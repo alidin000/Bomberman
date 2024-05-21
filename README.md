@@ -42,8 +42,11 @@ The game configuration screen allows you to:
 
 After setting up your game preferences, click the "Next" button to proceed to the keyboard configuration. Once you've configured the controls, hit the "Play" button to start the game.
 
-##UML
+## UML
 <img src="src_diagram1.png"></img>
+
+## Documentation
+<a href="document.pdf" class="image fit">Click here to see the documentation</a>
 ## License
 
 This project is licensed under the MIT License - see the LICENSE.md file for details.
