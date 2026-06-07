@@ -2,8 +2,14 @@
 import { GameAction } from './actions';
 import { GameEngineState } from './types';
 import { createInitialState, resetRoundState } from './initialState';
-import { movePlayer, tickPowerUps } from './players';
 import {
+  movePlayer,
+  placeObstacle,
+  tickPickupMessages,
+  tickPowerUps,
+} from './players';
+import {
+  detonatePlayerBombs,
   placeBomb,
   placeUltimateBomb,
   tickBombs,
@@ -103,6 +109,7 @@ function processTick(state: GameEngineState, deltaMs: number): GameEngineState {
 
   let next = { ...state, tick: state.tick + 1 };
   next = tickPowerUps(next, deltaMs);
+  next = tickPickupMessages(next, deltaMs);
   next = tickBombs(next, deltaMs);
   next = tickExplosions(next, deltaMs);
   next = tickBossEncounter(next, deltaMs);
@@ -127,9 +134,17 @@ export function gameReducer(
       if (!state || state.phase !== 'playing' || state.paused) return state;
       return placeBomb(state, action.playerId);
 
+    case 'DETONATE_BOMBS':
+      if (!state || state.phase !== 'playing' || state.paused) return state;
+      return detonatePlayerBombs(state, action.playerId);
+
     case 'USE_ULTIMATE':
       if (!state || state.phase !== 'playing' || state.paused) return state;
       return placeUltimateBomb(state, action.playerId);
+
+    case 'PLACE_OBSTACLE':
+      if (!state || state.phase !== 'playing' || state.paused) return state;
+      return placeObstacle(state, action.playerId);
 
     case 'TICK':
       if (!state) return state;

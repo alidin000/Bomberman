@@ -1,5 +1,5 @@
 import {
-  randomPowerUpGenerator, isPower, isBomb, Power, Bomb, gameItem
+  randomPowerUpGenerator, isPower, isBomb, isObstacle, Power, Bomb, gameItem
 } from './gameItem';
 
 describe('Game Utilities', () => {
@@ -29,6 +29,16 @@ describe('Game Utilities', () => {
 
       expect(isBomb(bomb)).toBeTruthy();
       expect(isBomb(nonBomb)).toBeFalsy();
+    });
+  });
+
+  describe('isObstacle', () => {
+    it('does not mistake owned bombs for player cover', () => {
+      const bomb: Bomb = { ownerId: 'player1', range: 3, coords: { x: 1, y: 2 } };
+      const obstacle: gameItem = { ownerId: 'player1', coords: { x: 2, y: 2 } };
+
+      expect(isObstacle(bomb)).toBeFalsy();
+      expect(isObstacle(obstacle)).toBeTruthy();
     });
   });
 });

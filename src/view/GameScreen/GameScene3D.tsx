@@ -1,8 +1,12 @@
 /* eslint-disable react/no-unknown-property, react/no-array-index-key */
 /* eslint-disable react/require-default-props, comma-dangle, max-len */
-import React, { useMemo, useRef } from 'react';
+import React, {
+  useEffect, useMemo, useRef, useState,
+} from 'react';
 import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils';
 import {
   BombKind,
   BossHazard,
@@ -28,7 +32,8 @@ import StageAtlas from '../../assets/ninja-bomber-stage-atlas.png';
 const TILE_SIZE = 1;
 const MAP_OFFSET_X = -7;
 const MAP_OFFSET_Z = -4.5;
-const ENTITY_LERP_SPEED = 11;
+const ENTITY_LERP_SPEED = 7.2;
+const ENTITY_SNAP_EPSILON = 0.0016;
 
 type TextureCrop = {
   x: number;
@@ -71,10 +76,10 @@ const POWERUP_VISUALS: Record<Power, {
 };
 
 const BEAST_TAILS: Record<MonsterKind, number> = {
-  basic: 1,
-  smart: 2,
-  ghost: 3,
-  fork: 4,
+  basic: 0,
+  smart: 0,
+  ghost: 0,
+  fork: 0,
 };
 
 const MONSTER_VISUALS: Record<MonsterKind, {
@@ -86,16 +91,16 @@ const MONSTER_VISUALS: Record<MonsterKind, {
   style: 'fox' | 'sand' | 'flame' | 'horn';
 }> = {
   basic: {
-    body: '#f97316', accent: '#fed7aa', belly: '#fff7ed', glow: '#fb923c', scale: 1.12, style: 'fox'
+    body: '#334155', accent: '#94a3b8', belly: '#111827', glow: '#f97316', scale: 1.08, style: 'fox'
   },
   smart: {
-    body: '#c48a4a', accent: '#7c2d12', belly: '#f5deb3', glow: '#f59e0b', scale: 1.18, style: 'sand'
+    body: '#c48a4a', accent: '#7c2d12', belly: '#f5deb3', glow: '#f59e0b', scale: 1.12, style: 'sand'
   },
   ghost: {
-    body: '#1d4ed8', accent: '#7dd3fc', belly: '#dbeafe', glow: '#38bdf8', scale: 1.08, style: 'flame'
+    body: '#1d4ed8', accent: '#7dd3fc', belly: '#dbeafe', glow: '#38bdf8', scale: 1.06, style: 'flame'
   },
   fork: {
-    body: '#312e81', accent: '#a855f7', belly: '#c4b5fd', glow: '#a855f7', scale: 1.28, style: 'horn'
+    body: '#f8fafc', accent: '#a855f7', belly: '#1f2937', glow: '#a855f7', scale: 1.16, style: 'horn'
   },
 };
 
@@ -219,6 +224,183 @@ const CHARACTER_VISUALS: Record<CharacterId, {
   },
 };
 
+type SceneModelConfig = {
+  paths: string[];
+  height: number;
+  footY?: number;
+  rotation?: [number, number, number];
+  scale?: number;
+};
+
+const CHARACTER_MODEL_CONFIGS: Record<CharacterId, SceneModelConfig> = {
+  deidara: {
+    paths: ['/models/characters/deidara.glb'],
+    height: 1.16,
+  },
+  naruto: {
+    paths: [
+      '/models/characters/naruto_rigged.glb',
+      '/models/characters/naruto.glb',
+      '/models/characters/naruto_mode_kurama_free_fire.glb',
+    ],
+    height: 1.16,
+  },
+  sasuke: {
+    paths: [
+      '/models/characters/sasuke_fortnite.glb',
+      '/models/characters/sasuke.glb',
+    ],
+    height: 1.16,
+  },
+  gaara: {
+    paths: ['/models/characters/gaara.glb'],
+    height: 1.16,
+  },
+  minato: {
+    paths: [
+      '/models/characters/freefire_new_3d_character_minato_namikaze.glb',
+      '/models/characters/minato.glb',
+    ],
+    height: 1.16,
+  },
+  itachi: {
+    paths: [
+      '/models/characters/itachi_uchiha_sharingan_akatsuki_amaterasu.glb',
+      '/models/characters/itachi.glb',
+    ],
+    height: 1.16,
+  },
+};
+
+const BOSS_MODEL_CONFIGS: Partial<Record<BossId, SceneModelConfig>> = {
+  shukaku: {
+    paths: [
+      '/models/characters/shukaku_naruto.glb',
+      '/models/bosses/shukaku.glb',
+    ],
+    height: 0.94,
+    footY: -0.58,
+  },
+  kurama: {
+    paths: [
+      '/models/characters/kurama__nine-tails.glb',
+      '/models/bosses/kurama.glb',
+    ],
+    height: 0.9,
+    footY: -0.58,
+  },
+};
+
+type SceneModelAsset = {
+  scene: THREE.Group;
+  animations: THREE.AnimationClip[];
+  config: SceneModelConfig;
+  sourcePath: string;
+};
+
+type SceneModelCacheEntry =
+  | { status: 'loaded'; asset: SceneModelAsset }
+  | { status: 'loading'; promise: Promise<SceneModelAsset | null> }
+  | { status: 'missing' };
+
+const SCENE_MODEL_CACHE = new Map<string, SceneModelCacheEntry>();
+
+function configureModelMeshes(root: THREE.Object3D, cloneMaterials: boolean) {
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh) return;
+
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    if (cloneMaterials) {
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map((material) => material.clone())
+        : mesh.material.clone();
+    }
+  });
+}
+
+function findCharacterClip(
+  animations: THREE.AnimationClip[],
+  pattern: RegExp,
+): THREE.AnimationClip | undefined {
+  return animations.find((clip) => pattern.test(clip.name));
+}
+
+function loadSceneModelPath(
+  loader: GLTFLoader,
+  cacheKey: string,
+  config: SceneModelConfig,
+  index = 0,
+): Promise<SceneModelAsset | null> {
+  const path = config.paths[index];
+  if (!path) return Promise.resolve(null);
+
+  return loader.loadAsync(path).then((gltf) => {
+    const asset = {
+      scene: gltf.scene,
+      animations: gltf.animations ?? [],
+      config,
+      sourcePath: path,
+    };
+    configureModelMeshes(asset.scene, false);
+    SCENE_MODEL_CACHE.set(cacheKey, { status: 'loaded', asset });
+    return asset;
+  }).catch(() => loadSceneModelPath(loader, cacheKey, config, index + 1));
+}
+
+function loadSceneModel(
+  cacheKey: string,
+  config: SceneModelConfig,
+): Promise<SceneModelAsset | null> {
+  const cached = SCENE_MODEL_CACHE.get(cacheKey);
+  if (cached?.status === 'loaded') return Promise.resolve(cached.asset);
+  if (cached?.status === 'missing') return Promise.resolve(null);
+  if (cached?.status === 'loading') return cached.promise;
+
+  const loader = new GLTFLoader();
+  const promise = loadSceneModelPath(loader, cacheKey, config).then((asset) => {
+    if (!asset) {
+      SCENE_MODEL_CACHE.set(cacheKey, { status: 'missing' });
+    }
+    return asset;
+  });
+
+  SCENE_MODEL_CACHE.set(cacheKey, { status: 'loading', promise });
+  return promise;
+}
+
+function useSceneModel(cacheKey: string | null, config?: SceneModelConfig) {
+  const [asset, setAsset] = useState<SceneModelAsset | null>(() => {
+    if (!cacheKey) return null;
+    const cached = SCENE_MODEL_CACHE.get(cacheKey);
+    return cached?.status === 'loaded' ? cached.asset : null;
+  });
+
+  useEffect(() => {
+    if (!cacheKey || !config) {
+      setAsset(null);
+      return undefined;
+    }
+
+    let mounted = true;
+    const cached = SCENE_MODEL_CACHE.get(cacheKey);
+    setAsset(cached?.status === 'loaded' ? cached.asset : null);
+    loadSceneModel(cacheKey, config).then((nextAsset) => {
+      if (mounted) setAsset(nextAsset);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [cacheKey, config]);
+
+  return asset;
+}
+
+function useCharacterModel(characterId: CharacterId) {
+  return useSceneModel(`character:${characterId}`, CHARACTER_MODEL_CONFIGS[characterId]);
+}
+
 function useCroppedTexture(image: string, crop: TextureCrop) {
   const source = useLoader(THREE.TextureLoader, image);
   return useMemo(() => {
@@ -317,6 +499,7 @@ function useSmoothWorldPosition(
   x: number,
   y: number,
   elevation: number,
+  motionRef?: React.MutableRefObject<number>,
 ) {
   const initialized = useRef(false);
   const targetRef = useRef(new THREE.Vector3());
@@ -335,13 +518,29 @@ function useSmoothWorldPosition(
     }
 
     const direction = directionRef.current.copy(target).sub(group.position);
-    if (direction.lengthSq() > 0.0001) {
+    const horizontalDistanceSq = direction.x * direction.x + direction.z * direction.z;
+    const motionTarget = Math.min(Math.sqrt(horizontalDistanceSq) / TILE_SIZE, 1);
+    const movement = motionRef;
+    if (movement) {
+      movement.current = THREE.MathUtils.lerp(
+        movement.current,
+        motionTarget,
+        1 - Math.exp(-delta * 16),
+      );
+    }
+
+    if (horizontalDistanceSq > 0.0001) {
       const targetRotation = Math.atan2(direction.x, direction.z);
       group.rotation.y = THREE.MathUtils.lerp(
         group.rotation.y,
         targetRotation,
         1 - Math.exp(-delta * ENTITY_LERP_SPEED),
       );
+    }
+
+    if (horizontalDistanceSq <= ENTITY_SNAP_EPSILON) {
+      group.position.copy(target);
+      return;
     }
 
     group.position.lerp(target, 1 - Math.exp(-delta * ENTITY_LERP_SPEED));
@@ -1140,18 +1339,129 @@ function CharacterAccessory({
   return null;
 }
 
+function createFittedSceneModel(asset: SceneModelAsset): THREE.Group {
+  const clone = cloneSkeleton(asset.scene) as THREE.Group;
+  const model = new THREE.Group();
+  const rotation = asset.config.rotation ?? [0, 0, 0];
+  configureModelMeshes(clone, true);
+  clone.rotation.set(rotation[0], rotation[1], rotation[2]);
+  model.add(clone);
+  model.updateMatrixWorld(true);
+
+  const bounds = new THREE.Box3().setFromObject(model);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  bounds.getSize(size);
+  bounds.getCenter(center);
+
+  clone.position.x -= center.x;
+  clone.position.y -= bounds.min.y;
+  clone.position.z -= center.z;
+  model.scale.setScalar((asset.config.height / Math.max(size.y, 0.001)) * (asset.config.scale ?? 1));
+  model.position.y = asset.config.footY ?? -0.56;
+
+  return model;
+}
+
+function LoadedSceneModel({
+  asset,
+  ghost,
+  motionRef,
+}: {
+  asset: SceneModelAsset;
+  ghost: boolean;
+  motionRef?: React.MutableRefObject<number>;
+}) {
+  const model = useMemo(() => createFittedSceneModel(asset), [asset]);
+
+  const mixerRef = useRef<THREE.AnimationMixer | null>(null);
+  const actionsRef = useRef<{
+    idle?: THREE.AnimationAction;
+    move?: THREE.AnimationAction;
+    fallback?: THREE.AnimationAction;
+  } | null>(null);
+
+  useEffect(() => {
+    const mixer = new THREE.AnimationMixer(model);
+    const idleClip = findCharacterClip(asset.animations, /idle|stand|breath/i);
+    const moveClip = findCharacterClip(asset.animations, /run|walk|move|sprint/i);
+    const fallbackClip = asset.animations[0];
+    const idle = idleClip ? mixer.clipAction(idleClip).play() : undefined;
+    const move = moveClip && moveClip !== idleClip ? mixer.clipAction(moveClip).play() : undefined;
+    const fallback = !idle && !move && fallbackClip ? mixer.clipAction(fallbackClip).play() : undefined;
+
+    if (idle) idle.setEffectiveWeight(1);
+    if (move) move.setEffectiveWeight(0);
+    if (fallback) fallback.setEffectiveWeight(1);
+
+    mixerRef.current = mixer;
+    actionsRef.current = { idle, move, fallback };
+
+    return () => {
+      mixer.stopAllAction();
+      mixer.uncacheRoot(model);
+      mixerRef.current = null;
+      actionsRef.current = null;
+    };
+  }, [asset.animations, model]);
+
+  useEffect(() => {
+    model.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh) return;
+
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((sourceMaterial) => {
+        const material = sourceMaterial;
+        material.transparent = ghost;
+        material.opacity = ghost ? 0.56 : 1;
+        material.depthWrite = !ghost;
+      });
+    });
+  }, [ghost, model]);
+
+  useFrame((_, delta) => {
+    const movement = THREE.MathUtils.clamp(motionRef?.current ?? 0, 0, 1);
+    const actions = actionsRef.current;
+    if (actions?.idle && actions.move) {
+      actions.idle.setEffectiveWeight(1 - movement);
+      actions.move.setEffectiveWeight(movement);
+      actions.move.timeScale = 0.8 + movement * 0.85;
+    } else if (actions?.fallback) {
+      actions.fallback.timeScale = 0.72 + movement * 0.72;
+    }
+    mixerRef.current?.update(delta);
+  });
+
+  return <primitive object={model} />;
+}
+
 function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineState }) {
   const ref = useRef<THREE.Group>(null);
+  const motionRef = useRef(0);
   const ghost = isPowerUpActive(state, player.id, 'Ghost');
   const invincible = isPowerUpActive(state, player.id, 'Invincibility');
   const visual = CHARACTER_VISUALS[player.characterId];
-  useSmoothWorldPosition(ref, player.x, player.y, 0.55);
+  const characterModel = useCharacterModel(player.characterId);
+  useSmoothWorldPosition(ref, player.x, player.y, 0.55, motionRef);
 
   useFrame(({ clock }) => {
-    if (ref.current && invincible) {
-      ref.current.visible = Math.sin(clock.elapsedTime * 10) > 0;
-    } else if (ref.current) {
-      ref.current.visible = true;
+    const group = ref.current;
+    if (!group) return;
+
+    const movement = motionRef.current;
+    const stride = Math.sin(clock.elapsedTime * 13);
+    group.position.y += Math.abs(stride) * 0.038 * movement;
+    group.rotation.z = THREE.MathUtils.lerp(
+      group.rotation.z,
+      stride * 0.035 * movement,
+      0.22,
+    );
+
+    if (invincible) {
+      group.visible = Math.sin(clock.elapsedTime * 10) > 0;
+    } else {
+      group.visible = true;
     }
   });
 
@@ -1171,68 +1481,91 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
           opacity={ghost ? 0.25 : 0.46}
         />
       </mesh>
-      <mesh position={[0, -0.04, 0]} castShadow>
-        <capsuleGeometry args={[0.2, 0.44, 8, 16]} />
-        <meshStandardMaterial
-          color={visual.body}
-          emissive={visual.body}
-          emissiveIntensity={0.08}
-          transparent={ghost}
-          opacity={ghost ? 0.55 : 1}
-          roughness={0.46}
-        />
-      </mesh>
-      <mesh position={[0, -0.08, 0.16]} castShadow>
-        <boxGeometry args={[0.38, 0.26, 0.035]} />
-        <meshStandardMaterial
-          color={visual.trim}
-          emissive={visual.trim}
-          emissiveIntensity={0.08}
-          transparent={ghost}
-          opacity={ghost ? 0.55 : 1}
-        />
-      </mesh>
-      <mesh position={[0, 0.32, 0.02]} castShadow>
-        <sphereGeometry args={[0.19, 18, 18]} />
-        <meshStandardMaterial color="#f2c7a2" roughness={0.48} transparent={ghost} opacity={ghost ? 0.55 : 1} />
-      </mesh>
-      <CharacterHair characterId={player.characterId} visual={visual} ghost={ghost} />
-      <mesh position={[0, 0.35, 0.2]} castShadow>
-        <boxGeometry args={[0.42, 0.055, 0.04]} />
-        <meshStandardMaterial
-          color={visual.headband}
-          emissive={visual.headband}
-          emissiveIntensity={0.18}
-          transparent={ghost}
-          opacity={ghost ? 0.55 : 1}
-        />
-      </mesh>
-      <mesh position={[0, 0.35, 0.225]} castShadow>
-        <boxGeometry args={[0.16, 0.05, 0.018]} />
-        <meshStandardMaterial color="#d1d5db" metalness={0.6} roughness={0.32} transparent={ghost} opacity={ghost ? 0.55 : 1} />
-      </mesh>
-      {[-0.22, 0.22].map((side) => (
-        <mesh
-          key={`${player.id}-arm-${side}`}
-          position={[side, 0.04, 0.04]}
-          rotation={[0.35, 0, side > 0 ? -0.55 : 0.55]}
-          castShadow
-        >
-          <capsuleGeometry args={[0.055, 0.34, 5, 8]} />
-          <meshStandardMaterial color={visual.accent} roughness={0.48} transparent={ghost} opacity={ghost ? 0.55 : 1} />
-        </mesh>
-      ))}
-      {[-0.09, 0.09].map((side) => (
-        <mesh key={`${player.id}-eye-${side}`} position={[side, 0.34, 0.17]}>
-          <sphereGeometry args={[0.025, 8, 8]} />
-          <meshStandardMaterial color="#111827" />
-        </mesh>
-      ))}
-      <CharacterAccessory characterId={player.characterId} visual={visual} ghost={ghost} />
-      <mesh position={[0, -0.27, -0.08]} rotation={[Math.PI / 2, 0, Math.PI / 2]} castShadow>
-        <cylinderGeometry args={[0.075, 0.075, 0.42, 12]} />
-        <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.12} />
-      </mesh>
+      {characterModel ? (
+        <LoadedSceneModel asset={characterModel} ghost={ghost} motionRef={motionRef} />
+      ) : (
+        <>
+          <mesh position={[0, -0.04, 0]} castShadow>
+            <capsuleGeometry args={[0.2, 0.44, 8, 16]} />
+            <meshStandardMaterial
+              color={visual.body}
+              emissive={visual.body}
+              emissiveIntensity={0.08}
+              transparent={ghost}
+              opacity={ghost ? 0.55 : 1}
+              roughness={0.46}
+            />
+          </mesh>
+          <mesh position={[0, -0.08, 0.16]} castShadow>
+            <boxGeometry args={[0.38, 0.26, 0.035]} />
+            <meshStandardMaterial
+              color={visual.trim}
+              emissive={visual.trim}
+              emissiveIntensity={0.08}
+              transparent={ghost}
+              opacity={ghost ? 0.55 : 1}
+            />
+          </mesh>
+          <mesh position={[0, 0.32, 0.02]} castShadow>
+            <sphereGeometry args={[0.19, 18, 18]} />
+            <meshStandardMaterial color="#f2c7a2" roughness={0.48} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+          </mesh>
+          <CharacterHair characterId={player.characterId} visual={visual} ghost={ghost} />
+          <mesh position={[0, 0.35, 0.2]} castShadow>
+            <boxGeometry args={[0.42, 0.055, 0.04]} />
+            <meshStandardMaterial
+              color={visual.headband}
+              emissive={visual.headband}
+              emissiveIntensity={0.18}
+              transparent={ghost}
+              opacity={ghost ? 0.55 : 1}
+            />
+          </mesh>
+          <mesh position={[0, 0.35, 0.225]} castShadow>
+            <boxGeometry args={[0.16, 0.05, 0.018]} />
+            <meshStandardMaterial color="#d1d5db" metalness={0.6} roughness={0.32} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+          </mesh>
+          {[-0.22, 0.22].map((side) => (
+            <mesh
+              key={`${player.id}-arm-${side}`}
+              position={[side, 0.04, 0.04]}
+              rotation={[0.35, 0, side > 0 ? -0.55 : 0.55]}
+              castShadow
+            >
+              <capsuleGeometry args={[0.055, 0.34, 5, 8]} />
+              <meshStandardMaterial color={visual.accent} roughness={0.48} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+            </mesh>
+          ))}
+          {[-0.09, 0.09].map((side) => (
+            <mesh
+              key={`${player.id}-leg-${side}`}
+              position={[side, -0.36, 0.02]}
+              rotation={[0.18, 0, side > 0 ? -0.08 : 0.08]}
+              castShadow
+            >
+              <capsuleGeometry args={[0.052, 0.34, 5, 8]} />
+              <meshStandardMaterial color={visual.body} roughness={0.5} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+            </mesh>
+          ))}
+          {[-0.1, 0.1].map((side) => (
+            <mesh key={`${player.id}-shoe-${side}`} position={[side, -0.55, 0.1]} rotation={[0.2, 0, 0]} castShadow>
+              <boxGeometry args={[0.13, 0.06, 0.2]} />
+              <meshStandardMaterial color="#111827" roughness={0.56} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+            </mesh>
+          ))}
+          {[-0.09, 0.09].map((side) => (
+            <mesh key={`${player.id}-eye-${side}`} position={[side, 0.34, 0.17]}>
+              <sphereGeometry args={[0.025, 8, 8]} />
+              <meshStandardMaterial color="#111827" />
+            </mesh>
+          ))}
+          <CharacterAccessory characterId={player.characterId} visual={visual} ghost={ghost} />
+          <mesh position={[0, -0.27, -0.08]} rotation={[Math.PI / 2, 0, Math.PI / 2]} castShadow>
+            <cylinderGeometry args={[0.075, 0.075, 0.42, 12]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.12} />
+          </mesh>
+        </>
+      )}
       {invincible && (
         <>
           <mesh position={[0, 0.04, 0]}>
@@ -1353,25 +1686,42 @@ function MonsterMesh({ monster }: { monster: MonsterState }) {
   return (
     <group ref={ref} scale={visual.scale}>
       <ShadowBlob />
-      <mesh castShadow scale={visual.style === 'horn' ? [1.16, 0.92, 1.08] : [1, 0.9, 1]}>
-        <sphereGeometry args={[0.36, 18, 18]} />
+      <mesh position={[0, -0.05, 0]} castShadow scale={visual.style === 'horn' ? [1.08, 1.05, 0.96] : [0.95, 1, 0.9]}>
+        <capsuleGeometry args={[0.17, 0.46, 7, 14]} />
         <meshStandardMaterial
           color={color}
           emissive={visual.glow}
-          emissiveIntensity={isGhost ? 0.95 : 0.38}
+          emissiveIntensity={isGhost ? 0.85 : 0.22}
           transparent={isGhost}
           opacity={isGhost ? 0.58 : 1}
-          roughness={0.38}
+          roughness={0.46}
         />
       </mesh>
-      <mesh position={[0, -0.03, 0.24]} scale={[0.82, 0.62, 0.24]}>
-        <sphereGeometry args={[0.22, 12, 12]} />
+      <mesh position={[0, -0.08, 0.17]} scale={[0.9, 0.76, 0.22]} castShadow>
+        <boxGeometry args={[0.34, 0.28, 0.05]} />
         <meshStandardMaterial color={visual.belly} emissive={visual.glow} emissiveIntensity={0.08} transparent={isGhost} opacity={isGhost ? 0.42 : 1} />
       </mesh>
-      <mesh position={[0, 0.31, 0.05]} scale={[0.84, 0.64, 0.78]} castShadow>
+      <mesh position={[0, 0.31, 0.04]} scale={visual.style === 'horn' ? [0.82, 0.94, 0.78] : [0.82, 0.78, 0.78]} castShadow>
         <sphereGeometry args={[0.2, 16, 16]} />
         <meshStandardMaterial color={color} emissive={visual.glow} emissiveIntensity={isGhost ? 0.9 : 0.28} transparent={isGhost} opacity={isGhost ? 0.55 : 1} roughness={0.42} />
       </mesh>
+      {[-0.21, 0.21].map((side) => (
+        <mesh
+          key={`${monster.id}-ninja-arm-${side}`}
+          position={[side, 0.02, 0.04]}
+          rotation={[0.28, 0, side > 0 ? -0.62 : 0.62]}
+          castShadow
+        >
+          <capsuleGeometry args={[0.04, 0.34, 5, 8]} />
+          <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.14} transparent={isGhost} opacity={isGhost ? 0.5 : 1} />
+        </mesh>
+      ))}
+      {[-0.08, 0.08].map((side) => (
+        <mesh key={`${monster.id}-ninja-leg-${side}`} position={[side, -0.36, 0.01]} rotation={[0.12, 0, side > 0 ? -0.08 : 0.08]} castShadow>
+          <capsuleGeometry args={[0.044, 0.28, 5, 8]} />
+          <meshStandardMaterial color={visual.belly} roughness={0.5} transparent={isGhost} opacity={isGhost ? 0.48 : 1} />
+        </mesh>
+      ))}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.39, 0]}>
         <torusGeometry args={[0.5, 0.022, 6, 36]} />
         <meshStandardMaterial
@@ -1383,12 +1733,22 @@ function MonsterMesh({ monster }: { monster: MonsterState }) {
         />
       </mesh>
 
-      {visual.style === 'fox' && [-0.13, 0.13].map((side) => (
-        <mesh key={`${monster.id}-fox-ear-${side}`} position={[side, 0.52, 0.02]} rotation={[0.28, 0, side > 0 ? -0.42 : 0.42]} castShadow>
-          <coneGeometry args={[0.08, 0.24, 8]} />
-          <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.2} />
-        </mesh>
-      ))}
+      {visual.style === 'fox' && (
+        <>
+          <mesh position={[0, 0.37, 0.21]} castShadow>
+            <boxGeometry args={[0.34, 0.045, 0.026]} />
+            <meshStandardMaterial color="#0f172a" emissive={visual.glow} emissiveIntensity={0.16} />
+          </mesh>
+          <mesh position={[0, 0.37, 0.235]}>
+            <boxGeometry args={[0.11, 0.04, 0.018]} />
+            <meshStandardMaterial color="#d1d5db" metalness={0.5} roughness={0.32} />
+          </mesh>
+          <mesh position={[0.24, 0.08, 0.18]} rotation={[Math.PI / 2, 0, -0.72]}>
+            <coneGeometry args={[0.035, 0.32, 4]} />
+            <meshStandardMaterial color="#d1d5db" metalness={0.45} roughness={0.28} emissive={visual.glow} emissiveIntensity={0.12} />
+          </mesh>
+        </>
+      )}
 
       {visual.style === 'sand' && (
         <>
@@ -1639,6 +1999,11 @@ function BossStyleDetails({
 function BossMesh({ state }: { state: GameEngineState }) {
   const { boss } = state;
   const ref = useRef<THREE.Group>(null);
+  const bossModelConfig = boss ? BOSS_MODEL_CONFIGS[boss.id] : undefined;
+  const bossModel = useSceneModel(
+    boss && bossModelConfig ? `boss:${boss.id}` : null,
+    bossModelConfig,
+  );
   useSmoothWorldPosition(ref, boss?.x ?? 0, boss?.y ?? 0, 0.92);
 
   useFrame(({ clock }) => {
@@ -1661,48 +2026,54 @@ function BossMesh({ state }: { state: GameEngineState }) {
         <torusGeometry args={[0.62, 0.025, 8, 42]} />
         <meshStandardMaterial color={visual.glow} emissive={visual.glow} emissiveIntensity={1.05} transparent opacity={0.38} />
       </mesh>
-      <mesh castShadow scale={visual.style === 'shell' || visual.style === 'slug' ? [1.22, 0.78, 1.04] : [1, 0.95, 1]}>
-        <sphereGeometry args={[0.38, 20, 20]} />
-        <meshStandardMaterial color={visual.body} emissive={visual.glow} emissiveIntensity={0.32} roughness={0.42} />
-      </mesh>
-      <mesh position={[0, -0.02, 0.28]} scale={[0.86, 0.52, 0.28]}>
-        <sphereGeometry args={[0.2, 14, 14]} />
-        <meshStandardMaterial color={visual.belly} emissive={visual.glow} emissiveIntensity={0.1} roughness={0.5} />
-      </mesh>
-      <mesh position={[0, 0.48, 0.08]} scale={[0.92, 0.74, 0.8]} castShadow>
-        <sphereGeometry args={[0.22, 18, 18]} />
-        <meshStandardMaterial color={visual.body} emissive={visual.glow} emissiveIntensity={0.38} roughness={0.4} />
-      </mesh>
-      {[-0.1, 0.1].map((side) => (
-        <React.Fragment key={`${boss.id}-eye-${side}`}>
-          <mesh position={[side, 0.5, 0.27]}>
-            <sphereGeometry args={[0.045, 10, 10]} />
-            <meshStandardMaterial color="#fff7ed" emissive={visual.glow} emissiveIntensity={0.32} />
+      {bossModel ? (
+        <LoadedSceneModel asset={bossModel} ghost={false} />
+      ) : (
+        <>
+          <mesh castShadow scale={visual.style === 'shell' || visual.style === 'slug' ? [1.22, 0.78, 1.04] : [1, 0.95, 1]}>
+            <sphereGeometry args={[0.38, 20, 20]} />
+            <meshStandardMaterial color={visual.body} emissive={visual.glow} emissiveIntensity={0.32} roughness={0.42} />
           </mesh>
-          <mesh position={[side, 0.5, 0.305]}>
-            <sphereGeometry args={[0.019, 8, 8]} />
-            <meshStandardMaterial color={boss.id === 'kurama' ? '#7f1d1d' : '#111827'} emissive={boss.id === 'kurama' ? '#f97316' : '#000'} emissiveIntensity={0.25} />
+          <mesh position={[0, -0.02, 0.28]} scale={[0.86, 0.52, 0.28]}>
+            <sphereGeometry args={[0.2, 14, 14]} />
+            <meshStandardMaterial color={visual.belly} emissive={visual.glow} emissiveIntensity={0.1} roughness={0.5} />
           </mesh>
-        </React.Fragment>
-      ))}
-      <BossStyleDetails bossId={boss.id} visual={visual} />
-      {Array.from({ length: boss.tails }, (_, index) => {
-        const offset = (index - (boss.tails - 1) / 2) * (boss.tails > 5 ? 0.08 : 0.12);
-        let tailLength = 0.68;
-        if (visual.style === 'shell') tailLength = 0.52;
-        if (visual.style === 'octo') tailLength = 0.78;
-        return (
-          <mesh
-            key={`${boss.id}-boss-tail-${index}`}
-            position={[offset, -0.02 + index * 0.008, -0.42 - Math.abs(offset) * 0.28]}
-            rotation={[0.92, offset * 4.5, offset * 4.1]}
-            castShadow
-          >
-            <capsuleGeometry args={[visual.style === 'octo' ? 0.05 : 0.044, tailLength, 5, 8]} />
-            <meshStandardMaterial color={visual.style === 'octo' ? '#4c1d95' : visual.accent} emissive={visual.glow} emissiveIntensity={0.34} />
+          <mesh position={[0, 0.48, 0.08]} scale={[0.92, 0.74, 0.8]} castShadow>
+            <sphereGeometry args={[0.22, 18, 18]} />
+            <meshStandardMaterial color={visual.body} emissive={visual.glow} emissiveIntensity={0.38} roughness={0.4} />
           </mesh>
-        );
-      })}
+          {[-0.1, 0.1].map((side) => (
+            <React.Fragment key={`${boss.id}-eye-${side}`}>
+              <mesh position={[side, 0.5, 0.27]}>
+                <sphereGeometry args={[0.045, 10, 10]} />
+                <meshStandardMaterial color="#fff7ed" emissive={visual.glow} emissiveIntensity={0.32} />
+              </mesh>
+              <mesh position={[side, 0.5, 0.305]}>
+                <sphereGeometry args={[0.019, 8, 8]} />
+                <meshStandardMaterial color={boss.id === 'kurama' ? '#7f1d1d' : '#111827'} emissive={boss.id === 'kurama' ? '#f97316' : '#000'} emissiveIntensity={0.25} />
+              </mesh>
+            </React.Fragment>
+          ))}
+          <BossStyleDetails bossId={boss.id} visual={visual} />
+          {Array.from({ length: boss.tails }, (_, index) => {
+            const offset = (index - (boss.tails - 1) / 2) * (boss.tails > 5 ? 0.08 : 0.12);
+            let tailLength = 0.68;
+            if (visual.style === 'shell') tailLength = 0.52;
+            if (visual.style === 'octo') tailLength = 0.78;
+            return (
+              <mesh
+                key={`${boss.id}-boss-tail-${index}`}
+                position={[offset, -0.02 + index * 0.008, -0.42 - Math.abs(offset) * 0.28]}
+                rotation={[0.92, offset * 4.5, offset * 4.1]}
+                castShadow
+              >
+                <capsuleGeometry args={[visual.style === 'octo' ? 0.05 : 0.044, tailLength, 5, 8]} />
+                <meshStandardMaterial color={visual.style === 'octo' ? '#4c1d95' : visual.accent} emissive={visual.glow} emissiveIntensity={0.34} />
+              </mesh>
+            );
+          })}
+        </>
+      )}
       {boss.phase > 1 && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.49, 0]}>
           <ringGeometry args={[0.68, 0.86, 36]} />

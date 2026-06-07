@@ -101,6 +101,7 @@ export const CenteredButtonContainer = styled.div`
 
 export const Row = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   margin: 24px 0;
@@ -160,6 +161,38 @@ export const ExtraKeys = styled.div`
   flex-direction: row;
   justify-content: center;
   margin-left: 25px;
+`;
+
+export const ActionKeysGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(64px, 1fr));
+  gap: 8px;
+  margin-left: 24px;
+
+  @media (max-width: 760px) {
+    grid-template-columns: repeat(2, minmax(64px, 1fr));
+    margin-left: 0;
+    margin-top: 12px;
+  }
+`;
+
+export const ActionKeyCell = styled.label`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  color: rgba(248, 250, 252, 0.68);
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+`;
+
+export const ActionKeyName = styled.span`
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 export const MapToggleButton = styled(ToggleButton)`
@@ -351,6 +384,32 @@ export const LoadoutRow = styled.div<{ color: string }>`
 export const LoadoutKey = styled.span`
   color: rgba(248, 250, 252, 0.68);
   font-weight: 800;
+  text-transform: uppercase;
+`;
+
+export const PowerLoadoutGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  margin-top: 8px;
+`;
+
+export const PowerLoadoutItem = styled.div<{ color: string }>`
+  min-height: 42px;
+  padding: 6px 7px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, ${(props) => props.color}29, rgba(0, 0, 0, 0.22));
+  border: 1px solid ${(props) => props.color}66;
+  color: rgba(248, 250, 252, 0.74);
+  font-size: 0.66rem;
+  line-height: 1.22;
+`;
+
+export const PowerLoadoutName = styled.strong<{ color: string }>`
+  display: block;
+  margin-bottom: 2px;
+  color: ${(props) => props.color};
+  font-size: 0.68rem;
   text-transform: uppercase;
 `;
 

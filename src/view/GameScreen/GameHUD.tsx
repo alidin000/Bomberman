@@ -15,6 +15,9 @@ import {
   PlayerAvatar,
   PlayerStats,
   PowerBadge,
+  PickupNotes,
+  PickupNote,
+  PickupNoteTitle,
   StatPill,
   HudRight,
   MonsterPaper,
@@ -56,10 +59,13 @@ function PlayerCard({
   player: GameEngineState['players'][0];
   state: GameEngineState;
 }) {
-  const activePowers = player.powerUps.filter(
+  const activePowers = Array.from(new Set(player.powerUps)).filter(
     (p) => isPowerUpActive(state, player.id, p)
       || !['Ghost', 'Invincibility'].includes(p),
   );
+  const pickupMessages = state.pickupMessages
+    .filter((message) => message.playerId === player.id)
+    .slice(-2);
   const character = getCharacterDefinition(player.characterId);
 
   return (
@@ -104,6 +110,19 @@ function PlayerCard({
           );
         })}
       </PowerChips>
+      {pickupMessages.length > 0 && (
+        <PickupNotes>
+          {pickupMessages.map((message) => {
+            const theme = getCharacterPowerTheme(player.characterId, message.power);
+            return (
+              <PickupNote key={message.id} color={theme.color}>
+                <PickupNoteTitle>{theme.label}</PickupNoteTitle>
+                {theme.effect}
+              </PickupNote>
+            );
+          })}
+        </PickupNotes>
+      )}
       <AbilityPanel color={character.secondaryColor}>
         <AbilityRow>
           <strong>Bomb</strong>

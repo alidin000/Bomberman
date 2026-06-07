@@ -5,10 +5,7 @@ import React, {
   useState,
   useMemo
 } from 'react';
-
-interface KeyBindings {
-  [key: number]: string[];
-}
+import { DEFAULT_KEY_BINDINGS, KeyBindings, normalizeKeyBindings } from '../constants/props';
 
 interface GameSettingsContextType {
   playerKeyBindings: KeyBindings;
@@ -16,11 +13,7 @@ interface GameSettingsContextType {
 }
 
 const defaultState: GameSettingsContextType = {
-  playerKeyBindings: {
-    1: ['w', 'a', 's', 'd', '2', '3'],
-    2: ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight', 'o', 'p'],
-    3: ['u', 'h', 'j', 'k', '7', '8']
-  },
+  playerKeyBindings: normalizeKeyBindings(DEFAULT_KEY_BINDINGS),
   setPlayerKeyBindings: () => {}
 };
 

@@ -21,7 +21,7 @@ const TestComponent = () => {
       <button
         onClick={() => setPlayerKeyBindings((prev) => ({
           ...prev,
-          1: ['i', 'j', 'k', 'l', '5', '6'],
+          1: ['i', 'j', 'k', 'l', '5', '4', '6', '7'],
         }))}
       >
         Change Player 1 Keys
@@ -38,9 +38,9 @@ describe('GameSettingsProvider', () => {
       </GameSettingsProvider>
     );
 
-    expect(screen.getByTestId('player1-keys').textContent).toBe('w, a, s, d, 2, 3');
-    expect(screen.getByTestId('player2-keys').textContent).toBe('ArrowUp, ArrowLeft, ArrowDown, ArrowRight, o, p');
-    expect(screen.getByTestId('player3-keys').textContent).toBe('u, h, j, k, 7, 8');
+    expect(screen.getByTestId('player1-keys').textContent).toBe('w, a, s, d, 2, 1, 3, 4');
+    expect(screen.getByTestId('player2-keys').textContent).toBe('ArrowUp, ArrowLeft, ArrowDown, ArrowRight, o, i, p, [');
+    expect(screen.getByTestId('player3-keys').textContent).toBe('u, h, j, k, 7, 6, 8, 9');
   });
 
   const user = userEvent;
@@ -53,7 +53,7 @@ describe('GameSettingsProvider', () => {
 
     await user.click(screen.getByText('Change Player 1 Keys'));
 
-    expect(screen.getByTestId('player1-keys').textContent).toBe('i, j, k, l, 5, 6');
+    expect(screen.getByTestId('player1-keys').textContent).toBe('i, j, k, l, 5, 4, 6, 7');
   });
 });
 

@@ -4,13 +4,16 @@ A 3D browser arena game built with React, TypeScript, Three.js, and React Three 
 
 ## Current Features
 
-- **3D arena renderer** with textured village floors, animated bombs, procedural shinobi, low-poly monsters, warning hazards, and smooth entity movement.
+- **3D arena renderer** with textured village floors, animated bombs, optional `.glb` shinobi models, procedural fallbacks, low-poly monsters, warning hazards, and smooth entity movement.
 - **Solo boss mode** with procedural tailed-beast models, phase-based abilities, danger-zone warnings, boss health, and story rewards.
 - **Local arena mode** for two or three players with configurable controls and trial targets.
+- **Hybrid smooth movement** keeps bombs and explosions grid-based while held direction keys move characters through 0.1-cell decimal steps, with lane-centering and planted-bomb escape like classic Bomberman movement.
 - **Six shinobi loadouts**: Deidara, Naruto, Sasuke, Gaara, Minato, and Itachi.
 - **Distinct bomb behavior**: clay blasts, clone diagonals, Chidori piercing, sand control, teleport marks, crow illusions, and signature ultimates.
+- **Longer ultimate fuses** give players time to escape oversized signature blasts after activating them.
 - **Character-specific explosion visuals**: Deidara clay/fire bursts, Naruto Rasengan chakra swirls, Sasuke lightning with black flame accents, Gaara sand clouds, Minato teleport seals, and Itachi genjutsu/crow effects.
-- **Character-themed power-up UI** with run-specific labels such as Clone Training, FTG Kunai, Sand Armor, Sharingan Timing, and Yata Mirror.
+- **Character-themed power-up UI** with profile-card and manual notes for every pickup effect, using labels such as Clone Training, FTG Kunai, Sand Armor, Sharingan Timing, and Yata Mirror.
+- **Verified power-up mechanics** for bomb capacity, blast range, manual detonation, speed boosts, guard shields, phase movement, and placeable cover. Manual bombs use a dedicated detonate key, and cover pickups use a dedicated cover key.
 - **Character passives**: Minato has faster movement, while Gaara and Itachi can spend defensive passives to survive an otherwise lethal hit.
 - **Character notes** in the roster, manual, and loadout picker explain each shinobi's bomb, ultimate, passive, and playstyle before a match starts.
 - **Village-themed enemies** such as Rogue Genin, Sand Ninja, Mist Ninja, Thunder Hawk, White Zetsu, and Akatsuki Cultist. Monsters only seal players on contact, while their visual tells show threat identity.
@@ -33,6 +36,8 @@ A 3D browser arena game built with React, TypeScript, Three.js, and React Three 
 
 - In-game bosses are rendered as simple procedural beast models instead of flat portrait cards.
 - Local enemies use procedural ninja/monster silhouettes with overhead name/threat bars.
+- Player characters can be upgraded from procedural meshes to optimized `.glb` assets by placing files such as `naruto.glb` or `sasuke.glb` in `public/models/characters/`.
+- Imported character models are cached, cloned per player, and can blend idle and movement animation clips when the files include them.
 - Boss hazards use anime-inspired telegraphs: sand spikes, blue fire, water cannons, lava bursts, steam rings, acid bubbles, air strikes, tentacle slams, and tailed-beast bombs.
 - Tailed-beast bombs and chakra shockwaves inherit the active boss color so each boss encounter reads differently.
 - The main roster board and Shinobi Manual stay in sync with the implemented characters, monsters, stages, bosses, and power-up themes.
@@ -69,12 +74,13 @@ npm run build
 - `src/story/` stores local story progression and unlock rewards.
 - `src/network/` contains replay and future online-room message types.
 - `public/maps/` contains stage map layouts.
+- `public/models/characters/` contains optional `.glb` character model overrides and the asset pipeline notes.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for deeper architecture notes.
 
 ## Controls
 
-Controls are configured in the setup flow. Each player has movement keys, a basic bomb key, and an ultimate key. The last saved control setup is reused on the next run.
+Controls are configured in the setup flow. Each player has movement keys plus four action keys: bomb, detonate, ultimate, and cover. Controls can also be reassigned from the pause settings dialog and are saved for the next run.
 
 ## License
 

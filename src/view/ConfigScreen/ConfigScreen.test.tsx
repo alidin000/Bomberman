@@ -98,7 +98,7 @@ describe('ConfigScreen', () => {
     fireEvent.click(screen.getByText('Next'));
     const playerInputs = screen.getAllByRole('textbox');
     fireEvent.keyDown(playerInputs[0], { key: 'A' });
-    fireEvent.keyDown(playerInputs[6], { key: 'A' });
+    fireEvent.keyDown(playerInputs[8], { key: 'A' });
     const errorMessage = screen.getByText('Please correct the highlighted key conflicts before proceeding.');
     expect(errorMessage).toBeInTheDocument();
   });

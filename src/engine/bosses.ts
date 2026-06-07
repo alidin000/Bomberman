@@ -2,6 +2,7 @@ import { BossHazard, GameEngineState, PlayerState } from './types';
 import { isBomb, isObstacle } from '../model/gameItem';
 import { getBossDefinition } from '../content';
 import { applyCharacterSurvival } from './players';
+import { getPlayerCell, positionOverlapsCell } from './grid';
 
 const BOSS_ATTACK_MS = 3100;
 const BOSS_MOVE_MS = 950;
@@ -164,41 +165,42 @@ function spawnBossHazards(state: GameEngineState): {
   const bossDefinition = getBossDefinition(state.boss.id);
   const ability = bossDefinition.attacks[state.tick % bossDefinition.attacks.length];
   const { color } = state.boss;
+  const targetCell = getPlayerCell(target);
   let hazards: BossHazard[] = [];
 
   if (state.boss.id === 'shukaku') {
-    hazards = addHazardAt(state, hazards, 'sandTornado', target.x, target.y, color);
+    hazards = addHazardAt(state, hazards, 'sandTornado', targetCell.x, targetCell.y, color);
     if (state.boss.phase > 1) {
-      hazards = addHazardAt(state, hazards, 'sandSpikes', target.x + 1, target.y, color);
+      hazards = addHazardAt(state, hazards, 'sandSpikes', targetCell.x + 1, targetCell.y, color);
     }
   } else if (state.boss.id === 'matatabi') {
     hazards = addLineHazards(state, 'blueFireTrail', color, state.tick % 2 === 0);
   } else if (state.boss.id === 'isobu') {
     hazards = addLineHazards(state, 'waterCannon', color, Math.abs(target.x - state.boss.x) > Math.abs(target.y - state.boss.y));
   } else if (state.boss.id === 'sonGoku') {
-    hazards = addHazardAt(state, hazards, 'lavaBurst', target.x, target.y, color);
+    hazards = addHazardAt(state, hazards, 'lavaBurst', targetCell.x, targetCell.y, color);
     if (state.boss.phase > 1) {
-      hazards = addHazardAt(state, hazards, 'lavaBurst', target.x + 1, target.y, color);
+      hazards = addHazardAt(state, hazards, 'lavaBurst', targetCell.x + 1, targetCell.y, color);
     }
   } else if (state.boss.id === 'kokuo') {
     hazards = addLineHazards(state, 'steamCharge', color, state.tick % 2 === 1);
   } else if (state.boss.id === 'saiken') {
-    hazards = addHazardAt(state, hazards, 'acidBubble', target.x, target.y, color);
+    hazards = addHazardAt(state, hazards, 'acidBubble', targetCell.x, targetCell.y, color);
     if (state.boss.phase > 1) {
-      hazards = addHazardAt(state, hazards, 'acidBubble', target.x + 2, target.y, color);
+      hazards = addHazardAt(state, hazards, 'acidBubble', targetCell.x + 2, targetCell.y, color);
     }
   } else if (state.boss.id === 'chomei') {
-    hazards = addHazardAt(state, hazards, 'airStrike', target.x, target.y, color);
+    hazards = addHazardAt(state, hazards, 'airStrike', targetCell.x, targetCell.y, color);
     if (state.boss.phase > 1) {
-      hazards = addHazardAt(state, hazards, 'airStrike', target.x, target.y - 1, color);
+      hazards = addHazardAt(state, hazards, 'airStrike', targetCell.x, targetCell.y - 1, color);
     }
   } else if (state.boss.id === 'gyuki') {
-    hazards = addHazardAt(state, hazards, 'tentacleSlam', target.x, target.y, color);
+    hazards = addHazardAt(state, hazards, 'tentacleSlam', targetCell.x, targetCell.y, color);
     if (state.boss.phase > 1) {
-      hazards = addHazardAt(state, hazards, 'tentacleSlam', target.x + 1, target.y, color);
+      hazards = addHazardAt(state, hazards, 'tentacleSlam', targetCell.x + 1, targetCell.y, color);
     }
   } else {
-    hazards = addHazardAt(state, hazards, 'beastBomb', target.x, target.y, color);
+    hazards = addHazardAt(state, hazards, 'beastBomb', targetCell.x, targetCell.y, color);
     hazards = addHazardAt(state, hazards, 'chakraShockwave', state.boss.x + 1, state.boss.y, color);
     hazards = addHazardAt(state, hazards, 'chakraShockwave', state.boss.x - 1, state.boss.y, color);
     hazards = addHazardAt(state, hazards, 'chakraShockwave', state.boss.x, state.boss.y + 1, color);
@@ -214,15 +216,20 @@ function hazardIsActive(hazard: BossHazard): boolean {
 
 function damagePlayersInHazards(
   players: PlayerState[],
-  hazards: BossHazard[]
+  hazards: BossHazard[],
+  timedPowerUps: GameEngineState['timedPowerUps']
 ): PlayerState[] {
   return players.map((player) => {
     if (!player.alive) return player;
+    const invincible = timedPowerUps[player.id]?.some(
+      (tp) => tp.power === 'Invincibility' && tp.ticksRemaining > 0
+    ) || player.powerUps.includes('Invincibility');
+    if (invincible) return player;
+
     const hit = hazards.some((hazard) => (
       hazard.damage > 0
       && hazardIsActive(hazard)
-      && hazard.x === player.x
-      && hazard.y === player.y
+      && positionOverlapsCell(player, hazard.x, hazard.y)
     ));
     return hit ? applyCharacterSurvival(player) : player;
   });
@@ -283,6 +290,6 @@ export function tickBossEncounter(state: GameEngineState, deltaMs: number): Game
       currentAbility: ability,
     },
     hazards: allHazards,
-    players: damagePlayersInHazards(next.players, allHazards),
+    players: damagePlayersInHazards(next.players, allHazards, next.timedPowerUps),
   };
 }

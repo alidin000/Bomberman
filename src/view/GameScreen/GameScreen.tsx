@@ -5,7 +5,11 @@ import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useParams } from 'react-router-dom';
 import { StyledBackground } from '../WelcomeScreen/WelcomeScreen.styles';
-import { KeyBindings, DEFAULT_KEY_BINDINGS } from '../../constants/props';
+import {
+  KeyBindings,
+  DEFAULT_KEY_BINDINGS,
+  normalizeKeyBindings,
+} from '../../constants/props';
 import { RoundResultDialog } from './RoundResultDialog';
 import SettingsScreen from './SettingsScreen/SettingsScreen';
 import ModifyControlsDialog from './SettingsScreen/ModifyControlsDialog';
@@ -27,7 +31,9 @@ import {
 
 export const GameScreen = () => {
   const { numOfPlayers, numOfRounds, selectedMap } = useParams();
-  const [keyBindings, setKeyBindings] = useState<KeyBindings>(DEFAULT_KEY_BINDINGS);
+  const [keyBindings, setKeyBindings] = useState<KeyBindings>(
+    () => normalizeKeyBindings(DEFAULT_KEY_BINDINGS)
+  );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isModifyingControls, setIsModifyingControls] = useState(false);
 
@@ -65,7 +71,7 @@ export const GameScreen = () => {
   useEffect(() => {
     const stored = localStorage.getItem('playerKeyBindings');
     if (stored) {
-      setKeyBindings(JSON.parse(stored));
+      setKeyBindings(normalizeKeyBindings(JSON.parse(stored)));
     }
   }, []);
 
@@ -124,7 +130,7 @@ export const GameScreen = () => {
         <PauseOverlay>Paused</PauseOverlay>
       )}
       <GameHint>
-        Move, bait boss abilities, dodge warning seals, and punish with bombs or ultimates.
+        Move, bait boss abilities, then punish with bombs, detonation tags, cover, or ultimates.
       </GameHint>
       <RoundResultDialog
         open={dialogOpen}
@@ -154,7 +160,10 @@ export const GameScreen = () => {
           setIsModifyingControls(false);
           resume();
         }}
-        onSave={() => {
+        onSave={(nextBindings) => {
+          const normalized = normalizeKeyBindings(nextBindings);
+          setKeyBindings(normalized);
+          localStorage.setItem('playerKeyBindings', JSON.stringify(normalized));
           setIsModifyingControls(false);
           resume();
         }}

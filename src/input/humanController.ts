@@ -24,8 +24,14 @@ export class HumanController implements PlayerController {
     if (input.bomb) {
       return [{ type: 'DROP_BOMB', playerId: player.id }];
     }
+    if (input.detonate) {
+      return [{ type: 'DETONATE_BOMBS', playerId: player.id }];
+    }
     if (input.special) {
       return [{ type: 'USE_ULTIMATE', playerId: player.id }];
+    }
+    if (input.cover) {
+      return [{ type: 'PLACE_OBSTACLE', playerId: player.id }];
     }
     return [];
   }
@@ -49,7 +55,13 @@ export function getInputStateForKey(
     return { ...input, bomb: true };
   }
   if (bindings[5] === key) {
+    return { ...input, detonate: true };
+  }
+  if (bindings[6] === key) {
     return { ...input, special: true };
+  }
+  if (bindings[7] === key) {
+    return { ...input, cover: true };
   }
   return input;
 }

@@ -25,7 +25,9 @@ import {
   ControlsLabel,
   KeyGroup,
   KeyRow,
-  ExtraKeys,
+  ActionKeysGrid,
+  ActionKeyCell,
+  ActionKeyName,
   ConfigIntro,
   SectionTitle,
   SelectionGrid,
@@ -44,7 +46,13 @@ import {
   LoadoutRow,
 } from './ConfigScreen.styles';
 import { WelcomeContainer } from '../WelcomeScreen/WelcomeScreen.styles';
-import { KeyBindings, arrowKeySymbols, DEFAULT_KEY_BINDINGS } from '../../constants/props';
+import {
+  ACTION_BINDING_LABELS,
+  KeyBindings,
+  arrowKeySymbols,
+  DEFAULT_KEY_BINDINGS,
+  normalizeKeyBindings,
+} from '../../constants/props';
 import RosterBoard from '../../assets/ninja-bomber-roster-board.png';
 import StageAtlas from '../../assets/ninja-bomber-stage-atlas.png';
 import {
@@ -120,7 +128,9 @@ export const ConfigScreen = () => {
     DEFAULT_CHARACTER_ID,
   ]);
   const [selectedUpgrade, setSelectedUpgrade] = useState<StoryUpgradeId>('extraClay');
-  const [playerKeyBindings, setPlayerKeyBindings] = useState<KeyBindings>(DEFAULT_KEY_BINDINGS);
+  const [playerKeyBindings, setPlayerKeyBindings] = useState<KeyBindings>(
+    () => normalizeKeyBindings(DEFAULT_KEY_BINDINGS)
+  );
   const navigate = useNavigate();
   const [keyErrors, setKeyErrors] = useState<KeyErrors>({});
   const [storyProgress, setStoryProgress] = useState(loadStoryProgress);
@@ -178,7 +188,7 @@ export const ConfigScreen = () => {
 
   const handleBack = () => {
     setActiveStep((prevActiveStep) => prevActiveStep - 1);
-    setPlayerKeyBindings({ ...DEFAULT_KEY_BINDINGS });
+    setPlayerKeyBindings(normalizeKeyBindings(DEFAULT_KEY_BINDINGS));
     setKeyErrors({});
   };
 
@@ -200,7 +210,7 @@ export const ConfigScreen = () => {
       setStoryProgress(progress);
     }
     localStorage.setItem('selectedMap', JSON.stringify(mapData));
-    localStorage.setItem('playerKeyBindings', JSON.stringify(playerKeyBindings));
+    localStorage.setItem('playerKeyBindings', JSON.stringify(normalizeKeyBindings(playerKeyBindings)));
     localStorage.setItem('gameSetup', JSON.stringify({
       mode,
       stageId: selectedStage,
@@ -249,7 +259,7 @@ export const ConfigScreen = () => {
   }, [activePlayerCount, playerKeyBindings]);
 
   const renderKeyConfig = (player: number) => (
-    <>
+    <React.Fragment key={`player-config-${player}`}>
       <PlayerControlsRow numOfPlayers={numOfPlayers}>
         <ControlsLabel>
           Player
@@ -278,21 +288,27 @@ export const ConfigScreen = () => {
             ))}
           </KeyRow>
         </KeyGroup>
-        <ExtraKeys>
-          {playerKeyBindings[player].slice(4, 6).map((key, index) => (
-            <KeyConfigInput
-              key={`player-${player}-key-${index + 4}`}
-              aria-label={index === 0 ? `player ${player} bomb key` : `player ${player} ultimate key`}
-              value={arrowKeySymbols[key] || key.toUpperCase()}
-              onKeyDown={(e) => handleKeyDown(player, index + 4, e)}
-              readOnly
-              style={{ borderColor: keyErrors[`player${player}-${index + 4}`] ? 'red' : 'black' }}
-            />
-          ))}
-        </ExtraKeys>
+        <ActionKeysGrid>
+          {ACTION_BINDING_LABELS.map((label, index) => {
+            const keyIndex = index + 4;
+            const key = playerKeyBindings[player][keyIndex];
+            return (
+              <ActionKeyCell key={`player-${player}-key-${keyIndex}`}>
+                <ActionKeyName>{label}</ActionKeyName>
+                <KeyConfigInput
+                  aria-label={`player ${player} ${label.toLowerCase()} key`}
+                  value={arrowKeySymbols[key] || key.toUpperCase()}
+                  onKeyDown={(e) => handleKeyDown(player, keyIndex, e)}
+                  readOnly
+                  style={{ borderColor: keyErrors[`player${player}-${keyIndex}`] ? 'red' : 'black' }}
+                />
+              </ActionKeyCell>
+            );
+          })}
+        </ActionKeysGrid>
       </PlayerControlsRow>
       {player < activePlayerCount && <Divider style={{ margin: `${numOfPlayers === '2' ? '60px' : '20px'} 0` }} />}
-    </>
+    </React.Fragment>
   );
 
   useEffect(() => {
@@ -531,7 +547,7 @@ export const ConfigScreen = () => {
           {((activeStep === 1 && mode === 'local') || activeStep === 2) && (
             <StepContent>
               <Typography variant="body2" color="text.secondary">
-                The first extra key drops bombs. The second extra key fires your ultimate.
+                Assign movement plus four action keys: bomb, detonate, ultimate, and cover.
               </Typography>
               <div>
                 {Array.from({ length: activePlayerCount }, (_, i) => renderKeyConfig(i + 1))}

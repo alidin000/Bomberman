@@ -7,7 +7,8 @@ import {
   Point, GameEngineState, MonsterState, PlayerState,
 } from './types';
 import { MONSTER_MOVE_MS } from './constants';
-import { applyCharacterSurvival } from './players';
+import { applyCharacterSurvival, isPowerUpActive } from './players';
+import { getPlayerCell, positionsTouch } from './grid';
 
 const DIRECTIONS: Point[] = [
   { x: 0, y: -1 },
@@ -125,7 +126,7 @@ function moveSmartMonster(
     return pDist < bestDist ? p : best;
   });
 
-  const path = aStarSearch(map, { x: monster.x, y: monster.y }, { x: closest.x, y: closest.y });
+  const path = aStarSearch(map, { x: monster.x, y: monster.y }, getPlayerCell(closest));
   if (path.length > 1) {
     return { ...monster, x: path[1].x, y: path[1].y };
   }
@@ -222,12 +223,10 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): MonsterSt
 export function checkMonsterCollisions(state: GameEngineState): PlayerState[] {
   return state.players.map((player) => {
     if (!player.alive) return player;
-    const hasInvincibility = state.timedPowerUps[player.id]?.some(
-      (tp) => tp.power === 'Invincibility' && tp.ticksRemaining > 0,
-    );
+    const hasInvincibility = isPowerUpActive(state, player.id, 'Invincibility');
     if (hasInvincibility) return player;
 
-    const hit = state.monsters.some((m) => m.x === player.x && m.y === player.y);
+    const hit = state.monsters.some((m) => positionsTouch(m, player));
     return hit ? applyCharacterSurvival(player) : player;
   });
 }

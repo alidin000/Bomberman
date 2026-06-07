@@ -7,7 +7,9 @@ export interface InputState {
   left: boolean;
   right: boolean;
   bomb: boolean;
+  detonate: boolean;
   special: boolean;
+  cover: boolean;
 }
 
 export interface PlayerController {
@@ -20,5 +22,7 @@ export const EMPTY_INPUT_STATE: InputState = {
   left: false,
   right: false,
   bomb: false,
+  detonate: false,
   special: false,
+  cover: false,
 };

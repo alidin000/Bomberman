@@ -24,15 +24,7 @@ import {
   STAGE_DEFINITIONS,
   getBossDefinition,
 } from '../../content';
-
-const CHARACTER_POWER_UPS = [
-  ['Naruto', 'Clone Training / Kurama Chakra / Rasengan Mastery / Sage Training'],
-  ['Sasuke', 'Sharingan Timing / Chidori Current / Curse Mark Veil / Susanoo Fragment'],
-  ['Gaara', 'Sand Armor / Shukaku Chakra / Desert Blessing / Sand Coffin Seal'],
-  ['Itachi', 'Crow Feather / Sharingan Mirage / Tsukuyomi Trigger / Yata Mirror'],
-  ['Minato', 'FTG Kunai / Yellow Flash / Hokage Cloak / Teleport Mastery'],
-  ['Deidara', 'Clay Pouch / C2 Blast Study / Art Release Seal / Explosive Guard'],
-];
+import { getCharacterPowerLoadout } from '../../content/characterPowerups';
 
 const LOCAL_BEASTS = [
   'Leaf: Rogue Genin, Rogue Chunin, Training Clone.',
@@ -108,11 +100,19 @@ export const InstructionsScreen = () => {
                 </ManualItem>
                 <ManualItem>
                   <ManualBadge>Bomb</ManualBadge>
-                  The first extra key plants your basic bomb.
+                  Plants your basic bomb.
+                </ManualItem>
+                <ManualItem>
+                  <ManualBadge>Det</ManualBadge>
+                  Triggers manual bombs after picking up a release/tag power-up.
                 </ManualItem>
                 <ManualItem>
                   <ManualBadge>Ult</ManualBadge>
-                  The second extra key spends the charged ultimate.
+                  Spends the charged ultimate.
+                </ManualItem>
+                <ManualItem>
+                  <ManualBadge>Cover</ManualBadge>
+                  Places a cover tile ahead after picking up a barrier power-up.
                 </ManualItem>
                 <ManualItem>
                   <ManualBadge>Pause</ManualBadge>
@@ -154,13 +154,19 @@ export const InstructionsScreen = () => {
             <ManualSection wide>
               <ManualSectionTitle>Character Power-Ups</ManualSectionTitle>
               <ManualList compact>
-                {CHARACTER_POWER_UPS.map(([name, effect]) => (
-                  <ManualItem key={name}>
-                    <ManualBadge>{name}</ManualBadge>
-                    {effect}
+                {CHARACTER_DEFINITIONS.filter((character) => character.implemented).map((character) => (
+                  <ManualItem key={`${character.id}-powerups`}>
+                    <ManualBadge>{character.name}</ManualBadge>
+                    {getCharacterPowerLoadout(character.id).map((powerUp) => (
+                      <span key={powerUp.power}>
+                        <strong>{powerUp.label}</strong>
+                        {': '}
+                        {powerUp.effect}
+                        {' '}
+                      </span>
+                    ))}
                   </ManualItem>
                 ))}
-                <ManualItem>Pickups still improve core arena stats like bomb count, blast radius, movement, shields, manual release, phasing, and cover.</ManualItem>
               </ManualList>
             </ManualSection>
 

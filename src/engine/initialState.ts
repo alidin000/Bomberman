@@ -47,6 +47,7 @@ function createPlayer(index: number, config: GameConfig): PlayerState {
     ultimateCooldown,
     ultimateCooldownRemaining: 0,
     ultimateCharge: 100,
+    facing: index === 1 ? 'left' : 'right',
     passiveState: character.passive,
   };
 }
@@ -122,6 +123,7 @@ export function createInitialState(config: GameConfig): GameEngineState {
     explosions: [],
     destroyedBoxes: [],
     timedPowerUps: {},
+    pickupMessages: [],
     boss: createBoss({ ...config, map }),
     hazards: [],
     round: 1,
@@ -155,6 +157,7 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     explosions: [],
     destroyedBoxes: [],
     timedPowerUps: {},
+    pickupMessages: [],
     boss: createBoss({ ...state.config, map }),
     hazards: [],
     phase: 'playing',

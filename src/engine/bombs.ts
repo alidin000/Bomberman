@@ -9,7 +9,8 @@ import {
 import {
   BOMB_FUSE_MS, BOX_DESTROY_MS, EXPLOSION_MS,
 } from './constants';
-import { applyCharacterSurvival } from './players';
+import { applyCharacterSurvival, isPowerUpActive } from './players';
+import { getCell, getPlayerCell, positionOverlapsCell } from './grid';
 
 let bombIdCounter = 0;
 
@@ -65,12 +66,12 @@ function getBombFuse(kind: BombState['kind']): number {
     sandCoffin: 3300,
     thunderMark: 1500,
     crowClone: 2400,
-    giantClay: 1400,
-    rasenshuriken: 1100,
-    kirin: 800,
-    sandTsunami: 1200,
-    instantTeleport: 700,
-    tsukuyomi: 900,
+    giantClay: 2600,
+    rasenshuriken: 2400,
+    kirin: 2100,
+    sandTsunami: 2600,
+    instantTeleport: 1700,
+    tsukuyomi: 2300,
   };
   return fuseByKind[kind] ?? BOMB_FUSE_MS;
 }
@@ -95,11 +96,12 @@ function getCloneBombPoint(
   state: GameEngineState,
   player: PlayerState,
 ): { x: number; y: number } | null {
+  const origin = getPlayerCell(player);
   return [
-    { x: player.x + 1, y: player.y },
-    { x: player.x - 1, y: player.y },
-    { x: player.x, y: player.y + 1 },
-    { x: player.x, y: player.y - 1 },
+    { x: origin.x + 1, y: origin.y },
+    { x: origin.x - 1, y: origin.y },
+    { x: origin.x, y: origin.y + 1 },
+    { x: origin.x, y: origin.y - 1 },
   ].find((point) => canPlaceBombAt(state, point.x, point.y)) ?? null;
 }
 
@@ -109,11 +111,12 @@ function getBasicBombPlacements(
   kind: BombState['kind'],
   hasDetonator: boolean,
 ): BombState[] {
+  const origin = getPlayerCell(player);
   const bombs = [
     createBomb(
       player.id,
-      player.x,
-      player.y,
+      origin.x,
+      origin.y,
       getBasicBombRange(player, kind),
       hasDetonator,
       kind,
@@ -262,17 +265,11 @@ export function placeBomb(state: GameEngineState, playerId: string): GameEngineS
   const player = state.players.find((p) => p.id === playerId);
   if (!player || !player.alive) return state;
   const hasDetonator = player.powerUps.includes('Detonator');
-
-  if (
-    hasDetonator
-    && player.activeBombs > 0
-    && (player.activeBombs >= player.maxBombs || state.map[player.y][player.x] !== 'Empty')
-  ) {
-    return detonatePlayerBombs(state, playerId);
-  }
+  const origin = getPlayerCell(player);
+  const currentCell = getCell(state.map, origin);
 
   if (player.activeBombs >= player.maxBombs && player.characterId !== 'naruto') return state;
-  if (state.map[player.y][player.x] !== 'Empty') return state;
+  if (currentCell !== 'Empty') return state;
 
   const kind = BASIC_BOMBS[player.characterId];
   const bombs = getBasicBombPlacements(state, player, kind, hasDetonator);
@@ -304,20 +301,22 @@ export function placeBomb(state: GameEngineState, playerId: string): GameEngineS
 
 export function placeUltimateBomb(state: GameEngineState, playerId: string): GameEngineState {
   const player = state.players.find((p) => p.id === playerId);
-  if (!player || !player.alive || player.ultimateCooldownRemaining > 0) return state;
-  if (state.map[player.y][player.x] !== 'Empty') return state;
+  if (!player || !player.alive) return state;
+  if (player.ultimateCooldownRemaining > 0) return state;
+  const origin = getPlayerCell(player);
+  if (getCell(state.map, origin) !== 'Empty') return state;
 
   const bomb = createBomb(
     playerId,
-    player.x,
-    player.y,
+    origin.x,
+    origin.y,
     player.bombRange + (player.characterId === 'minato' ? 1 : 3),
     false,
     ULTIMATE_BOMBS[player.characterId],
     getBombFuse(ULTIMATE_BOMBS[player.characterId]),
   );
   const newMap = state.map.map((row) => [...row]);
-  newMap[player.y][player.x] = {
+  newMap[origin.y][origin.x] = {
     range: bomb.range,
     coords: { x: bomb.x, y: bomb.y },
     ownerId: playerId,
@@ -327,7 +326,7 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
       ? {
         ...p,
         ...(player.characterId === 'minato'
-          ? getTeleportDestination(state, player.x, player.y)
+          ? getTeleportDestination(state, origin.x, origin.y)
           : {}),
         activeBombs: p.activeBombs + 1,
         ultimateCooldownRemaining: p.ultimateCooldown,
@@ -417,8 +416,10 @@ function applyMonsterBombEffect(monster: MonsterState, bomb: BombState): Monster
   return null;
 }
 
-function detonatePlayerBombs(state: GameEngineState, playerId: string): GameEngineState {
-  const playerBombs = state.bombs.filter((b) => b.ownerId === playerId);
+export function detonatePlayerBombs(state: GameEngineState, playerId: string): GameEngineState {
+  const playerBombs = state.bombs.filter(
+    (bomb) => bomb.ownerId === playerId && bomb.manualDetonation
+  );
   if (playerBombs.length === 0) return state;
 
   let next = explodeBombs(state, playerBombs);
@@ -493,6 +494,9 @@ export function explodeBombs(state: GameEngineState, bombsToExplode: BombState[]
         });
         map[y][x] = 'Empty';
       }
+      if (isObstacle(cell)) {
+        map[y][x] = 'Empty';
+      }
 
       const chained = cellHasBomb(map, x, y);
       const chainedBomb = chained ? remainingBombsByCell.get(key) : null;
@@ -503,10 +507,8 @@ export function explodeBombs(state: GameEngineState, bombsToExplode: BombState[]
       }
 
       players.forEach((p, index) => {
-        if (p.x === x && p.y === y && p.alive) {
-          const invincible = state.timedPowerUps[p.id]?.some(
-            (tp) => tp.power === 'Invincibility' && tp.ticksRemaining > 0,
-          );
+        if (p.alive && positionOverlapsCell(p, x, y)) {
+          const invincible = isPowerUpActive(state, p.id, 'Invincibility');
           if (!invincible) {
             players[index] = applyCharacterSurvival(p);
           }
@@ -600,9 +602,9 @@ export function killPlayersInExplosions(
     if (!player.alive) return player;
     const invincible = timedPowerUps[player.id]?.some(
       (tp) => tp.power === 'Invincibility' && tp.ticksRemaining > 0,
-    );
+    ) || player.powerUps.includes('Invincibility');
     if (invincible) return player;
-    const hit = explosions.some((e) => e.x === player.x && e.y === player.y);
+    const hit = explosions.some((e) => positionOverlapsCell(player, e.x, e.y));
     return hit ? applyCharacterSurvival(player) : player;
   });
 }

@@ -7,6 +7,8 @@ import {
   GameAction,
   GameEngineState,
   GameConfig,
+  Direction,
+  PlayerState,
   TICK_MS,
 } from '../engine';
 import { KeyBindings } from '../constants/props';
@@ -19,6 +21,28 @@ import {
 
 const MAX_FRAME_DELTA_MS = 100;
 const MAX_TICK_STEPS_PER_FRAME = 4;
+const MOVE_REPEAT_MS = 28;
+const FAST_MOVE_REPEAT_MS = 18;
+
+type ActiveMovement = {
+  accumulatorMs: number;
+  direction: Direction;
+  key: string;
+};
+
+function getInputDirection(input: ReturnType<typeof getInputStateForKey>): Direction | null {
+  if (input.up) return 'up';
+  if (input.down) return 'down';
+  if (input.left) return 'left';
+  if (input.right) return 'right';
+  return null;
+}
+
+function getMoveRepeatMs(player: PlayerState): number {
+  return player.characterId === 'minato' || player.powerUps.includes('RollerSkate')
+    ? FAST_MOVE_REPEAT_MS
+    : MOVE_REPEAT_MS;
+}
 
 export function useGameEngine(config: GameConfig | null, keyBindings: KeyBindings) {
   const [state, dispatch] = useReducer(gameReducer, null);
@@ -27,6 +51,7 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
   const accumulatorRef = useRef(0);
   const rafRef = useRef<number>();
   const humanControllerRef = useRef(new HumanController());
+  const activeMovementRef = useRef<Record<string, ActiveMovement>>({});
 
   useEffect(() => {
     if (config) {
@@ -54,7 +79,45 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
       const input = getInputStateForKey(key, bindings);
       if (hasInput(input)) {
         event.preventDefault();
-        humanControllerRef.current.getActions(player, input).forEach(dispatch);
+        const direction = getInputDirection(input);
+        if (direction) {
+          const active = activeMovementRef.current[player.id];
+          if (!active || active.direction !== direction || active.key !== key) {
+            dispatch({ type: 'MOVE', playerId: player.id, direction });
+            activeMovementRef.current[player.id] = {
+              accumulatorMs: 0,
+              direction,
+              key,
+            };
+            return;
+          }
+          return;
+        }
+        if (!event.repeat) {
+          humanControllerRef.current.getActions(player, input).forEach(dispatch);
+        }
+        return;
+      }
+    }
+  }, [keyBindings]);
+
+  const handleKeyUp = useCallback((event: KeyboardEvent) => {
+    const current = stateRef.current;
+    if (!current) return;
+
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+
+    for (let i = 0; i < current.players.length; i += 1) {
+      const bindings = getPlayerBindings(keyBindings, i);
+      if (!bindings) continue;
+
+      const player = current.players[i];
+      const input = getInputStateForKey(key, bindings);
+      const direction = getInputDirection(input);
+      const active = activeMovementRef.current[player.id];
+
+      if (direction && active?.key === key) {
+        delete activeMovementRef.current[player.id];
         return;
       }
     }
@@ -62,8 +125,12 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [handleKeyDown, handleKeyUp]);
 
   useEffect(() => {
     let lastTime = performance.now();
@@ -86,6 +153,28 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
         if (tickSteps === MAX_TICK_STEPS_PER_FRAME) {
           accumulatorRef.current = 0;
         }
+
+        Object.entries(activeMovementRef.current).forEach(([playerId, active]) => {
+          const player = current.players.find((item) => item.id === playerId);
+          if (!player || !player.alive) {
+            delete activeMovementRef.current[playerId];
+            return;
+          }
+
+          const repeatMs = getMoveRepeatMs(player);
+          let accumulatorMs = active.accumulatorMs + delta;
+          const moveSteps = Math.min(5, Math.floor(accumulatorMs / repeatMs));
+          for (let step = 0; step < moveSteps; step += 1) {
+            dispatch({ type: 'MOVE', playerId, direction: active.direction });
+          }
+          accumulatorMs -= moveSteps * repeatMs;
+          activeMovementRef.current[playerId] = {
+            ...active,
+            accumulatorMs,
+          };
+        });
+      } else {
+        activeMovementRef.current = {};
       }
       rafRef.current = requestAnimationFrame(loop);
     };

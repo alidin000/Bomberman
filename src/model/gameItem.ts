@@ -32,5 +32,8 @@ export function isBomb(item: gameItem): item is Bomb {
 }
 
 export function isObstacle(item: gameItem): item is Obstacle {
-  return typeof item === 'object' && 'ownerId' in item && 'coords' in item;
+  return typeof item === 'object'
+    && 'ownerId' in item
+    && 'coords' in item
+    && !('range' in item);
 }

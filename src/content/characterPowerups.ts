@@ -5,6 +5,7 @@ import { CharacterId } from './types';
 export type CharacterPowerTheme = {
   label: string;
   shortLabel: string;
+  effect: string;
   color: string;
   accent: string;
   paper: string;
@@ -12,29 +13,42 @@ export type CharacterPowerTheme = {
 
 const DEFAULT_POWER_THEMES: Record<Power, CharacterPowerTheme> = {
   AddBomb: {
-    label: '+1 Bomb Charge', shortLabel: '+Bomb', color: '#f97316', accent: '#fed7aa', paper: '#fff1d6'
+    label: '+1 Bomb Charge', shortLabel: '+Bomb', effect: 'Adds one extra active bomb charge.', color: '#f97316', accent: '#fed7aa', paper: '#fff1d6'
   },
   BlastRangeUp: {
-    label: '+Blast Radius', shortLabel: '+Blast', color: '#22c55e', accent: '#bbf7d0', paper: '#ecfccb'
+    label: '+Blast Radius', shortLabel: '+Blast', effect: 'Extends this character\'s blast pattern by one tile.', color: '#22c55e', accent: '#bbf7d0', paper: '#ecfccb'
   },
   Detonator: {
-    label: 'Manual Release', shortLabel: 'Release', color: '#dc2626', accent: '#fed7aa', paper: '#f9e8d2'
+    label: 'Manual Release', shortLabel: 'Release', effect: 'Plants manual bombs that can be triggered with the detonate key.', color: '#dc2626', accent: '#fed7aa', paper: '#f9e8d2'
   },
   RollerSkate: {
-    label: '+Movement Speed', shortLabel: '+Speed', color: '#38bdf8', accent: '#dbeafe', paper: '#e0f2fe'
+    label: '+Movement Speed', shortLabel: '+Speed', effect: 'Speeds up held movement with a faster 0.1-step cadence.', color: '#38bdf8', accent: '#dbeafe', paper: '#e0f2fe'
   },
   Invincibility: {
-    label: 'Chakra Shield', shortLabel: 'Shield', color: '#a855f7', accent: '#ddd6fe', paper: '#ede9fe'
+    label: 'Chakra Shield', shortLabel: 'Shield', effect: 'Temporarily blocks blasts, monsters, and active boss hazards.', color: '#a855f7', accent: '#ddd6fe', paper: '#ede9fe'
   },
   Ghost: {
-    label: 'Phase Step', shortLabel: 'Phase', color: '#16a34a', accent: '#bbf7d0', paper: '#dcfce7'
+    label: 'Phase Step', shortLabel: 'Phase', effect: 'Temporarily phases through walls, bombs, boxes, and cover.', color: '#16a34a', accent: '#bbf7d0', paper: '#dcfce7'
   },
   Obstacle: {
-    label: 'Barrier Drop', shortLabel: 'Barrier', color: '#a16207', accent: '#fde68a', paper: '#e7d2a6'
+    label: 'Barrier Drop', shortLabel: 'Barrier', effect: 'Adds three cover charges; use the cover key to place one ahead.', color: '#a16207', accent: '#fde68a', paper: '#e7d2a6'
   },
 };
 
-const CHARACTER_POWER_THEMES: Record<CharacterId, Partial<Record<Power, CharacterPowerTheme>>> = {
+const POWER_ORDER: Power[] = [
+  'AddBomb',
+  'BlastRangeUp',
+  'Detonator',
+  'RollerSkate',
+  'Invincibility',
+  'Ghost',
+  'Obstacle',
+];
+
+const CHARACTER_POWER_THEMES: Record<
+CharacterId,
+Partial<Record<Power, Partial<CharacterPowerTheme>>>
+> = {
   deidara: {
     AddBomb: { label: 'Clay Pouch', shortLabel: 'Clay +1', color: '#f5efe0', accent: '#f97316', paper: '#fff7ed' },
     BlastRangeUp: { label: 'C2 Blast Study', shortLabel: 'C2 Range', color: '#fb923c', accent: '#fef3c7', paper: '#fff7ed' },
@@ -95,6 +109,17 @@ export function getCharacterPowerTheme(
   characterId: CharacterId | undefined,
   power: Power,
 ): CharacterPowerTheme {
-  return CHARACTER_POWER_THEMES[characterId ?? 'deidara']?.[power]
-    ?? DEFAULT_POWER_THEMES[power];
+  return {
+    ...DEFAULT_POWER_THEMES[power],
+    ...CHARACTER_POWER_THEMES[characterId ?? 'deidara']?.[power],
+  };
+}
+
+export function getCharacterPowerLoadout(
+  characterId: CharacterId | undefined,
+): Array<CharacterPowerTheme & { power: Power }> {
+  return POWER_ORDER.map((power) => ({
+    power,
+    ...getCharacterPowerTheme(characterId, power),
+  }));
 }

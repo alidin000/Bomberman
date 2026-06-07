@@ -54,6 +54,7 @@ export interface PlayerState {
   ultimateCooldown: number;
   ultimateCooldownRemaining: number;
   ultimateCharge: number;
+  facing?: Direction;
   specialState?: string;
   passiveState?: string;
 }
@@ -124,6 +125,13 @@ export interface TimedPowerUp {
   flashTicksRemaining: number;
 }
 
+export interface PowerUpMessage {
+  id: string;
+  playerId: string;
+  power: Power;
+  ticksRemaining: number;
+}
+
 export interface GameConfig {
   mode?: GameMode;
   numPlayers: number;
@@ -143,6 +151,7 @@ export interface GameEngineState {
   explosions: ExplosionCell[];
   destroyedBoxes: DestroyedBox[];
   timedPowerUps: Record<string, TimedPowerUp[]>;
+  pickupMessages: PowerUpMessage[];
   boss: BossState | null;
   hazards: BossHazard[];
   round: number;
