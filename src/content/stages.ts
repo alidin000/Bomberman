@@ -1,0 +1,112 @@
+import { StageDefinition, StageId } from './types';
+
+export const STAGE_DEFINITIONS: StageDefinition[] = [
+  {
+    id: 'hiddenLeaf',
+    name: 'Hidden Leaf Village',
+    mapId: 'hiddenLeaf',
+    theme: 'Forest village lanes with timber walls, trap leaves, and monument colors.',
+    mechanic: 'Leaf traps pulse in cross patterns before bursting.',
+    bossId: 'kurama',
+    palette: {
+      groundA: '#24451f',
+      groundB: '#1b3518',
+      wall: '#5f4634',
+      crate: '#8b5e34',
+      accent: '#ff8a00',
+    },
+    assetSlots: {},
+    implemented: true,
+  },
+  {
+    id: 'hiddenSand',
+    name: 'Hidden Sand Village',
+    mapId: 'hiddenSand',
+    theme: 'Desert arena with carved stone alleys and drifting sand cover.',
+    mechanic: 'Sand tornadoes chase players and force lane changes.',
+    bossId: 'shukaku',
+    palette: {
+      groundA: '#8b6f47',
+      groundB: '#73542f',
+      wall: '#5a4024',
+      crate: '#c48a4a',
+      accent: '#facc15',
+    },
+    assetSlots: {},
+    implemented: true,
+  },
+  {
+    id: 'hiddenMist',
+    name: 'Hidden Mist Village',
+    mapId: 'hiddenMist',
+    theme: 'Wet stone bridges with low fog and water-channel chokepoints.',
+    mechanic: 'Water cannons fire long telegraphed lines.',
+    bossId: 'isobu',
+    palette: {
+      groundA: '#1f3f46',
+      groundB: '#183039',
+      wall: '#334155',
+      crate: '#64748b',
+      accent: '#7dd3fc',
+    },
+    assetSlots: {},
+    implemented: true,
+  },
+  {
+    id: 'hiddenCloud',
+    name: 'Hidden Cloud Village',
+    mapId: 'hiddenCloud',
+    theme: 'Sky platforms, storm lanes, and broken cloud cover.',
+    mechanic: 'Tentacle slams and lightning lanes split the arena.',
+    bossId: 'gyuki',
+    palette: {
+      groundA: '#334155',
+      groundB: '#1e293b',
+      wall: '#475569',
+      crate: '#94a3b8',
+      accent: '#60a5fa',
+    },
+    assetSlots: {},
+    implemented: true,
+  },
+  {
+    id: 'hiddenStone',
+    name: 'Hidden Stone Village',
+    mapId: 'hiddenStone',
+    theme: 'Canyon walls and boulder corridors with heavy cover.',
+    mechanic: 'Steam charges shove players out of safe routes.',
+    bossId: 'kokuo',
+    palette: {
+      groundA: '#4a3a2a',
+      groundB: '#37291d',
+      wall: '#57534e',
+      crate: '#78716c',
+      accent: '#e5e7eb',
+    },
+    assetSlots: {},
+    implemented: true,
+  },
+  {
+    id: 'akatsukiHideout',
+    name: 'Akatsuki Hideout',
+    mapId: 'akatsukiHideout',
+    theme: 'Dark ritual cave with red seal markings and ambush corridors.',
+    mechanic: 'Blue fire trails and seal bursts punish predictable movement.',
+    bossId: 'matatabi',
+    palette: {
+      groundA: '#1a1015',
+      groundB: '#0f0b12',
+      wall: '#3f1d2b',
+      crate: '#5b2436',
+      accent: '#dc2626',
+    },
+    assetSlots: {},
+    implemented: true,
+  },
+];
+
+export const DEFAULT_STAGE_ID: StageId = 'hiddenSand';
+
+export function getStageDefinition(id?: string): StageDefinition {
+  return STAGE_DEFINITIONS.find((stage) => stage.id === id) ?? STAGE_DEFINITIONS[1];
+}

@@ -22,17 +22,13 @@ export const InstructionsScreen = () => {
         aria-labelledby="customized-dialog-title"
       >
         <StyledDialogTitle id="customized-dialog-title">
-          Welcome to Bomberman!
+          Shinobi Arena Manual
         </StyledDialogTitle>
         <StyledDialogContent dividers>
           <Typography variant="body1">
-            Welcome to
-            <strong>Bomberman</strong>
-            ! Dive into an explosive adventure with our custom Bomberman game,
-            where strategy, speed, and sharp reflexes lead to victory.
-            Play against your friend(s) in this dynamic,
-            tile-based arena filled with dangers and delights.
-            Here&apos;s a guide to get you started.
+            Enter a 3D shinobi arena where bombs are character techniques,
+            village stages shape the fight, and tailed beasts pressure the board
+            with warned hazards.
           </Typography>
           {' '}
           <br />
@@ -40,35 +36,32 @@ export const InstructionsScreen = () => {
           {' '}
           <br />
           <Typography variant="body1">
-            The aim is simple: be the last Bomberman standing.
-            Navigate the 2D field, plant bombs to eliminate obstacles and opponents,
-            and dodge monsters to survive.
+            In solo mode, defeat the village boss before it overwhelms the arena.
+            In local arena mode, outlast the other shinobi across the chosen
+            number of trials.
           </Typography>
           {' '}
           <br />
-          <Typography variant="h4">Game Setup</Typography>
+          <Typography variant="h4">Arena Setup</Typography>
           {' '}
           <br />
           <Typography variant="body1">
-            <strong>Maps:</strong>
+            <strong>Villages:</strong>
             {' '}
-            Choose from 3 distinct maps, each with its own layout of indestructible walls,
-            destructible boxes, and bonuses. Maps can have various shapes,
-            providing unique strategic challenges.
+            Choose Leaf, Sand, Mist, Cloud, Stone, or Hideout stages. Each stage
+            uses a different arena layout, palette, boss identity, and hazard theme.
           </Typography>
           <Typography variant="body1">
-            <strong>Players:</strong>
+            <strong>Shinobi:</strong>
             {' '}
-            Two or optionally three players can join the fray, each controlling a
-            Bomberman character.Aim to outlast your opponents by utilizing bombs,
-            power-ups, and quick movements.
+            Pick from Deidara, Naruto, Sasuke, Gaara, Minato, and Itachi. Each
+            one has a named basic bomb, ultimate, passive style, and blast pattern.
           </Typography>
           <Typography variant="body1">
-            <strong>Wins:</strong>
+            <strong>Victory Seals:</strong>
             {' '}
-            Before starting, set the number of wins required for a victory.
-            Track your progress after each round, aiming to meet the set target.
-            Draws count as a loss for all involved.
+            In local mode, choose how many trial wins are needed to claim the match.
+            Solo mode tracks boss rewards and unlocks through story progress.
           </Typography>
           {' '}
           <br />
@@ -79,20 +72,21 @@ export const InstructionsScreen = () => {
             <strong>Movement:</strong>
             {' '}
             Use your keyboard to move your character up, down, left, or right.
-            Navigate the field to avoid dangers and position yourself strategically.
+            Read warning seals, bait boss casts, and keep escape paths open.
           </Typography>
           <Typography variant="body1">
-            <strong>Bombs:</strong>
+            <strong>Bomb Techniques:</strong>
             {' '}
-            Place bombs on your current tile with a special action button.
-            Each bomb explodes in a cross-shaped blast after a short delay,
-            affecting adjacent tiles but blocked by walls and boxes.
+            Place your basic bomb on the current tile. Deidara uses clay spiders,
+            Naruto adds clone diagonals, Sasuke pierces with Chidori, Gaara slows
+            with sand, Minato marks space, and Itachi delays enemies with crows.
           </Typography>
           <Typography variant="body1">
-            <strong>Custom Controls:</strong>
+            <strong>Ultimates:</strong>
             {' '}
-            Customize your control scheme from the settings menu.
-            Your last configuration is saved and applied automatically at game start.
+            The second action key spends the charged ultimate. These create larger
+            signature effects like C3, Rasenshuriken, Kirin, Sand Tsunami, Instant
+            Teleport, or Tsukuyomi.
           </Typography>
           {' '}
           <br />
@@ -103,27 +97,26 @@ export const InstructionsScreen = () => {
             <strong>Walls and Boxes:</strong>
             {' '}
             Navigate around indestructible walls and destructible boxes.
-            Boxes may hide power-ups or curses, revealed only when destroyed.
+            Boxes may hide chakra upgrades or arena tools, revealed only when destroyed.
           </Typography>
           <Typography variant="body1">
-            <strong>Monsters:</strong>
+            <strong>Tailed Beasts and Beasts:</strong>
             {' '}
-            Avoid monsters roaming the field. If they touch your Bomberman,
-            it&apos;s game over. Their movement is unpredictable, changing direction
-            upon hitting obstacles or randomly over time.
+            Solo bosses move, cast warned abilities, and change pressure by phase.
+            Local arena beasts roam as fox, oni, mist, and horned hazards.
           </Typography>
           <Typography variant="body1">
-            <strong>Power-Ups:</strong>
+            <strong>Scrolls, Tags, and Charms:</strong>
             {' '}
-            Enhance your Bomberman with bonuses from destroyed boxes,
-            such as increased bomb count, expanded blast range, and unique abilities like
-            invincibility or passing through obstacles.
+            Broken boxes can reveal clay storage scrolls, blast formula scrolls,
+            body flicker tags, command seals, guard charms, phase seals, and
+            earth-style seals.
           </Typography>
           <Typography variant="body1">
-            <strong>Curses:</strong>
+            <strong>Hazards:</strong>
             {' '}
-            Beware of picking up curses that can slow you down,
-            limit your bomb&apos;s blast range, or force premature bomb placement.
+            Warning markers appear before boss attacks become active. Step away
+            during the warning, then punish after the cast.
           </Typography>
           {' '}
           <br />
@@ -139,16 +132,16 @@ export const InstructionsScreen = () => {
             setting up traps and strategic strikes.
           </Typography>
           <Typography variant="body1">
-            <strong>Special Power-Ups:</strong>
+            <strong>Boss Control:</strong>
             {' '}
-            Seek out advanced bonuses for game-changing abilities like detonating bombs on command,
-            increased speed, and the power to place additional obstacles on the field.
+            Sand and illusion bombs delay boss attacks. Lightning and clay hit harder.
+            Teleport and clone blasts help reposition and cover unusual angles.
           </Typography>
           <Typography variant="body1">
-            <strong>Hindering Curses:</strong>
+            <strong>Custom Controls:</strong>
             {' '}
-            Unlucky finds can hinder your progress. Learn to adapt quickly to challenges like
-            decreased speed or forced bomb placement.
+            Configure movement, bomb, and ultimate keys from setup or the settings menu.
+            Your last control setup is reused on the next run.
           </Typography>
           {' '}
           <br />
@@ -156,10 +149,8 @@ export const InstructionsScreen = () => {
           {' '}
           <br />
           <Typography variant="body1">
-            The game concludes when one Bomberman remains or all
-            players meet their demise, resulting in a draw.
-            Survive monster encounters and explosions to claim victory. After each round,
-            review the scores and aim for the set number of wins to achieve ultimate victory.
+            A solo trial ends when the boss is defeated or the player is sealed.
+            A local match ends when a shinobi reaches the target number of trial wins.
           </Typography>
           {' '}
           <br />
@@ -170,26 +161,25 @@ export const InstructionsScreen = () => {
             <strong>Strategic Bombing:</strong>
             {' '}
             Plan your bomb placements not just to destroy obstacles,
-            but to trap opponents or defend yourself against monsters.
+            but to trap opponents, clip boss movement, or force beasts into blast lines.
           </Typography>
           <Typography variant="body1">
-            <strong>Monitor Power-Ups:</strong>
+            <strong>Watch the HUD:</strong>
             {' '}
-            Keep track of your bonuses and use them to your advantage,
-            adapting your strategy to the power-ups at your disposal.
+            The HUD shows the selected character&apos;s bomb, ultimate, charge, boss
+            health, active cast, and danger-zone count.
           </Typography>
           <Typography variant="body1">
             <strong>Adapt and Overcome:</strong>
             {' '}
-            Stay alert to the changing dynamics of the game field.
-            Adapt to curses, capitalize on power-ups, and anticipate your opponents&apos; moves.
+            Every character has a different blast footprint. Choose the shinobi
+            whose bomb shape fits your route through the stage.
           </Typography>
           <Typography variant="body1">
             <strong>Ready, Set, Explode!</strong>
             {' '}
-            With customizable controls, a variety of maps, and a mix of strategic elements,
-            Custom Bomberman offers endless fun and competition. Whether it&apos;s a duel or
-            a three-player showdown, only the cleverest and quickest will emerge victorious.
+            Master the village map, create space with your signature bomb, and
+            time ultimates when the boss or rival shinobi has nowhere to run.
           </Typography>
         </StyledDialogContent>
         <DialogActions>

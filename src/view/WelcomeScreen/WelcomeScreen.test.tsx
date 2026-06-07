@@ -1,6 +1,8 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BrowserRouter, useNavigate, NavigateFunction } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material/styles';
+import theme from '../../theme/InstructionsTheme';
 import { WelcomeScreen } from './WelcomeScreen';
 
 jest.mock('react-router-dom', () => {
@@ -22,35 +24,27 @@ describe('WelcomeScreen', () => {
   const setup = () => {
     render(
       <BrowserRouter>
-        <WelcomeScreen />
+        <ThemeProvider theme={theme}>
+          <WelcomeScreen />
+        </ThemeProvider>
       </BrowserRouter>
     );
   };
 
-  it('should display the Bomberman logo', () => {
+  it('should display the game title', () => {
     setup();
-    const logo = screen.getByAltText('Bomberman');
-    expect(logo).toBeInTheDocument();
-    expect(logo).toHaveStyle('width: 50%');
+    expect(screen.getByText('Explosive Shinobi Arena')).toBeInTheDocument();
   });
 
-  it('should display the instructions image', () => {
+  it('should navigate to /config when Enter the Arena is clicked', () => {
     setup();
-    const instructionsImg = screen.getByAltText('Instructions');
-    expect(instructionsImg).toBeInTheDocument();
-  });
-
-  it('should navigate to /config when the start button is clicked', () => {
-    setup();
-    const startButton = screen.getByRole('button');
-    fireEvent.click(startButton);
+    fireEvent.click(screen.getByRole('button', { name: /enter the arena/i }));
     expect(mockNavigate).toHaveBeenCalledWith('/config');
   });
 
-  it('should navigate to /instructions when the instructions image is clicked', () => {
+  it('should navigate to /instructions when Shinobi Manual is clicked', () => {
     setup();
-    const instructionsImg = screen.getByAltText('Instructions');
-    fireEvent.click(instructionsImg);
+    fireEvent.click(screen.getByRole('button', { name: /shinobi manual/i }));
     expect(mockNavigate).toHaveBeenCalledWith('/instructions');
   });
 });

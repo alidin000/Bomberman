@@ -1,38 +1,56 @@
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material/styles';
+import theme from '../../theme/InstructionsTheme';
 import { GameScreen } from './GameScreen';
+import { createInitialState } from '../../engine/initialState';
+import { parseMapRows } from '../../engine/mapLoader';
+import { defaultMap } from '../../constants/contants';
+
+jest.mock('./GameScene3D', () => ({
+  GameScene3D: () => <div data-testid="game-scene-3d" />,
+}));
+
+const mockState = createInitialState({
+  numPlayers: 2,
+  totalRounds: 1,
+  selectedMap: 'map1',
+  map: parseMapRows(defaultMap),
+});
+
+jest.mock('../../hooks/useGameEngine', () => ({
+  useGameEngine: () => ({
+    state: mockState,
+    dispatch: jest.fn(),
+    pause: jest.fn(),
+    resume: jest.fn(),
+    restart: jest.fn(),
+    dismissDialog: jest.fn(),
+  }),
+}));
 
 describe('GameScreen', () => {
   it('renders without crashing', () => {
-    const { container } = render(
-      <MemoryRouter initialEntries={['/gamescreen/1']}>
-        <GameScreen />
+    render(
+      <MemoryRouter initialEntries={['/game/2/1/map1']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
       </MemoryRouter>
     );
-    expect(container).toBeInTheDocument();
+    expect(screen.getByTestId('game-scene-3d')).toBeInTheDocument();
   });
 
-  it('initializes players correctly', () => {
-    const { getByText } = render(
-      <MemoryRouter initialEntries={['/gamescreen/1']}>
-        <GameScreen />
+  it('shows themed player names in HUD', () => {
+    render(
+      <MemoryRouter initialEntries={['/game/2/1/map1']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
       </MemoryRouter>
     );
-    expect(getByText('player1')).toBeInTheDocument();
-    expect(getByText('player2')).toBeInTheDocument();
-  });
-
-  it('loads map from local storage', async () => {
-    localStorage.setItem('selectedMap', JSON.stringify([[' ', 'W', 'B']]));
-    const { findByAltText } = render(
-      <MemoryRouter initialEntries={['/gamescreen/1']}>
-        <GameScreen />
-      </MemoryRouter>
-    );
-    const wallImage = await findByAltText('Wall');
-    const boxImage = await findByAltText('Box');
-    expect(wallImage).toBeInTheDocument();
-    expect(boxImage).toBeInTheDocument();
+    expect(screen.getAllByText('Deidara').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Clay Art Shinobi').length).toBeGreaterThan(0);
   });
 });

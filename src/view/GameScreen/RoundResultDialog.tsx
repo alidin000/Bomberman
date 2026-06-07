@@ -42,7 +42,7 @@ export const RoundResultDialog = (
           alignItems: 'center'
         }}
       >
-        {isGameOver ? 'Game Over!' : 'Round Over'}
+        {isGameOver ? 'Arena Sealed' : 'Trial Complete'}
       </DialogTitle>
       <DialogContent
         sx={{
@@ -58,12 +58,12 @@ export const RoundResultDialog = (
         {isGameOver
           ? (
             <>
-              <Button onClick={() => navigate('/config')} variant="outlined">Start New Game</Button>
-              <Button onClick={() => navigate('/')} variant="outlined">Back to Home</Button>
+              <Button onClick={() => navigate('/config')} variant="outlined">Choose New Loadout</Button>
+              <Button onClick={() => navigate('/')} variant="outlined">Back to Dojo</Button>
             </>
           )
           : (
-            <Button onClick={onClose} variant="outlined">Next Round</Button>
+            <Button onClick={onClose} variant="outlined">Next Trial</Button>
           )}
       </DialogContent>
     </Dialog>

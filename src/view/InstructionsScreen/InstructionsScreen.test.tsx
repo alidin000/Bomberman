@@ -24,15 +24,15 @@ describe('InstructionsScreen', () => {
     );
   };
 
-  it('should display the dialog title "Welcome to Bomberman!"', () => {
+  it('should display the Shinobi Arena manual title', () => {
     setup();
-    const title = screen.getByText('Welcome to Bomberman!');
+    const title = screen.getByText('Shinobi Arena Manual');
     expect(title).toBeInTheDocument();
   });
 
   it('should display the objective section correctly', () => {
     setup();
-    const objective = screen.getByText(/be the last Bomberman standing/i);
+    const objective = screen.getByText(/defeat the village boss/i);
     expect(objective).toBeInTheDocument();
   });
 

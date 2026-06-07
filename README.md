@@ -1,55 +1,70 @@
-# Bomberman Game
+# Explosive Shinobi Arena
 
-Welcome to our Bomberman game project! This game is a modern interpretation of the classic Bomberman experience, allowing players to navigate through various maps, place bombs, and dodge explosions in a strategic manner. Whether you're playing alone or with friends, this game promises a fun and engaging experience.
+A 3D browser arena game built with React, TypeScript, Three.js, and React Three Fiber. The current build turns a grid-bomb combat loop into a shinobi boss arena with character-specific bombs, village stages, tailed-beast hazards, story unlocks, and a network-ready engine for future online rooms.
+
+## Current Features
+
+- **3D arena renderer** with textured village floors, animated bombs, billboard characters, warning hazards, and smooth entity movement.
+- **Solo boss mode** with moving tailed beasts, phase-based abilities, danger-zone warnings, boss health, and story rewards.
+- **Local arena mode** for two or three players with configurable controls and trial targets.
+- **Six shinobi loadouts**: Deidara, Naruto, Sasuke, Gaara, Minato, and Itachi.
+- **Distinct bomb behavior**: clay blasts, clone diagonals, Chidori piercing, sand control, teleport marks, crow illusions, and signature ultimates.
+- **Character passives**: Minato has faster movement, while Gaara and Itachi can spend defensive passives to survive an otherwise lethal hit.
+- **Safe round starts** with spawn cells and escape lanes cleared across village maps, including local arena resets.
+- **Optimized explosion flow** that computes only affected cells, reduces blast-loop allocations, and avoids unnecessary 3D scene rerenders during explosion timers.
+- **Future multiplayer groundwork** through serializable engine actions, replay helpers, and room-selection message types.
+
+## Character Loadouts
+
+| Character | Basic Bomb | Ultimate | Gameplay Identity |
+| --- | --- | --- | --- |
+| Deidara | Clay Spider Bomb | C3 Giant Bomb | High damage clay explosions and wide ult coverage |
+| Naruto | Shadow Clone Bomb | Rasenshuriken | Diagonal clone bursts and wide chakra pressure |
+| Sasuke | Chidori Mine | Kirin | Lightning blasts that pierce boxes and strike long lines |
+| Gaara | Sand Coffin Trap | Sand Tsunami | Area control, boss-delay effects, and one automatic sand shield |
+| Minato | Flying Thunder Mark | Instant Teleport | Blink-style bomb coverage and faster movement |
+| Itachi | Crow Clone | Tsukuyomi | Illusion bombs that delay threats and one illusion dodge |
+
+## Performance Notes
+
+The engine keeps explosion resolution cell-based instead of scanning the full map. Recent optimizations also reduce garbage during chained blasts by using keyed lookups for active explosions and bombs, and the 3D renderer memoizes explosion/tile layers so countdown-only ticks do not rebuild the board.
 
 ## Getting Started
 
-To get started with this game, you'll need to have Node.js installed on your machine. If you don't have Node.js installed, you can download and install it from [nodejs.org](https://nodejs.org/).
-
-### Installation
-
-First, clone the repository to your local machine:
-
-```bash
-git clone https://szofttech.inf.elte.hu/software-technology-2024/group-5/academic-avengers.git
-cd bomberman
-```
-
-Then, install the necessary dependencies:
+Use Node.js 18 or newer, but below Node 21, matching the project engine range.
 
 ```bash
 npm install
+npm start
 ```
 
-### Running the Game
+The dev server opens the game in the browser. Use the config flow to choose mode, stage, character loadout, upgrades, and controls.
 
-To start the game, run the following command in the terminal:
+## Useful Scripts
 
 ```bash
-npm run start
+npm run lint
+CI=true npm test -- --watchAll=false
+npm run build
 ```
 
-This command will launch the game in your default web browser. You can navigate to the game configuration screen, set up your game preferences, and start playing!
+## Project Layout
 
-### Game Configuration
+- `src/engine/` contains deterministic, serializable simulation logic for movement, bombs, beasts, bosses, hazards, and round state.
+- `src/content/` defines character, boss, stage, and power-up catalogs.
+- `src/view/GameScreen/GameScene3D.tsx` renders the 3D arena.
+- `src/view/ConfigScreen/` handles mode, village, loadout, upgrade, and key setup.
+- `src/story/` stores local story progression and unlock rewards.
+- `src/network/` contains replay and future online-room message types.
+- `public/maps/` contains stage map layouts.
 
-The game configuration screen allows you to:
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for deeper architecture notes.
 
-- Choose a map for the gameplay.
-- Select the number of rounds.
-- Set the number of players (2 or 3).
-- Configure the keyboard controls for each player.
+## Controls
 
-After setting up your game preferences, click the "Next" button to proceed to the keyboard configuration. Once you've configured the controls, hit the "Play" button to start the game.
+Controls are configured in the setup flow. Each player has movement keys, a basic bomb key, and an ultimate key. The last saved control setup is reused on the next run.
 
-## UML
-<img src="src_diagram1.png"></img>
-
-## Documentation
-<a href="document.pdf" class="image fit">Click here to see the documentation</a>
 ## License
 
-This project is licensed under the MIT License - see the LICENSE.md file for details.
-
-Enjoy the game, and feel free to share your feedback and suggestions!
+This project is licensed under the MIT License.
 

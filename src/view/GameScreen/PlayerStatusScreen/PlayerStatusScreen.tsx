@@ -33,7 +33,7 @@ export const PlayerStatus = ({
     <PlayerStatusContainer theme={theme} index={index}>
       <PlayerName variant="h6">{player.getName()}</PlayerName>
       <Typography variant="body1">
-        Bombs:
+        Clay Charges:
         {player.getBombs()}
       </Typography>
       <PowerUpsList>
@@ -43,7 +43,7 @@ export const PlayerStatus = ({
         ))}
       </PowerUpsList>
       <ObstaclesCount variant="body1">
-        Obstacles:
+        Earth Seals:
         {player.getObstacles()}
       </ObstaclesCount>
     </PlayerStatusContainer>

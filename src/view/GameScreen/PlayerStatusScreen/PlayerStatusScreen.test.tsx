@@ -28,14 +28,14 @@ describe('PlayerStatus', () => {
     expect(screen.getByText('Player 1')).toBeInTheDocument();
   });
 
-  it('displays the number of bombs', () => {
+  it('displays the number of clay charges', () => {
     render(<PlayerStatus player={mockPlayer} index={0} />);
-    expect(screen.getByText('Bombs:3')).toBeInTheDocument();
+    expect(screen.getByText('Clay Charges:3')).toBeInTheDocument();
   });
 
-  it('displays the number of obstacles', () => {
+  it('displays the number of earth seals', () => {
     render(<PlayerStatus player={mockPlayer} index={0} />);
-    expect(screen.getByText('Obstacles:1')).toBeInTheDocument();
+    expect(screen.getByText('Earth Seals:1')).toBeInTheDocument();
   });
 
   it('renders the correct power-up icons', () => {
