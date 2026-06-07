@@ -412,130 +412,121 @@ function getExplosionStyle(kind?: BombKind): { color: string; emissive: string }
   return BOMB_STYLE[kind ?? 'standard'];
 }
 
-function getBurstParticleColor(index: number, kind?: BombKind): string {
-  if (index % 3 === 0) return '#f5efe0';
-  if (index % 2 === 0) return getExplosionStyle(kind).color;
-  return getExplosionStyle(kind).emissive;
+const EXPLOSION_INSTANCE_CAPACITY = 160;
+const EXPLOSION_DUMMY = new THREE.Object3D();
+const EXPLOSION_COLOR = new THREE.Color();
+
+function getExplosionKey(explosion: ExplosionCell): string {
+  return `${explosion.x},${explosion.y},${explosion.kind ?? 'standard'}`;
 }
 
-function getBurstParticleEmissive(index: number, kind?: BombKind): string {
-  return index % 3 === 0 ? '#7c3aed' : getExplosionStyle(kind).emissive;
-}
-
-function ExplosionMeshBase({ explosion }: { explosion: ExplosionCell }) {
-  const groupRef = useRef<THREE.Group>(null);
-  const particleGroupRef = useRef<THREE.Group>(null);
-  const shockwaveRef = useRef<THREE.Mesh>(null);
-  const flameRef = useRef<THREE.Mesh>(null);
-  const ringRef = useRef<THREE.Mesh>(null);
+function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
+  const flameRef = useRef<THREE.InstancedMesh>(null);
+  const shockwaveRef = useRef<THREE.InstancedMesh>(null);
+  const ringRef = useRef<THREE.InstancedMesh>(null);
   const lightRef = useRef<THREE.PointLight>(null);
-  const ageMsRef = useRef(0);
-  const particles = useMemo(() => Array.from({ length: 9 }, (_, index) => {
-    const angle = (Math.PI * 2 * index) / 9;
-    const radius = 0.16 + (index % 3) * 0.09;
-    return {
-      x: Math.cos(angle) * radius,
-      z: Math.sin(angle) * radius,
-      y: 0.16 + (index % 4) * 0.08,
-      size: 0.045 + (index % 2) * 0.025,
-    };
-  }), []);
-  const [wx, , wz] = toWorld(explosion.x, explosion.y);
-  const style = getExplosionStyle(explosion.kind);
+  const agesRef = useRef(new Map<string, number>());
 
-  useFrame(({ clock }, delta) => {
-    ageMsRef.current = Math.min(EXPLOSION_MS, ageMsRef.current + delta * 1000);
-    const progress = ageMsRef.current / EXPLOSION_MS;
-    if (groupRef.current) {
-      groupRef.current.rotation.y = clock.elapsedTime * 2.5;
+  useFrame((_, delta) => {
+    const activeKeys = new Set<string>();
+    const count = Math.min(explosions.length, EXPLOSION_INSTANCE_CAPACITY);
+    let strongestLight = 0;
+    let strongestLightPosition: [number, number, number] | null = null;
+    let strongestLightColor = '#f97316';
+
+    for (let index = 0; index < count; index += 1) {
+      const explosion = explosions[index];
+      const key = getExplosionKey(explosion);
+      activeKeys.add(key);
+
+      const ageMs = Math.min(
+        EXPLOSION_MS,
+        (agesRef.current.get(key) ?? 0) + delta * 1000
+      );
+      agesRef.current.set(key, ageMs);
+
+      const progress = ageMs / EXPLOSION_MS;
+      const [wx, , wz] = toWorld(explosion.x, explosion.y);
+      const style = getExplosionStyle(explosion.kind);
+      const pulse = Math.sin(progress * Math.PI);
+
+      EXPLOSION_COLOR.set(style.color);
+
+      EXPLOSION_DUMMY.position.set(wx, 0.45 + progress * 0.08, wz);
+      EXPLOSION_DUMMY.scale.set(
+        0.95 - progress * 0.18,
+        1.05 + pulse * 0.32,
+        0.95 - progress * 0.18
+      );
+      EXPLOSION_DUMMY.rotation.set(0, progress * Math.PI * 2, 0);
+      EXPLOSION_DUMMY.updateMatrix();
+      flameRef.current?.setMatrixAt(index, EXPLOSION_DUMMY.matrix);
+      flameRef.current?.setColorAt(index, EXPLOSION_COLOR);
+
+      EXPLOSION_COLOR.set(style.emissive);
+
+      EXPLOSION_DUMMY.position.set(wx, 0.16, wz);
+      EXPLOSION_DUMMY.scale.setScalar(0.65 + progress * 1.4);
+      EXPLOSION_DUMMY.rotation.set(-Math.PI / 2, 0, progress * Math.PI);
+      EXPLOSION_DUMMY.updateMatrix();
+      shockwaveRef.current?.setMatrixAt(index, EXPLOSION_DUMMY.matrix);
+      shockwaveRef.current?.setColorAt(index, EXPLOSION_COLOR);
+
+      EXPLOSION_DUMMY.position.set(wx, 0.14, wz);
+      EXPLOSION_DUMMY.scale.setScalar(0.7 + pulse * 0.25);
+      EXPLOSION_DUMMY.rotation.set(-Math.PI / 2, 0, 0);
+      EXPLOSION_DUMMY.updateMatrix();
+      ringRef.current?.setMatrixAt(index, EXPLOSION_DUMMY.matrix);
+      ringRef.current?.setColorAt(index, EXPLOSION_COLOR);
+
+      if (pulse > strongestLight) {
+        strongestLight = pulse;
+        strongestLightPosition = [wx, 1.1, wz];
+        strongestLightColor = style.emissive;
+      }
     }
-    if (particleGroupRef.current) {
-      particleGroupRef.current.scale.setScalar(1 + progress * 0.55);
-      particleGroupRef.current.position.y = progress * 0.26;
-    }
-    if (shockwaveRef.current) {
-      shockwaveRef.current.scale.setScalar(0.8 + progress * 1.4);
-      const mat = shockwaveRef.current.material as THREE.MeshStandardMaterial;
-      mat.opacity = Math.max(0, 0.45 - progress * 0.35);
-    }
-    if (ringRef.current) {
-      const mat = ringRef.current.material as THREE.MeshStandardMaterial;
-      mat.opacity = Math.max(0.1, 0.65 - progress * 0.5);
-    }
+
+    Array.from(agesRef.current.keys()).forEach((key) => {
+      if (!activeKeys.has(key)) agesRef.current.delete(key);
+    });
+
+    [flameRef.current, shockwaveRef.current, ringRef.current].forEach((mesh) => {
+      if (!mesh) return;
+      const instancedMesh = mesh;
+      instancedMesh.count = count;
+      instancedMesh.instanceMatrix.needsUpdate = true;
+      if (instancedMesh.instanceColor) instancedMesh.instanceColor.needsUpdate = true;
+    });
+
     if (lightRef.current) {
-      lightRef.current.intensity = 2.4 * (1 - progress);
-    }
-    if (flameRef.current) {
-      flameRef.current.scale.set(1.1 - progress * 0.25, 1.2 + progress * 0.45, 1.1 - progress * 0.25);
-      const mat = flameRef.current.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = 1.8 - progress * 0.8;
-      mat.opacity = Math.max(0.2, 0.92 - progress * 0.55);
+      lightRef.current.intensity = strongestLight * 2.1;
+      lightRef.current.color.set(strongestLightColor);
+      if (strongestLightPosition) {
+        lightRef.current.position.set(...strongestLightPosition);
+      }
     }
   });
 
+  if (explosions.length === 0) return null;
+
   return (
-    <group ref={groupRef} position={[wx, 0.25, wz]}>
-      <pointLight ref={lightRef} color={style.emissive} distance={3.6} intensity={2.4} />
-      <mesh ref={shockwaveRef} rotation={[-Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.34, 0.035, 8, 36]} />
-        <meshStandardMaterial
-          color={style.color}
-          emissive={style.emissive}
-          emissiveIntensity={1.4}
-          transparent
-          opacity={0.4}
-        />
-      </mesh>
-      <mesh ref={flameRef} position={[0, 0.2, 0]}>
-        <sphereGeometry args={[0.38, 18, 18]} />
-        <meshStandardMaterial
-          color={style.color}
-          emissive={style.emissive}
-          emissiveIntensity={1.8}
-          transparent
-          opacity={0.85}
-        />
-      </mesh>
-      <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]}>
+    <>
+      <pointLight ref={lightRef} distance={5} intensity={1.8} color="#f97316" />
+      <instancedMesh ref={shockwaveRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]}>
+        <torusGeometry args={[0.34, 0.035, 8, 24]} />
+        <meshBasicMaterial transparent opacity={0.38} vertexColors depthWrite={false} />
+      </instancedMesh>
+      <instancedMesh ref={flameRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]}>
+        <sphereGeometry args={[0.34, 12, 12]} />
+        <meshBasicMaterial transparent opacity={0.82} vertexColors depthWrite={false} />
+      </instancedMesh>
+      <instancedMesh ref={ringRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]}>
         <ringGeometry args={[0.18, 0.55, 6]} />
-        <meshStandardMaterial
-          color="#111827"
-          emissive={style.emissive}
-          emissiveIntensity={0.35}
-          transparent
-          opacity={0.65}
-        />
-      </mesh>
-      <group ref={particleGroupRef}>
-        {particles.map((particle, index) => (
-          <mesh
-            key={`${explosion.x}-${explosion.y}-particle-${index}`}
-            position={[particle.x, particle.y, particle.z]}
-          >
-            {index % 3 === 0 ? (
-              <boxGeometry args={[particle.size * 1.8, particle.size * 0.35, particle.size]} />
-            ) : (
-              <sphereGeometry args={[particle.size, 8, 8]} />
-            )}
-            <meshStandardMaterial
-              color={getBurstParticleColor(index, explosion.kind)}
-              emissive={getBurstParticleEmissive(index, explosion.kind)}
-              emissiveIntensity={1.1}
-              transparent
-              opacity={0.85}
-            />
-          </mesh>
-        ))}
-      </group>
-    </group>
+        <meshBasicMaterial transparent opacity={0.48} vertexColors depthWrite={false} />
+      </instancedMesh>
+    </>
   );
 }
-
-const ExplosionMesh = React.memo(ExplosionMeshBase, (prev, next) => (
-  prev.explosion.x === next.explosion.x
-  && prev.explosion.y === next.explosion.y
-  && prev.explosion.kind === next.explosion.kind
-));
 
 function ShadowBlob() {
   return (
@@ -1023,9 +1014,7 @@ function MapTilesBase({
         }
         return tile;
       }))}
-      {explosions.map((e) => (
-        <ExplosionMesh key={`exp-${e.x}-${e.y}`} explosion={e} />
-      ))}
+      <ExplosionField explosions={explosions} />
       {hazards.map((hazard) => (
         <HazardMesh key={hazard.id} hazard={hazard} />
       ))}
