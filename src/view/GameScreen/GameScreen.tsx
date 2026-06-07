@@ -57,6 +57,11 @@ export const GameScreen = () => {
     dismissDialog,
   } = useGameEngine(config, keyBindings);
 
+  const bossHealth = state?.boss?.health;
+  const bossId = state?.boss?.id;
+  const gamePhase = state?.phase;
+  const gameMode = state?.config.mode;
+
   useEffect(() => {
     const stored = localStorage.getItem('playerKeyBindings');
     if (stored) {
@@ -66,14 +71,15 @@ export const GameScreen = () => {
 
   useEffect(() => {
     if (
-      state?.config.mode === 'solo'
-      && state.phase === 'game_over'
-      && state.boss
-      && state.boss.health <= 0
+      gameMode === 'solo'
+      && gamePhase === 'game_over'
+      && bossId
+      && typeof bossHealth === 'number'
+      && bossHealth <= 0
     ) {
-      completeBossReward(state.boss.id, 'gaara', 'hiddenCloud');
+      completeBossReward(bossId, 'gaara', 'hiddenCloud');
     }
-  }, [state?.phase, state?.boss, state?.config.mode]);
+  }, [bossHealth, bossId, gameMode, gamePhase]);
 
   const isPaused = state?.paused ?? false;
   const dialogOpen = state?.phase === 'round_end' || state?.phase === 'game_over';

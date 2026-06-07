@@ -1,15 +1,19 @@
 # Explosive Shinobi Arena
 
-A 3D browser arena game built with React, TypeScript, Three.js, and React Three Fiber. The current build turns a grid-bomb combat loop into a shinobi boss arena with character-specific bombs, village stages, tailed-beast hazards, story unlocks, and a network-ready engine for future online rooms.
+A 3D browser arena game built with React, TypeScript, Three.js, and React Three Fiber. The current build turns a grid-bomb combat loop into a shinobi boss arena with character-specific bombs, themed explosions, village stages, procedural monsters, tailed-beast bosses, story unlocks, and a network-ready engine for future online rooms.
 
 ## Current Features
 
-- **3D arena renderer** with textured village floors, animated bombs, billboard characters, warning hazards, and smooth entity movement.
-- **Solo boss mode** with moving tailed beasts, phase-based abilities, danger-zone warnings, boss health, and story rewards.
+- **3D arena renderer** with textured village floors, animated bombs, procedural shinobi, low-poly monsters, warning hazards, and smooth entity movement.
+- **Solo boss mode** with procedural tailed-beast models, phase-based abilities, danger-zone warnings, boss health, and story rewards.
 - **Local arena mode** for two or three players with configurable controls and trial targets.
 - **Six shinobi loadouts**: Deidara, Naruto, Sasuke, Gaara, Minato, and Itachi.
 - **Distinct bomb behavior**: clay blasts, clone diagonals, Chidori piercing, sand control, teleport marks, crow illusions, and signature ultimates.
+- **Character-specific explosion visuals**: Deidara clay/fire bursts, Naruto Rasengan chakra swirls, Sasuke lightning with black flame accents, Gaara sand clouds, Minato teleport seals, and Itachi genjutsu/crow effects.
+- **Character-themed power-up UI** with run-specific labels such as Clone Training, FTG Kunai, Sand Armor, Sharingan Timing, and Yata Mirror.
 - **Character passives**: Minato has faster movement, while Gaara and Itachi can spend defensive passives to survive an otherwise lethal hit.
+- **Character notes** in the roster, manual, and loadout picker explain each shinobi's bomb, ultimate, passive, and playstyle before a match starts.
+- **Village-themed enemies** such as Rogue Genin, Sand Ninja, Mist Ninja, Thunder Hawk, White Zetsu, and Akatsuki Cultist. Monsters only seal players on contact, while their visual tells show threat identity.
 - **Safe round starts** with spawn cells and escape lanes cleared across village maps, including local arena resets.
 - **Optimized explosion flow** that computes only affected cells, reduces blast-loop allocations, and avoids unnecessary 3D scene rerenders during explosion timers.
 - **Future multiplayer groundwork** through serializable engine actions, replay helpers, and room-selection message types.
@@ -18,12 +22,20 @@ A 3D browser arena game built with React, TypeScript, Three.js, and React Three 
 
 | Character | Basic Bomb | Ultimate | Gameplay Identity |
 | --- | --- | --- | --- |
-| Deidara | Clay Spider Bomb | C3 Giant Bomb | High damage clay explosions and wide ult coverage |
-| Naruto | Shadow Clone Bomb | Rasenshuriken | Diagonal clone bursts and wide chakra pressure |
-| Sasuke | Chidori Mine | Kirin | Lightning blasts that pierce boxes and strike long lines |
-| Gaara | Sand Coffin Trap | Sand Tsunami | Area control, boss-delay effects, and one automatic sand shield |
-| Minato | Flying Thunder Mark | Instant Teleport | Blink-style bomb coverage and faster movement |
-| Itachi | Crow Clone | Tsukuyomi | Illusion bombs that delay threats and one illusion dodge |
+| Deidara | Clay Spider Bomb | C3 Giant Bomb | Area bomber with fast clay fuses, pure explosive visuals, and huge raw blast coverage |
+| Naruto | Shadow Clone Bomb | Rasenshuriken | Clone pressure with extra marks and Rasengan-style blue chakra explosion swirls |
+| Sasuke | Chidori Mine | Kirin | Lightning control with electric lanes, piercing bombs, and black flame explosion accents |
+| Gaara | Sand Coffin Trap | Sand Tsunami | Sand control, enemy-delay effects, sand-cloud explosions, and one automatic sand shield |
+| Minato | Flying Thunder Mark | Instant Teleport | Speed and seal play with quick Flying Thunder God marks, teleport effects, and blink pressure |
+| Itachi | Crow Clone | Tsukuyomi | Genjutsu traps with awkward crow-clone angles, red illusion bursts, and one illusion dodge |
+
+## Visual Direction
+
+- In-game bosses are rendered as simple procedural beast models instead of flat portrait cards.
+- Local enemies use procedural ninja/monster silhouettes with overhead name/threat bars.
+- Boss hazards use anime-inspired telegraphs: sand spikes, blue fire, water cannons, lava bursts, steam rings, acid bubbles, air strikes, tentacle slams, and tailed-beast bombs.
+- Tailed-beast bombs and chakra shockwaves inherit the active boss color so each boss encounter reads differently.
+- The main roster board and Shinobi Manual stay in sync with the implemented characters, monsters, stages, bosses, and power-up themes.
 
 ## Performance Notes
 
@@ -44,7 +56,7 @@ The Vite dev server opens the game in the browser. Use the config flow to choose
 
 ```bash
 npm run lint
-CI=true npm test -- --watchAll=false
+npm test
 npm run build
 ```
 
@@ -67,4 +79,3 @@ Controls are configured in the setup flow. Each player has movement keys, a basi
 ## License
 
 This project is licensed under the MIT License.
-

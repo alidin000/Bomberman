@@ -87,14 +87,38 @@ export const StatPill = styled(Box)({
 
 export const PowerChips = styled(Box)({
   display: 'flex',
-  gap: 4,
+  gap: 5,
   flexWrap: 'wrap',
-  marginTop: 4,
-  '& .MuiChip-root': {
-    height: 22,
-    fontSize: '0.7rem',
-  },
+  marginTop: 6,
 });
+
+export const PowerBadge = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'color' && prop !== 'accent',
+})<{ color: string; accent: string }>(({ color, accent }) => ({
+  minHeight: 24,
+  maxWidth: '100%',
+  padding: '4px 7px',
+  borderRadius: 7,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  color: '#f8fafc',
+  background: `linear-gradient(135deg, ${color}7a, rgba(15, 23, 42, 0.9))`,
+  border: `1px solid ${accent}aa`,
+  boxShadow: `0 0 14px ${color}33, inset 0 1px 0 rgba(255,255,255,0.16)`,
+  fontSize: '0.68rem',
+  fontWeight: 800,
+  lineHeight: 1.1,
+  '&::before': {
+    content: '""',
+    width: 7,
+    height: 7,
+    flex: '0 0 auto',
+    borderRadius: '50%',
+    background: accent,
+    boxShadow: `0 0 8px ${accent}`,
+  },
+}));
 
 export const AbilityPanel = styled(Box)<{ color: string }>(({ color }) => ({
   marginTop: 8,
@@ -151,13 +175,25 @@ export const MonsterPaper = styled(Paper)({
 export const BossPaper = styled(Paper, {
   shouldForwardProp: (prop) => prop !== 'color',
 })<{ color: string }>(({ color }) => ({
-  padding: 14,
-  minWidth: 280,
-  background: `linear-gradient(135deg, ${color}40, rgba(14, 9, 20, 0.95))`,
+  position: 'absolute',
+  top: 14,
+  left: '50%',
+  transform: 'translateX(-50%)',
+  width: 'min(520px, calc(100vw - 610px))',
+  minWidth: 340,
+  padding: '11px 14px',
+  background: `linear-gradient(135deg, rgba(15, 23, 42, 0.94), ${color}4f, rgba(14, 9, 20, 0.95))`,
   color: '#f8fafc',
   border: `1px solid ${color}99`,
-  boxShadow: `0 10px 32px ${color}33`,
+  boxShadow: `0 14px 38px ${color}3d, inset 0 1px 0 rgba(255,255,255,0.14)`,
   backdropFilter: 'blur(8px)',
+  textAlign: 'center',
+  '@media (max-width: 1100px)': {
+    position: 'static',
+    transform: 'none',
+    width: '100%',
+    minWidth: 250,
+  },
 }));
 
 export const MonsterChips = styled(Box)({
@@ -165,8 +201,18 @@ export const MonsterChips = styled(Box)({
   gap: 6,
   flexWrap: 'wrap',
   marginTop: 8,
-  '& .MuiChip-root': {
-    color: '#fff',
-    borderColor: 'rgba(255,255,255,0.28)',
-  },
 });
+
+export const MonsterBadge = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'color',
+})<{ color: string }>(({ color }) => ({
+  padding: '5px 7px',
+  borderRadius: 7,
+  color: '#fff',
+  background: `linear-gradient(135deg, ${color}66, rgba(15, 23, 42, 0.86))`,
+  border: `1px solid ${color}99`,
+  boxShadow: `0 0 12px ${color}22`,
+  fontSize: '0.72rem',
+  fontWeight: 800,
+  lineHeight: 1.1,
+}));

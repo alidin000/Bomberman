@@ -8,6 +8,7 @@ import {
   BossHazard,
   ExplosionCell,
   GameEngineState,
+  HazardKind,
   MonsterKind,
   MonsterState,
   PlayerState,
@@ -18,10 +19,10 @@ import {
 import { isPowerUpActive } from '../../engine/players';
 import { EXPLOSION_MS } from '../../engine/constants';
 import { getStageDefinition } from '../../content';
+import { getCharacterPowerTheme } from '../../content/characterPowerups';
 import {
   BossId, CharacterId, StageDefinition, StageId
 } from '../../content/types';
-import RosterBoard from '../../assets/ninja-bomber-roster-board.png';
 import StageAtlas from '../../assets/ninja-bomber-stage-atlas.png';
 
 const TILE_SIZE = 1;
@@ -44,36 +45,29 @@ const POWERUP_VISUALS: Record<Power, {
   paper: string;
   accent: string;
   glow: string;
-  shape: 'scroll' | 'seal' | 'charm' | 'tag';
+  shape: 'scroll' | 'seal' | 'charm' | 'tag' | 'fragment';
 }> = {
   AddBomb: {
-    paper: '#f8ead2', accent: '#d92323', glow: '#ff8a00', shape: 'scroll'
+    paper: '#fff1d6', accent: '#f97316', glow: '#ff8a00', shape: 'scroll'
   },
   BlastRangeUp: {
-    paper: '#fff7d6', accent: '#ff8a00', glow: '#f97316', shape: 'scroll'
+    paper: '#ecfccb', accent: '#22c55e', glow: '#84cc16', shape: 'scroll'
   },
   Detonator: {
-    paper: '#f4e5c2', accent: '#7c3aed', glow: '#a855f7', shape: 'seal'
+    paper: '#f9e8d2', accent: '#dc2626', glow: '#f97316', shape: 'tag'
   },
   RollerSkate: {
-    paper: '#e0f2fe', accent: '#38bdf8', glow: '#38bdf8', shape: 'tag'
+    paper: '#e0f2fe', accent: '#38bdf8', glow: '#38bdf8', shape: 'scroll'
   },
   Invincibility: {
-    paper: '#fef3c7', accent: '#facc15', glow: '#ffd166', shape: 'charm'
+    paper: '#ede9fe', accent: '#7c3aed', glow: '#a855f7', shape: 'fragment'
   },
   Ghost: {
-    paper: '#ede9fe', accent: '#a78bfa', glow: '#c4b5fd', shape: 'seal'
+    paper: '#dcfce7', accent: '#16a34a', glow: '#86efac', shape: 'seal'
   },
   Obstacle: {
     paper: '#e7d2a6', accent: '#6b4f3a', glow: '#a16207', shape: 'tag'
   },
-};
-
-const MONSTER_COLORS: Record<MonsterKind, string> = {
-  basic: '#ff8a00',
-  smart: '#ef4444',
-  ghost: '#7dd3fc',
-  fork: '#a855f7',
 };
 
 const BEAST_TAILS: Record<MonsterKind, number> = {
@@ -83,34 +77,81 @@ const BEAST_TAILS: Record<MonsterKind, number> = {
   fork: 4,
 };
 
-const BOSS_CROPS: Record<BossId, TextureCrop> = {
+const MONSTER_VISUALS: Record<MonsterKind, {
+  body: string;
+  accent: string;
+  belly: string;
+  glow: string;
+  scale: number;
+  style: 'fox' | 'sand' | 'flame' | 'horn';
+}> = {
+  basic: {
+    body: '#f97316', accent: '#fed7aa', belly: '#fff7ed', glow: '#fb923c', scale: 1.12, style: 'fox'
+  },
+  smart: {
+    body: '#c48a4a', accent: '#7c2d12', belly: '#f5deb3', glow: '#f59e0b', scale: 1.18, style: 'sand'
+  },
+  ghost: {
+    body: '#1d4ed8', accent: '#7dd3fc', belly: '#dbeafe', glow: '#38bdf8', scale: 1.08, style: 'flame'
+  },
+  fork: {
+    body: '#312e81', accent: '#a855f7', belly: '#c4b5fd', glow: '#a855f7', scale: 1.28, style: 'horn'
+  },
+};
+
+const BOSS_VISUALS: Record<BossId, {
+  body: string;
+  accent: string;
+  belly: string;
+  glow: string;
+  scale: number;
+  style: 'sand' | 'flameCat' | 'shell' | 'lavaApe' | 'steam' | 'slug' | 'wing' | 'octo' | 'fox';
+}> = {
   shukaku: {
-    x: 0.0, y: 0.39, width: 0.12, height: 0.19
+    body: '#c48a4a', accent: '#7c2d12', belly: '#f5deb3', glow: '#f59e0b', scale: 1.5, style: 'sand'
   },
   matatabi: {
-    x: 0.125, y: 0.39, width: 0.115, height: 0.19
+    body: '#1d4ed8', accent: '#7dd3fc', belly: '#dbeafe', glow: '#38bdf8', scale: 1.42, style: 'flameCat'
   },
   isobu: {
-    x: 0.245, y: 0.39, width: 0.115, height: 0.19
+    body: '#0e7490', accent: '#67e8f9', belly: '#cffafe', glow: '#22d3ee', scale: 1.5, style: 'shell'
   },
   sonGoku: {
-    x: 0.365, y: 0.39, width: 0.115, height: 0.19
+    body: '#dc2626', accent: '#fed7aa', belly: '#7f1d1d', glow: '#fb923c', scale: 1.56, style: 'lavaApe'
   },
   kokuo: {
-    x: 0.49, y: 0.39, width: 0.115, height: 0.19
+    body: '#e5e7eb', accent: '#93c5fd', belly: '#f8fafc', glow: '#bfdbfe', scale: 1.48, style: 'steam'
   },
   saiken: {
-    x: 0.61, y: 0.39, width: 0.115, height: 0.19
+    body: '#7c3aed', accent: '#bef264', belly: '#ddd6fe', glow: '#a3e635', scale: 1.42, style: 'slug'
   },
   chomei: {
-    x: 0.73, y: 0.39, width: 0.115, height: 0.19
+    body: '#16a34a', accent: '#bbf7d0', belly: '#dcfce7', glow: '#86efac', scale: 1.44, style: 'wing'
   },
   gyuki: {
-    x: 0.85, y: 0.39, width: 0.105, height: 0.19
+    body: '#3f1d1d', accent: '#e9d5ff', belly: '#7c2d12', glow: '#a855f7', scale: 1.54, style: 'octo'
   },
   kurama: {
-    x: 0.89, y: 0.39, width: 0.11, height: 0.19
+    body: '#f97316', accent: '#fed7aa', belly: '#fff7ed', glow: '#fb923c', scale: 1.58, style: 'fox'
   },
+};
+
+const HAZARD_VISUALS: Record<HazardKind, {
+  color: string;
+  accent: string;
+  effect: 'sand' | 'spikes' | 'fire' | 'water' | 'lava' | 'steam' | 'acid' | 'air' | 'tentacle' | 'bomb' | 'shockwave';
+}> = {
+  sandTornado: { color: '#d6a45d', accent: '#8b5e34', effect: 'sand' },
+  sandSpikes: { color: '#f59e0b', accent: '#7c2d12', effect: 'spikes' },
+  blueFireTrail: { color: '#38bdf8', accent: '#dbeafe', effect: 'fire' },
+  waterCannon: { color: '#22d3ee', accent: '#cffafe', effect: 'water' },
+  lavaBurst: { color: '#ef4444', accent: '#f97316', effect: 'lava' },
+  steamCharge: { color: '#e5e7eb', accent: '#93c5fd', effect: 'steam' },
+  acidBubble: { color: '#a3e635', accent: '#7c3aed', effect: 'acid' },
+  airStrike: { color: '#86efac', accent: '#f8fafc', effect: 'air' },
+  tentacleSlam: { color: '#6d28d9', accent: '#c084fc', effect: 'tentacle' },
+  beastBomb: { color: '#581c87', accent: '#f97316', effect: 'bomb' },
+  chakraShockwave: { color: '#fb923c', accent: '#fff7ed', effect: 'shockwave' },
 };
 
 const STAGE_CROPS: Record<StageId, TextureCrop> = {
@@ -155,24 +196,26 @@ const CHARACTER_VISUALS: Record<CharacterId, {
   accent: string;
   hair: string;
   aura: string;
+  trim: string;
+  headband: string;
 }> = {
   deidara: {
-    body: '#f5efe0', accent: '#d92323', hair: '#f8fafc', aura: '#ff8a00'
+    body: '#111827', accent: '#d92323', hair: '#f8fafc', aura: '#ff8a00', trim: '#f8fafc', headband: '#1f2937'
   },
   naruto: {
-    body: '#ff8a00', accent: '#2563eb', hair: '#facc15', aura: '#f97316'
+    body: '#ff8a00', accent: '#2563eb', hair: '#facc15', aura: '#f97316', trim: '#111827', headband: '#1d4ed8'
   },
   sasuke: {
-    body: '#1e293b', accent: '#60a5fa', hair: '#111827', aura: '#60a5fa'
+    body: '#1e293b', accent: '#60a5fa', hair: '#111827', aura: '#60a5fa', trim: '#7c3aed', headband: '#0f172a'
   },
   gaara: {
-    body: '#b45309', accent: '#f59e0b', hair: '#dc2626', aura: '#d6a45d'
+    body: '#7f1d1d', accent: '#f59e0b', hair: '#dc2626', aura: '#d6a45d', trim: '#3b2412', headband: '#7f1d1d'
   },
   minato: {
-    body: '#facc15', accent: '#2563eb', hair: '#fde68a', aura: '#fde047'
+    body: '#2563eb', accent: '#facc15', hair: '#fde68a', aura: '#fde047', trim: '#f8fafc', headband: '#1e40af'
   },
   itachi: {
-    body: '#111827', accent: '#dc2626', hair: '#111827', aura: '#ef4444'
+    body: '#111827', accent: '#dc2626', hair: '#111827', aura: '#ef4444', trim: '#7f1d1d', headband: '#374151'
   },
 };
 
@@ -188,6 +231,43 @@ function useCroppedTexture(image: string, crop: TextureCrop) {
     texture.needsUpdate = true;
     return texture;
   }, [crop, source]);
+}
+
+function TextSprite({
+  text,
+  color,
+  width = 0.7,
+}: {
+  text: string;
+  color: string;
+  width?: number;
+}) {
+  const texture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.font = '700 42px Arial, sans-serif';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.shadowColor = 'rgba(0, 0, 0, 0.85)';
+      context.shadowBlur = 10;
+      context.fillStyle = color;
+      context.fillText(text, canvas.width / 2, canvas.height / 2, 460);
+    }
+    const nextTexture = new THREE.CanvasTexture(canvas);
+    nextTexture.colorSpace = THREE.SRGBColorSpace;
+    nextTexture.needsUpdate = true;
+    return nextTexture;
+  }, [color, text]);
+
+  return (
+    <sprite scale={[width, 0.18, 1]}>
+      <spriteMaterial map={texture} transparent depthWrite={false} />
+    </sprite>
+  );
 }
 
 function Floor({
@@ -232,37 +312,6 @@ function GroundTile({
   );
 }
 
-function BillboardPlane({
-  texture,
-  width,
-  height,
-  opacity = 1,
-}: {
-  texture: THREE.Texture;
-  width: number;
-  height: number;
-  opacity?: number;
-}) {
-  const planeRef = useRef<THREE.Mesh>(null);
-  useFrame(({ camera }) => {
-    if (planeRef.current) {
-      planeRef.current.lookAt(camera.position);
-    }
-  });
-
-  return (
-    <mesh ref={planeRef} position={[0, height / 2 - 0.2, 0]} castShadow>
-      <planeGeometry args={[width, height]} />
-      <meshBasicMaterial
-        map={texture}
-        transparent
-        opacity={opacity}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
-  );
-}
-
 function useSmoothWorldPosition(
   ref: React.MutableRefObject<THREE.Group | null>,
   x: number,
@@ -270,22 +319,22 @@ function useSmoothWorldPosition(
   elevation: number,
 ) {
   const initialized = useRef(false);
-  const lastTarget = useRef(new THREE.Vector3());
+  const targetRef = useRef(new THREE.Vector3());
+  const directionRef = useRef(new THREE.Vector3());
 
   useFrame((_, delta) => {
     const group = ref.current;
     if (!group) return;
     const [wx, , wz] = toWorld(x, y);
-    const target = new THREE.Vector3(wx, elevation, wz);
+    const target = targetRef.current.set(wx, elevation, wz);
 
     if (!initialized.current) {
       group.position.copy(target);
-      lastTarget.current.copy(target);
       initialized.current = true;
       return;
     }
 
-    const direction = target.clone().sub(group.position);
+    const direction = directionRef.current.copy(target).sub(group.position);
     if (direction.lengthSq() > 0.0001) {
       const targetRotation = Math.atan2(direction.x, direction.z);
       group.rotation.y = THREE.MathUtils.lerp(
@@ -296,7 +345,6 @@ function useSmoothWorldPosition(
     }
 
     group.position.lerp(target, 1 - Math.exp(-delta * ENTITY_LERP_SPEED));
-    lastTarget.current.copy(target);
   });
 }
 
@@ -366,50 +414,266 @@ function BombMesh({ x, y, kind }: { x: number; y: number; kind: BombKind }) {
       lightRef.current.intensity = 0.7 + Math.sin(clock.elapsedTime * 12) * 0.35;
     }
   });
+  const ultimateScale = ['giantClay', 'rasenshuriken', 'kirin', 'sandTsunami', 'instantTeleport', 'tsukuyomi']
+    .includes(kind)
+    ? 1.35
+    : 1;
   const giant = kind === 'giantClay';
   const style = BOMB_STYLE[kind];
   return (
-    <group ref={groupRef} position={[wx, giant ? 0.45 : 0.35, wz]} scale={giant ? 1.65 : 1}>
-      <pointLight ref={lightRef} color={style.emissive} distance={2.8} intensity={0.8} />
-      <mesh ref={coreRef} castShadow scale={[1.15, 0.72, 0.9]}>
-        <sphereGeometry args={[0.26, 24, 24]} />
-        <meshStandardMaterial
-          color={style.color}
-          emissive={style.emissive}
-          emissiveIntensity={0.24}
-          roughness={0.52}
-        />
-      </mesh>
-      <mesh position={[0, 0.18, 0.2]} castShadow>
-        <sphereGeometry args={[0.12, 14, 14]} />
-        <meshStandardMaterial color="#f7f0df" roughness={0.5} />
-      </mesh>
-      {[-0.22, -0.1, 0.1, 0.22].map((side) => (
-        <React.Fragment key={`clay-leg-${side}`}>
-          <mesh position={[side, -0.04, 0.13]} rotation={[0, 0, side > 0 ? -0.75 : 0.75]}>
-            <capsuleGeometry args={[0.022, 0.25, 4, 6]} />
-            <meshStandardMaterial color="#f5efe0" roughness={0.55} />
+    <group ref={groupRef} position={[wx, giant ? 0.48 : 0.36, wz]} scale={giant ? 1.72 : ultimateScale}>
+      <pointLight ref={lightRef} color={style.emissive} distance={2.8} intensity={0.72} />
+
+      {(kind === 'claySpider' || kind === 'giantClay') && (
+        <>
+          <mesh ref={coreRef} castShadow scale={[1.15, 0.72, 0.9]}>
+            <sphereGeometry args={[0.26, 24, 24]} />
+            <meshStandardMaterial color="#f5efe0" emissive={style.emissive} emissiveIntensity={0.24} roughness={0.52} />
           </mesh>
-          <mesh position={[side, -0.04, -0.13]} rotation={[0, 0, side > 0 ? 0.75 : -0.75]}>
-            <capsuleGeometry args={[0.022, 0.25, 4, 6]} />
-            <meshStandardMaterial color="#f5efe0" roughness={0.55} />
+          <mesh position={[0, 0.18, 0.2]} castShadow>
+            <sphereGeometry args={[0.12, 14, 14]} />
+            <meshStandardMaterial color="#f7f0df" roughness={0.5} />
           </mesh>
-        </React.Fragment>
-      ))}
-      <mesh position={[0, 0.1, 0.32]} rotation={[Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.24, 0.12]} />
-        <meshStandardMaterial color={style.emissive} emissive={style.emissive} emissiveIntensity={0.55} />
-      </mesh>
-      <mesh position={[0.12, 0.42, 0.05]}>
-        <sphereGeometry args={[0.045, 8, 8]} />
-        <meshStandardMaterial color="#ffdd55" emissive="#ff6600" emissiveIntensity={1.2} />
-      </mesh>
+          {[-0.22, -0.1, 0.1, 0.22].map((side) => (
+            <React.Fragment key={`clay-leg-${side}`}>
+              <mesh position={[side, -0.04, 0.13]} rotation={[0, 0, side > 0 ? -0.75 : 0.75]}>
+                <capsuleGeometry args={[0.022, 0.25, 4, 6]} />
+                <meshStandardMaterial color="#f5efe0" roughness={0.55} />
+              </mesh>
+              <mesh position={[side, -0.04, -0.13]} rotation={[0, 0, side > 0 ? 0.75 : -0.75]}>
+                <capsuleGeometry args={[0.022, 0.25, 4, 6]} />
+                <meshStandardMaterial color="#f5efe0" roughness={0.55} />
+              </mesh>
+            </React.Fragment>
+          ))}
+          <mesh position={[0, 0.1, 0.32]} rotation={[Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[0.24, 0.12]} />
+            <meshStandardMaterial color={style.emissive} emissive={style.emissive} emissiveIntensity={0.55} />
+          </mesh>
+          {giant && (
+            <mesh position={[0, 0.42, 0.02]}>
+              <sphereGeometry args={[0.06, 8, 8]} />
+              <meshStandardMaterial color="#ffdd55" emissive="#ff6600" emissiveIntensity={1.2} />
+            </mesh>
+          )}
+        </>
+      )}
+
+      {kind === 'shadowClone' && (
+        <>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.22, 0]}>
+            <torusGeometry args={[0.33, 0.026, 8, 34]} />
+            <meshStandardMaterial color="#fed7aa" emissive="#f97316" emissiveIntensity={0.64} transparent opacity={0.62} />
+          </mesh>
+          <mesh ref={coreRef} position={[0, 0.02, 0]} castShadow>
+            <capsuleGeometry args={[0.11, 0.32, 6, 12]} />
+            <meshStandardMaterial color="#ff8a00" emissive="#f97316" emissiveIntensity={0.34} roughness={0.5} />
+          </mesh>
+          <mesh position={[0, 0.31, 0.03]} castShadow>
+            <sphereGeometry args={[0.14, 16, 16]} />
+            <meshStandardMaterial color="#ffedd5" emissive="#f97316" emissiveIntensity={0.18} roughness={0.45} />
+          </mesh>
+          <mesh position={[0, 0.38, 0.12]} castShadow>
+            <boxGeometry args={[0.29, 0.045, 0.035]} />
+            <meshStandardMaterial color="#1d4ed8" emissive="#2563eb" emissiveIntensity={0.28} />
+          </mesh>
+          {[-0.08, 0.08].map((side) => (
+            <mesh key={`clone-hair-${side}`} position={[side, 0.49, 0.01]} rotation={[0.15, 0, side > 0 ? -0.32 : 0.32]}>
+              <coneGeometry args={[0.055, 0.18, 6]} />
+              <meshStandardMaterial color="#facc15" emissive="#f59e0b" emissiveIntensity={0.24} />
+            </mesh>
+          ))}
+          {[-0.16, 0.16].map((side) => (
+            <mesh key={`clone-arm-${side}`} position={[side, 0.04, 0.02]} rotation={[0.25, 0, side > 0 ? -0.7 : 0.7]}>
+              <capsuleGeometry args={[0.032, 0.24, 4, 6]} />
+              <meshStandardMaterial color="#2563eb" emissive="#1d4ed8" emissiveIntensity={0.12} />
+            </mesh>
+          ))}
+          {[-0.22, 0.22].map((side) => (
+            <mesh key={`clone-smoke-${side}`} position={[side, -0.16, side > 0 ? -0.08 : 0.08]} scale={[1.2, 0.66, 1.2]}>
+              <sphereGeometry args={[0.1, 12, 12]} />
+              <meshStandardMaterial color="#f8fafc" emissive="#e5e7eb" emissiveIntensity={0.2} transparent opacity={0.62} />
+            </mesh>
+          ))}
+          <mesh position={[0, 0.2, 0]}>
+            <sphereGeometry args={[0.07, 16, 16]} />
+            <meshStandardMaterial color="#ffedd5" emissive="#f97316" emissiveIntensity={0.9} transparent opacity={0.68} />
+          </mesh>
+        </>
+      )}
+
+      {(kind === 'chidoriMine' || kind === 'kirin') && (
+        <>
+          <mesh ref={coreRef} rotation={[-Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[kind === 'kirin' ? 0.31 : 0.24, 0.028, 8, 32]} />
+            <meshStandardMaterial color={style.color} emissive={style.emissive} emissiveIntensity={0.9} />
+          </mesh>
+          {[-0.2, 0, 0.2].map((side) => (
+            <mesh key={`lightning-mark-${side}`} position={[side, 0.18, 0]} rotation={[0.4, 0, side > 0 ? -0.5 : 0.5]}>
+              <coneGeometry args={[0.035, kind === 'kirin' ? 0.46 : 0.32, 4]} />
+              <meshStandardMaterial color="#dbeafe" emissive={style.emissive} emissiveIntensity={1.1} />
+            </mesh>
+          ))}
+          {kind === 'kirin' && (
+            <mesh position={[0, 0.42, 0]}>
+              <coneGeometry args={[0.1, 0.74, 5]} />
+              <meshStandardMaterial color="#bfdbfe" emissive="#60a5fa" emissiveIntensity={1.15} transparent opacity={0.78} />
+            </mesh>
+          )}
+        </>
+      )}
+
+      {(kind === 'sandCoffin' || kind === 'sandTsunami') && (
+        <>
+          <mesh ref={coreRef} castShadow scale={[1.18, 0.72, 1.18]}>
+            <sphereGeometry args={[kind === 'sandTsunami' ? 0.32 : 0.25, 18, 18]} />
+            <meshStandardMaterial color="#c48a4a" emissive="#d6a45d" emissiveIntensity={0.16} roughness={0.88} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.14, 0]}>
+            <torusGeometry args={[kind === 'sandTsunami' ? 0.44 : 0.31, 0.036, 8, 34]} />
+            <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={0.45} transparent opacity={0.62} />
+          </mesh>
+          {[-0.18, 0.18].map((side) => (
+            <mesh key={`sand-grain-${side}`} position={[side, 0.2, 0.12]}>
+              <dodecahedronGeometry args={[0.06, 0]} />
+              <meshStandardMaterial color="#d6a45d" />
+            </mesh>
+          ))}
+        </>
+      )}
+
+      {(kind === 'thunderMark' || kind === 'instantTeleport') && (
+        <>
+          <mesh ref={coreRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.22, 0]}>
+            <ringGeometry args={[0.2, kind === 'instantTeleport' ? 0.45 : 0.35, 36]} />
+            <meshStandardMaterial color="#fef3c7" emissive={style.emissive} emissiveIntensity={1.05} transparent opacity={0.78} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.215, 0]}>
+            <ringGeometry args={[0.06, kind === 'instantTeleport' ? 0.18 : 0.14, 24]} />
+            <meshStandardMaterial color="#facc15" emissive="#facc15" emissiveIntensity={1.1} transparent opacity={0.7} />
+          </mesh>
+          {[0, (Math.PI * 2) / 3, (Math.PI * 4) / 3].map((rotation) => (
+            <React.Fragment key={`thunder-seal-${rotation}`}>
+              <mesh position={[Math.sin(rotation) * 0.24, -0.2, Math.cos(rotation) * 0.24]} rotation={[-Math.PI / 2, 0, -rotation]}>
+                <boxGeometry args={[0.045, kind === 'instantTeleport' ? 0.38 : 0.28, 0.018]} />
+                <meshStandardMaterial color="#fde68a" emissive="#facc15" emissiveIntensity={0.82} transparent opacity={0.78} />
+              </mesh>
+              <mesh position={[Math.sin(rotation) * 0.39, -0.19, Math.cos(rotation) * 0.39]} rotation={[Math.PI / 2, 0, -rotation]}>
+                <coneGeometry args={[0.045, 0.16, 3]} />
+                <meshStandardMaterial color="#d1d5db" metalness={0.5} roughness={0.28} emissive="#facc15" emissiveIntensity={0.18} />
+              </mesh>
+            </React.Fragment>
+          ))}
+          {kind === 'instantTeleport' && (
+            <mesh position={[0, 0.25, 0]} rotation={[0, 0, Math.PI / 4]}>
+              <coneGeometry args={[0.16, 0.86, 4]} />
+              <meshStandardMaterial color="#fef3c7" emissive="#facc15" emissiveIntensity={1.05} transparent opacity={0.44} />
+            </mesh>
+          )}
+          <mesh position={[0, -0.17, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 4]}>
+            <boxGeometry args={[0.5, 0.035, 0.02]} />
+            <meshStandardMaterial color="#60a5fa" emissive="#38bdf8" emissiveIntensity={0.6} transparent opacity={0.66} />
+          </mesh>
+        </>
+      )}
+
+      {(kind === 'crowClone' || kind === 'tsukuyomi') && (
+        <>
+          <mesh ref={coreRef} castShadow scale={[1.1, 0.8, 0.95]}>
+            <sphereGeometry args={[0.24, 16, 16]} />
+            <meshStandardMaterial color="#050507" emissive={style.emissive} emissiveIntensity={kind === 'tsukuyomi' ? 0.6 : 0.24} roughness={0.42} />
+          </mesh>
+          {[-0.22, 0.22].map((side) => (
+            <mesh key={`crow-wing-${side}`} position={[side, 0.02, 0]} rotation={[0, side > 0 ? -0.3 : 0.3, side > 0 ? -0.7 : 0.7]}>
+              <coneGeometry args={[0.1, 0.38, 3]} />
+              <meshStandardMaterial color="#111827" emissive="#dc2626" emissiveIntensity={0.18} />
+            </mesh>
+          ))}
+          <mesh position={[0, 0.1, 0.22]}>
+            <sphereGeometry args={[0.045, 10, 10]} />
+            <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={1.2} />
+          </mesh>
+          {kind === 'tsukuyomi' && (
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.09, 0]}>
+              <torusGeometry args={[0.42, 0.025, 8, 42]} />
+              <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={1.05} transparent opacity={0.55} />
+            </mesh>
+          )}
+        </>
+      )}
+
+      {kind === 'rasenshuriken' && (
+        <>
+          <mesh ref={coreRef}>
+            <sphereGeometry args={[0.19, 24, 24]} />
+            <meshStandardMaterial color="#dbeafe" emissive="#38bdf8" emissiveIntensity={1.05} transparent opacity={0.86} />
+          </mesh>
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.28, 0.025, 8, 36]} />
+            <meshStandardMaterial color="#bfdbfe" emissive="#38bdf8" emissiveIntensity={0.95} />
+          </mesh>
+          {[0, Math.PI / 2, Math.PI, Math.PI * 1.5].map((rotation) => (
+            <mesh key={`rasen-blade-${rotation}`} position={[Math.sin(rotation) * 0.24, 0, Math.cos(rotation) * 0.24]} rotation={[Math.PI / 2, 0, -rotation]}>
+              <coneGeometry args={[0.065, 0.32, 3]} />
+              <meshStandardMaterial color="#eff6ff" emissive="#38bdf8" emissiveIntensity={0.75} />
+            </mesh>
+          ))}
+        </>
+      )}
+
+      {kind === 'standard' && (
+        <mesh ref={coreRef} castShadow>
+          <sphereGeometry args={[0.26, 24, 24]} />
+          <meshStandardMaterial color={style.color} emissive={style.emissive} emissiveIntensity={0.24} roughness={0.52} />
+        </mesh>
+      )}
     </group>
   );
 }
 
-function getExplosionStyle(kind?: BombKind): { color: string; emissive: string } {
-  return BOMB_STYLE[kind ?? 'standard'];
+type ExplosionEffect = 'chakra' | 'lightning' | 'sand' | 'clay' | 'genjutsu' | 'teleport' | 'rasengan';
+
+function getExplosionStyle(kind?: BombKind): {
+  color: string;
+  emissive: string;
+  accent: string;
+  effect: ExplosionEffect;
+} {
+  if (kind === 'chidoriMine' || kind === 'kirin') {
+    return {
+      color: '#93c5fd', emissive: '#60a5fa', accent: '#050507', effect: 'lightning'
+    };
+  }
+  if (kind === 'sandCoffin' || kind === 'sandTsunami') {
+    return {
+      color: '#d6a45d', emissive: '#f59e0b', accent: '#8b5e34', effect: 'sand'
+    };
+  }
+  if (kind === 'claySpider' || kind === 'giantClay') {
+    return {
+      color: '#fed7aa', emissive: '#f97316', accent: '#ef4444', effect: 'clay'
+    };
+  }
+  if (kind === 'crowClone' || kind === 'tsukuyomi') {
+    return {
+      color: '#7f1d1d', emissive: '#ef4444', accent: '#111827', effect: 'genjutsu'
+    };
+  }
+  if (kind === 'thunderMark' || kind === 'instantTeleport') {
+    return {
+      color: '#fef3c7', emissive: '#facc15', accent: '#60a5fa', effect: 'teleport'
+    };
+  }
+  if (kind === 'shadowClone' || kind === 'rasenshuriken') {
+    return {
+      color: '#dbeafe', emissive: '#38bdf8', accent: '#f97316', effect: 'rasengan'
+    };
+  }
+  return {
+    ...BOMB_STYLE[kind ?? 'standard'],
+    accent: '#fed7aa',
+    effect: 'chakra',
+  };
 }
 
 const EXPLOSION_INSTANCE_CAPACITY = 160;
@@ -424,6 +688,8 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
   const flameRef = useRef<THREE.InstancedMesh>(null);
   const shockwaveRef = useRef<THREE.InstancedMesh>(null);
   const ringRef = useRef<THREE.InstancedMesh>(null);
+  const accentRef = useRef<THREE.InstancedMesh>(null);
+  const debrisRef = useRef<THREE.InstancedMesh>(null);
   const lightRef = useRef<THREE.PointLight>(null);
   const agesRef = useRef(new Map<string, number>());
 
@@ -451,13 +717,33 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
       const pulse = Math.sin(progress * Math.PI);
 
       EXPLOSION_COLOR.set(style.color);
-
       EXPLOSION_DUMMY.position.set(wx, 0.45 + progress * 0.08, wz);
-      EXPLOSION_DUMMY.scale.set(
-        0.95 - progress * 0.18,
-        1.05 + pulse * 0.32,
-        0.95 - progress * 0.18
-      );
+      EXPLOSION_DUMMY.scale.set(0.95 - progress * 0.18, 1.05 + pulse * 0.32, 0.95 - progress * 0.18);
+
+      if (style.effect === 'lightning') {
+        EXPLOSION_DUMMY.position.set(wx, 0.7 + pulse * 0.18, wz);
+        EXPLOSION_DUMMY.scale.set(0.34 + pulse * 0.08, 1.55 + pulse * 0.7, 0.34 + pulse * 0.08);
+      }
+      if (style.effect === 'sand') {
+        EXPLOSION_DUMMY.position.set(wx, 0.24 + pulse * 0.12, wz);
+        EXPLOSION_DUMMY.scale.set(1.2 + pulse * 0.35, 0.46 + pulse * 0.22, 1.2 + pulse * 0.35);
+      }
+      if (style.effect === 'clay') {
+        EXPLOSION_DUMMY.position.set(wx, 0.5 + pulse * 0.16, wz);
+        EXPLOSION_DUMMY.scale.set(1.28 + pulse * 0.35, 1.18 + pulse * 0.45, 1.28 + pulse * 0.35);
+      }
+      if (style.effect === 'rasengan') {
+        EXPLOSION_DUMMY.position.set(wx, 0.42 + pulse * 0.14, wz);
+        EXPLOSION_DUMMY.scale.set(0.72 + pulse * 0.5, 0.72 + pulse * 0.5, 0.72 + pulse * 0.5);
+      }
+      if (style.effect === 'genjutsu') {
+        EXPLOSION_DUMMY.position.set(wx, 0.42 + pulse * 0.12, wz);
+        EXPLOSION_DUMMY.scale.set(0.74 + pulse * 0.18, 1.15 + pulse * 0.4, 0.74 + pulse * 0.18);
+      }
+      if (style.effect === 'teleport') {
+        EXPLOSION_DUMMY.position.set(wx, 0.34 + pulse * 0.2, wz);
+        EXPLOSION_DUMMY.scale.set(0.62 + pulse * 0.32, 0.82 + pulse * 0.4, 0.62 + pulse * 0.32);
+      }
       EXPLOSION_DUMMY.rotation.set(0, progress * Math.PI * 2, 0);
       EXPLOSION_DUMMY.updateMatrix();
       flameRef.current?.setMatrixAt(index, EXPLOSION_DUMMY.matrix);
@@ -479,6 +765,70 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
       ringRef.current?.setMatrixAt(index, EXPLOSION_DUMMY.matrix);
       ringRef.current?.setColorAt(index, EXPLOSION_COLOR);
 
+      EXPLOSION_COLOR.set(style.accent);
+      if (style.effect === 'lightning') {
+        EXPLOSION_DUMMY.position.set(wx, 0.68 + pulse * 0.28, wz);
+        EXPLOSION_DUMMY.scale.set(0.13, 1.25 + pulse * 0.85, 0.13);
+        EXPLOSION_DUMMY.rotation.set(progress * Math.PI, progress * Math.PI * 3, index * 0.7);
+      } else if (style.effect === 'rasengan') {
+        EXPLOSION_DUMMY.position.set(
+          wx + Math.sin(progress * Math.PI * 6 + index) * 0.24,
+          0.44 + pulse * 0.25,
+          wz + Math.cos(progress * Math.PI * 6 + index) * 0.24
+        );
+        EXPLOSION_DUMMY.scale.set(0.14 + pulse * 0.04, 0.9 + pulse * 0.35, 0.14 + pulse * 0.04);
+        EXPLOSION_DUMMY.rotation.set(Math.PI / 2, progress * Math.PI * 7, index * 0.9);
+      } else if (style.effect === 'genjutsu') {
+        EXPLOSION_DUMMY.position.set(wx + Math.cos(index) * 0.22, 0.46, wz + Math.sin(index) * 0.22);
+        EXPLOSION_DUMMY.scale.set(0.28 + pulse * 0.08, 0.62, 0.1);
+        EXPLOSION_DUMMY.rotation.set(0.2, progress * Math.PI * 4, index * 1.2);
+      } else if (style.effect === 'teleport') {
+        EXPLOSION_DUMMY.position.set(wx, 0.3 + pulse * 0.18, wz);
+        EXPLOSION_DUMMY.scale.set(0.12, 0.68 + pulse * 0.3, 0.12);
+        EXPLOSION_DUMMY.rotation.set(Math.PI / 2, 0, progress * Math.PI * 6);
+      } else if (style.effect === 'clay') {
+        EXPLOSION_DUMMY.position.set(wx, 0.72 + pulse * 0.24, wz);
+        EXPLOSION_DUMMY.scale.set(0.2 + pulse * 0.06, 1.0 + pulse * 0.45, 0.2 + pulse * 0.06);
+        EXPLOSION_DUMMY.rotation.set(0, progress * Math.PI * 3, index * 0.5);
+      } else {
+        EXPLOSION_DUMMY.position.set(wx, 0.52, wz);
+        EXPLOSION_DUMMY.scale.setScalar(0.001);
+        EXPLOSION_DUMMY.rotation.set(0, 0, 0);
+      }
+      EXPLOSION_DUMMY.updateMatrix();
+      accentRef.current?.setMatrixAt(index, EXPLOSION_DUMMY.matrix);
+      accentRef.current?.setColorAt(index, EXPLOSION_COLOR);
+
+      EXPLOSION_COLOR.set(style.effect === 'sand' ? '#8b5e34' : style.accent);
+      if (style.effect === 'sand' || style.effect === 'clay' || style.effect === 'lightning' || style.effect === 'rasengan') {
+        EXPLOSION_DUMMY.position.set(
+          wx + Math.sin(index * 1.8) * (0.2 + progress * 0.4),
+          0.18 + pulse * 0.32,
+          wz + Math.cos(index * 1.8) * (0.2 + progress * 0.4)
+        );
+        let debrisScale = 0.1;
+        if (style.effect === 'sand') debrisScale = 0.14;
+        if (style.effect === 'lightning') debrisScale = 0.085;
+        if (style.effect === 'rasengan') debrisScale = 0.075;
+        EXPLOSION_DUMMY.scale.setScalar(debrisScale + pulse * 0.09);
+        EXPLOSION_DUMMY.rotation.set(progress * Math.PI * 2, index * 0.9, progress * Math.PI);
+      } else if (style.effect === 'genjutsu') {
+        EXPLOSION_DUMMY.position.set(
+          wx + Math.sin(index * 2.6 + progress * 4) * 0.34,
+          0.32 + pulse * 0.24,
+          wz + Math.cos(index * 2.6 + progress * 4) * 0.34
+        );
+        EXPLOSION_DUMMY.scale.set(0.16 + pulse * 0.08, 0.28, 0.08);
+        EXPLOSION_DUMMY.rotation.set(0.5, progress * Math.PI * 4, index * 1.1);
+      } else {
+        EXPLOSION_DUMMY.position.set(wx, 0.14, wz);
+        EXPLOSION_DUMMY.scale.setScalar(0.001);
+        EXPLOSION_DUMMY.rotation.set(0, 0, 0);
+      }
+      EXPLOSION_DUMMY.updateMatrix();
+      debrisRef.current?.setMatrixAt(index, EXPLOSION_DUMMY.matrix);
+      debrisRef.current?.setColorAt(index, EXPLOSION_COLOR);
+
       if (pulse > strongestLight) {
         strongestLight = pulse;
         strongestLightPosition = [wx, 1.1, wz];
@@ -490,7 +840,7 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
       if (!activeKeys.has(key)) agesRef.current.delete(key);
     });
 
-    [flameRef.current, shockwaveRef.current, ringRef.current].forEach((mesh) => {
+    [flameRef.current, shockwaveRef.current, ringRef.current, accentRef.current, debrisRef.current].forEach((mesh) => {
       if (!mesh) return;
       const instancedMesh = mesh;
       instancedMesh.count = count;
@@ -524,6 +874,14 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
         <ringGeometry args={[0.18, 0.55, 6]} />
         <meshBasicMaterial transparent opacity={0.48} vertexColors depthWrite={false} />
       </instancedMesh>
+      <instancedMesh ref={accentRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]}>
+        <coneGeometry args={[0.12, 0.58, 4]} />
+        <meshBasicMaterial transparent opacity={0.78} vertexColors depthWrite={false} />
+      </instancedMesh>
+      <instancedMesh ref={debrisRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]}>
+        <tetrahedronGeometry args={[0.12, 0]} />
+        <meshBasicMaterial transparent opacity={0.72} vertexColors depthWrite={false} />
+      </instancedMesh>
     </>
   );
 }
@@ -535,6 +893,251 @@ function ShadowBlob() {
       <meshBasicMaterial color="#000" transparent opacity={0.26} />
     </mesh>
   );
+}
+
+type CharacterVisual = (typeof CHARACTER_VISUALS)[CharacterId];
+
+function HairMaterial({ visual, ghost }: { visual: CharacterVisual; ghost: boolean }) {
+  return (
+    <meshStandardMaterial
+      color={visual.hair}
+      roughness={0.5}
+      transparent={ghost}
+      opacity={ghost ? 0.55 : 1}
+    />
+  );
+}
+
+function CharacterHair({
+  characterId,
+  visual,
+  ghost,
+}: {
+  characterId: CharacterId;
+  visual: CharacterVisual;
+  ghost: boolean;
+}) {
+  if (characterId === 'naruto' || characterId === 'minato') {
+    const spikes = characterId === 'naruto'
+      ? [-0.22, -0.11, 0, 0.11, 0.22]
+      : [-0.26, -0.14, 0, 0.14, 0.26];
+    return (
+      <>
+        <mesh position={[0, 0.45, -0.03]} scale={[1.08, 0.58, 0.95]} castShadow>
+          <sphereGeometry args={[0.2, 16, 16]} />
+          <HairMaterial visual={visual} ghost={ghost} />
+        </mesh>
+        {spikes.map((side) => (
+          <mesh
+            key={`${characterId}-hair-spike-${side}`}
+            position={[side, 0.58 - Math.abs(side) * 0.12, 0.03]}
+            rotation={[0.38, side * 3.2, side > 0 ? -0.64 : 0.64]}
+            castShadow
+          >
+            <coneGeometry args={[0.07, characterId === 'minato' ? 0.3 : 0.24, 8]} />
+            <HairMaterial visual={visual} ghost={ghost} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+
+  if (characterId === 'sasuke') {
+    const spikes = [
+      { position: [-0.2, 0.5, -0.04], rotation: [0.2, -0.9, 0.8] },
+      { position: [-0.08, 0.58, -0.08], rotation: [0.05, -0.3, 0.35] },
+      { position: [0.1, 0.58, -0.08], rotation: [0.05, 0.3, -0.35] },
+      { position: [0.22, 0.5, -0.04], rotation: [0.2, 0.9, -0.8] },
+    ];
+    return (
+      <>
+        <mesh position={[0, 0.45, -0.04]} scale={[1.12, 0.62, 0.95]} castShadow>
+          <sphereGeometry args={[0.2, 16, 16]} />
+          <HairMaterial visual={visual} ghost={ghost} />
+        </mesh>
+        {spikes.map((spike, index) => (
+          <mesh
+            key={`sasuke-hair-${index}`}
+            position={spike.position as [number, number, number]}
+            rotation={spike.rotation as [number, number, number]}
+            castShadow
+          >
+            <coneGeometry args={[0.075, 0.3, 8]} />
+            <HairMaterial visual={visual} ghost={ghost} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+
+  if (characterId === 'deidara') {
+    return (
+      <>
+        <mesh position={[0, 0.45, -0.03]} scale={[1.1, 0.58, 0.95]} castShadow>
+          <sphereGeometry args={[0.2, 16, 16]} />
+          <HairMaterial visual={visual} ghost={ghost} />
+        </mesh>
+        <mesh position={[-0.05, 0.65, -0.04]} castShadow>
+          <sphereGeometry args={[0.13, 14, 14]} />
+          <HairMaterial visual={visual} ghost={ghost} />
+        </mesh>
+        <mesh position={[0.17, 0.34, 0.08]} rotation={[0.28, 0, -0.18]} castShadow>
+          <capsuleGeometry args={[0.04, 0.38, 5, 8]} />
+          <HairMaterial visual={visual} ghost={ghost} />
+        </mesh>
+      </>
+    );
+  }
+
+  if (characterId === 'gaara') {
+    return (
+      <>
+        <mesh position={[0, 0.45, -0.03]} scale={[1.02, 0.52, 0.92]} castShadow>
+          <sphereGeometry args={[0.2, 16, 16]} />
+          <HairMaterial visual={visual} ghost={ghost} />
+        </mesh>
+        {[-0.14, 0, 0.14].map((side) => (
+          <mesh
+            key={`gaara-hair-${side}`}
+            position={[side, 0.56, 0.04]}
+            rotation={[0.62, side * 2.2, side > 0 ? -0.4 : 0.4]}
+            castShadow
+          >
+            <coneGeometry args={[0.055, 0.2, 7]} />
+            <HairMaterial visual={visual} ghost={ghost} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <mesh position={[0, 0.45, -0.03]} scale={[1.06, 0.6, 0.95]} castShadow>
+        <sphereGeometry args={[0.2, 16, 16]} />
+        <HairMaterial visual={visual} ghost={ghost} />
+      </mesh>
+      <mesh position={[-0.15, 0.28, 0.02]} rotation={[0.12, 0, 0.2]} castShadow>
+        <capsuleGeometry args={[0.045, 0.34, 5, 8]} />
+        <HairMaterial visual={visual} ghost={ghost} />
+      </mesh>
+      <mesh position={[0.15, 0.28, 0.02]} rotation={[0.12, 0, -0.2]} castShadow>
+        <capsuleGeometry args={[0.045, 0.34, 5, 8]} />
+        <HairMaterial visual={visual} ghost={ghost} />
+      </mesh>
+    </>
+  );
+}
+
+function CharacterAccessory({
+  characterId,
+  visual,
+  ghost,
+}: {
+  characterId: CharacterId;
+  visual: CharacterVisual;
+  ghost: boolean;
+}) {
+  const transparent = ghost;
+  const opacity = ghost ? 0.55 : 1;
+
+  if (characterId === 'naruto') {
+    return (
+      <>
+        {[-0.1, 0.1].map((side) => (
+          <React.Fragment key={`naruto-face-${side}`}>
+            <mesh position={[side, 0.31, 0.205]} rotation={[0, 0, side > 0 ? 0.2 : -0.2]}>
+              <boxGeometry args={[0.07, 0.008, 0.012]} />
+              <meshStandardMaterial color="#111827" />
+            </mesh>
+            <mesh position={[side, 0.27, 0.205]} rotation={[0, 0, side > 0 ? -0.2 : 0.2]}>
+              <boxGeometry args={[0.07, 0.008, 0.012]} />
+              <meshStandardMaterial color="#111827" />
+            </mesh>
+          </React.Fragment>
+        ))}
+      </>
+    );
+  }
+
+  if (characterId === 'sasuke') {
+    return (
+      <>
+        <mesh position={[0, -0.19, 0.16]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.24, 0.035, 8, 28]} />
+          <meshStandardMaterial color={visual.trim} emissive={visual.trim} emissiveIntensity={0.18} transparent={transparent} opacity={opacity} />
+        </mesh>
+        <mesh position={[0, -0.2, 0.2]} rotation={[0.2, 0, 0]}>
+          <boxGeometry args={[0.46, 0.05, 0.04]} />
+          <meshStandardMaterial color={visual.trim} transparent={transparent} opacity={opacity} />
+        </mesh>
+      </>
+    );
+  }
+
+  if (characterId === 'deidara') {
+    return (
+      <>
+        <mesh position={[-0.24, 0.13, 0.02]} scale={[0.8, 0.55, 0.7]} castShadow>
+          <sphereGeometry args={[0.11, 12, 12]} />
+          <meshStandardMaterial color="#f8fafc" emissive="#f97316" emissiveIntensity={0.12} transparent={transparent} opacity={opacity} />
+        </mesh>
+        <mesh position={[-0.28, 0.14, 0.12]} rotation={[0.2, 0, 0.6]}>
+          <coneGeometry args={[0.035, 0.16, 8]} />
+          <meshStandardMaterial color="#f8fafc" transparent={transparent} opacity={opacity} />
+        </mesh>
+      </>
+    );
+  }
+
+  if (characterId === 'gaara') {
+    return (
+      <group position={[0.24, 0.06, -0.2]} rotation={[0.18, 0.5, -0.28]}>
+        <mesh castShadow>
+          <sphereGeometry args={[0.19, 16, 16]} />
+          <meshStandardMaterial color="#9a5f2b" emissive="#d6a45d" emissiveIntensity={0.08} transparent={transparent} opacity={opacity} />
+        </mesh>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.14, 0.018, 8, 24]} />
+          <meshStandardMaterial color="#2f1c16" transparent={transparent} opacity={opacity} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (characterId === 'minato') {
+    return (
+      <>
+        <mesh position={[0, -0.08, -0.16]} rotation={[0.15, 0, 0]} castShadow>
+          <boxGeometry args={[0.58, 0.68, 0.045]} />
+          <meshStandardMaterial color="#f8fafc" emissive="#fde047" emissiveIntensity={0.06} transparent={transparent} opacity={opacity} />
+        </mesh>
+        <mesh position={[0, 0.08, -0.19]}>
+          <boxGeometry args={[0.5, 0.06, 0.05]} />
+          <meshStandardMaterial color="#dc2626" transparent={transparent} opacity={opacity} />
+        </mesh>
+      </>
+    );
+  }
+
+  if (characterId === 'itachi') {
+    return (
+      <>
+        {[-0.12, 0.12].map((side) => (
+          <mesh key={`itachi-cloud-${side}`} position={[side, 0.0, 0.2]}>
+            <sphereGeometry args={[0.055, 10, 10]} />
+            <meshStandardMaterial color="#dc2626" emissive="#ef4444" emissiveIntensity={0.28} transparent={transparent} opacity={opacity} />
+          </mesh>
+        ))}
+        <mesh position={[0, -0.22, -0.02]} scale={[1.05, 0.72, 0.92]} castShadow>
+          <sphereGeometry args={[0.22, 12, 12]} />
+          <meshStandardMaterial color="#050507" transparent={transparent} opacity={opacity} roughness={0.5} />
+        </mesh>
+      </>
+    );
+  }
+
+  return null;
 }
 
 function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineState }) {
@@ -579,23 +1182,34 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
           roughness={0.46}
         />
       </mesh>
+      <mesh position={[0, -0.08, 0.16]} castShadow>
+        <boxGeometry args={[0.38, 0.26, 0.035]} />
+        <meshStandardMaterial
+          color={visual.trim}
+          emissive={visual.trim}
+          emissiveIntensity={0.08}
+          transparent={ghost}
+          opacity={ghost ? 0.55 : 1}
+        />
+      </mesh>
       <mesh position={[0, 0.32, 0.02]} castShadow>
         <sphereGeometry args={[0.19, 18, 18]} />
         <meshStandardMaterial color="#f2c7a2" roughness={0.48} transparent={ghost} opacity={ghost ? 0.55 : 1} />
       </mesh>
-      <mesh position={[0, 0.45, -0.02]} scale={[1.05, 0.58, 0.95]} castShadow>
-        <sphereGeometry args={[0.2, 16, 16]} />
-        <meshStandardMaterial color={visual.hair} roughness={0.5} transparent={ghost} opacity={ghost ? 0.55 : 1} />
-      </mesh>
+      <CharacterHair characterId={player.characterId} visual={visual} ghost={ghost} />
       <mesh position={[0, 0.35, 0.2]} castShadow>
         <boxGeometry args={[0.42, 0.055, 0.04]} />
         <meshStandardMaterial
-          color={visual.accent}
-          emissive={visual.accent}
-          emissiveIntensity={0.2}
+          color={visual.headband}
+          emissive={visual.headband}
+          emissiveIntensity={0.18}
           transparent={ghost}
           opacity={ghost ? 0.55 : 1}
         />
+      </mesh>
+      <mesh position={[0, 0.35, 0.225]} castShadow>
+        <boxGeometry args={[0.16, 0.05, 0.018]} />
+        <meshStandardMaterial color="#d1d5db" metalness={0.6} roughness={0.32} transparent={ghost} opacity={ghost ? 0.55 : 1} />
       </mesh>
       {[-0.22, 0.22].map((side) => (
         <mesh
@@ -614,23 +1228,117 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
           <meshStandardMaterial color="#111827" />
         </mesh>
       ))}
+      <CharacterAccessory characterId={player.characterId} visual={visual} ghost={ghost} />
       <mesh position={[0, -0.27, -0.08]} rotation={[Math.PI / 2, 0, Math.PI / 2]} castShadow>
         <cylinderGeometry args={[0.075, 0.075, 0.42, 12]} />
         <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.12} />
       </mesh>
       {invincible && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.34, 0]}>
-          <torusGeometry args={[0.48, 0.03, 8, 36]} />
-          <meshBasicMaterial color="#ffd166" transparent opacity={0.72} />
-        </mesh>
+        <>
+          <mesh position={[0, 0.04, 0]}>
+            <sphereGeometry args={[0.56, 18, 18]} />
+            <meshBasicMaterial color={visual.aura} transparent opacity={0.14} depthWrite={false} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.34, 0]}>
+            <torusGeometry args={[0.5, 0.03, 8, 36]} />
+            <meshBasicMaterial color={visual.aura} transparent opacity={0.74} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, Math.PI / 4]} position={[0, 0.08, 0]}>
+            <torusGeometry args={[0.42, 0.018, 8, 34]} />
+            <meshBasicMaterial color={visual.accent} transparent opacity={0.5} />
+          </mesh>
+        </>
       )}
     </group>
   );
 }
 
+function MonsterNameplate({
+  monster,
+  visual,
+}: {
+  monster: MonsterState;
+  visual: typeof MONSTER_VISUALS[MonsterKind];
+}) {
+  let barWidth = 0.36;
+  if (monster.kind === 'smart') barWidth = 0.44;
+  if (monster.kind === 'fork') barWidth = 0.52;
+  return (
+    <group position={[0, 0.8, 0]} rotation={[-0.25, 0, 0]}>
+      <mesh>
+        <boxGeometry args={[0.72, 0.12, 0.025]} />
+        <meshBasicMaterial color="#0f172a" transparent opacity={0.72} />
+      </mesh>
+      <mesh position={[0, -0.085, 0.005]}>
+        <boxGeometry args={[0.58, 0.035, 0.02]} />
+        <meshBasicMaterial color="#334155" transparent opacity={0.78} />
+      </mesh>
+      <mesh position={[-(0.58 - barWidth) / 2, -0.085, 0.016]}>
+        <boxGeometry args={[barWidth, 0.035, 0.018]} />
+        <meshBasicMaterial color={visual.glow} transparent opacity={0.92} />
+      </mesh>
+      <group position={[0, 0.008, 0.03]}>
+        <TextSprite text={monster.name} color="#f8fafc" width={monster.name.length > 16 ? 0.82 : 0.7} />
+      </group>
+    </group>
+  );
+}
+
+function MonsterAttackTell({ monster, visual }: { monster: MonsterState; visual: typeof MONSTER_VISUALS[MonsterKind] }) {
+  if (monster.kind === 'basic') {
+    return (
+      <>
+        <mesh position={[0, 0.14, 0.48]} rotation={[Math.PI / 2, 0, 0]}>
+          <coneGeometry args={[0.035, 0.38, 4]} />
+          <meshStandardMaterial color="#d1d5db" metalness={0.5} roughness={0.32} emissive={visual.glow} emissiveIntensity={0.18} />
+        </mesh>
+        <mesh position={[0, 0.14, 0.28]} rotation={[Math.PI / 2, 0, 0]}>
+          <boxGeometry args={[0.035, 0.34, 0.022]} />
+          <meshStandardMaterial color={visual.glow} emissive={visual.glow} emissiveIntensity={0.58} transparent opacity={0.5} />
+        </mesh>
+      </>
+    );
+  }
+  if (monster.kind === 'smart') {
+    return (
+      <>
+        {[-0.2, 0, 0.2].map((offset) => (
+          <mesh key={`${monster.id}-sand-line-${offset}`} position={[offset, -0.08, 0.46 + Math.abs(offset) * 0.2]} rotation={[0.42, 0, 0]}>
+            <coneGeometry args={[0.045, 0.34, 6]} />
+            <meshStandardMaterial color="#d6a45d" emissive="#f59e0b" emissiveIntensity={0.32} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+  if (monster.kind === 'ghost') {
+    return (
+      <>
+        {[-0.2, 0.2].map((offset) => (
+          <mesh key={`${monster.id}-clone-wisp-${offset}`} position={[offset, 0.1, 0.42]} rotation={[0.7, offset * 2, offset > 0 ? -0.25 : 0.25]}>
+            <coneGeometry args={[0.065, 0.42, 8]} />
+            <meshStandardMaterial color="#bfdbfe" emissive={visual.glow} emissiveIntensity={0.9} transparent opacity={0.56} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+  return (
+    <>
+      {[-0.26, 0.26].map((offset) => (
+        <mesh key={`${monster.id}-slam-tell-${offset}`} position={[offset, 0.04, 0.5]} rotation={[1.05, offset > 0 ? -0.35 : 0.35, offset > 0 ? -0.6 : 0.6]}>
+          <capsuleGeometry args={[0.04, 0.62, 5, 8]} />
+          <meshStandardMaterial color="#4c1d95" emissive={visual.glow} emissiveIntensity={0.38} />
+        </mesh>
+      ))}
+    </>
+  );
+}
+
 function MonsterMesh({ monster }: { monster: MonsterState }) {
   const ref = useRef<THREE.Group>(null);
-  const color = MONSTER_COLORS[monster.kind];
+  const visual = MONSTER_VISUALS[monster.kind];
+  const color = visual.body;
   const isGhost = monster.kind === 'ghost';
   const tails = BEAST_TAILS[monster.kind];
   useSmoothWorldPosition(ref, monster.x, monster.y, 0.45);
@@ -643,47 +1351,103 @@ function MonsterMesh({ monster }: { monster: MonsterState }) {
   });
 
   return (
-    <group ref={ref} scale={1.22}>
+    <group ref={ref} scale={visual.scale}>
       <ShadowBlob />
-      <mesh castShadow>
-        <dodecahedronGeometry args={[0.4, 1]} />
+      <mesh castShadow scale={visual.style === 'horn' ? [1.16, 0.92, 1.08] : [1, 0.9, 1]}>
+        <sphereGeometry args={[0.36, 18, 18]} />
         <meshStandardMaterial
           color={color}
-          emissive={color}
+          emissive={visual.glow}
           emissiveIntensity={isGhost ? 0.95 : 0.38}
           transparent={isGhost}
           opacity={isGhost ? 0.58 : 1}
           roughness={0.38}
         />
       </mesh>
-      <pointLight color={color} distance={3.2} intensity={isGhost ? 1.05 : 0.65} />
-      <mesh position={[0, 0.4, 0]} rotation={[Math.PI, 0, 0]}>
-        <coneGeometry args={[0.16, 0.24, 8]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.4} />
+      <mesh position={[0, -0.03, 0.24]} scale={[0.82, 0.62, 0.24]}>
+        <sphereGeometry args={[0.22, 12, 12]} />
+        <meshStandardMaterial color={visual.belly} emissive={visual.glow} emissiveIntensity={0.08} transparent={isGhost} opacity={isGhost ? 0.42 : 1} />
+      </mesh>
+      <mesh position={[0, 0.31, 0.05]} scale={[0.84, 0.64, 0.78]} castShadow>
+        <sphereGeometry args={[0.2, 16, 16]} />
+        <meshStandardMaterial color={color} emissive={visual.glow} emissiveIntensity={isGhost ? 0.9 : 0.28} transparent={isGhost} opacity={isGhost ? 0.55 : 1} roughness={0.42} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.39, 0]}>
         <torusGeometry args={[0.5, 0.022, 6, 36]} />
         <meshStandardMaterial
-          color={color}
-          emissive={color}
+          color={visual.glow}
+          emissive={visual.glow}
           emissiveIntensity={0.9}
           transparent
           opacity={isGhost ? 0.58 : 0.4}
         />
       </mesh>
+
+      {visual.style === 'fox' && [-0.13, 0.13].map((side) => (
+        <mesh key={`${monster.id}-fox-ear-${side}`} position={[side, 0.52, 0.02]} rotation={[0.28, 0, side > 0 ? -0.42 : 0.42]} castShadow>
+          <coneGeometry args={[0.08, 0.24, 8]} />
+          <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.2} />
+        </mesh>
+      ))}
+
+      {visual.style === 'sand' && (
+        <>
+          <mesh position={[0, 0.48, 0.03]} rotation={[Math.PI, 0, 0]}>
+            <coneGeometry args={[0.14, 0.2, 8]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.3} />
+          </mesh>
+          {[-0.18, 0.18].map((side) => (
+            <mesh key={`${monster.id}-sand-spike-${side}`} position={[side, 0.2, -0.25]} rotation={[0.7, side, side > 0 ? -0.35 : 0.35]}>
+              <coneGeometry args={[0.055, 0.28, 7]} />
+              <meshStandardMaterial color="#d6a45d" emissive={visual.glow} emissiveIntensity={0.16} />
+            </mesh>
+          ))}
+        </>
+      )}
+
+      {visual.style === 'flame' && (
+        <>
+          <mesh position={[0, 0.56, 0.0]} rotation={[0.05, 0, 0]}>
+            <coneGeometry args={[0.13, 0.36, 8]} />
+            <meshStandardMaterial color="#bfdbfe" emissive={visual.glow} emissiveIntensity={1.1} transparent opacity={0.72} />
+          </mesh>
+          {[-0.18, 0.18].map((side) => (
+            <mesh key={`${monster.id}-flame-wisp-${side}`} position={[side, 0.18, -0.28]} rotation={[0.8, side * 2, side > 0 ? -0.3 : 0.3]}>
+              <coneGeometry args={[0.07, 0.34, 8]} />
+              <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.9} transparent opacity={0.62} />
+            </mesh>
+          ))}
+        </>
+      )}
+
+      {visual.style === 'horn' && (
+        <>
+          {[-0.18, 0.18].map((side) => (
+            <mesh key={`${monster.id}-main-horn-${side}`} position={[side, 0.5, 0.04]} rotation={[0.28, 0, side > 0 ? -0.55 : 0.55]}>
+              <coneGeometry args={[0.075, 0.34, 8]} />
+              <meshStandardMaterial color="#f8fafc" roughness={0.35} />
+            </mesh>
+          ))}
+          <mesh position={[0, 0.0, -0.25]} scale={[0.8, 0.32, 0.2]}>
+            <sphereGeometry args={[0.26, 12, 12]} />
+            <meshStandardMaterial color="#111827" emissive={visual.glow} emissiveIntensity={0.22} />
+          </mesh>
+        </>
+      )}
+
       {Array.from({ length: tails }, (_, index) => {
         const offset = (index - (tails - 1) / 2) * 0.12;
         return (
           <mesh
             key={`${monster.id}-tail-${index}`}
-            position={[offset, 0.04 + index * 0.015, -0.34]}
-            rotation={[0.8, offset * 2.2, offset * 3.2]}
+            position={[offset, 0.02 + index * 0.014, -0.38]}
+            rotation={[0.86, offset * 2.4, offset * 3.4]}
             castShadow
           >
-            <capsuleGeometry args={[0.055, 0.46, 5, 8]} />
+            <capsuleGeometry args={[0.052, visual.style === 'horn' ? 0.58 : 0.46, 5, 8]} />
             <meshStandardMaterial
-              color={color}
-              emissive={color}
+              color={visual.accent}
+              emissive={visual.glow}
               emissiveIntensity={isGhost ? 0.45 : 0.16}
               transparent={isGhost}
               opacity={isGhost ? 0.55 : 1}
@@ -692,108 +1456,397 @@ function MonsterMesh({ monster }: { monster: MonsterState }) {
         );
       })}
       {[-0.12, 0.12].map((side) => (
-        <mesh key={`${monster.id}-eye-${side}`} position={[side, 0.09, 0.28]}>
-          <sphereGeometry args={[0.055, 10, 10]} />
-          <meshStandardMaterial color="#f8f9fa" emissive="#f8f9fa" emissiveIntensity={0.15} />
+        <mesh key={`${monster.id}-eye-${side}`} position={[side, 0.33, 0.2]}>
+          <sphereGeometry args={[0.045, 10, 10]} />
+          <meshStandardMaterial color={isGhost ? '#bfdbfe' : '#f8f9fa'} emissive={visual.glow} emissiveIntensity={isGhost ? 0.8 : 0.15} />
         </mesh>
       ))}
       {[-0.12, 0.12].map((side) => (
-        <mesh key={`${monster.id}-pupil-${side}`} position={[side, 0.085, 0.33]}>
-          <sphereGeometry args={[0.024, 8, 8]} />
-          <meshStandardMaterial color="#111" />
+        <mesh key={`${monster.id}-pupil-${side}`} position={[side, 0.325, 0.24]}>
+          <sphereGeometry args={[0.018, 8, 8]} />
+          <meshStandardMaterial color={visual.style === 'flame' ? '#1e3a8a' : '#111'} />
         </mesh>
       ))}
-      {(monster.kind === 'fork' || monster.kind === 'smart') && [-0.16, 0.16].map((side) => (
-        <mesh
-          key={`${monster.id}-horn-${side}`}
-          position={[side, 0.36, 0.02]}
-          rotation={[0.25, 0, side > 0 ? -0.45 : 0.45]}
-        >
-          <coneGeometry args={[0.07, 0.22, 8]} />
-          <meshStandardMaterial color="#f1f2f6" roughness={0.35} />
-        </mesh>
-      ))}
+      <MonsterAttackTell monster={monster} visual={visual} />
+      <MonsterNameplate monster={monster} visual={visual} />
     </group>
+  );
+}
+
+function BossStyleDetails({
+  bossId,
+  visual,
+}: {
+  bossId: BossId;
+  visual: (typeof BOSS_VISUALS)[BossId];
+}) {
+  if (visual.style === 'sand') {
+    return (
+      <>
+        {[-0.18, 0.18].map((side) => (
+          <mesh key={`${bossId}-sand-ear-${side}`} position={[side, 0.78, 0.05]} rotation={[0.28, 0, side > 0 ? -0.36 : 0.36]} castShadow>
+            <coneGeometry args={[0.12, 0.34, 8]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.2} />
+          </mesh>
+        ))}
+        {[-0.26, 0, 0.26].map((offset) => (
+          <mesh key={`${bossId}-sand-mark-${offset}`} position={[offset, 0.13, 0.31]} scale={[1.2, 0.44, 0.18]}>
+            <sphereGeometry args={[0.07, 10, 10]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.16} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+  if (visual.style === 'flameCat') {
+    return (
+      <>
+        {[-0.17, 0.17].map((side) => (
+          <mesh key={`${bossId}-cat-ear-${side}`} position={[side, 0.74, 0.05]} rotation={[0.24, 0, side > 0 ? -0.42 : 0.42]}>
+            <coneGeometry args={[0.1, 0.28, 8]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.88} transparent opacity={0.86} />
+          </mesh>
+        ))}
+        {[0, Math.PI * 0.66, Math.PI * 1.33].map((rotation) => (
+          <mesh key={`${bossId}-blue-flame-${rotation}`} position={[Math.sin(rotation) * 0.28, 0.3, -0.22 + Math.cos(rotation) * 0.16]} rotation={[0.75, rotation, 0]}>
+            <coneGeometry args={[0.08, 0.48, 8]} />
+            <meshStandardMaterial color="#bfdbfe" emissive={visual.glow} emissiveIntensity={1.05} transparent opacity={0.62} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+  if (visual.style === 'shell') {
+    return (
+      <>
+        <mesh position={[0, 0.16, -0.1]} scale={[1.24, 0.42, 0.92]} castShadow>
+          <sphereGeometry args={[0.34, 16, 16]} />
+          <meshStandardMaterial color="#164e63" emissive={visual.glow} emissiveIntensity={0.2} roughness={0.5} />
+        </mesh>
+        {[-0.28, 0, 0.28].map((offset) => (
+          <mesh key={`${bossId}-shell-spike-${offset}`} position={[offset, 0.56, -0.08]} rotation={[0.5, offset * 2, 0]}>
+            <coneGeometry args={[0.075, 0.26, 7]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.34} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+  if (visual.style === 'lavaApe') {
+    return (
+      <>
+        {[-0.42, 0.42].map((side) => (
+          <mesh key={`${bossId}-fist-${side}`} position={[side, 0.08, 0.23]} scale={[1.15, 0.88, 1.05]} castShadow>
+            <sphereGeometry args={[0.16, 14, 14]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.46} roughness={0.5} />
+          </mesh>
+        ))}
+        {[-0.18, 0.18].map((offset) => (
+          <mesh key={`${bossId}-lava-crack-${offset}`} position={[offset, 0.14, 0.34]} rotation={[0.2, 0, offset > 0 ? -0.45 : 0.45]}>
+            <boxGeometry args={[0.035, 0.42, 0.025]} />
+            <meshStandardMaterial color="#fed7aa" emissive="#fb923c" emissiveIntensity={0.72} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+  if (visual.style === 'steam') {
+    return (
+      <>
+        {[-0.15, 0.15].map((side) => (
+          <mesh key={`${bossId}-steam-horn-${side}`} position={[side, 0.76, 0.04]} rotation={[0.22, 0, side > 0 ? -0.22 : 0.22]}>
+            <coneGeometry args={[0.065, 0.42, 8]} />
+            <meshStandardMaterial color="#f8fafc" emissive={visual.glow} emissiveIntensity={0.28} />
+          </mesh>
+        ))}
+        {[0.18, 0.32].map((height) => (
+          <mesh key={`${bossId}-steam-ring-${height}`} position={[0, height, -0.02]} rotation={[-Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.42 + height * 0.35, 0.018, 8, 32]} />
+            <meshStandardMaterial color="#f8fafc" emissive={visual.glow} emissiveIntensity={0.54} transparent opacity={0.38} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+  if (visual.style === 'slug') {
+    return (
+      <>
+        {[-0.13, 0.13].map((side) => (
+          <mesh key={`${bossId}-slug-antenna-${side}`} position={[side, 0.77, 0.08]} rotation={[0.55, 0, side > 0 ? -0.22 : 0.22]}>
+            <capsuleGeometry args={[0.025, 0.32, 4, 6]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.55} />
+          </mesh>
+        ))}
+        {[0, 1, 2].map((bubble) => (
+          <mesh key={`${bossId}-acid-bubble-${bubble}`} position={[(bubble - 1) * 0.18, 0.34 + bubble * 0.05, -0.24]}>
+            <sphereGeometry args={[0.075, 12, 12]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.72} transparent opacity={0.58} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+  if (visual.style === 'wing') {
+    return (
+      <>
+        {[-0.42, 0.42].map((side) => (
+          <mesh key={`${bossId}-wing-${side}`} position={[side, 0.28, -0.12]} rotation={[0.24, side > 0 ? -0.5 : 0.5, side > 0 ? -0.38 : 0.38]}>
+            <planeGeometry args={[0.52, 0.72]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.42} transparent opacity={0.44} side={THREE.DoubleSide} />
+          </mesh>
+        ))}
+        <mesh position={[0, 0.64, 0.03]}>
+          <coneGeometry args={[0.07, 0.26, 6]} />
+          <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.5} />
+        </mesh>
+      </>
+    );
+  }
+  if (visual.style === 'octo') {
+    return (
+      <>
+        {[-0.16, 0.16].map((side) => (
+          <mesh key={`${bossId}-octo-horn-${side}`} position={[side, 0.76, 0.04]} rotation={[0.25, 0, side > 0 ? -0.42 : 0.42]}>
+            <coneGeometry args={[0.085, 0.36, 8]} />
+            <meshStandardMaterial color="#f8fafc" roughness={0.36} />
+          </mesh>
+        ))}
+        {[-0.34, 0.34].map((side) => (
+          <mesh key={`${bossId}-octo-arm-${side}`} position={[side, 0.05, 0.18]} rotation={[0.95, 0, side > 0 ? -0.86 : 0.86]}>
+            <capsuleGeometry args={[0.055, 0.72, 5, 8]} />
+            <meshStandardMaterial color="#4c1d95" emissive={visual.glow} emissiveIntensity={0.4} />
+          </mesh>
+        ))}
+      </>
+    );
+  }
+  return (
+    <>
+      {[-0.18, 0.18].map((side) => (
+        <mesh key={`${bossId}-fox-ear-${side}`} position={[side, 0.77, 0.04]} rotation={[0.25, 0, side > 0 ? -0.45 : 0.45]} castShadow>
+          <coneGeometry args={[0.11, 0.34, 8]} />
+          <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.26} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.43, 0.28]} scale={[0.8, 0.38, 0.32]}>
+        <sphereGeometry args={[0.18, 14, 14]} />
+        <meshStandardMaterial color={visual.belly} emissive={visual.glow} emissiveIntensity={0.12} />
+      </mesh>
+    </>
   );
 }
 
 function BossMesh({ state }: { state: GameEngineState }) {
   const { boss } = state;
   const ref = useRef<THREE.Group>(null);
-  const bossTexture = useCroppedTexture(
-    RosterBoard,
-    boss ? BOSS_CROPS[boss.id] : BOSS_CROPS.shukaku
-  );
-  useSmoothWorldPosition(ref, boss?.x ?? 0, boss?.y ?? 0, 0.9);
+  useSmoothWorldPosition(ref, boss?.x ?? 0, boss?.y ?? 0, 0.92);
 
   useFrame(({ clock }) => {
     if (ref.current) {
-      ref.current.position.y = 0.9 + Math.sin(clock.elapsedTime * 2.2) * 0.05;
+      ref.current.position.y = 0.92 + Math.sin(clock.elapsedTime * 2.2) * 0.05;
+      ref.current.rotation.z = Math.sin(clock.elapsedTime * 1.8) * 0.025;
     }
   });
 
   if (!boss || boss.health <= 0) return null;
 
+  const visual = BOSS_VISUALS[boss.id];
+  const phasePulse = boss.phase > 1 ? 1.08 : 1;
+
   return (
-    <group ref={ref} scale={1.6}>
-      <pointLight color={boss.color} distance={6} intensity={1.8} />
+    <group ref={ref} scale={visual.scale * phasePulse}>
+      <pointLight color={visual.glow} distance={5.2} intensity={1.25} />
       <ShadowBlob />
-      <BillboardPlane texture={bossTexture} width={1.05} height={1.25} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.56, 0]}>
+        <torusGeometry args={[0.62, 0.025, 8, 42]} />
+        <meshStandardMaterial color={visual.glow} emissive={visual.glow} emissiveIntensity={1.05} transparent opacity={0.38} />
+      </mesh>
+      <mesh castShadow scale={visual.style === 'shell' || visual.style === 'slug' ? [1.22, 0.78, 1.04] : [1, 0.95, 1]}>
+        <sphereGeometry args={[0.38, 20, 20]} />
+        <meshStandardMaterial color={visual.body} emissive={visual.glow} emissiveIntensity={0.32} roughness={0.42} />
+      </mesh>
+      <mesh position={[0, -0.02, 0.28]} scale={[0.86, 0.52, 0.28]}>
+        <sphereGeometry args={[0.2, 14, 14]} />
+        <meshStandardMaterial color={visual.belly} emissive={visual.glow} emissiveIntensity={0.1} roughness={0.5} />
+      </mesh>
+      <mesh position={[0, 0.48, 0.08]} scale={[0.92, 0.74, 0.8]} castShadow>
+        <sphereGeometry args={[0.22, 18, 18]} />
+        <meshStandardMaterial color={visual.body} emissive={visual.glow} emissiveIntensity={0.38} roughness={0.4} />
+      </mesh>
+      {[-0.1, 0.1].map((side) => (
+        <React.Fragment key={`${boss.id}-eye-${side}`}>
+          <mesh position={[side, 0.5, 0.27]}>
+            <sphereGeometry args={[0.045, 10, 10]} />
+            <meshStandardMaterial color="#fff7ed" emissive={visual.glow} emissiveIntensity={0.32} />
+          </mesh>
+          <mesh position={[side, 0.5, 0.305]}>
+            <sphereGeometry args={[0.019, 8, 8]} />
+            <meshStandardMaterial color={boss.id === 'kurama' ? '#7f1d1d' : '#111827'} emissive={boss.id === 'kurama' ? '#f97316' : '#000'} emissiveIntensity={0.25} />
+          </mesh>
+        </React.Fragment>
+      ))}
+      <BossStyleDetails bossId={boss.id} visual={visual} />
       {Array.from({ length: boss.tails }, (_, index) => {
-        const offset = (index - (boss.tails - 1) / 2) * 0.08;
+        const offset = (index - (boss.tails - 1) / 2) * (boss.tails > 5 ? 0.08 : 0.12);
+        let tailLength = 0.68;
+        if (visual.style === 'shell') tailLength = 0.52;
+        if (visual.style === 'octo') tailLength = 0.78;
         return (
           <mesh
             key={`${boss.id}-boss-tail-${index}`}
-            position={[offset, 0.02 + index * 0.01, -0.5]}
-            rotation={[0.9, offset * 4, offset * 4]}
+            position={[offset, -0.02 + index * 0.008, -0.42 - Math.abs(offset) * 0.28]}
+            rotation={[0.92, offset * 4.5, offset * 4.1]}
             castShadow
           >
-            <capsuleGeometry args={[0.045, 0.62, 5, 8]} />
-            <meshStandardMaterial
-              color={boss.color}
-              emissive={boss.color}
-              emissiveIntensity={0.28}
-            />
+            <capsuleGeometry args={[visual.style === 'octo' ? 0.05 : 0.044, tailLength, 5, 8]} />
+            <meshStandardMaterial color={visual.style === 'octo' ? '#4c1d95' : visual.accent} emissive={visual.glow} emissiveIntensity={0.34} />
           </mesh>
         );
       })}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.54, 0]}>
-        <torusGeometry args={[0.62, 0.025, 8, 42]} />
-        <meshStandardMaterial
-          color={boss.color}
-          emissive={boss.color}
-          emissiveIntensity={1.1}
-          transparent
-          opacity={0.42}
-        />
-      </mesh>
+      {boss.phase > 1 && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.49, 0]}>
+          <ringGeometry args={[0.68, 0.86, 36]} />
+          <meshStandardMaterial color={visual.glow} emissive={visual.glow} emissiveIntensity={0.9} transparent opacity={0.22} />
+        </mesh>
+      )}
     </group>
   );
 }
 
 function HazardMesh({ hazard }: { hazard: BossHazard }) {
-  const ref = useRef<THREE.Mesh>(null);
+  const ref = useRef<THREE.Group>(null);
   const [wx, , wz] = toWorld(hazard.x, hazard.y);
   const active = hazard.ticksRemaining <= hazard.warningTicks;
+  const visual = HAZARD_VISUALS[hazard.kind];
+  const beastColored = hazard.kind === 'beastBomb' || hazard.kind === 'chakraShockwave';
+  const effectColor = beastColored ? hazard.color : visual.color;
+  const effectAccent = beastColored ? '#fff7ed' : visual.accent;
+  const color = active ? effectColor : '#facc15';
+  const opacity = active ? 0.78 : 0.46;
 
   useFrame(({ clock }) => {
     if (ref.current) {
-      ref.current.rotation.z = clock.elapsedTime * 3;
+      ref.current.rotation.y = clock.elapsedTime * (active ? 2.6 : 1.5);
       ref.current.scale.setScalar(active ? 1.15 : 0.85 + Math.sin(clock.elapsedTime * 8) * 0.08);
     }
   });
 
   return (
-    <mesh ref={ref} position={[wx, 0.05, wz]} rotation={[-Math.PI / 2, 0, 0]}>
-      <ringGeometry args={[0.18, active ? 0.52 : 0.38, 24]} />
-      <meshStandardMaterial
-        color={active ? hazard.color : '#facc15'}
-        emissive={active ? hazard.color : '#facc15'}
-        emissiveIntensity={active ? 1.3 : 0.65}
-        transparent
-        opacity={active ? 0.72 : 0.48}
-      />
-    </mesh>
+    <group ref={ref} position={[wx, 0.06, wz]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.18, active ? 0.52 : 0.38, 26]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 1.25 : 0.62} transparent opacity={opacity} />
+      </mesh>
+
+      {visual.effect === 'sand' && (
+        <>
+          <mesh position={[0, 0.28, 0]} rotation={[0, 0, 0.18]}>
+            <coneGeometry args={[0.18, active ? 0.92 : 0.52, 9]} />
+            <meshStandardMaterial color="#d6a45d" emissive="#f59e0b" emissiveIntensity={0.38} transparent opacity={active ? 0.58 : 0.34} />
+          </mesh>
+          {[0.16, 0.36].map((height) => (
+            <mesh key={`sand-ring-${hazard.id}-${height}`} position={[0, height, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[0.2 + height * 0.42, 0.018, 7, 28]} />
+              <meshStandardMaterial color={visual.accent} emissive={effectColor} emissiveIntensity={0.45} transparent opacity={0.5} />
+            </mesh>
+          ))}
+        </>
+      )}
+
+      {visual.effect === 'spikes' && [-0.24, 0, 0.24].map((offset) => (
+        <mesh key={`sand-spike-${hazard.id}-${offset}`} position={[offset, active ? 0.24 : 0.08, 0]} rotation={[0.18, 0, offset > 0 ? -0.12 : 0.12]}>
+          <coneGeometry args={[0.075, active ? 0.62 : 0.28, 7]} />
+          <meshStandardMaterial color="#d6a45d" emissive={visual.color} emissiveIntensity={active ? 0.42 : 0.2} />
+        </mesh>
+      ))}
+
+      {visual.effect === 'fire' && [-0.22, 0, 0.22].map((offset) => (
+        <mesh key={`blue-fire-${hazard.id}-${offset}`} position={[offset, active ? 0.28 : 0.12, 0]} rotation={[0.18, offset * 2, offset > 0 ? -0.18 : 0.18]}>
+          <coneGeometry args={[0.08, active ? 0.72 : 0.38, 8]} />
+          <meshStandardMaterial color={offset === 0 ? '#dbeafe' : visual.color} emissive={visual.color} emissiveIntensity={active ? 1 : 0.45} transparent opacity={active ? 0.72 : 0.45} />
+        </mesh>
+      ))}
+
+      {visual.effect === 'water' && (
+        <>
+          <mesh position={[0, 0.2, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.075, 0.12, active ? 0.92 : 0.48, 12]} />
+            <meshStandardMaterial color={visual.color} emissive={visual.color} emissiveIntensity={0.62} transparent opacity={0.58} />
+          </mesh>
+          <mesh position={[0.33, 0.2, 0]}>
+            <sphereGeometry args={[0.12, 14, 14]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.color} emissiveIntensity={0.64} transparent opacity={0.52} />
+          </mesh>
+        </>
+      )}
+
+      {visual.effect === 'lava' && (
+        <>
+          <mesh position={[0, active ? 0.34 : 0.12, 0]}>
+            <coneGeometry args={[active ? 0.22 : 0.12, active ? 0.78 : 0.34, 8]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.color} emissiveIntensity={active ? 0.9 : 0.4} transparent opacity={0.78} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.32, 0.035, 8, 28]} />
+            <meshStandardMaterial color="#7f1d1d" emissive={visual.accent} emissiveIntensity={0.58} transparent opacity={0.58} />
+          </mesh>
+        </>
+      )}
+
+      {visual.effect === 'steam' && [0.12, 0.3, 0.48].map((height) => (
+        <mesh key={`steam-${hazard.id}-${height}`} position={[0, height, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.18 + height * 0.45, 0.02, 8, 30]} />
+          <meshStandardMaterial color="#f8fafc" emissive={visual.accent} emissiveIntensity={0.56} transparent opacity={active ? 0.5 : 0.28} />
+        </mesh>
+      ))}
+
+      {visual.effect === 'acid' && [-0.18, 0.08, 0.25].map((offset, index) => (
+        <mesh key={`acid-${hazard.id}-${offset}`} position={[offset, 0.14 + index * 0.08, index % 2 ? -0.12 : 0.12]}>
+          <sphereGeometry args={[active ? 0.12 : 0.08, 14, 14]} />
+          <meshStandardMaterial color={visual.color} emissive={visual.color} emissiveIntensity={0.78} transparent opacity={0.55} />
+        </mesh>
+      ))}
+
+      {visual.effect === 'air' && (
+        <>
+          <mesh position={[0, 0.56, 0]} rotation={[Math.PI, 0, 0]}>
+            <coneGeometry args={[0.16, active ? 1.12 : 0.58, 7]} />
+            <meshStandardMaterial color={visual.accent} emissive={visual.color} emissiveIntensity={0.68} transparent opacity={active ? 0.5 : 0.26} />
+          </mesh>
+          <mesh position={[0, 0.12, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.28, 0.018, 8, 28]} />
+            <meshStandardMaterial color={visual.color} emissive={visual.color} emissiveIntensity={0.7} transparent opacity={0.44} />
+          </mesh>
+        </>
+      )}
+
+      {visual.effect === 'tentacle' && [-0.16, 0.16].map((offset) => (
+        <mesh key={`tentacle-${hazard.id}-${offset}`} position={[offset, 0.18, 0]} rotation={[Math.PI / 2, 0, offset > 0 ? -0.35 : 0.35]}>
+          <capsuleGeometry args={[0.06, active ? 0.82 : 0.42, 5, 8]} />
+          <meshStandardMaterial color="#4c1d95" emissive={visual.color} emissiveIntensity={0.46} />
+        </mesh>
+      ))}
+
+      {visual.effect === 'bomb' && (
+        <>
+          <mesh position={[0, active ? 0.34 : 0.2, 0]}>
+            <sphereGeometry args={[active ? 0.24 : 0.15, 18, 18]} />
+            <meshStandardMaterial color="#1e1b4b" emissive={effectColor} emissiveIntensity={active ? 1 : 0.52} transparent opacity={0.82} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.36, 0.026, 8, 34]} />
+            <meshStandardMaterial color={effectAccent} emissive={effectAccent} emissiveIntensity={0.7} transparent opacity={0.46} />
+          </mesh>
+        </>
+      )}
+
+      {visual.effect === 'shockwave' && [0.26, 0.42].map((radius) => (
+        <mesh key={`shock-${hazard.id}-${radius}`} rotation={[-Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[radius, 0.022, 8, 34]} />
+          <meshStandardMaterial color={effectColor} emissive={effectColor} emissiveIntensity={0.82} transparent opacity={active ? 0.54 : 0.28} />
+        </mesh>
+      ))}
+    </group>
   );
 }
 
@@ -806,24 +1859,36 @@ function PowerupSymbol({
 }) {
   if (power === 'AddBomb') {
     return (
-      <mesh position={[0, 0.12, 0.04]} castShadow>
-        <sphereGeometry args={[0.085, 14, 14]} />
-        <meshStandardMaterial color="#f5efe0" emissive={accent} emissiveIntensity={0.25} />
-      </mesh>
+      <>
+        <mesh position={[0, 0.13, 0.04]} castShadow>
+          <sphereGeometry args={[0.075, 14, 14]} />
+          <meshStandardMaterial color="#ffedd5" emissive={accent} emissiveIntensity={0.42} />
+        </mesh>
+        <mesh position={[0, 0.13, 0.04]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.12, 0.012, 6, 24]} />
+          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.5} />
+        </mesh>
+      </>
     );
   }
   if (power === 'BlastRangeUp') {
     return (
-      <mesh position={[0, 0.13, 0.04]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.105, 0.018, 8, 28]} />
-        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.7} />
-      </mesh>
+      <>
+        <mesh position={[0, 0.13, 0.04]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.12, 0.018, 8, 28]} />
+          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.7} />
+        </mesh>
+        <mesh position={[0.08, 0.13, 0.04]} rotation={[0, 0, -0.8]}>
+          <coneGeometry args={[0.04, 0.18, 3]} />
+          <meshStandardMaterial color="#ecfccb" emissive={accent} emissiveIntensity={0.48} />
+        </mesh>
+      </>
     );
   }
   if (power === 'Detonator') {
     return (
       <mesh position={[0, 0.13, 0.04]}>
-        <boxGeometry args={[0.07, 0.22, 0.035]} />
+        <boxGeometry args={[0.08, 0.24, 0.035]} />
         <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.5} />
       </mesh>
     );
@@ -838,32 +1903,135 @@ function PowerupSymbol({
   }
   if (power === 'Invincibility') {
     return (
-      <mesh position={[0, 0.13, 0.04]}>
-        <sphereGeometry args={[0.105, 6, 6]} />
-        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.45} />
-      </mesh>
+      <group position={[0, 0.13, 0.04]}>
+        <mesh rotation={[0.2, 0.4, 0]}>
+          <octahedronGeometry args={[0.13, 0]} />
+          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.62} transparent opacity={0.86} />
+        </mesh>
+        <mesh position={[0.07, -0.02, 0]} rotation={[0.4, -0.2, 0.6]}>
+          <octahedronGeometry args={[0.07, 0]} />
+          <meshStandardMaterial color="#c4b5fd" emissive={accent} emissiveIntensity={0.45} transparent opacity={0.8} />
+        </mesh>
+      </group>
     );
   }
   if (power === 'Ghost') {
     return (
-      <mesh position={[0, 0.13, 0.04]}>
-        <sphereGeometry args={[0.11, 14, 14]} />
-        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.75} transparent opacity={0.62} />
-      </mesh>
+      <>
+        <mesh position={[0, 0.13, 0.04]}>
+          <sphereGeometry args={[0.11, 14, 14]} />
+          <meshStandardMaterial color="#dcfce7" emissive={accent} emissiveIntensity={0.75} transparent opacity={0.62} />
+        </mesh>
+        <mesh position={[0, 0.13, 0.16]}>
+          <boxGeometry args={[0.18, 0.035, 0.02]} />
+          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.45} />
+        </mesh>
+      </>
     );
   }
   return (
-    <mesh position={[0, 0.12, 0.04]}>
-      <boxGeometry args={[0.18, 0.12, 0.045]} />
-      <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.35} />
-    </mesh>
+    <group position={[0, 0.12, 0.04]}>
+      <mesh>
+        <dodecahedronGeometry args={[0.11, 0]} />
+        <meshStandardMaterial color="#8b6f47" emissive={accent} emissiveIntensity={0.18} />
+      </mesh>
+      <mesh position={[0.09, -0.03, 0.04]}>
+        <dodecahedronGeometry args={[0.065, 0]} />
+        <meshStandardMaterial color="#6b4f3a" />
+      </mesh>
+    </group>
   );
 }
 
-function PowerUpMesh({ x, y, power }: { x: number; y: number; power: Power }) {
+type PowerUpVisual = (typeof POWERUP_VISUALS)[Power];
+
+function PowerUpBody({ visual }: { visual: PowerUpVisual }) {
+  if (visual.shape === 'fragment') {
+    return (
+      <group position={[0, 0.07, 0]}>
+        <mesh rotation={[0.2, 0.5, 0.2]} castShadow>
+          <octahedronGeometry args={[0.2, 0]} />
+          <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.45} transparent opacity={0.84} />
+        </mesh>
+        <mesh position={[-0.15, -0.02, 0.03]} rotation={[0.5, -0.2, 0.8]} castShadow>
+          <octahedronGeometry args={[0.11, 0]} />
+          <meshStandardMaterial color="#c4b5fd" emissive={visual.glow} emissiveIntensity={0.28} transparent opacity={0.78} />
+        </mesh>
+        <mesh position={[0.15, 0.01, -0.04]} rotation={[-0.3, 0.3, -0.6]} castShadow>
+          <octahedronGeometry args={[0.09, 0]} />
+          <meshStandardMaterial color="#6d28d9" emissive={visual.glow} emissiveIntensity={0.28} transparent opacity={0.74} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if (visual.shape === 'charm') {
+    return (
+      <mesh position={[0, 0.07, 0]} castShadow>
+        <boxGeometry args={[0.34, 0.42, 0.07]} />
+        <meshStandardMaterial color={visual.paper} emissive={visual.glow} emissiveIntensity={0.12} roughness={0.55} />
+      </mesh>
+    );
+  }
+
+  if (visual.shape === 'tag') {
+    return (
+      <>
+        <mesh position={[0, 0.07, 0]} castShadow>
+          <boxGeometry args={[0.28, 0.48, 0.055]} />
+          <meshStandardMaterial color={visual.paper} roughness={0.62} emissive={visual.glow} emissiveIntensity={0.08} />
+        </mesh>
+        <mesh position={[0, 0.08, 0.04]}>
+          <boxGeometry args={[0.2, 0.05, 0.02]} />
+          <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.3} />
+        </mesh>
+        <mesh position={[0, -0.03, 0.04]}>
+          <boxGeometry args={[0.15, 0.14, 0.02]} />
+          <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.24} />
+        </mesh>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <mesh position={[0, 0.07, 0]} castShadow>
+        <boxGeometry args={[0.46, 0.28, 0.06]} />
+        <meshStandardMaterial color={visual.paper} roughness={0.62} />
+      </mesh>
+      <mesh position={[-0.27, 0.07, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <cylinderGeometry args={[0.055, 0.055, 0.16, 12]} />
+        <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.2} />
+      </mesh>
+      <mesh position={[0.27, 0.07, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <cylinderGeometry args={[0.055, 0.055, 0.16, 12]} />
+        <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.2} />
+      </mesh>
+    </>
+  );
+}
+
+function PowerUpMesh({
+  x,
+  y,
+  power,
+  characterId,
+}: {
+  x: number;
+  y: number;
+  power: Power;
+  characterId?: CharacterId;
+}) {
   const ref = useRef<THREE.Group>(null);
   const [wx, , wz] = toWorld(x, y);
-  const visual = POWERUP_VISUALS[power];
+  const theme = getCharacterPowerTheme(characterId, power);
+  const baseVisual = POWERUP_VISUALS[power];
+  const visual = {
+    ...baseVisual,
+    paper: theme.paper,
+    accent: theme.color,
+    glow: theme.accent,
+  };
   useFrame(({ clock }) => {
     if (ref.current) {
       ref.current.position.y = 0.35 + Math.sin(clock.elapsedTime * 3) * 0.08;
@@ -872,7 +2040,6 @@ function PowerUpMesh({ x, y, power }: { x: number; y: number; power: Power }) {
   });
   return (
     <group ref={ref} position={[wx, 0.35, wz]}>
-      <pointLight color={visual.glow} distance={2.2} intensity={0.75} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.32, 0]}>
         <ringGeometry args={[0.18, 0.38, 24]} />
         <meshStandardMaterial
@@ -883,27 +2050,7 @@ function PowerUpMesh({ x, y, power }: { x: number; y: number; power: Power }) {
           opacity={0.34}
         />
       </mesh>
-      {visual.shape === 'charm' ? (
-        <mesh position={[0, 0.07, 0]} castShadow>
-          <boxGeometry args={[0.34, 0.42, 0.07]} />
-          <meshStandardMaterial color={visual.paper} emissive={visual.glow} emissiveIntensity={0.12} roughness={0.55} />
-        </mesh>
-      ) : (
-        <>
-          <mesh position={[0, 0.07, 0]} castShadow>
-            <boxGeometry args={[0.46, 0.28, 0.06]} />
-            <meshStandardMaterial color={visual.paper} roughness={0.62} />
-          </mesh>
-          <mesh position={[-0.27, 0.07, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-            <cylinderGeometry args={[0.055, 0.055, 0.16, 12]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.2} />
-          </mesh>
-          <mesh position={[0.27, 0.07, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-            <cylinderGeometry args={[0.055, 0.055, 0.16, 12]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.2} />
-          </mesh>
-        </>
-      )}
+      <PowerUpBody visual={visual} />
       <mesh position={[0, -0.08, 0.04]} castShadow>
         <boxGeometry args={[0.52, 0.035, 0.035]} />
         <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.25} />
@@ -920,6 +2067,7 @@ type MapTilesProps = {
   explosions: GameEngineState['explosions'];
   hazards: GameEngineState['hazards'];
   palette: StageDefinition['palette'];
+  powerTheme?: CharacterId;
 };
 
 function sameBombCells(
@@ -956,6 +2104,7 @@ function MapTilesBase({
   explosions,
   hazards,
   palette,
+  powerTheme,
 }: MapTilesProps) {
   const destroyedSet = useMemo(
     () => new Set(destroyedBoxes.map((b) => `${b.x},${b.y}`)),
@@ -991,7 +2140,7 @@ function MapTilesBase({
           return (
             <React.Fragment key={`cell-${x}-${y}`}>
               {tile}
-              <PowerUpMesh x={x} y={y} power={cell} />
+              <PowerUpMesh x={x} y={y} power={cell} characterId={powerTheme} />
             </React.Fragment>
           );
         }
@@ -1029,10 +2178,14 @@ const MapTiles = React.memo(MapTilesBase, (prev, next) => (
   && sameTimedCells(prev.destroyedBoxes, next.destroyedBoxes)
   && sameTimedCells(prev.explosions, next.explosions)
   && prev.hazards === next.hazards
+  && prev.powerTheme === next.powerTheme
 ));
 
 function SceneContent({ state }: { state: GameEngineState }) {
-  const stage = getStageDefinition(state.config.stageId);
+  const stage = useMemo(
+    () => getStageDefinition(state.config.stageId),
+    [state.config.stageId]
+  );
   return (
     <>
       <ambientLight intensity={0.72} />
@@ -1048,6 +2201,7 @@ function SceneContent({ state }: { state: GameEngineState }) {
         explosions={state.explosions}
         hazards={state.hazards}
         palette={stage.palette}
+        powerTheme={state.players[0]?.characterId}
       />
       {state.players.map((p) => (
         <PlayerMesh key={p.id} player={p} state={state} />
@@ -1068,8 +2222,9 @@ export function GameScene3D({ state }: GameScene3DProps) {
   return (
     <Canvas
       shadows
+      dpr={[1, 1.35]}
       style={{ width: '100%', height: '100%', background: 'linear-gradient(180deg, #161132 0%, #3b3278 52%, #221b44 100%)' }}
-      gl={{ antialias: true }}
+      gl={{ antialias: false, powerPreference: 'high-performance' }}
       camera={{ position: [0, 13.2, 9.6], fov: 48 }}
     >
       <SceneContent state={state} />

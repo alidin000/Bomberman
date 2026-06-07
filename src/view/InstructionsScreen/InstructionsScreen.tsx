@@ -1,6 +1,7 @@
+/* eslint-disable object-curly-newline, max-len */
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Typography } from '@mui/material';
+import SportsEsportsIcon from '@mui/icons-material/SportsEsports';
 import {
   InstructionsBackground,
   StyledDialog,
@@ -8,11 +9,46 @@ import {
   StyledDialogContent,
   DialogActions,
   BackButton,
+  ManualIntro,
+  ManualGrid,
+  ManualSection,
+  ManualSectionTitle,
+  ManualList,
+  ManualItem,
+  ManualBadge,
+  CharacterManualGrid,
+  CharacterManualCard,
 } from './InstructionsScreen.styles';
+import {
+  CHARACTER_DEFINITIONS,
+  STAGE_DEFINITIONS,
+  getBossDefinition,
+} from '../../content';
+
+const CHARACTER_POWER_UPS = [
+  ['Naruto', 'Clone Training / Kurama Chakra / Rasengan Mastery / Sage Training'],
+  ['Sasuke', 'Sharingan Timing / Chidori Current / Curse Mark Veil / Susanoo Fragment'],
+  ['Gaara', 'Sand Armor / Shukaku Chakra / Desert Blessing / Sand Coffin Seal'],
+  ['Itachi', 'Crow Feather / Sharingan Mirage / Tsukuyomi Trigger / Yata Mirror'],
+  ['Minato', 'FTG Kunai / Yellow Flash / Hokage Cloak / Teleport Mastery'],
+  ['Deidara', 'Clay Pouch / C2 Blast Study / Art Release Seal / Explosive Guard'],
+];
+
+const LOCAL_BEASTS = [
+  'Leaf: Rogue Genin, Rogue Chunin, Training Clone.',
+  'Sand: Puppet Scout, Scorpion Puppet, Sand Ninja.',
+  'Mist: Mist Ninja, Water Clone, Hunter Ninja.',
+  'Cloud: Lightning Ninja, Thunder Hawk, Cloud Samurai.',
+  'Akatsuki: White Zetsu, Crow Swarm, Akatsuki Cultist.',
+];
 
 export const InstructionsScreen = () => {
   const navigate = useNavigate();
   const handleClose = () => navigate('/');
+  const stages = STAGE_DEFINITIONS.filter((stage) => stage.implemented);
+  const bosses = stages
+    .map((stage) => (stage.bossId ? getBossDefinition(stage.bossId) : null))
+    .filter((boss): boss is ReturnType<typeof getBossDefinition> => Boolean(boss));
 
   return (
     <InstructionsBackground>
@@ -25,165 +61,125 @@ export const InstructionsScreen = () => {
           Shinobi Arena Manual
         </StyledDialogTitle>
         <StyledDialogContent dividers>
-          <Typography variant="body1">
-            Enter a 3D shinobi arena where bombs are character techniques,
-            village stages shape the fight, and tailed beasts pressure the board
-            with warned hazards.
-          </Typography>
-          {' '}
-          <br />
-          <Typography variant="h4">Objective</Typography>
-          {' '}
-          <br />
-          <Typography variant="body1">
-            In solo mode, defeat the village boss before it overwhelms the arena.
-            In local arena mode, outlast the other shinobi across the chosen
-            number of trials.
-          </Typography>
-          {' '}
-          <br />
-          <Typography variant="h4">Arena Setup</Typography>
-          {' '}
-          <br />
-          <Typography variant="body1">
-            <strong>Villages:</strong>
-            {' '}
-            Choose Leaf, Sand, Mist, Cloud, Stone, or Hideout stages. Each stage
-            uses a different arena layout, palette, boss identity, and hazard theme.
-          </Typography>
-          <Typography variant="body1">
-            <strong>Shinobi:</strong>
-            {' '}
-            Pick from Deidara, Naruto, Sasuke, Gaara, Minato, and Itachi. Each
-            one has a named basic bomb, ultimate, passive style, and blast pattern.
-          </Typography>
-          <Typography variant="body1">
-            <strong>Victory Seals:</strong>
-            {' '}
-            In local mode, choose how many trial wins are needed to claim the match.
-            Solo mode tracks boss rewards and unlocks through story progress.
-          </Typography>
-          {' '}
-          <br />
-          <Typography variant="h4">Controls and Movement</Typography>
-          {' '}
-          <br />
-          <Typography variant="body1">
-            <strong>Movement:</strong>
-            {' '}
-            Use your keyboard to move your character up, down, left, or right.
-            Read warning seals, bait boss casts, and keep escape paths open.
-          </Typography>
-          <Typography variant="body1">
-            <strong>Bomb Techniques:</strong>
-            {' '}
-            Place your basic bomb on the current tile. Deidara uses clay spiders,
-            Naruto adds clone diagonals, Sasuke pierces with Chidori, Gaara slows
-            with sand, Minato marks space, and Itachi delays enemies with crows.
-          </Typography>
-          <Typography variant="body1">
-            <strong>Ultimates:</strong>
-            {' '}
-            The second action key spends the charged ultimate. These create larger
-            signature effects like C3, Rasenshuriken, Kirin, Sand Tsunami, Instant
-            Teleport, or Tsukuyomi.
-          </Typography>
-          {' '}
-          <br />
-          <Typography variant="h4">Gameplay Elements</Typography>
-          {' '}
-          <br />
-          <Typography variant="body1">
-            <strong>Walls and Boxes:</strong>
-            {' '}
-            Navigate around indestructible walls and destructible boxes.
-            Boxes may hide chakra upgrades or arena tools, revealed only when destroyed.
-          </Typography>
-          <Typography variant="body1">
-            <strong>Tailed Beasts and Beasts:</strong>
-            {' '}
-            Solo bosses move, cast warned abilities, and change pressure by phase.
-            Local arena beasts roam as fox, oni, mist, and horned hazards.
-          </Typography>
-          <Typography variant="body1">
-            <strong>Scrolls, Tags, and Charms:</strong>
-            {' '}
-            Broken boxes can reveal clay storage scrolls, blast formula scrolls,
-            body flicker tags, command seals, guard charms, phase seals, and
-            earth-style seals.
-          </Typography>
-          <Typography variant="body1">
-            <strong>Hazards:</strong>
-            {' '}
-            Warning markers appear before boss attacks become active. Step away
-            during the warning, then punish after the cast.
-          </Typography>
-          {' '}
-          <br />
-          {' '}
-          <Typography variant="h4">Advanced Gameplay</Typography>
-          {' '}
-          <br />
-          <Typography variant="body1">
-            <strong>Chain Reactions:</strong>
-            {' '}
-            Bombs can trigger other bombs,
-            creating devastating chain reactions. Use this to your advantage,
-            setting up traps and strategic strikes.
-          </Typography>
-          <Typography variant="body1">
-            <strong>Boss Control:</strong>
-            {' '}
-            Sand and illusion bombs delay boss attacks. Lightning and clay hit harder.
-            Teleport and clone blasts help reposition and cover unusual angles.
-          </Typography>
-          <Typography variant="body1">
-            <strong>Custom Controls:</strong>
-            {' '}
-            Configure movement, bomb, and ultimate keys from setup or the settings menu.
-            Your last control setup is reused on the next run.
-          </Typography>
-          {' '}
-          <br />
-          <Typography variant="h4">End Game</Typography>
-          {' '}
-          <br />
-          <Typography variant="body1">
-            A solo trial ends when the boss is defeated or the player is sealed.
-            A local match ends when a shinobi reaches the target number of trial wins.
-          </Typography>
-          {' '}
-          <br />
-          <Typography variant="h4">Tips for Success</Typography>
-          {' '}
-          <br />
-          <Typography variant="body1">
-            <strong>Strategic Bombing:</strong>
-            {' '}
-            Plan your bomb placements not just to destroy obstacles,
-            but to trap opponents, clip boss movement, or force beasts into blast lines.
-          </Typography>
-          <Typography variant="body1">
-            <strong>Watch the HUD:</strong>
-            {' '}
-            The HUD shows the selected character&apos;s bomb, ultimate, charge, boss
-            health, active cast, and danger-zone count.
-          </Typography>
-          <Typography variant="body1">
-            <strong>Adapt and Overcome:</strong>
-            {' '}
-            Every character has a different blast footprint. Choose the shinobi
-            whose bomb shape fits your route through the stage.
-          </Typography>
-          <Typography variant="body1">
-            <strong>Ready, Set, Explode!</strong>
-            {' '}
-            Master the village map, create space with your signature bomb, and
-            time ultimates when the boss or rival shinobi has nowhere to run.
-          </Typography>
+          <ManualIntro>
+            Plant character-specific bombs, manage blast routes, and defeat the village boss in solo mode or outlast rival shinobi in local arena mode.
+          </ManualIntro>
+
+          <ManualGrid>
+            <ManualSection wide>
+              <ManualSectionTitle>Playable Shinobi</ManualSectionTitle>
+              <CharacterManualGrid>
+                {CHARACTER_DEFINITIONS.filter((character) => character.implemented).map((character) => (
+                  <CharacterManualCard key={character.id} color={character.secondaryColor}>
+                    <strong>{character.name}</strong>
+                    <span>{character.basicBomb}</span>
+                    <span>{character.ultimate}</span>
+                    <small>{character.passive}</small>
+                    <p>{character.description}</p>
+                  </CharacterManualCard>
+                ))}
+              </CharacterManualGrid>
+            </ManualSection>
+
+            <ManualSection>
+              <ManualSectionTitle>Modes</ManualSectionTitle>
+              <ManualList>
+                <ManualItem>
+                  <ManualBadge>Solo</ManualBadge>
+                  Defeat the current stage boss before your shinobi is sealed.
+                </ManualItem>
+                <ManualItem>
+                  <ManualBadge>Local</ManualBadge>
+                  Two or three players fight for the selected number of victory seals.
+                </ManualItem>
+                <ManualItem>
+                  <ManualBadge>Online</ManualBadge>
+                  Rooms are visible as a future mode and are not playable yet.
+                </ManualItem>
+              </ManualList>
+            </ManualSection>
+
+            <ManualSection>
+              <ManualSectionTitle>Controls</ManualSectionTitle>
+              <ManualList>
+                <ManualItem>
+                  <ManualBadge>Move</ManualBadge>
+                  Use the four configured movement keys.
+                </ManualItem>
+                <ManualItem>
+                  <ManualBadge>Bomb</ManualBadge>
+                  The first extra key plants your basic bomb.
+                </ManualItem>
+                <ManualItem>
+                  <ManualBadge>Ult</ManualBadge>
+                  The second extra key spends the charged ultimate.
+                </ManualItem>
+                <ManualItem>
+                  <ManualBadge>Pause</ManualBadge>
+                  Use the top-right controls for pause, restart, and key edits.
+                </ManualItem>
+              </ManualList>
+            </ManualSection>
+
+            <ManualSection>
+              <ManualSectionTitle>Story Bosses</ManualSectionTitle>
+              <ManualList>
+                {bosses.map((boss) => (
+                  <ManualItem key={boss.id}>
+                    <ManualBadge>
+                      {boss.tails}
+                      {' '}
+                      tail
+                    </ManualBadge>
+                    {boss.name}
+                    {' '}
+                    casts
+                    {' '}
+                    {boss.attacks.join(' / ')}
+                    .
+                  </ManualItem>
+                ))}
+              </ManualList>
+            </ManualSection>
+
+            <ManualSection>
+              <ManualSectionTitle>Local Beasts</ManualSectionTitle>
+              <ManualList>
+                {LOCAL_BEASTS.map((beast) => (
+                  <ManualItem key={beast}>{beast}</ManualItem>
+                ))}
+              </ManualList>
+            </ManualSection>
+
+            <ManualSection wide>
+              <ManualSectionTitle>Character Power-Ups</ManualSectionTitle>
+              <ManualList compact>
+                {CHARACTER_POWER_UPS.map(([name, effect]) => (
+                  <ManualItem key={name}>
+                    <ManualBadge>{name}</ManualBadge>
+                    {effect}
+                  </ManualItem>
+                ))}
+                <ManualItem>Pickups still improve core arena stats like bomb count, blast radius, movement, shields, manual release, phasing, and cover.</ManualItem>
+              </ManualList>
+            </ManualSection>
+
+            <ManualSection wide>
+              <ManualSectionTitle>Arena Flow</ManualSectionTitle>
+              <ManualList compact>
+                <ManualItem>Destructible boxes can reveal power-ups after they break.</ManualItem>
+                <ManualItem>Boss warning seals appear before hazards become active; leave the marked cell, then punish.</ManualItem>
+                <ManualItem>Bombs can chain-trigger nearby bombs, so delayed setups can cover routes that a single blast misses.</ManualItem>
+                <ManualItem>Gaara and Itachi each have one passive survival save; after it triggers, the passive is spent.</ManualItem>
+              </ManualList>
+            </ManualSection>
+          </ManualGrid>
         </StyledDialogContent>
         <DialogActions>
-          <BackButton onClick={handleClose} />
+          <BackButton type="button" onClick={handleClose}>
+            <SportsEsportsIcon fontSize="small" />
+            Back to Arena
+          </BackButton>
         </DialogActions>
       </StyledDialog>
     </InstructionsBackground>

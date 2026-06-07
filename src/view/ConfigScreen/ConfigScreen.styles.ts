@@ -7,29 +7,96 @@ type PlayerControlsRowProps = {
 
 export const StyledDialog = styled(Dialog)({
   '& .MuiDialog-paper': {
-    width: '980px',
+    width: '1180px',
     maxWidth: '95vw',
-    minHeight: '720px',
-    padding: '24px',
-    background: 'linear-gradient(145deg, rgba(12, 10, 9, 0.97), rgba(22, 15, 28, 0.96))',
+    minHeight: '760px',
+    maxHeight: '92vh',
+    padding: '20px 22px 0',
+    borderRadius: 8,
+    overflow: 'hidden',
+    background: 'linear-gradient(145deg, rgba(15, 15, 16, 0.98), rgba(43, 34, 25, 0.97))',
     color: '#f8fafc',
+    border: '1px solid rgba(255,255,255,0.16)',
+    boxShadow: '0 26px 90px rgba(0,0,0,0.62), inset 0 1px 0 rgba(255,255,255,0.1)',
+  },
+  '& .MuiDialogTitle-root': {
+    padding: '0 0 14px',
+    color: '#fff7ed',
+    fontWeight: 900,
+    letterSpacing: '0.06em',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    textShadow: '0 2px 0 #000',
+  },
+  '& .MuiDialogContent-root': {
+    padding: '0 4px 18px',
+    overflowX: 'hidden',
+  },
+  '& .MuiStepper-root': {
+    margin: '0 auto 12px',
+    padding: '10px 12px',
+    maxWidth: 720,
+    borderRadius: 6,
+    background: 'linear-gradient(90deg, rgba(0,0,0,0.34), rgba(255,255,255,0.07), rgba(0,0,0,0.34))',
+    border: '1px solid rgba(255,255,255,0.1)',
+  },
+  '& .MuiStepLabel-label': {
+    color: 'rgba(248,250,252,0.62)',
+    fontWeight: 800,
+    textTransform: 'uppercase',
+    fontSize: '0.72rem',
+  },
+  '& .MuiStepLabel-label.Mui-active, & .MuiStepLabel-label.Mui-completed': {
+    color: '#ffd166',
+  },
+  '& .MuiStepIcon-root': {
+    color: 'rgba(255,255,255,0.18)',
+  },
+  '& .MuiStepIcon-root.Mui-active, & .MuiStepIcon-root.Mui-completed': {
+    color: '#f59e0b',
+  },
+  '& .MuiTypography-colorTextSecondary': {
+    color: 'rgba(248,250,252,0.64)',
+  },
+  '& .MuiButton-contained': {
+    borderRadius: 6,
+    background: 'linear-gradient(180deg, #f5a524, #ad4f12)',
+    color: '#111827',
+    fontWeight: 900,
+    boxShadow: '0 10px 24px rgba(0,0,0,0.34)',
+  },
+  '& .MuiButton-contained:hover': {
+    background: 'linear-gradient(180deg, #ffd166, #c25a13)',
+  },
+  '& .MuiToggleButton-root': {
+    color: '#f8fafc',
+    borderColor: 'rgba(255,255,255,0.18)',
+    background: 'rgba(0,0,0,0.24)',
+    fontWeight: 800,
+  },
+  '& .MuiToggleButton-root.Mui-selected': {
+    color: '#111827',
+    background: '#ffd166',
   },
 });
 
 export const StepContent = styled.div`
-  margin-top: 20px;
-  margin-bottom: 20px;
+  margin-top: 16px;
+  margin-bottom: 0;
+  padding-bottom: 96px;
 `;
 
 export const CenteredButtonContainer = styled.div`
-  position: absolute;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
   display: flex;
   justify-content: center;
   gap: 12px;
   width: 100%;
+  margin-top: 22px;
+  padding: 16px 0 18px;
+  background: linear-gradient(180deg, rgba(28, 22, 18, 0), rgba(28, 22, 18, 0.96) 42%);
 `;
 
 export const Row = styled.div`
@@ -43,8 +110,12 @@ export const PlayerControlsRow = styled.div<PlayerControlsRowProps>`
   display: flex;
   align-items: center;
   justify-content: start;
-  margin-bottom: ${(props) => (props.numOfPlayers === '2' ? '48px' : '20px')};
-  margin-top: ${(props) => (props.numOfPlayers === '2' ? '32px' : '16px')};
+  margin-bottom: ${(props) => (props.numOfPlayers === '2' ? '32px' : '18px')};
+  margin-top: ${(props) => (props.numOfPlayers === '2' ? '24px' : '14px')};
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 `;
 
 export const ControlsLabel = styled(Typography)`
@@ -66,19 +137,21 @@ export const KeyRow = styled.div`
 `;
 
 export const KeyConfigInput = styled.input`
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   margin: 3px;
   text-align: center;
   font-size: 18px;
-  border-radius: 8px;
-  border: 2px solid rgba(108, 92, 231, 0.5);
-  background: rgba(30, 30, 60, 0.8);
+  font-weight: 900;
+  border-radius: 6px;
+  border: 2px solid rgba(245, 158, 11, 0.5);
+  background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(0,0,0,0.28));
   color: #f5f6fa;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
   &:focus {
     outline: none;
-    border-color: #6c5ce7;
-    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.3);
+    border-color: #ffd166;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.24);
   }
 `;
 
@@ -119,7 +192,11 @@ export const MapToggleButton = styled(ToggleButton)`
 `;
 
 export const ConfigIntro = styled.div`
-  margin-bottom: 20px;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(0,0,0,0.28), rgba(255,255,255,0.06), rgba(0,0,0,0.28));
+  border: 1px solid rgba(255,255,255,0.1);
 `;
 
 export const ReferenceBoard = styled.div`
@@ -139,10 +216,10 @@ export const ReferenceImage = styled.img`
 `;
 
 export const CharacterPortrait = styled.div`
-  height: 168px;
-  margin: -2px -2px 10px;
+  height: 174px;
+  margin: -6px -6px 10px;
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(0, 0, 0, 0.38);
 `;
@@ -160,45 +237,71 @@ export const CharacterPortraitImage = styled.div<{
 `;
 
 export const SectionTitle = styled(Typography)`
-  margin: 18px 0 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  position: relative;
+  z-index: 0;
+  width: fit-content;
+  margin: 20px auto 12px;
+  padding: 5px 34px 6px;
+  color: #fff7ed;
+  font-weight: 900;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  text-align: center;
+  text-shadow: 0 2px 0 #000;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    transform: rotate(-1deg);
+    background: linear-gradient(90deg, transparent 0%, #111 12%, #17120f 88%, transparent 100%);
+  }
 `;
 
 export const SelectionGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(164px, 1fr));
+  gap: 10px;
 `;
 
 export const SelectionCard = styled.button<{ selected: boolean; accent: string }>`
   min-height: 128px;
-  padding: 12px;
-  border: 1px solid ${(props) => (props.selected ? props.accent : 'rgba(255, 255, 255, 0.16)')};
-  border-radius: 16px;
+  padding: 10px;
+  border: 1px solid ${(props) => (props.selected ? props.accent : 'rgba(255, 255, 255, 0.14)')};
+  border-radius: 8px;
   background: ${(props) => (
     props.selected
-      ? `linear-gradient(145deg, ${props.accent}55, rgba(10, 12, 22, 0.94))`
-      : 'rgba(10, 12, 22, 0.78)'
+      ? `linear-gradient(180deg, ${props.accent}4f, rgba(9, 10, 12, 0.96))`
+      : 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(8, 9, 11, 0.92))'
   )};
   color: #f8fafc;
   cursor: pointer;
   text-align: left;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+  box-shadow: ${(props) => (
+    props.selected
+      ? `0 0 0 2px ${props.accent}55, 0 16px 36px rgba(0,0,0,0.38)`
+      : '0 10px 26px rgba(0,0,0,0.28)'
+  )};
+
+  &:disabled {
+    cursor: not-allowed;
+    filter: grayscale(0.78) brightness(0.62);
+  }
 
   &:hover {
-    transform: translateY(-2px);
+    transform: translateY(-3px);
     border-color: ${(props) => props.accent};
-    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.42);
   }
 `;
 
 export const StagePreview = styled.div`
-  height: 118px;
-  margin: -2px -2px 10px;
+  height: 128px;
+  margin: -6px -6px 10px;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(0, 0, 0, 0.32);
 `;
@@ -220,8 +323,8 @@ export const AbilityLine = styled.div<{ color: string }>`
   margin-top: 8px;
   padding: 6px 8px;
   border-left: 3px solid ${(props) => props.color};
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.26);
   color: rgba(248, 250, 252, 0.78);
   font-size: 0.72rem;
 `;
@@ -239,8 +342,8 @@ export const LoadoutRow = styled.div<{ color: string }>`
   gap: 8px;
   align-items: center;
   padding: 5px 7px;
-  border-radius: 9px;
-  background: linear-gradient(90deg, ${(props) => props.color}33, rgba(255, 255, 255, 0.06));
+  border-radius: 6px;
+  background: linear-gradient(90deg, ${(props) => props.color}33, rgba(0, 0, 0, 0.22));
   border: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 0.72rem;
 `;
@@ -259,13 +362,13 @@ export const CardHeader = styled.div`
 `;
 
 export const ColorOrb = styled.span<{ color: string }>`
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
-  border-radius: 999px;
-  background: radial-gradient(circle at 35% 30%, #fff7, transparent 35%),
-    ${(props) => props.color};
-  box-shadow: 0 0 22px ${(props) => props.color}88;
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.48), ${(props) => props.color} 42%, #050507 100%);
+  border: 1px solid rgba(255,255,255,0.24);
+  box-shadow: 0 0 18px ${(props) => props.color}70;
 `;
 
 export const CardMeta = styled(Typography)`
@@ -276,4 +379,8 @@ export const ModeGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+
+  @media (max-width: 760px) {
+    grid-template-columns: 1fr;
+  }
 `;

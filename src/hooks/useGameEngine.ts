@@ -17,6 +17,9 @@ import {
   HumanController,
 } from '../input/humanController';
 
+const MAX_FRAME_DELTA_MS = 100;
+const MAX_TICK_STEPS_PER_FRAME = 4;
+
 export function useGameEngine(config: GameConfig | null, keyBindings: KeyBindings) {
   const [state, dispatch] = useReducer(gameReducer, null);
   const stateRef = useRef(state);
@@ -66,14 +69,22 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     let lastTime = performance.now();
 
     const loop = (now: number) => {
-      const delta = now - lastTime;
+      const delta = Math.min(now - lastTime, MAX_FRAME_DELTA_MS);
       lastTime = now;
       const current = stateRef.current;
       if (current && !current.paused && current.phase === 'playing') {
         accumulatorRef.current += delta;
-        while (accumulatorRef.current >= TICK_MS) {
+        let tickSteps = 0;
+        while (
+          accumulatorRef.current >= TICK_MS
+          && tickSteps < MAX_TICK_STEPS_PER_FRAME
+        ) {
           dispatch({ type: 'TICK', deltaMs: TICK_MS });
           accumulatorRef.current -= TICK_MS;
+          tickSteps += 1;
+        }
+        if (tickSteps === MAX_TICK_STEPS_PER_FRAME) {
+          accumulatorRef.current = 0;
         }
       }
       rafRef.current = requestAnimationFrame(loop);

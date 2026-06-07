@@ -442,6 +442,9 @@ export const ConfigScreen = () => {
                             <span>{character.passive}</span>
                           </LoadoutRow>
                         </LoadoutGrid>
+                        <AbilityLine color={character.secondaryColor}>
+                          {character.description}
+                        </AbilityLine>
                         {mode === 'solo'
                           && !storyProgress.unlockedCharacters.includes(character.id)
                           && <Chip size="small" label="Locked" />}

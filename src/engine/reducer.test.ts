@@ -41,7 +41,7 @@ describe('gameReducer', () => {
     expect(state!.phase).toBe('playing');
   });
 
-  it('spawns chakra beasts for village arena maps', () => {
+  it('spawns ninja enemies for village arena maps', () => {
     const state = createInitialState({
       ...baseConfig,
       selectedMap: 'hiddenSand',
@@ -49,7 +49,7 @@ describe('gameReducer', () => {
     });
 
     expect(state.monsters.length).toBeGreaterThan(0);
-    expect(state.monsters.map((monster) => monster.name)).toContain('Shukaku Sand Wraith');
+    expect(state.monsters.map((monster) => monster.name)).toContain('Puppet Scout');
   });
 
   it('moves player within bounds', () => {
@@ -172,7 +172,7 @@ describe('gameReducer', () => {
     expect(state.players[0].passiveState).toBe('Sand Shield Spent');
   });
 
-  it('lets Itachi spend illusion dodge to survive first beast contact', () => {
+  it('lets Itachi spend illusion dodge to survive first monster contact', () => {
     let state = createInitialState({
       ...baseConfig,
       selectedCharacters: ['itachi', 'gaara'],
@@ -181,7 +181,7 @@ describe('gameReducer', () => {
       ...state,
       monsters: [{
         id: 'itachi-contact',
-        name: 'Akatsuki Beast Hunter',
+        name: 'Akatsuki Cultist',
         x: 1,
         y: 1,
         kind: 'smart',
@@ -193,6 +193,28 @@ describe('gameReducer', () => {
 
     expect(state.players[0].alive).toBe(true);
     expect(state.players[0].passiveState).toBe('Illusion Dodge Spent');
+  });
+
+  it('does not seal players from a clear lane without monster contact', () => {
+    let state = createInitialState({
+      ...baseConfig,
+      selectedCharacters: ['naruto', 'sasuke'],
+    });
+    state = {
+      ...state,
+      monsters: [{
+        id: 'sand-line',
+        name: 'Sand Ninja',
+        x: 3,
+        y: 1,
+        kind: 'smart',
+        moveCooldown: 1000,
+      }],
+    };
+
+    state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
+
+    expect(state.players[0].alive).toBe(true);
   });
 
   it('keeps detonator bombs from exploding on the timer', () => {

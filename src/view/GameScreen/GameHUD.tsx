@@ -1,7 +1,7 @@
 /* eslint-disable object-curly-newline, comma-dangle */
 import React from 'react';
-import { Chip, Typography } from '@mui/material';
-import { GameEngineState } from '../../engine/types';
+import { Typography } from '@mui/material';
+import { GameEngineState, MonsterKind } from '../../engine/types';
 import { Power } from '../../model/gameItem';
 import { isPowerUpActive } from '../../engine/players';
 import {
@@ -14,25 +14,35 @@ import {
   PlayerHeader,
   PlayerAvatar,
   PlayerStats,
+  PowerBadge,
   StatPill,
   HudRight,
   MonsterPaper,
   MonsterChips,
+  MonsterBadge,
   UltimateProgress,
   BossPaper,
   AbilityPanel,
   AbilityRow,
 } from './GameHUD.styles';
 import { getCharacterDefinition } from '../../content';
+import { getCharacterPowerTheme } from '../../content/characterPowerups';
 
 const POWER_LABELS: Record<Power, string> = {
-  AddBomb: 'Clay Scroll',
-  BlastRangeUp: 'Blast Scroll',
-  Detonator: 'Command Seal',
-  RollerSkate: 'Flicker Tag',
-  Invincibility: 'Guard Charm',
-  Ghost: 'Phase Seal',
-  Obstacle: 'Earth Seal',
+  AddBomb: 'Bomb capacity',
+  BlastRangeUp: 'Blast radius',
+  Detonator: 'Detonation Tag',
+  RollerSkate: 'Movement boost',
+  Invincibility: 'Shield',
+  Ghost: 'Phase survival',
+  Obstacle: 'Placeable cover',
+};
+
+const MONSTER_BADGE_COLORS: Record<MonsterKind, string> = {
+  basic: '#f97316',
+  smart: '#d6a45d',
+  ghost: '#38bdf8',
+  fork: '#a855f7',
 };
 
 type GameHUDProps = {
@@ -80,13 +90,19 @@ function PlayerCard({
         </StatPill>
       </PlayerStats>
       <PowerChips>
-        {activePowers.map((power) => (
-          <Chip
-            key={power}
-            label={POWER_LABELS[power]}
-            size="small"
-          />
-        ))}
+        {activePowers.map((power) => {
+          const theme = getCharacterPowerTheme(player.characterId, power);
+          return (
+            <PowerBadge
+              key={power}
+              color={theme.color}
+              accent={theme.accent}
+              title={`${POWER_LABELS[power]} · ${theme.label}`}
+            >
+              {theme.shortLabel}
+            </PowerBadge>
+          );
+        })}
       </PowerChips>
       <AbilityPanel color={character.secondaryColor}>
         <AbilityRow>
@@ -109,12 +125,11 @@ function BossSummary({ state }: GameHUDProps) {
 
   return (
     <BossPaper elevation={4} color={state.boss.color}>
-      <Typography variant="subtitle2" fontWeight="bold">
-        Boss:
-        {' '}
+      <Typography variant="overline" fontWeight="bold" letterSpacing="0.12em" display="block">
         {state.boss.name}
       </Typography>
-      <Typography variant="caption" display="block">
+      <UltimateProgress variant="determinate" value={health} />
+      <Typography variant="caption" display="block" color="#e5e7eb">
         Phase
         {' '}
         {state.boss.phase}
@@ -124,34 +139,36 @@ function BossSummary({ state }: GameHUDProps) {
         {state.boss.tails}
         {' '}
         tail chakra
-      </Typography>
-      <Typography variant="caption" display="block" color="warning.light">
-        Casting:
         {' '}
-        {state.boss.currentAbility}
-      </Typography>
-      <Typography variant="caption" display="block">
-        Active danger zones:
+        ·
         {' '}
-        {state.hazards.length}
-      </Typography>
-      <UltimateProgress variant="determinate" value={health} />
-      <Typography variant="caption">
         {state.boss.health}
         /
         {state.boss.maxHealth}
         {' '}
         HP
       </Typography>
+      <Typography variant="caption" display="block" color="warning.light">
+        {state.boss.currentAbility}
+        {' '}
+        ·
+        {' '}
+        {state.hazards.length}
+        {' '}
+        danger zones
+      </Typography>
     </BossPaper>
   );
 }
 
 function MonsterSummary({ state }: GameHUDProps) {
-  const counts = state.monsters.reduce<Record<string, number>>((acc, monster) => ({
-    ...acc,
-    [monster.name]: (acc[monster.name] ?? 0) + 1,
-  }), {});
+  const counts = state.monsters.reduce<
+    Record<string, { count: number; kind: MonsterKind }>
+  >((acc, monster) => {
+    const current = acc[monster.name] ?? { count: 0, kind: monster.kind };
+    acc[monster.name] = { ...current, count: current.count + 1 };
+    return acc;
+  }, {});
 
   return (
     <MonsterPaper elevation={4}>
@@ -165,13 +182,13 @@ function MonsterSummary({ state }: GameHUDProps) {
         roaming
       </Typography>
       <MonsterChips>
-        {Object.entries(counts).map(([name, count]) => (
-          <Chip
-            key={name}
-            label={`${name} x${count}`}
-            size="small"
-            variant="outlined"
-          />
+        {Object.entries(counts).map(([name, data]) => (
+          <MonsterBadge key={name} color={MONSTER_BADGE_COLORS[data.kind]}>
+            {name}
+            {' '}
+            x
+            {data.count}
+          </MonsterBadge>
         ))}
       </MonsterChips>
     </MonsterPaper>
