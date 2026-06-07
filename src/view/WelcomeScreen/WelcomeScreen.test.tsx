@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BrowserRouter, useNavigate, NavigateFunction } from 'react-router-dom';
@@ -5,20 +6,20 @@ import { ThemeProvider } from '@mui/material/styles';
 import theme from '../../theme/InstructionsTheme';
 import { WelcomeScreen } from './WelcomeScreen';
 
-jest.mock('react-router-dom', () => {
-  const originalModule = jest.requireActual('react-router-dom');
+vi.mock('react-router-dom', async () => {
+  const originalModule = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
   return {
     ...originalModule,
-    useNavigate: jest.fn(),
+    useNavigate: vi.fn(),
   };
 });
 
 describe('WelcomeScreen', () => {
-  let mockNavigate: jest.Mock<NavigateFunction>;
+  let mockNavigate: Mock<NavigateFunction>;
 
   beforeEach(() => {
-    mockNavigate = jest.fn();
-    (useNavigate as jest.Mock).mockReturnValue(mockNavigate);
+    mockNavigate = vi.fn();
+    (useNavigate as Mock).mockReturnValue(mockNavigate);
   });
 
   const setup = () => {

@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 /* eslint-disable no-plusplus */
 import React from 'react';
 import {
@@ -6,11 +7,11 @@ import {
 import { BrowserRouter, useNavigate, NavigateFunction } from 'react-router-dom';
 import { ConfigScreen } from './ConfigScreen';
 
-jest.mock('react-router-dom', () => {
-  const originalModule = jest.requireActual('react-router-dom');
+vi.mock('react-router-dom', async () => {
+  const originalModule = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
   return {
     ...originalModule,
-    useNavigate: jest.fn(),
+    useNavigate: vi.fn(),
   };
 });
 
@@ -34,15 +35,15 @@ Object.defineProperty(window, 'localStorage', {
 });
 
 describe('ConfigScreen', () => {
-  let mockNavigate: jest.Mock<NavigateFunction>;
+  let mockNavigate: Mock<NavigateFunction>;
 
   beforeEach(() => {
     localStorage.clear();
-    mockNavigate = jest.fn();
-    (useNavigate as jest.Mock).mockReturnValue(mockNavigate);
-    global.fetch = jest.fn().mockResolvedValue({
+    mockNavigate = vi.fn();
+    (useNavigate as Mock).mockReturnValue(mockNavigate);
+    global.fetch = vi.fn().mockResolvedValue({
       text: () => Promise.resolve('###########\n#         #\n###########'),
-    }) as jest.Mock;
+    }) as Mock;
   });
 
   const setup = (step = 0) => {

@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -8,7 +9,7 @@ import { createInitialState } from '../../engine/initialState';
 import { parseMapRows } from '../../engine/mapLoader';
 import { defaultMap } from '../../constants/contants';
 
-jest.mock('./GameScene3D', () => ({
+vi.mock('./GameScene3D', () => ({
   GameScene3D: () => <div data-testid="game-scene-3d" />,
 }));
 
@@ -19,14 +20,14 @@ const mockState = createInitialState({
   map: parseMapRows(defaultMap),
 });
 
-jest.mock('../../hooks/useGameEngine', () => ({
+vi.mock('../../hooks/useGameEngine', () => ({
   useGameEngine: () => ({
     state: mockState,
-    dispatch: jest.fn(),
-    pause: jest.fn(),
-    resume: jest.fn(),
-    restart: jest.fn(),
-    dismissDialog: jest.fn(),
+    dispatch: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    restart: vi.fn(),
+    dismissDialog: vi.fn(),
   }),
 }));
 

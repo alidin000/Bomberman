@@ -8,11 +8,16 @@
     "plugin:@typescript-eslint/recommended"
   ],
   "env": {
-    "browser": true,
-    "jest": true
+    "browser": true
   },
   "globals": {
-    "React": true
+    "React": true,
+    "afterAll": true,
+    "beforeAll": true,
+    "beforeEach": true,
+    "describe": true,
+    "expect": true,
+    "it": true
   },
   "settings": {
     "import/extensions": [".js", ".jsx", ".ts", ".tsx"],
@@ -64,12 +69,18 @@
       "experimentalDecorators": true
     }
   },
-  "plugins": ["jest", "import", "react-hooks", "@typescript-eslint"],
+  "plugins": ["import", "react-hooks", "@typescript-eslint"],
   "overrides": [
     {
       "files":["*.ts","*.tsx"],
       "rules": {
         "react/requires-default-props": "off"
+      }
+    },
+    {
+      "files": ["*.test.ts", "*.test.tsx", "setupTests.ts"],
+      "rules": {
+        "import/no-extraneous-dependencies": ["error", { "devDependencies": true }]
       }
     }
   ]

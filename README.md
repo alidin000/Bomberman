@@ -31,14 +31,14 @@ The engine keeps explosion resolution cell-based instead of scanning the full ma
 
 ## Getting Started
 
-Use Node.js 18 or newer, but below Node 21, matching the project engine range.
+Use Node.js 22, matching the Render/runtime configuration in `.node-version`.
 
 ```bash
 npm install
 npm start
 ```
 
-The dev server opens the game in the browser. Use the config flow to choose mode, stage, character loadout, upgrades, and controls.
+The Vite dev server opens the game in the browser. Use the config flow to choose mode, stage, character loadout, upgrades, and controls.
 
 ## Useful Scripts
 

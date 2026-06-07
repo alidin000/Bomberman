@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { renderHook } from '@testing-library/react-hooks';
@@ -5,33 +6,33 @@ import { act } from 'react-dom/test-utils';
 import { usePlayerActions } from './usePlayerActions';
 import { Player } from '../model/player';
 
-jest.mock('../model/player');
+vi.mock('../model/player');
 
 describe('usePlayerActions', () => {
   let mockPlayersInfo: Array<any>;
-  let mockSetMap: jest.Mock;
-  let mockAddPowerUp: jest.Mock;
-  let mockRemovePowerUp: jest.Mock;
-  let mockIsPowerUpActive: jest.Mock;
+  let mockSetMap: Mock;
+  let mockAddPowerUp: Mock;
+  let mockRemovePowerUp: Mock;
+  let mockIsPowerUpActive: Mock;
 
   beforeEach(() => {
-    mockSetMap = jest.fn();
-    mockAddPowerUp = jest.fn();
-    mockRemovePowerUp = jest.fn();
-    mockIsPowerUpActive = jest.fn();
+    mockSetMap = vi.fn();
+    mockAddPowerUp = vi.fn();
+    mockRemovePowerUp = vi.fn();
+    mockIsPowerUpActive = vi.fn();
 
     const mockPlayer = {
-      isAlive: jest.fn().mockReturnValue(true),
-      move: jest.fn(),
-      getId: jest.fn().mockReturnValue('player1'),
-      getY: jest.fn().mockReturnValue(1),
-      getX: jest.fn().mockReturnValue(1),
+      isAlive: vi.fn().mockReturnValue(true),
+      move: vi.fn(),
+      getId: vi.fn().mockReturnValue('player1'),
+      getY: vi.fn().mockReturnValue(1),
+      getX: vi.fn().mockReturnValue(1),
     } as unknown as Player;
 
     mockPlayersInfo = [{
       player: mockPlayer,
-      setNewPlayer: jest.fn(),
-      dropBomb: jest.fn(),
+      setNewPlayer: vi.fn(),
+      dropBomb: vi.fn(),
       keyBindings: ['w', 'a', 's', 'd', ' '],
       enemies: [],
     }];

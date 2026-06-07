@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { renderHook } from '@testing-library/react-hooks';
 import { act } from '@testing-library/react';
@@ -5,44 +6,44 @@ import { useBombManager } from './useBombManager';
 import { Player } from '../model/player';
 import { GameMap } from '../model/gameItem';
 
-jest.mock('../model/player');
-jest.mock('../model/gameItem', () => ({
-  isObstacle: jest.fn(),
-  isBomb: jest.fn(),
-  randomPowerUpGenerator: jest.fn().mockReturnValue('Empty'),
+vi.mock('../model/player');
+vi.mock('../model/gameItem', () => ({
+  isObstacle: vi.fn(),
+  isBomb: vi.fn(),
+  randomPowerUpGenerator: vi.fn().mockReturnValue('Empty'),
 }));
 
 describe('useBombManager', () => {
   let mockPlayersRef: React.MutableRefObject<Player[]>;
-  let mockSetPlayers: jest.Mock[];
+  let mockSetPlayers: Mock[];
   let mockMapRef: React.MutableRefObject<GameMap>;
-  let mockSetMap: jest.Mock;
-  let mockSetExplosions: jest.Mock;
-  let mockSetDestroyedBoxes: jest.Mock;
+  let mockSetMap: Mock;
+  let mockSetExplosions: Mock;
+  let mockSetDestroyedBoxes: Mock;
 
   beforeEach(() => {
     const mockPlayer = {
-      getId: jest.fn().mockReturnValue('player1'),
-      getY: jest.fn().mockReturnValue(1),
-      getX: jest.fn().mockReturnValue(1),
-      getBombs: jest.fn().mockReturnValue(1),
-      getBombRange: jest.fn().mockReturnValue(1),
-      canPlaceBomb: jest.fn().mockReturnValue(true),
-      incrementActiveBombs: jest.fn(),
-      decrementActiveBombs: jest.fn(),
-      isAlive: jest.fn().mockReturnValue(true),
-      isDetonator: jest.fn().mockReturnValue(false),
-      isInvincible: jest.fn().mockReturnValue(false),
-      killPlayer: jest.fn(),
-      removePowerUp: jest.fn(),
+      getId: vi.fn().mockReturnValue('player1'),
+      getY: vi.fn().mockReturnValue(1),
+      getX: vi.fn().mockReturnValue(1),
+      getBombs: vi.fn().mockReturnValue(1),
+      getBombRange: vi.fn().mockReturnValue(1),
+      canPlaceBomb: vi.fn().mockReturnValue(true),
+      incrementActiveBombs: vi.fn(),
+      decrementActiveBombs: vi.fn(),
+      isAlive: vi.fn().mockReturnValue(true),
+      isDetonator: vi.fn().mockReturnValue(false),
+      isInvincible: vi.fn().mockReturnValue(false),
+      killPlayer: vi.fn(),
+      removePowerUp: vi.fn(),
     } as unknown as Player;
 
     mockPlayersRef = { current: [mockPlayer] };
-    mockSetPlayers = [jest.fn()];
+    mockSetPlayers = [vi.fn()];
     mockMapRef = { current: [['Empty', 'Empty'], ['Empty', 'Empty']] };
-    mockSetMap = jest.fn();
-    mockSetExplosions = jest.fn();
-    mockSetDestroyedBoxes = jest.fn();
+    mockSetMap = vi.fn();
+    mockSetExplosions = vi.fn();
+    mockSetDestroyedBoxes = vi.fn();
   });
 
   it('should drop a bomb on the map', () => {
@@ -69,7 +70,7 @@ describe('useBombManager', () => {
   });
 
   it('should explode a bomb after a delay', () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     const { result } = renderHook(() => useBombManager(
       0,
@@ -86,12 +87,12 @@ describe('useBombManager', () => {
     });
 
     act(() => {
-      jest.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(3000);
     });
 
     expect(mockSetExplosions).toHaveBeenCalled();
     expect(mockSetMap).toHaveBeenCalled();
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it('should not drop a bomb if the cell is not empty', () => {

@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 /* eslint-disable max-len */
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { renderHook, act } from '@testing-library/react-hooks';
@@ -5,27 +6,27 @@ import usePowerUpManager from './usePowerUpManager';
 import { Player } from '../model/player';
 import { GameMap } from '../model/gameItem';
 
-jest.mock('../model/player');
-jest.mock('../model/gameItem', () => ({
-  isObstacle: jest.fn().mockReturnValue(false),
+vi.mock('../model/player');
+vi.mock('../model/gameItem', () => ({
+  isObstacle: vi.fn().mockReturnValue(false),
 }));
 
 describe('usePowerUpManager', () => {
   let mockPlayersRef: React.MutableRefObject<Player[]>;
-  let mockSetPlayers: jest.Mock[];
+  let mockSetPlayers: Mock[];
   let mockMapRef: React.MutableRefObject<GameMap>;
 
   beforeEach(() => {
     const mockPlayer = {
-      getId: jest.fn().mockReturnValue('player1'),
-      getY: jest.fn().mockReturnValue(1),
-      getX: jest.fn().mockReturnValue(1),
-      isAlive: jest.fn().mockReturnValue(true),
-      killPlayer: jest.fn(),
+      getId: vi.fn().mockReturnValue('player1'),
+      getY: vi.fn().mockReturnValue(1),
+      getX: vi.fn().mockReturnValue(1),
+      isAlive: vi.fn().mockReturnValue(true),
+      killPlayer: vi.fn(),
     } as unknown as Player;
 
     mockPlayersRef = { current: [mockPlayer] };
-    mockSetPlayers = [jest.fn()];
+    mockSetPlayers = [vi.fn()];
     mockMapRef = { current: [['Empty', 'Empty'], ['Empty', 'Empty']] };
   });
 
@@ -51,17 +52,17 @@ describe('usePowerUpManager', () => {
   });
 
   it('should check if a power-up is flashing', () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     const { result } = renderHook(() => usePowerUpManager(mockMapRef, mockPlayersRef, mockSetPlayers));
 
     act(() => {
       result.current.addPowerUp('player1', 'Ghost', 5000);
-      jest.advanceTimersByTime(2000); // Fast-forward time
+      vi.advanceTimersByTime(2000); // Fast-forward time
     });
 
     expect(result.current.isPowerUpFlashing('player1', 'Ghost')).toBe(true);
 
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it('should clear all power-ups for a player', () => {

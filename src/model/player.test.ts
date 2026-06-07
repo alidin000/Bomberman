@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 import { GameMap } from './gameItem';
 import { Player } from './player';
 
@@ -5,18 +6,18 @@ describe('Player', () => {
   let player: Player;
   let map: GameMap;
   let otherPlayers: Player[];
-  let setMap: jest.Mock;
+  let setMap: Mock;
 
-  const addPowerUp = jest.fn();
-  const removePowerUp = jest.fn();
-  const isPowerUpActive = jest.fn();
+  const addPowerUp = vi.fn();
+  const removePowerUp = vi.fn();
+  const isPowerUpActive = vi.fn();
 
   beforeEach(() => {
     // Initialize map with empty spaces
     map = Array.from({ length: 10 }, () => Array(10).fill('Empty'));
 
     // Mock function for setting the map
-    setMap = jest.fn();
+    setMap = vi.fn();
 
     // Other players in the game
     const playerImages = {

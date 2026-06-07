@@ -1,3 +1,4 @@
+import { vi, type Mock } from 'vitest';
 /* eslint-disable no-shadow */
 /* eslint-disable max-len */
 import { Monster } from './monster';
@@ -133,11 +134,11 @@ describe('Monster Tests', () => {
 
     it('should randomly change direction', () => {
       // Test if the ForkMonster can randomly change direction
-      jest.spyOn(global.Math, 'random').mockReturnValue(0.1); // Ensure random path chosen
+      vi.spyOn(global.Math, 'random').mockReturnValue(0.1); // Ensure random path chosen
       const forkMonster = new ForkMonster('1', 'ForkMonster', 1, 1);
       const direction = forkMonster.chooseDirection([{ x: 2, y: 1 }], [player]);
       expect(direction).toEqual({ x: 2, y: 1 });
-      (global.Math.random as jest.Mock).mockRestore();
+      (global.Math.random as Mock).mockRestore();
     });
 
     it('should avoid obstacles while moving towards player', () => {

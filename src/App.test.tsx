@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
@@ -6,16 +7,16 @@ import { App } from './App';
 import theme from './theme/InstructionsTheme';
 import { GameSettingsProvider } from './contexts/GameSettingsContext';
 
-jest.mock('./view/GameScreen/GameScreen', () => ({
+vi.mock('./view/GameScreen/GameScreen', () => ({
   GameScreen: () => <div>GameScreen</div>,
 }));
-jest.mock('./view/WelcomeScreen/WelcomeScreen', () => ({
+vi.mock('./view/WelcomeScreen/WelcomeScreen', () => ({
   WelcomeScreen: () => <div>WelcomeScreen</div>,
 }));
-jest.mock('./view/ConfigScreen/ConfigScreen', () => ({
+vi.mock('./view/ConfigScreen/ConfigScreen', () => ({
   ConfigScreen: () => <div>ConfigScreen</div>,
 }));
-jest.mock('./view/InstructionsScreen/InstructionsScreen', () => ({
+vi.mock('./view/InstructionsScreen/InstructionsScreen', () => ({
   InstructionsScreen: () => <div>InstructionsScreen</div>,
 }));
 

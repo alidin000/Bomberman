@@ -1,22 +1,23 @@
+import { vi, type Mock } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BrowserRouter, useNavigate, NavigateFunction } from 'react-router-dom';
 import { InstructionsScreen } from './InstructionsScreen';
 
-jest.mock('react-router-dom', () => {
-  const originalModule = jest.requireActual('react-router-dom');
+vi.mock('react-router-dom', async () => {
+  const originalModule = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
   return {
     ...originalModule,
-    useNavigate: jest.fn(),
+    useNavigate: vi.fn(),
   };
 });
 
 describe('InstructionsScreen', () => {
-  let mockNavigate: jest.Mock<NavigateFunction>;
+  let mockNavigate: Mock<NavigateFunction>;
 
   const setup = () => {
-    mockNavigate = jest.fn();
-    (useNavigate as jest.Mock).mockReturnValue(mockNavigate);
+    mockNavigate = vi.fn();
+    (useNavigate as Mock).mockReturnValue(mockNavigate);
     render(
       <BrowserRouter>
         <InstructionsScreen />

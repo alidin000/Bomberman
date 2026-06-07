@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 /* eslint-disable react/button-has-type */
 import React from 'react';
 import { render, screen } from '@testing-library/react';
@@ -5,8 +6,8 @@ import userEvent from '@testing-library/user-event';
 import { GameSettingsProvider, useGameSettings } from './GameSettingsContext';
 
 beforeAll(() => {
-  jest.spyOn(console, 'error').mockImplementation(() => {});
-  jest.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
 
 const TestComponent = () => {
@@ -57,5 +58,5 @@ describe('GameSettingsProvider', () => {
 });
 
 afterAll(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
