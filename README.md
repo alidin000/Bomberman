@@ -28,13 +28,13 @@ A 3D browser arena game built with React, TypeScript, Three.js, and React Three 
 
 ## Current Project State vs. v2.0 PRD
 
-The latest product direction is larger than the current implementation. Phases 1 and 2 are now implemented for the Hidden Leaf campaign loop: the game has objective progression, fogged exploration, character-specific rewards, hidden-area discoveries, Zetsu surprises, ability-driven shinobi enemies, and respawn pressure. Later v2.0 mission-variety, presentation, and multiplayer phases remain planned work.
+The latest product direction is larger than the current implementation. Phases 1 and 2 are now implemented across all seven campaign stages: the game has objective progression, fogged exploration, character-specific rewards, hidden-area discoveries, Zetsu surprises, ability-driven shinobi enemies, respawn pressure, and boss unlocks for every village route stop. Later v2.0 mission-variety, presentation, and multiplayer phases remain planned work.
 
 Implemented today:
 
-- A 35x35 Hidden Leaf campaign map plus compact arena maps for Hidden Sand, Hidden Mist, Hidden Cloud, Hidden Stone, Akatsuki Hideout, and Great Shinobi War.
+- Dense 35x35 campaign maps for Hidden Leaf, Hidden Sand, Hidden Mist, Hidden Cloud, Hidden Stone, Akatsuki Hideout, and Great Shinobi War.
 - A saved campaign route that starts at Hidden Leaf, unlocks villages sequentially, stores completed stages, unlocks characters/rewards, and resumes from the last village.
-- A Phase 1 Hidden Leaf campaign loop: rescue villagers, protect the Hokage Building, clear the Iruka mini-boss gate, open the Kurama arena, defeat the boss, and earn the reward.
+- Phase 1 objective loops for every stage: rescue targets, protect a stage-specific structure, clear a mini-boss gate, open the boss arena, defeat the boss, and earn the reward.
 - Campaign runtime state for current village, mission step, objective progress, defense structures, spawn points, discovered secrets, boss arena state, and mission result.
 - Versioned story save migration for objective progress, mission results, fragments, reputation, and story completion.
 - Map loading and 3D camera/floor support for larger 35x35+ campaign rows while keeping existing compact arena fixtures compatible.
@@ -42,19 +42,21 @@ Implemented today:
 - Character vision radii, campaign fog of war, Deidara explosion reveal, Sasuke/Itachi/Minato enemy sensing, and Gaara wall sensing.
 - Character-themed bomb behavior, ultimate effects, passives, power-up labels, and HUD/manual presentation.
 - Per-character campaign pickup pools with PRD signature rewards and procedural 3D pickup fallbacks.
-- Hidden-area metadata on the Hidden Leaf campaign map, including a scroll cache, archive fragment, and elite Zetsu burrow.
+- Hidden-area metadata on every campaign map, including a scroll cache, archive fragment, and elite Zetsu burrow per stage.
 - Deterministic destroyed-crate outcome table: 60% nothing, 20% power-up, 15% White Zetsu, 4% elite Zetsu, and 1% rare reward.
 - Shinobi enemy archetypes with warned ability state for Kunai Throw, Body Flicker, Water Clone, Sand Spike, Lightning Strike, and Zetsu Ambush.
 - Campaign respawn point state with timers, max-active caps, active monster tracking, and deterministic archetype rotation.
+- Active mini-boss gate guards for every campaign stage; the boss arena opens only after the guard is defeated and the gate is reached.
 - Local PvP-style arena support for two or three players.
+- Shared-screen movement bounds for local multiplayer so players cannot run out of the camera window.
+- Streamlined setup with single-match launches and in-game restart using the same map, characters, upgrade, and controls.
 - Deterministic engine actions and replay/network type groundwork.
 
 Not implemented yet:
 
-- Fully authored 35x35 to 50x50 campaign maps beyond Hidden Leaf, secret rooms, and boss arenas hidden inside larger exploration maps.
-- Objective-driven campaign stages beyond the first Hidden Leaf chain, such as activating shrines, collecting seals, locating bridges, and unique objectives for every village.
+- Fully bespoke 50x50 campaign maps, physical secret-room geometry, and boss arenas hidden inside larger exploration maps.
+- Unique objective variants for every village beyond the shared rescue, defense, mini-boss gate, and boss arena chain, such as activating shrines, collecting seals, locating bridges, and route-specific puzzles.
 - Village hubs, NPCs, currency, reputation, fragments, hidden areas, or lore collectibles.
-- Full mini-boss combat entities beyond the current Iruka gate encounter.
 - Multi-village defense missions with building HP and enemy waves.
 - Full collectible persistence for rare fragments and scroll lore beyond in-mission discovery state.
 - Fully bespoke `.glb` pickup and enemy models beyond the current procedural fallbacks.
@@ -72,18 +74,18 @@ Goal: turn the existing saved boss route into a real campaign loop without break
 2. Add campaign runtime state to `src/engine/types.ts`: current village, mission step, objective progress, structures, spawn points, discovered secrets, and mission result.
 3. Keep all objective changes reducer-driven through serializable actions so future online mode can replay them.
 4. Expand map loading to support larger 35x35+ maps while keeping current arena maps as compatibility fixtures.
-5. Implement the first full Hidden Leaf loop: exploration, rescue villagers, protect Hokage Building, mini-boss gate, Kurama boss arena, reward.
+5. Implement full stage loops across all campaign maps: exploration, rescue targets, protect structures, mini-boss gates, boss arenas, and rewards.
 6. Version the save schema in `src/story/` so old local saves migrate cleanly into objective progress, fragments, reputation, and story completion.
 7. Extend fog of war with PRD-specific sensing: Sasuke hidden enemy reveal, Itachi enemy outlines, Minato proximity sensing, Gaara wall sensing, and Deidara explosion reveal.
 
 Exit criteria:
 
-- A new player can start Hidden Leaf, complete objectives, unlock the boss, earn the reward, and resume after reload.
+- A new player can start any campaign stage, complete objectives, unlock the boss, earn the reward, and resume after reload.
 - Campaign logic has reducer tests for objective progress, save migration, fog reveal, and boss unlock gates.
 
 ### Phase 2 - Powerups, Enemies, and Exploration Rewards
 
-Status: implemented for the current Hidden Leaf campaign loop.
+Status: implemented across all seven campaign stages.
 
 Goal: make exploration feel dangerous and character-specific.
 

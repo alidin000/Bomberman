@@ -13,9 +13,7 @@ import {
   HudRoot,
   PlayerCards,
   PlayerCardPaper,
-  RoundPaper,
   PowerChips,
-  RoundProgress,
   PlayerHeader,
   PlayerAvatar,
   PlayerStats,
@@ -183,7 +181,7 @@ function formatObjectiveDetail(objective: CampaignObjectiveState): string {
     if (objective.status === 'complete') {
       return `${objective.gateLabel ?? objective.label} opened`;
     }
-    return `Reach ${objective.miniBossLabel ?? objective.label}`;
+    return `Defeat ${objective.miniBossLabel ?? objective.label} and reach the gate`;
   }
 
   const secondsRemaining = Math.ceil((objective.ticksRemaining ?? 0) / 1000);
@@ -316,14 +314,7 @@ function MonsterSummary({ state }: GameHUDProps) {
   );
 }
 
-function formatTrialWinner(state: GameEngineState, winner: string): string {
-  if (winner === 'draw') return 'Draw';
-  return state.players.find((player) => player.id === winner)?.name ?? winner;
-}
-
 export function GameHUD({ state }: GameHUDProps) {
-  const roundProgress = (state.round / state.totalRounds) * 100;
-
   return (
     <HudRoot>
       <PlayerCards>
@@ -332,23 +323,6 @@ export function GameHUD({ state }: GameHUDProps) {
         ))}
       </PlayerCards>
       <HudRight>
-        <RoundPaper elevation={4}>
-          <Typography variant="subtitle2" fontWeight="bold">
-            Round
-            {' '}
-            {Math.min(state.round, state.totalRounds)}
-            /
-            {state.totalRounds}
-          </Typography>
-          <RoundProgress variant="determinate" value={roundProgress} />
-          {state.roundWinners.length > 0 && (
-            <Typography variant="caption" color="text.secondary" display="block">
-              Trial wins:
-              {' '}
-              {state.roundWinners.map((winner) => formatTrialWinner(state, winner)).join(', ')}
-            </Typography>
-          )}
-        </RoundPaper>
         <CampaignSummary state={state} />
         <BossSummary state={state} />
         <MonsterSummary state={state} />

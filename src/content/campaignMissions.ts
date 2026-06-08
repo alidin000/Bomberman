@@ -2,7 +2,7 @@ import { StageId } from './types';
 import { EnemyArchetype } from './enemies';
 import { Power } from '../model/gameItem';
 
-export type CampaignMissionId = 'hiddenLeafOpening';
+export type CampaignMissionId = `${StageId}Opening`;
 
 export type CampaignMissionStep =
   | 'exploration'
@@ -14,10 +14,7 @@ export type CampaignMissionStep =
   | 'complete'
   | 'failed';
 
-export type CampaignObjectiveId =
-  | 'rescueLeafVillagers'
-  | 'protectHokageBuilding'
-  | 'confrontIruka';
+export type CampaignObjectiveId = string;
 
 export type CampaignObjectiveKind = 'rescue' | 'defense' | 'miniBoss';
 
@@ -105,163 +102,404 @@ export interface CampaignMissionDefinition {
   objectives: CampaignObjectiveDefinition[];
 }
 
-export const CAMPAIGN_MISSIONS: CampaignMissionDefinition[] = [
+interface VillageMissionConfig {
+  stageId: StageId;
+  title: string;
+  villageName: string;
+  rescueLabel: string;
+  rescueDescription: string;
+  rescueTargets: [string, string];
+  structureLabel: string;
+  defenseDescription: string;
+  miniBossLabel: string;
+  miniBossDescription: string;
+  miniBossGateLabel: string;
+  bossGateLabel: string;
+  bossArenaLabel: string;
+  hiddenRewardPowerUp: Power;
+  hiddenScrollLabel: string;
+  hiddenFragmentLabel: string;
+  hiddenBurrowLabel: string;
+  spawnArchetypes: [EnemyArchetype[], EnemyArchetype[], EnemyArchetype[]];
+  objectiveIds?: {
+    rescue: CampaignObjectiveId;
+    defense: CampaignObjectiveId;
+    miniBoss: CampaignObjectiveId;
+  };
+}
+
+const RESPAWN_MS = 20000;
+
+const VILLAGE_MISSIONS: VillageMissionConfig[] = [
   {
-    id: 'hiddenLeafOpening',
     stageId: 'hiddenLeaf',
     title: 'Hidden Leaf Emergency',
     villageName: 'Hidden Leaf',
-    districts: [
-      {
-        id: 'villageEntrance',
-        label: 'Village Entrance',
-        description: 'The evacuation route at the edge of Hidden Leaf.',
-        x: 1,
-        y: 1,
-      },
-      {
-        id: 'trainingGrounds',
-        label: 'Training Grounds',
-        description: 'Scattered logs and lanes where villagers are hiding.',
-        x: 3,
-        y: 1,
-      },
-      {
-        id: 'villageCenter',
-        label: 'Village Center',
-        description: 'The central evacuation seal near the Hokage Building.',
-        x: 17,
-        y: 16,
-      },
-      {
-        id: 'forestGate',
-        label: 'Forest Gate',
-        description: 'Iruka holds the seal that opens Kurama\'s arena.',
-        x: 29,
-        y: 29,
-      },
-    ],
-    spawnPoints: [
-      {
-        id: 'leaf-main-gate',
-        label: 'Main Gate',
-        x: 6,
-        y: 5,
-        archetypes: ['rogueGenin', 'anbu'],
-        respawnMs: 20000,
-        maxActive: 3,
-        initialCount: 1,
-      },
-      {
-        id: 'leaf-training-grounds',
-        label: 'Training Grounds Burrow',
-        x: 13,
-        y: 8,
-        archetypes: ['mistNinja', 'sandNinja', 'whiteZetsu'],
-        respawnMs: 20000,
-        maxActive: 3,
-        initialCount: 1,
-      },
-      {
-        id: 'leaf-forest-gate',
-        label: 'Forest Gate Burrow',
-        x: 28,
-        y: 28,
-        archetypes: ['cloudNinja', 'whiteZetsu', 'blackZetsu'],
-        respawnMs: 20000,
-        maxActive: 4,
-        initialCount: 0,
-      },
-    ],
-    hiddenAreas: [
-      {
-        id: 'leaf-scroll-cache',
-        label: 'Training Grounds Secret Scroll',
-        description: 'A scroll cache hidden behind a destructible training crate.',
-        x: 3,
-        y: 2,
-        kind: 'scroll',
-        rewardPowerUp: 'Rasengan',
-      },
-      {
-        id: 'leaf-archive-fragment',
-        label: 'Hokage Archive Fragment',
-        description: 'A character fragment sealed into an old Hokage archive crate.',
-        x: 18,
-        y: 12,
-        kind: 'fragment',
-        rewardPowerUp: 'CharacterFragment',
-      },
-      {
-        id: 'leaf-zetsu-burrow',
-        label: 'Forest Zetsu Burrow',
-        description: 'A cracked root wall that hides an elite Zetsu ambush.',
-        x: 28,
-        y: 31,
-        kind: 'zetsuBurrow',
-        enemyArchetype: 'blackZetsu',
-      },
-    ],
-    discoveredSecrets: [],
+    rescueLabel: 'Rescue Villagers',
+    rescueDescription: 'Reach the marked villagers before challenging the tailed beast.',
+    rescueTargets: ['Training Grounds Villager', 'Village Center Villager'],
+    structureLabel: 'Hokage Building',
+    defenseDescription: 'Hold the village center until the evacuation seal finishes.',
+    miniBossLabel: 'Iruka',
+    miniBossDescription: 'Defeat Iruka at the forest gate, then open Kurama\'s arena seal.',
     miniBossGateLabel: 'Iruka evacuation seal',
     bossGateLabel: 'Kurama arena seal',
-    bossArena: {
-      label: 'Kurama Arena',
-      x: 17,
-      y: 17,
-      requires: ['confrontIruka'],
+    bossArenaLabel: 'Kurama Arena',
+    hiddenRewardPowerUp: 'Rasengan',
+    hiddenScrollLabel: 'Training Grounds Secret Scroll',
+    hiddenFragmentLabel: 'Hokage Archive Fragment',
+    hiddenBurrowLabel: 'Forest Zetsu Burrow',
+    spawnArchetypes: [
+      ['rogueGenin', 'anbu'],
+      ['mistNinja', 'sandNinja', 'whiteZetsu'],
+      ['cloudNinja', 'whiteZetsu', 'blackZetsu'],
+    ],
+    objectiveIds: {
+      rescue: 'rescueLeafVillagers',
+      defense: 'protectHokageBuilding',
+      miniBoss: 'confrontIruka',
     },
-    objectives: [
-      {
-        id: 'rescueLeafVillagers',
-        kind: 'rescue',
-        label: 'Rescue Villagers',
-        description: 'Reach the marked villagers before challenging the tailed beast.',
-        districtId: 'trainingGrounds',
-        targetCount: 2,
-        targets: [
-          {
-            id: 'leaf-villager-west',
-            label: 'Training Grounds Villager',
-            x: 3,
-            y: 1,
-          },
-          {
-            id: 'leaf-villager-east',
-            label: 'Village Center Villager',
-            x: 10,
-            y: 6,
-          },
-        ],
-      },
-      {
-        id: 'protectHokageBuilding',
-        kind: 'defense',
-        label: 'Protect Hokage Building',
-        description: 'Hold the village center until the evacuation seal finishes.',
-        districtId: 'villageCenter',
-        durationMs: 20000,
-        structureLabel: 'Hokage Building',
-        structureHp: 100,
-        x: 17,
-        y: 16,
-        requires: ['rescueLeafVillagers'],
-      },
-      {
-        id: 'confrontIruka',
-        kind: 'miniBoss',
-        label: 'Confront Iruka',
-        description: 'Reach Iruka at the forest gate to open Kurama\'s arena seal.',
-        districtId: 'forestGate',
-        miniBossLabel: 'Iruka',
-        gateLabel: 'Forest Gate Seal',
-        x: 29,
-        y: 29,
-        requires: ['protectHokageBuilding'],
-      },
+  },
+  {
+    stageId: 'hiddenSand',
+    title: 'Hidden Sand Siege',
+    villageName: 'Hidden Sand',
+    rescueLabel: 'Rescue Caravan Scouts',
+    rescueDescription: 'Find the scouts trapped among sandstone training lanes.',
+    rescueTargets: ['West Caravan Scout', 'Market Quarter Scout'],
+    structureLabel: 'Kazekage Tower',
+    defenseDescription: 'Protect the Kazekage Tower while the sand barrier reforms.',
+    miniBossLabel: 'Kankuro',
+    miniBossDescription: 'Defeat Kankuro at the puppet gate, then open Shukaku\'s arena.',
+    miniBossGateLabel: 'Puppet gate seal',
+    bossGateLabel: 'Shukaku arena seal',
+    bossArenaLabel: 'Shukaku Arena',
+    hiddenRewardPowerUp: 'SandArmor',
+    hiddenScrollLabel: 'Desert Armor Scroll',
+    hiddenFragmentLabel: 'Kazekage Archive Fragment',
+    hiddenBurrowLabel: 'Dune Zetsu Burrow',
+    spawnArchetypes: [
+      ['sandNinja', 'rogueGenin'],
+      ['sandNinja', 'whiteZetsu', 'anbu'],
+      ['sandNinja', 'blackZetsu', 'cloudNinja'],
+    ],
+  },
+  {
+    stageId: 'hiddenMist',
+    title: 'Hidden Mist Extraction',
+    villageName: 'Hidden Mist',
+    rescueLabel: 'Rescue Bridge Wardens',
+    rescueDescription: 'Reach the bridge wardens before the fog closes the canals.',
+    rescueTargets: ['West Bridge Warden', 'Canal Watch Warden'],
+    structureLabel: 'Mist Relay Shrine',
+    defenseDescription: 'Hold the relay shrine while the water seals stabilize.',
+    miniBossLabel: 'Haku',
+    miniBossDescription: 'Defeat Haku at the mirror gate, then open Isobu\'s arena.',
+    miniBossGateLabel: 'Mirror gate seal',
+    bossGateLabel: 'Isobu arena seal',
+    bossArenaLabel: 'Isobu Arena',
+    hiddenRewardPowerUp: 'CrowFeather',
+    hiddenScrollLabel: 'Silent Mist Scroll',
+    hiddenFragmentLabel: 'Hunter-Nin Archive Fragment',
+    hiddenBurrowLabel: 'Canal Zetsu Burrow',
+    spawnArchetypes: [
+      ['mistNinja', 'rogueGenin'],
+      ['mistNinja', 'whiteZetsu', 'anbu'],
+      ['mistNinja', 'blackZetsu', 'sandNinja'],
+    ],
+  },
+  {
+    stageId: 'hiddenCloud',
+    title: 'Hidden Cloud Stormline',
+    villageName: 'Hidden Cloud',
+    rescueLabel: 'Rescue Storm Watchers',
+    rescueDescription: 'Reach the watchers stranded along the storm platforms.',
+    rescueTargets: ['Lower Platform Watcher', 'Storm Tower Watcher'],
+    structureLabel: 'Raikage Relay',
+    defenseDescription: 'Protect the relay while lightning seals ground the storm.',
+    miniBossLabel: 'Darui',
+    miniBossDescription: 'Defeat Darui at the storm gate, then open Gyuki\'s arena.',
+    miniBossGateLabel: 'Storm gate seal',
+    bossGateLabel: 'Gyuki arena seal',
+    bossArenaLabel: 'Gyuki Arena',
+    hiddenRewardPowerUp: 'FTGKunai',
+    hiddenScrollLabel: 'Yellow Flash Kunai Cache',
+    hiddenFragmentLabel: 'Raikage Archive Fragment',
+    hiddenBurrowLabel: 'Storm Zetsu Burrow',
+    spawnArchetypes: [
+      ['cloudNinja', 'anbu'],
+      ['cloudNinja', 'whiteZetsu', 'rogueGenin'],
+      ['cloudNinja', 'blackZetsu', 'anbu'],
+    ],
+  },
+  {
+    stageId: 'hiddenStone',
+    title: 'Hidden Stone Lockdown',
+    villageName: 'Hidden Stone',
+    rescueLabel: 'Rescue Quarry Workers',
+    rescueDescription: 'Reach the quarry workers trapped in the boulder lanes.',
+    rescueTargets: ['West Quarry Worker', 'Archive Quarry Worker'],
+    structureLabel: 'Tsuchikage Fortress',
+    defenseDescription: 'Protect the fortress while the earth seals reset.',
+    miniBossLabel: 'Akatsuchi',
+    miniBossDescription: 'Defeat Akatsuchi at the canyon gate, then open Kokuo\'s arena.',
+    miniBossGateLabel: 'Canyon gate seal',
+    bossGateLabel: 'Kokuo arena seal',
+    bossArenaLabel: 'Kokuo Arena',
+    hiddenRewardPowerUp: 'Sharingan',
+    hiddenScrollLabel: 'Stone Archive Scroll',
+    hiddenFragmentLabel: 'Tsuchikage Archive Fragment',
+    hiddenBurrowLabel: 'Canyon Zetsu Burrow',
+    spawnArchetypes: [
+      ['sandNinja', 'rogueGenin'],
+      ['sandNinja', 'cloudNinja', 'whiteZetsu'],
+      ['anbu', 'blackZetsu', 'sandNinja'],
+    ],
+  },
+  {
+    stageId: 'akatsukiHideout',
+    title: 'Akatsuki Hideout Raid',
+    villageName: 'Akatsuki Hideout',
+    rescueLabel: 'Recover Captive Scouts',
+    rescueDescription: 'Reach the captured scouts before the ritual seals awaken.',
+    rescueTargets: ['Outer Cave Scout', 'Ritual Chamber Scout'],
+    structureLabel: 'Ritual Seal Core',
+    defenseDescription: 'Hold the seal core while the ambush markings fade.',
+    miniBossLabel: 'Konan',
+    miniBossDescription: 'Defeat Konan at the paper gate, then open Matatabi\'s arena.',
+    miniBossGateLabel: 'Paper gate seal',
+    bossGateLabel: 'Matatabi arena seal',
+    bossArenaLabel: 'Matatabi Arena',
+    hiddenRewardPowerUp: 'ClaySpider',
+    hiddenScrollLabel: 'Explosive Clay Cache',
+    hiddenFragmentLabel: 'Akatsuki Archive Fragment',
+    hiddenBurrowLabel: 'Hideout Zetsu Burrow',
+    spawnArchetypes: [
+      ['whiteZetsu', 'anbu'],
+      ['whiteZetsu', 'blackZetsu', 'mistNinja'],
+      ['blackZetsu', 'anbu', 'cloudNinja'],
+    ],
+  },
+  {
+    stageId: 'greatShinobiWar',
+    title: 'Great Shinobi War Front',
+    villageName: 'Great Shinobi War',
+    rescueLabel: 'Rescue Allied Shinobi',
+    rescueDescription: 'Reach allied shinobi pinned down across the battlefield.',
+    rescueTargets: ['Forward Scout', 'Medical Corps Shinobi'],
+    structureLabel: 'Alliance Command Post',
+    defenseDescription: 'Protect the command post until the war-front seal completes.',
+    miniBossLabel: 'Obito',
+    miniBossDescription: 'Defeat Obito at the masked gate, then open the final arena.',
+    miniBossGateLabel: 'Masked gate seal',
+    bossGateLabel: 'Final Kurama arena seal',
+    bossArenaLabel: 'Final Kurama Arena',
+    hiddenRewardPowerUp: 'CharacterFragment',
+    hiddenScrollLabel: 'Alliance Strategy Scroll',
+    hiddenFragmentLabel: 'War Archive Fragment',
+    hiddenBurrowLabel: 'War Zetsu Burrow',
+    spawnArchetypes: [
+      ['rogueGenin', 'cloudNinja', 'sandNinja'],
+      ['whiteZetsu', 'mistNinja', 'anbu'],
+      ['blackZetsu', 'whiteZetsu', 'cloudNinja'],
     ],
   },
 ];
+
+function missionId(stageId: StageId): CampaignMissionId {
+  return `${stageId}Opening`;
+}
+
+function defaultObjectiveIds(stageId: StageId) {
+  return {
+    rescue: `${stageId}Rescue`,
+    defense: `${stageId}Defense`,
+    miniBoss: `${stageId}MiniBoss`,
+  };
+}
+
+function districtId(stageId: StageId, suffix: string): string {
+  return `${stageId}-${suffix}`;
+}
+
+function createDistricts(config: VillageMissionConfig): CampaignDistrictDefinition[] {
+  return [
+    {
+      id: districtId(config.stageId, 'entrance'),
+      label: 'Village Entrance',
+      description: `The first safe lane into ${config.villageName}.`,
+      x: 1,
+      y: 1,
+    },
+    {
+      id: districtId(config.stageId, 'outer-district'),
+      label: 'Outer District',
+      description: `Scattered cover and evacuees near ${config.villageName}.`,
+      x: 3,
+      y: 1,
+    },
+    {
+      id: districtId(config.stageId, 'center'),
+      label: 'Village Center',
+      description: `The central defense point around ${config.structureLabel}.`,
+      x: 17,
+      y: 16,
+    },
+    {
+      id: districtId(config.stageId, 'boss-gate'),
+      label: 'Boss Gate',
+      description: `${config.miniBossLabel} guards the seal to ${config.bossArenaLabel}.`,
+      x: 29,
+      y: 29,
+    },
+  ];
+}
+
+function createSpawnPoints(config: VillageMissionConfig): CampaignSpawnPointDefinition[] {
+  return [
+    {
+      id: `${config.stageId}-main-gate`,
+      label: 'Main Gate',
+      x: 6,
+      y: 5,
+      archetypes: config.spawnArchetypes[0],
+      respawnMs: RESPAWN_MS,
+      maxActive: 3,
+      initialCount: 1,
+    },
+    {
+      id: `${config.stageId}-outer-burrow`,
+      label: 'Outer District Burrow',
+      x: 13,
+      y: 8,
+      archetypes: config.spawnArchetypes[1],
+      respawnMs: RESPAWN_MS,
+      maxActive: 3,
+      initialCount: 1,
+    },
+    {
+      id: `${config.stageId}-boss-gate-burrow`,
+      label: 'Boss Gate Burrow',
+      x: 28,
+      y: 28,
+      archetypes: config.spawnArchetypes[2],
+      respawnMs: RESPAWN_MS,
+      maxActive: 4,
+      initialCount: 0,
+    },
+  ];
+}
+
+function createHiddenAreas(config: VillageMissionConfig): CampaignHiddenAreaDefinition[] {
+  return [
+    {
+      id: `${config.stageId}-scroll-cache`,
+      label: config.hiddenScrollLabel,
+      description: `A hidden scroll cache buried in ${config.villageName}.`,
+      x: 3,
+      y: 2,
+      kind: 'scroll',
+      rewardPowerUp: config.hiddenRewardPowerUp,
+    },
+    {
+      id: `${config.stageId}-archive-fragment`,
+      label: config.hiddenFragmentLabel,
+      description: `A rare character fragment sealed in ${config.villageName}.`,
+      x: 18,
+      y: 12,
+      kind: 'fragment',
+      rewardPowerUp: 'CharacterFragment',
+    },
+    {
+      id: `${config.stageId}-zetsu-burrow`,
+      label: config.hiddenBurrowLabel,
+      description: `An unstable wall hiding an elite Zetsu ambush in ${config.villageName}.`,
+      x: 28,
+      y: 31,
+      kind: 'zetsuBurrow',
+      enemyArchetype: 'blackZetsu',
+    },
+  ];
+}
+
+function createObjectives(config: VillageMissionConfig): CampaignObjectiveDefinition[] {
+  const objectives = config.objectiveIds ?? defaultObjectiveIds(config.stageId);
+  return [
+    {
+      id: objectives.rescue,
+      kind: 'rescue',
+      label: config.rescueLabel,
+      description: config.rescueDescription,
+      districtId: districtId(config.stageId, 'outer-district'),
+      targetCount: 2,
+      targets: [
+        {
+          id: `${config.stageId}-rescue-west`,
+          label: config.rescueTargets[0],
+          x: 3,
+          y: 1,
+        },
+        {
+          id: `${config.stageId}-rescue-east`,
+          label: config.rescueTargets[1],
+          x: 10,
+          y: 6,
+        },
+      ],
+    },
+    {
+      id: objectives.defense,
+      kind: 'defense',
+      label: `Protect ${config.structureLabel}`,
+      description: config.defenseDescription,
+      districtId: districtId(config.stageId, 'center'),
+      durationMs: 20000,
+      structureLabel: config.structureLabel,
+      structureHp: 100,
+      x: 17,
+      y: 16,
+      requires: [objectives.rescue],
+    },
+    {
+      id: objectives.miniBoss,
+      kind: 'miniBoss',
+      label: `Confront ${config.miniBossLabel}`,
+      description: config.miniBossDescription,
+      districtId: districtId(config.stageId, 'boss-gate'),
+      miniBossLabel: config.miniBossLabel,
+      gateLabel: config.miniBossGateLabel,
+      x: 29,
+      y: 29,
+      requires: [objectives.defense],
+    },
+  ];
+}
+
+function createMission(config: VillageMissionConfig): CampaignMissionDefinition {
+  const objectives = config.objectiveIds ?? defaultObjectiveIds(config.stageId);
+  return {
+    id: missionId(config.stageId),
+    stageId: config.stageId,
+    title: config.title,
+    villageName: config.villageName,
+    districts: createDistricts(config),
+    spawnPoints: createSpawnPoints(config),
+    hiddenAreas: createHiddenAreas(config),
+    discoveredSecrets: [],
+    miniBossGateLabel: config.miniBossGateLabel,
+    bossGateLabel: config.bossGateLabel,
+    bossArena: {
+      label: config.bossArenaLabel,
+      x: 17,
+      y: 17,
+      requires: [objectives.miniBoss],
+    },
+    objectives: createObjectives(config),
+  };
+}
+
+export const CAMPAIGN_MISSIONS: CampaignMissionDefinition[] = VILLAGE_MISSIONS
+  .map(createMission);
 
 export function getCampaignMission(
   stageId?: StageId

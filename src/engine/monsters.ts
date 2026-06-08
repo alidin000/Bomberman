@@ -23,6 +23,15 @@ const MONSTER_ABILITY_WARNING_MS = 850;
 const MONSTER_HAZARD_TOTAL_MS = 1650;
 let monsterHazardIdCounter = 0;
 
+type MonsterMovementContext = {
+  distanceField: number[][] | null;
+  occupiedCells: Set<string>;
+};
+
+function cellKey(x: number, y: number): string {
+  return `${x},${y}`;
+}
+
 function isInBounds(x: number, y: number, map: GameMap): boolean {
   return x >= 1 && x < map[0].length - 1 && y >= 1 && y < map.length - 1;
 }
@@ -31,27 +40,17 @@ function basicValidMove(
   x: number,
   y: number,
   map: GameMap,
-  monsters: MonsterState[],
-  selfId: string,
+  occupiedCells: Set<string>,
 ): boolean {
   if (!isInBounds(x, y, map)) return false;
   if (map[y][x] !== 'Empty') return false;
-  return !monsters.some((m) => m.id !== selfId && m.x === x && m.y === y);
+  return !occupiedCells.has(cellKey(x, y));
 }
 
 function ghostValidMove(x: number, y: number, map: GameMap): boolean {
   if (!isInBounds(x, y, map)) return false;
   const cell = map[y][x];
   return cell !== 'Wall' && !isBomb(cell);
-}
-
-function getNeighbors(point: Point, map: GameMap): Point[] {
-  return DIRECTIONS.map((d) => ({ x: point.x + d.x, y: point.y + d.y }))
-    .filter((p) => isInBounds(p.x, p.y, map) && map[p.y][p.x] === 'Empty');
-}
-
-function heuristic(a: Point, b: Point): number {
-  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
 
 function hashMonster(monster: MonsterState, tick: number, salt = 0): number {
@@ -80,56 +79,92 @@ function chooseDeterministic<T>(
   return options[hashMonster(monster, tick, salt) % options.length];
 }
 
-function aStarSearch(map: GameMap, start: Point, goal: Point): Point[] {
-  let openSet: Point[] = [start];
-  const cameFrom = new Map<string, Point>();
-  const gScore = new Map<string, number>();
-  const fScore = new Map<string, number>();
-  const key = (p: Point) => `${p.x},${p.y}`;
+function createDistanceField(map: GameMap, players: PlayerState[]): number[][] | null {
+  const alivePlayers = players.filter((player) => player.alive);
+  if (alivePlayers.length === 0) return null;
 
-  gScore.set(key(start), 0);
-  fScore.set(key(start), heuristic(start, goal));
-
-  while (openSet.length > 0) {
-    const current = openSet.reduce((a, b) => (
-      (fScore.get(key(a)) ?? Infinity) < (fScore.get(key(b)) ?? Infinity) ? a : b
-    ));
-
-    if (current.x === goal.x && current.y === goal.y) {
-      const path: Point[] = [];
-      let cur: Point | undefined = current;
-      while (cur) {
-        path.unshift(cur);
-        cur = cameFrom.get(key(cur));
-      }
-      return path;
+  const distances = map.map((row) => row.map(() => Infinity));
+  const queue: Point[] = [];
+  alivePlayers.forEach((player) => {
+    const cell = getPlayerCell(player);
+    if (isInBounds(cell.x, cell.y, map) && map[cell.y][cell.x] === 'Empty') {
+      distances[cell.y][cell.x] = 0;
+      queue.push(cell);
     }
+  });
 
-    openSet = openSet.filter((p) => p.x !== current.x || p.y !== current.y);
-
-    for (const neighbor of getNeighbors(current, map)) {
-      const tentative = (gScore.get(key(current)) ?? Infinity) + 1;
-      if (tentative < (gScore.get(key(neighbor)) ?? Infinity)) {
-        cameFrom.set(key(neighbor), current);
-        gScore.set(key(neighbor), tentative);
-        fScore.set(key(neighbor), tentative + heuristic(neighbor, goal));
-        if (!openSet.some((p) => p.x === neighbor.x && p.y === neighbor.y)) {
-          openSet.push(neighbor);
-        }
+  let head = 0;
+  while (head < queue.length) {
+    const current = queue[head];
+    head += 1;
+    const nextDistance = distances[current.y][current.x] + 1;
+    DIRECTIONS.forEach((direction) => {
+      const x = current.x + direction.x;
+      const y = current.y + direction.y;
+      if (
+        isInBounds(x, y, map)
+        && map[y][x] === 'Empty'
+        && nextDistance < distances[y][x]
+      ) {
+        distances[y][x] = nextDistance;
+        queue.push({ x, y });
       }
-    }
+    });
   }
-  return [];
+
+  return queue.length > 0 ? distances : null;
+}
+
+function createMonsterMovementContext(
+  map: GameMap,
+  players: PlayerState[],
+  monsters: MonsterState[],
+): MonsterMovementContext {
+  return {
+    distanceField: createDistanceField(map, players),
+    occupiedCells: new Set(monsters.map((monster) => cellKey(monster.x, monster.y))),
+  };
+}
+
+function getDistanceAt(distanceField: number[][], point: Point): number {
+  return distanceField[point.y]?.[point.x] ?? Infinity;
+}
+
+function chooseDistanceFieldMove(
+  options: Point[],
+  distanceField: number[][] | null,
+  monster: MonsterState,
+  tick: number,
+  salt = 0,
+): Point | null {
+  if (!distanceField) return null;
+
+  let bestDistance = Infinity;
+  const bestOptions: Point[] = [];
+  options.forEach((option) => {
+    const distance = getDistanceAt(distanceField, option);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestOptions.length = 0;
+      bestOptions.push(option);
+    } else if (distance === bestDistance) {
+      bestOptions.push(option);
+    }
+  });
+
+  return Number.isFinite(bestDistance)
+    ? chooseDeterministic(bestOptions, monster, tick, salt)
+    : null;
 }
 
 function moveBasicMonster(
   monster: MonsterState,
   map: GameMap,
-  monsters: MonsterState[],
+  context: MonsterMovementContext,
   tick: number,
 ): MonsterState {
   const options = DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
-    .filter((p) => basicValidMove(p.x, p.y, map, monsters, monster.id));
+    .filter((p) => basicValidMove(p.x, p.y, map, context.occupiedCells));
 
   if (options.length === 0) return monster;
   const chosen = chooseDeterministic(options, monster, tick);
@@ -140,12 +175,12 @@ function moveBasicMonster(
 function moveSmartMonster(
   monster: MonsterState,
   map: GameMap,
-  monsters: MonsterState[],
+  context: MonsterMovementContext,
   players: PlayerState[],
   tick: number,
 ): MonsterState {
   const options = DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
-    .filter((p) => basicValidMove(p.x, p.y, map, monsters, monster.id));
+    .filter((p) => basicValidMove(p.x, p.y, map, context.occupiedCells));
 
   const alivePlayers = players.filter((p) => p.alive);
   if (alivePlayers.length === 0) {
@@ -153,15 +188,14 @@ function moveSmartMonster(
     return chosen ? { ...monster, x: chosen.x, y: chosen.y } : monster;
   }
 
-  const closest = alivePlayers.reduce((best, p) => {
-    const bestDist = (best.x - monster.x) ** 2 + (best.y - monster.y) ** 2;
-    const pDist = (p.x - monster.x) ** 2 + (p.y - monster.y) ** 2;
-    return pDist < bestDist ? p : best;
-  });
-
-  const path = aStarSearch(map, { x: monster.x, y: monster.y }, getPlayerCell(closest));
-  if (path.length > 1) {
-    return { ...monster, x: path[1].x, y: path[1].y };
+  const pathMove = chooseDistanceFieldMove(
+    options,
+    context.distanceField,
+    monster,
+    tick
+  );
+  if (pathMove) {
+    return { ...monster, x: pathMove.x, y: pathMove.y };
   }
   const chosen = chooseDeterministic(options, monster, tick);
   if (chosen) return { ...monster, x: chosen.x, y: chosen.y };
@@ -181,12 +215,12 @@ function moveGhostMonster(monster: MonsterState, map: GameMap, tick: number): Mo
 function moveForkMonster(
   monster: MonsterState,
   map: GameMap,
-  monsters: MonsterState[],
+  context: MonsterMovementContext,
   players: PlayerState[],
   tick: number,
 ): MonsterState {
   const options = DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
-    .filter((p) => basicValidMove(p.x, p.y, map, monsters, monster.id));
+    .filter((p) => basicValidMove(p.x, p.y, map, context.occupiedCells));
 
   if (options.length === 0) return monster;
 
@@ -217,25 +251,33 @@ function moveForkMonster(
     if (!random) return monster;
     return { ...monster, x: random.x, y: random.y };
   }
+  const pathMove = chooseDistanceFieldMove(
+    options,
+    context.distanceField,
+    monster,
+    tick,
+    23
+  );
+  if (pathMove) return { ...monster, x: pathMove.x, y: pathMove.y };
   return { ...monster, x: bestDir.x, y: bestDir.y };
 }
 
 function moveMonsterByKind(
   monster: MonsterState,
   map: GameMap,
-  monsters: MonsterState[],
+  context: MonsterMovementContext,
   players: PlayerState[],
   tick: number,
 ): MonsterState {
   switch (monster.kind) {
     case 'smart':
-      return moveSmartMonster(monster, map, monsters, players, tick);
+      return moveSmartMonster(monster, map, context, players, tick);
     case 'ghost':
       return moveGhostMonster(monster, map, tick);
     case 'fork':
-      return moveForkMonster(monster, map, monsters, players, tick);
+      return moveForkMonster(monster, map, context, players, tick);
     default:
-      return moveBasicMonster(monster, map, monsters, tick);
+      return moveBasicMonster(monster, map, context, tick);
   }
 }
 
@@ -546,6 +588,11 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
   let players = [...state.players];
   let hazards = [...state.hazards];
   let spawned: MonsterState[] = [];
+  const movementContext = createMonsterMovementContext(
+    state.map,
+    state.players,
+    state.monsters
+  );
 
   const monsters = state.monsters.map((monster) => {
     const abilityTick = tickMonsterAbility(
@@ -569,7 +616,7 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
     const moved = moveMonsterByKind(
       nextMonster,
       state.map,
-      state.monsters,
+      movementContext,
       players,
       state.tick,
     );

@@ -1,13 +1,16 @@
 import { gameReducer } from './reducer';
-import { createInitialState } from './initialState';
-import { GameConfig, MonsterState } from './types';
+import { createBossForConfig, createInitialState } from './initialState';
+import { GameConfig, GameEngineState, MonsterState } from './types';
 import { applyPowerUp } from './players';
 import { cellKey } from './fogOfWar';
+import { tickMonsters } from './monsters';
 import { parseMapRows } from './mapLoader';
 import { defaultMap } from '../constants/contants';
 import { isObstacle } from '../model/gameItem';
 import { getCampaignPickupPool } from '../content/characterPowerups';
 import { resolveZetsuOutcomeKind } from './campaignExploration';
+import { STAGE_DEFINITIONS } from '../content/stages';
+import { CAMPAIGN_MISSIONS, getCampaignMission } from '../content/campaignMissions';
 
 const baseConfig: GameConfig = {
   numPlayers: 2,
@@ -85,6 +88,36 @@ const hiddenLeafCampaignConfig: GameConfig = {
   map: hiddenLeafCampaignMap,
 };
 
+const campaignStageIds = STAGE_DEFINITIONS.map((stage) => stage.id);
+
+function unlockBossForTest(state: GameEngineState): GameEngineState {
+  const { campaign } = state;
+  return {
+    ...state,
+    campaign: campaign
+      ? {
+        ...campaign,
+        missionResult: 'success',
+        bossUnlocked: true,
+        bossArena: { ...campaign.bossArena, unlocked: true },
+        objectives: campaign.objectives.map((objective) => ({
+          ...objective,
+          status: 'complete',
+          current: objective.target,
+          ticksRemaining: objective.kind === 'defense' ? 0 : objective.ticksRemaining,
+          targets: objective.targets?.map((target) => ({ ...target, rescued: true })),
+        })),
+        structures: campaign.structures.map((structure) => ({
+          ...structure,
+          status: 'complete',
+        })),
+      }
+      : campaign,
+    boss: createBossForConfig(state.config),
+    monsters: [],
+  };
+}
+
 const abilityTestMap = parseMapRows([
   'WWWWWWW',
   'W     W',
@@ -159,13 +192,13 @@ describe('gameReducer', () => {
     expect(state.campaign?.missionStep).toBe('rescue');
     expect(state.campaign?.missionResult).toBe('in_progress');
     expect(state.campaign?.districts.map((district) => district.id)).toEqual([
-      'villageEntrance',
-      'trainingGrounds',
-      'villageCenter',
-      'forestGate',
+      'hiddenLeaf-entrance',
+      'hiddenLeaf-outer-district',
+      'hiddenLeaf-center',
+      'hiddenLeaf-boss-gate',
     ]);
     expect(state.campaign?.spawnPoints[0]).toMatchObject({
-      id: 'leaf-main-gate',
+      id: 'hiddenLeaf-main-gate',
       x: 6,
       y: 5,
       respawnMs: 20000,
@@ -188,6 +221,91 @@ describe('gameReducer', () => {
     expect(state.campaign?.objectives[2]).toMatchObject({
       id: 'confrontIruka',
       status: 'locked',
+    });
+  });
+
+  it('defines Phase 1 and Phase 2 campaign content for every stage', () => {
+    expect(CAMPAIGN_MISSIONS.map((mission) => mission.stageId)).toEqual(campaignStageIds);
+
+    STAGE_DEFINITIONS.forEach((stage) => {
+      const mission = getCampaignMission(stage.id);
+      expect(mission).not.toBeNull();
+      expect(mission).toMatchObject({
+        stageId: stage.id,
+      });
+      expect(mission?.objectives.map((objective) => objective.kind)).toEqual([
+        'rescue',
+        'defense',
+        'miniBoss',
+      ]);
+      expect(mission?.bossArena.requires).toEqual([
+        mission?.objectives[2].id,
+      ]);
+      expect(mission?.spawnPoints).toHaveLength(3);
+      expect(mission?.spawnPoints.every((point) => (
+        point.respawnMs === 20000
+        && point.maxActive >= 3
+        && point.archetypes.length >= 2
+      ))).toBe(true);
+      expect(mission?.hiddenAreas).toHaveLength(3);
+      expect(mission?.hiddenAreas.some((area) => area.rewardPowerUp)).toBe(true);
+      expect(mission?.hiddenAreas.some((area) => area.enemyArchetype === 'blackZetsu'))
+        .toBe(true);
+    });
+  });
+
+  it('lets every campaign stage complete Phase 1 objectives and unlock its boss', () => {
+    STAGE_DEFINITIONS.forEach((stage) => {
+      let state = createInitialState({
+        ...hiddenLeafCampaignConfig,
+        selectedMap: stage.mapId,
+        stageId: stage.id,
+      });
+      const mission = state.campaign;
+      expect(mission?.stageId).toBe(stage.id);
+      expect(state.boss).toBeNull();
+
+      mission?.objectives[0].targets?.forEach((target) => {
+        state = {
+          ...state,
+          players: state.players.map((player) => ({ ...player, x: target.x, y: target.y })),
+        };
+        state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
+      });
+      expect(state.campaign?.objectives[0].status).toBe('complete');
+
+      state = gameReducer(state, { type: 'TICK', deltaMs: 20000 })!;
+      expect(state.campaign?.objectives[1].status).toBe('complete');
+
+      const miniBoss = state.campaign?.objectives[2];
+      const guardId = `${miniBoss?.id}-guard`;
+      expect(state.monsters.some((monster) => (
+        monster.id === guardId
+        && monster.name === miniBoss?.miniBossLabel
+        && monster.elite
+      ))).toBe(true);
+      state = {
+        ...state,
+        players: state.players.map((player) => ({
+          ...player,
+          x: miniBoss?.x ?? player.x,
+          y: miniBoss?.y ?? player.y,
+        })),
+      };
+      state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
+
+      expect(state.campaign?.objectives[2].status).toBe('active');
+      expect(state.campaign?.bossUnlocked).toBe(false);
+
+      state = {
+        ...state,
+        monsters: state.monsters.filter((monster) => monster.id !== guardId),
+      };
+      state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
+
+      expect(state.campaign?.objectives[2].status).toBe('complete');
+      expect(state.campaign?.bossUnlocked).toBe(true);
+      expect(state.boss?.id).toBe(stage.bossId);
     });
   });
 
@@ -221,7 +339,7 @@ describe('gameReducer', () => {
         pendingOutcome: {
           kind: 'powerUp',
           powerUp: 'Rasengan',
-          secretId: 'leaf-scroll-cache',
+          secretId: 'hiddenLeaf-scroll-cache',
           label: 'Training Grounds Secret Scroll',
         },
       }],
@@ -230,7 +348,7 @@ describe('gameReducer', () => {
     state = gameReducer(state, { type: 'TICK', deltaMs: 2 })!;
 
     expect(state.map[2][3]).toBe('Rasengan');
-    expect(state.campaign?.discoveredSecrets).toContain('leaf-scroll-cache');
+    expect(state.campaign?.discoveredSecrets).toContain('hiddenLeaf-scroll-cache');
   });
 
   it('spawns Zetsu ambushes from campaign destruction outcomes', () => {
@@ -249,7 +367,7 @@ describe('gameReducer', () => {
         pendingOutcome: {
           kind: 'eliteZetsu',
           enemyArchetype: 'blackZetsu',
-          secretId: 'leaf-zetsu-burrow',
+          secretId: 'hiddenLeaf-zetsu-burrow',
           label: 'Forest Zetsu Burrow',
         },
       }],
@@ -259,12 +377,12 @@ describe('gameReducer', () => {
 
     expect(state.monsters).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        id: 'leaf-zetsu-burrow-enemy',
+        id: 'hiddenLeaf-zetsu-burrow-enemy',
         archetype: 'blackZetsu',
         abilityKind: 'zetsuMelee',
       }),
     ]));
-    expect(state.campaign?.discoveredSecrets).toContain('leaf-zetsu-burrow');
+    expect(state.campaign?.discoveredSecrets).toContain('hiddenLeaf-zetsu-burrow');
   });
 
   it('respawns campaign enemies with timers and max-active tracking', () => {
@@ -289,11 +407,11 @@ describe('gameReducer', () => {
 
     expect(state.monsters).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        id: 'leaf-main-gate-1',
-        spawnPointId: 'leaf-main-gate',
+        id: 'hiddenLeaf-main-gate-1',
+        spawnPointId: 'hiddenLeaf-main-gate',
       }),
     ]));
-    expect(state.campaign?.spawnPoints[0].activeMonsterIds).toContain('leaf-main-gate-1');
+    expect(state.campaign?.spawnPoints[0].activeMonsterIds).toContain('hiddenLeaf-main-gate-1');
     expect(state.campaign?.spawnPoints[0].ticksRemaining).toBe(20000);
   });
 
@@ -353,6 +471,42 @@ describe('gameReducer', () => {
     expect(state.hazards.map((hazard) => hazard.kind)).toEqual(
       expect.arrayContaining(['chakraShockwave', 'sandSpikes', 'airStrike'])
     );
+  });
+
+  it('moves smart monsters along the shared distance field instead of dead ends', () => {
+    let state = createInitialState(baseConfig);
+    const map = parseMapRows([
+      'WWWWWWW',
+      'W  W  W',
+      'W WWW W',
+      'W     W',
+      'WWWWWWW',
+    ].map((row) => row.split('')));
+    state = {
+      ...state,
+      map,
+      players: state.players.map((player, index) => (
+        index === 0
+          ? {
+            ...player, x: 5, y: 1, alive: true,
+          }
+          : { ...player, alive: false }
+      )),
+      monsters: [
+        shinobiEnemy({
+          id: 'smart-pathfinder',
+          name: 'Smart Pathfinder',
+          kind: 'smart',
+          x: 1,
+          y: 1,
+          moveCooldown: 0,
+        }),
+      ],
+    };
+
+    const next = tickMonsters(state, 1000);
+
+    expect(next.monsters[0]).toMatchObject({ x: 1, y: 2 });
   });
 
   it('resolves body flicker, water clone, and Zetsu melee abilities', () => {
@@ -451,10 +605,27 @@ describe('gameReducer', () => {
     expect(state.campaign?.missionStep).toBe('miniBoss');
     expect(state.campaign?.bossUnlocked).toBe(false);
     expect(state.boss).toBeNull();
+    expect(state.monsters).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'confrontIruka-guard',
+        name: 'Iruka',
+        elite: true,
+      }),
+    ]));
 
     state = {
       ...state,
       players: state.players.map((player) => ({ ...player, x: 29, y: 29 })),
+    };
+    state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
+
+    expect(state.campaign?.objectives[2].status).toBe('active');
+    expect(state.campaign?.bossUnlocked).toBe(false);
+    expect(state.boss).toBeNull();
+
+    state = {
+      ...state,
+      monsters: state.monsters.filter((monster) => monster.id !== 'confrontIruka-guard'),
     };
     state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
 
@@ -522,6 +693,30 @@ describe('gameReducer', () => {
     const startX = state.players[0].x;
     state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'right' })!;
     expect(state.players[0].x).toBeGreaterThanOrEqual(startX);
+  });
+
+  it('keeps local players inside shared-screen movement bounds', () => {
+    let state = createInitialState({
+      ...baseConfig,
+      selectedMap: 'hiddenLeaf',
+      map: hiddenLeafCampaignMap,
+    });
+    state = {
+      ...state,
+      players: state.players.map((player) => (
+        player.id === 'player1'
+          ? { ...player, x: 8, y: 10 }
+          : { ...player, x: 20, y: 10 }
+      )),
+    };
+
+    state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'left' })!;
+
+    expect(state.players[0].x).toBeCloseTo(8);
+
+    state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'right' })!;
+
+    expect(state.players[0].x).toBeCloseTo(8.1);
   });
 
   it('moves players in tenth-cell increments while bombs stay grid-snapped', () => {
@@ -1072,10 +1267,12 @@ describe('gameReducer', () => {
     expect(state.tick).toBe(1);
   });
 
-  it('initializes a solo boss encounter', () => {
+  it('gates campaign stage bosses behind village objectives', () => {
     const state = createInitialState(soloConfig);
-    expect(state.boss?.name).toBe('Shukaku');
-    expect(state.monsters).toHaveLength(0);
+    expect(state.boss).toBeNull();
+    expect(state.campaign?.stageId).toBe('hiddenSand');
+    expect(state.campaign?.bossUnlocked).toBe(false);
+    expect(state.monsters.length).toBeGreaterThan(0);
     expect(state.players[0].characterId).toBe('deidara');
   });
 
@@ -1158,7 +1355,7 @@ describe('gameReducer', () => {
   });
 
   it('moves solo bosses and casts telegraphed hazards', () => {
-    let state = createInitialState(soloConfig);
+    let state = unlockBossForTest(createInitialState(soloConfig));
     const start = { x: state.boss!.x, y: state.boss!.y };
 
     state = gameReducer(state, { type: 'TICK', deltaMs: 2000 })!;

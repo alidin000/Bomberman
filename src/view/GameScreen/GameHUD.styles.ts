@@ -173,27 +173,6 @@ export const AbilityRow = styled(Box)({
   },
 });
 
-export const RoundPaper = styled(Paper)({
-  padding: 11,
-  minWidth: 178,
-  color: '#f8fafc',
-  background: PANEL_SURFACE,
-  border: `1px solid ${PANEL_EDGE}`,
-  borderRadius: 6,
-  boxShadow: PANEL_SHADOW,
-  backdropFilter: 'blur(6px)',
-});
-
-export const RoundProgress = styled(LinearProgress)({
-  marginTop: 8,
-  height: 6,
-  borderRadius: 3,
-  backgroundColor: 'rgba(255, 230, 176, 0.18)',
-  '& .MuiLinearProgress-bar': {
-    background: 'linear-gradient(90deg, #f59e0b, #fb923c)',
-  },
-});
-
 export const ObjectivePaper = styled(Paper)({
   padding: 11,
   width: 278,

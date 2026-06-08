@@ -1,9 +1,13 @@
 import { getCampaignMission } from '../content/campaignMissions';
+import { EnemyArchetype } from '../content/enemies';
+import { isBomb, isObstacle } from '../model/gameItem';
+import { createShinobiEnemy } from './campaignEnemies';
 import {
   CampaignObjectiveState,
   CampaignRuntimeState,
   GameConfig,
   GameEngineState,
+  Point,
 } from './types';
 import { positionsTouch } from './grid';
 
@@ -11,6 +15,29 @@ const RESCUE_TOUCH_DISTANCE = 0.72;
 const MINI_BOSS_TOUCH_DISTANCE = 0.82;
 const STRUCTURE_DAMAGE = 50;
 const STRUCTURE_DAMAGE_COOLDOWN_MS = 650;
+const MINI_BOSS_GUARD_ARCHETYPES: Record<
+CampaignRuntimeState['stageId'],
+EnemyArchetype
+> = {
+  hiddenLeaf: 'anbu',
+  hiddenSand: 'sandNinja',
+  hiddenMist: 'mistNinja',
+  hiddenCloud: 'cloudNinja',
+  hiddenStone: 'sandNinja',
+  akatsukiHideout: 'blackZetsu',
+  greatShinobiWar: 'blackZetsu',
+};
+const MINI_BOSS_GUARD_OFFSETS: Point[] = [
+  { x: -1, y: 0 },
+  { x: 0, y: -1 },
+  { x: 1, y: 0 },
+  { x: 0, y: 1 },
+  { x: -1, y: -1 },
+  { x: 1, y: -1 },
+  { x: -1, y: 1 },
+  { x: 1, y: 1 },
+  { x: 0, y: 0 },
+];
 
 function objectiveIsComplete(
   objectives: CampaignObjectiveState[],
@@ -125,6 +152,92 @@ function getCampaignMessage(
   return activeObjective.description;
 }
 
+function getMiniBossGuardId(objective: CampaignObjectiveState): string {
+  return objective.miniBossGuardId ?? `${objective.id}-guard`;
+}
+
+function canSpawnMiniBossGuardAt(state: GameEngineState, x: number, y: number): boolean {
+  const cell = state.map[y]?.[x];
+  return cell !== undefined
+    && cell !== 'Wall'
+    && cell !== 'Box'
+    && !isBomb(cell)
+    && !isObstacle(cell)
+    && !state.monsters.some((monster) => monster.x === x && monster.y === y)
+    && !state.players.some((player) => player.alive && positionsTouch(player, { x, y }, 0.55));
+}
+
+function findMiniBossGuardCell(
+  state: GameEngineState,
+  objective: CampaignObjectiveState
+): Point | null {
+  if (typeof objective.x !== 'number' || typeof objective.y !== 'number') {
+    return null;
+  }
+
+  const match = MINI_BOSS_GUARD_OFFSETS.find((offset) => (
+    canSpawnMiniBossGuardAt(
+      state,
+      (objective.x ?? 0) + offset.x,
+      (objective.y ?? 0) + offset.y
+    )
+  ));
+  return match
+    ? { x: objective.x + match.x, y: objective.y + match.y }
+    : null;
+}
+
+function spawnActiveMiniBossGuards(state: GameEngineState): GameEngineState {
+  if (!state.campaign) return state;
+
+  const { campaign } = state;
+  let monsters = [...state.monsters];
+  const objectives = campaign.objectives.map((objective) => {
+    if (
+      objective.kind !== 'miniBoss'
+      || objective.status !== 'active'
+      || objective.miniBossSpawned
+    ) {
+      return objective;
+    }
+
+    const guardId = getMiniBossGuardId(objective);
+    if (monsters.some((monster) => monster.id === guardId)) {
+      return { ...objective, miniBossGuardId: guardId, miniBossSpawned: true };
+    }
+
+    const cell = findMiniBossGuardCell({ ...state, monsters }, objective);
+    if (!cell) return objective;
+
+    const guard = createShinobiEnemy({
+      archetype: MINI_BOSS_GUARD_ARCHETYPES[campaign.stageId],
+      x: cell.x,
+      y: cell.y,
+      id: guardId,
+    });
+    monsters = [
+      ...monsters,
+      {
+        ...guard,
+        name: objective.miniBossLabel ?? guard.name,
+        elite: true,
+        moveCooldown: Math.min(guard.moveCooldown, 420),
+        abilityCooldown: 700,
+      },
+    ];
+    return { ...objective, miniBossGuardId: guardId, miniBossSpawned: true };
+  });
+
+  return {
+    ...state,
+    monsters,
+    campaign: {
+      ...campaign,
+      objectives,
+    },
+  };
+}
+
 export function createCampaignRuntimeState(
   config: GameConfig
 ): CampaignRuntimeState | null {
@@ -163,6 +276,10 @@ export function createCampaignRuntimeState(
       structureDamageCooldownMs: 0,
       miniBossLabel: objective.miniBossLabel,
       gateLabel: objective.gateLabel,
+      miniBossGuardId: objective.kind === 'miniBoss'
+        ? `${objective.id}-guard`
+        : undefined,
+      miniBossSpawned: false,
       x: objective.x,
       y: objective.y,
       requires: objective.requires,
@@ -306,6 +423,12 @@ function updateMiniBossObjective(
   if (typeof objective.x !== 'number' || typeof objective.y !== 'number') {
     return objective;
   }
+  if (!objective.miniBossSpawned) return objective;
+
+  const guardAlive = state.monsters.some((monster) => (
+    monster.id === getMiniBossGuardId(objective)
+  ));
+  if (guardAlive) return { ...objective, current: 0 };
 
   const reached = state.players.some((player) => (
     player.alive
@@ -331,7 +454,17 @@ export function advanceCampaignObjectives(
     deltaMs
   ));
   objectives = refreshObjectiveStatuses(objectives);
-  objectives = objectives.map((objective) => updateMiniBossObjective(state, objective));
+
+  let workingState = {
+    ...state,
+    campaign: {
+      ...state.campaign,
+      objectives,
+    },
+  };
+  workingState = spawnActiveMiniBossGuards(workingState);
+  objectives = workingState.campaign?.objectives ?? objectives;
+  objectives = objectives.map((objective) => updateMiniBossObjective(workingState, objective));
   objectives = refreshObjectiveStatuses(objectives);
 
   const missionResult = anyObjectiveFailed(objectives)
@@ -350,7 +483,7 @@ export function advanceCampaignObjectives(
   };
 
   return {
-    ...state,
+    ...workingState,
     campaign: {
       ...campaign,
       currentDistrictId: getCurrentDistrictId(campaign),

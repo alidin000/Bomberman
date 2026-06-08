@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 type RoundResultDialogProps = {
   open: boolean;
   onClose: () => void;
+  onRestart: () => void;
   resultMessage: string;
   isGameOver: boolean;
 }
@@ -18,6 +19,7 @@ export const RoundResultDialog = (
   {
     open,
     onClose,
+    onRestart,
     resultMessage,
     isGameOver
   }: RoundResultDialogProps
@@ -58,6 +60,7 @@ export const RoundResultDialog = (
         {isGameOver
           ? (
             <>
+              <Button onClick={onRestart} variant="contained">Retry Same Setup</Button>
               <Button onClick={() => navigate('/config')} variant="outlined">Choose New Loadout</Button>
               <Button onClick={() => navigate('/')} variant="outlined">Back to Dojo</Button>
             </>

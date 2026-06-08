@@ -23,7 +23,7 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     color: '#2563eb',
     tails: 2,
     assetSlots: {},
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'isobu',
@@ -35,7 +35,7 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     color: '#0e7490',
     tails: 3,
     assetSlots: {},
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'sonGoku',
@@ -47,7 +47,7 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     color: '#dc2626',
     tails: 4,
     assetSlots: {},
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'kokuo',
@@ -59,7 +59,7 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     color: '#e5e7eb',
     tails: 5,
     assetSlots: {},
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'saiken',
@@ -71,7 +71,7 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     color: '#7c3aed',
     tails: 6,
     assetSlots: {},
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'chomei',
@@ -83,7 +83,7 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     color: '#16a34a',
     tails: 7,
     assetSlots: {},
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'gyuki',
@@ -95,7 +95,7 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     color: '#7c2d12',
     tails: 8,
     assetSlots: {},
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'kurama',
@@ -107,7 +107,7 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
     color: '#f97316',
     tails: 9,
     assetSlots: {},
-    implemented: false,
+    implemented: true,
   },
 ];
 

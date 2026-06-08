@@ -27,6 +27,8 @@ const MUTUALLY_EXCLUSIVE: Partial<Record<Power, Power | null>> = {
 };
 
 const PICKUP_MESSAGE_MS = 3600;
+const SHARED_SCREEN_MAX_DELTA_X = 12;
+const SHARED_SCREEN_MAX_DELTA_Y = 8;
 
 function addPickupMessage(
   state: GameEngineState,
@@ -130,6 +132,23 @@ function getDirectionDelta(direction: Direction): { dx: number; dy: number } {
   }
 }
 
+function staysInsideSharedScreen(
+  state: GameEngineState,
+  playerId: string,
+  x: number,
+  y: number
+): boolean {
+  if (state.config.mode === 'solo' || state.config.numPlayers <= 1) return true;
+
+  const aliveOthers = state.players.filter((player) => (
+    player.id !== playerId && player.alive
+  ));
+  return aliveOthers.every((player) => (
+    Math.abs(player.x - x) <= SHARED_SCREEN_MAX_DELTA_X
+    && Math.abs(player.y - y) <= SHARED_SCREEN_MAX_DELTA_Y
+  ));
+}
+
 export function movePlayer(
   state: GameEngineState,
   playerId: string,
@@ -150,6 +169,7 @@ export function movePlayer(
   const ny = roundToMovementStep(dx === 0 ? y + dy : moveTowardCellCenter(y));
 
   if (!isValidMove(state, playerId, nx, ny, x, y)) return state;
+  if (!staysInsideSharedScreen(state, playerId, nx, ny)) return state;
   const blocked = others.some((p) => positionsTouch(
     { x: nx, y: ny },
     p,

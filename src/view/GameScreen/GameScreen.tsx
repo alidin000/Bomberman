@@ -8,6 +8,8 @@ import React, {
 import SettingsIcon from '@mui/icons-material/Settings';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import { Tooltip } from '@mui/material';
 import { useParams } from 'react-router-dom';
 import { StyledBackground } from '../WelcomeScreen/WelcomeScreen.styles';
 import {
@@ -123,17 +125,30 @@ export const GameScreen = () => {
     <GameBackground>
       <GameHUD state={state} />
       <TopControls>
-        <ControlButton onClick={handleTogglePause}>
-          {isPaused ? <PlayArrowIcon /> : <PauseIcon />}
-        </ControlButton>
-        <ControlButton
-          onClick={() => {
-            setIsSettingsOpen(true);
-            pause();
-          }}
-        >
-          <SettingsIcon />
-        </ControlButton>
+        <Tooltip title={isPaused ? 'Resume' : 'Pause'}>
+          <ControlButton
+            aria-label={isPaused ? 'resume game' : 'pause game'}
+            onClick={handleTogglePause}
+          >
+            {isPaused ? <PlayArrowIcon /> : <PauseIcon />}
+          </ControlButton>
+        </Tooltip>
+        <Tooltip title="Restart same setup">
+          <ControlButton aria-label="restart same setup" onClick={restart}>
+            <RestartAltIcon />
+          </ControlButton>
+        </Tooltip>
+        <Tooltip title="Settings">
+          <ControlButton
+            aria-label="open settings"
+            onClick={() => {
+              setIsSettingsOpen(true);
+              pause();
+            }}
+          >
+            <SettingsIcon />
+          </ControlButton>
+        </Tooltip>
       </TopControls>
       <GameSceneContainer>
         <GameScene3D state={state} />
@@ -147,6 +162,7 @@ export const GameScreen = () => {
       <RoundResultDialog
         open={dialogOpen}
         onClose={handleCloseDialog}
+        onRestart={restart}
         resultMessage={state.resultMessage}
         isGameOver={state.phase === 'game_over'}
       />

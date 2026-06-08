@@ -1,10 +1,35 @@
-WWWWWWWWWWWWWWW
-W BB   B   BBW
-W  W B B W   W
-WB   B   B  BW
-W B WWWWW B  W
-W  B   B   B W
-WB  W B B W  W
-W   B   B  BBW
-W BB   B     W
-WWWWWWWWWWWWWWW
+WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+W           BB    BB    BB    B   W
+W  B B     B     B    BB    BB    W
+WB       B     B   B B    BBB   BBW
+WB     W B   W    BW     W B   W  W
+W      WB  B W   B W   B WB  B W  W
+W  BB  W B         W B   W B   W BW
+W B  W WWWW  WWWW WW WWWWWW  WWW BW
+W    B        B   BW   BBW   B WB W
+W   B     B  B  B    BB    BB  B BW
+W BB    B   B B     BB   BB   BBB W
+W B   BW   BBW     WB   BW   BBW  W
+WB  B  W  B  W  B B   B  W  B  W  W
+W BB WWWWWW  WWWW  WBWWWWWWB WWWB W
+WB    BWB   BW    BW    BWB   BW  W
+W    B W  BB W  B  W  BB W  B  W  W
+W  B  B  B     B    BB  B BB    BBW
+WB   B B     BB               BBB W
+W   BB W   B W   B W  BB W     W  W
+W  B WWWWWW BWWWWWWW WWWWWWB  WW BW
+WBB    WB  B W     WB    W     W  W
+WB   BBW  BBBW   B W   B W  B  W  W
+W   B  W BB  W BB BW BB  W B   W BW
+W B     B     B  B BB    BB    B  W
+W     BB    B   B B    BBB    B   W
+W   BWWWWWW  WWWWWWW WWWWWW B WW BW
+W B  B WB    WB    WB  B WB    WB W
+WB  B BW    BW    BW  B BW    BW  W
+W  BBB W  BBBW  B  W BB  W    BW  W
+W BB   WBB B WBB               WB W
+WB     B  B  B    BB    BB    B   W
+W    WWWWWWB WWWWWW  WWWWWW B WW  W
+W  B    BB     B B   B    BB    BBW
+WB     B     B  B  B     B     B  W
+WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW

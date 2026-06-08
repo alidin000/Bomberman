@@ -84,7 +84,7 @@ export const InstructionsScreen = () => {
                 </ManualItem>
                 <ManualItem>
                   <ManualBadge>Local</ManualBadge>
-                  Two or three players fight for the selected number of victory seals.
+                  Two or three players fight one couch match at a time and can retry the same setup from the game screen.
                 </ManualItem>
                 <ManualItem>
                   <ManualBadge>Online</ManualBadge>

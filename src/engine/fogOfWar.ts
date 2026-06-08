@@ -185,8 +185,42 @@ export function calculateFogOfWar(state: GameEngineState): FogOfWarState {
   };
 }
 
+function sameCellKeys(prev: string[] = [], next: string[] = []): boolean {
+  return prev.length === next.length
+    && prev.every((cell, index) => cell === next[index]);
+}
+
 export function withUpdatedFogOfWar(state: GameEngineState): GameEngineState {
-  return { ...state, fogOfWar: calculateFogOfWar(state) };
+  const nextFogOfWar = calculateFogOfWar(state);
+  const currentFogOfWar = state.fogOfWar;
+  const visibleSame = sameCellKeys(currentFogOfWar.visible, nextFogOfWar.visible);
+  const exploredSame = sameCellKeys(currentFogOfWar.explored, nextFogOfWar.explored);
+  const sensedEnemiesSame = sameCellKeys(
+    currentFogOfWar.sensedEnemies,
+    nextFogOfWar.sensedEnemies
+  );
+  const sensedWallsSame = sameCellKeys(
+    currentFogOfWar.sensedWalls,
+    nextFogOfWar.sensedWalls
+  );
+
+  if (visibleSame && exploredSame && sensedEnemiesSame && sensedWallsSame) {
+    return state;
+  }
+
+  return {
+    ...state,
+    fogOfWar: {
+      visible: visibleSame ? currentFogOfWar.visible : nextFogOfWar.visible,
+      explored: exploredSame ? currentFogOfWar.explored : nextFogOfWar.explored,
+      sensedEnemies: sensedEnemiesSame
+        ? currentFogOfWar.sensedEnemies
+        : nextFogOfWar.sensedEnemies,
+      sensedWalls: sensedWallsSame
+        ? currentFogOfWar.sensedWalls
+        : nextFogOfWar.sensedWalls,
+    },
+  };
 }
 
 export function getCellVisibility(

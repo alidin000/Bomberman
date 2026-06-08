@@ -201,6 +201,8 @@ export interface CampaignObjectiveState {
   structureDamageCooldownMs?: number;
   miniBossLabel?: string;
   gateLabel?: string;
+  miniBossGuardId?: string;
+  miniBossSpawned?: boolean;
   x?: number;
   y?: number;
   requires?: CampaignObjectiveId[];

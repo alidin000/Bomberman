@@ -93,6 +93,8 @@ type KeyErrors = {
   [key: string]: boolean;
 };
 
+const SINGLE_MATCH_ROUNDS = '1';
+
 const GAME_MODES: {
   id: GameMode;
   title: string;
@@ -153,13 +155,12 @@ function getMissionObjectiveSummary(objective: CampaignObjectiveDefinition): str
   if (objective.kind === 'defense') {
     return `${Math.ceil((objective.durationMs ?? 0) / 1000)}s defense hold`;
   }
-  return `Mini-boss gate: ${objective.miniBossLabel ?? objective.label}`;
+  return `Defeat ${objective.miniBossLabel ?? objective.label} at the gate`;
 }
 
 export const ConfigScreen = () => {
   const initialStoryProgress = useMemo(() => loadStoryProgress(), []);
   const [activeStep, setActiveStep] = useState(0);
-  const [rounds, setRounds] = useState('1');
   const [mode, setMode] = useState<GameMode>('solo');
   const [numOfPlayers, setNumOfPlayers] = useState('1');
   const [selectedStage, setSelectedStage] = useState<StageId>(
@@ -207,7 +208,6 @@ export const ConfigScreen = () => {
     setMode(nextMode);
     if (nextMode === 'solo') {
       setNumOfPlayers('1');
-      setRounds('1');
       setSelectedCharacters((current) => [current[0] ?? DEFAULT_CHARACTER_ID]);
     } else {
       setNumOfPlayers('2');
@@ -243,7 +243,6 @@ export const ConfigScreen = () => {
   };
 
   const handleCancel = () => {
-    setRounds('1');
     setNumOfPlayers('2');
     navigate('/');
   };
@@ -260,14 +259,12 @@ export const ConfigScreen = () => {
     characters = selectedCharacters,
     upgrade = selectedUpgrade,
     players = numOfPlayers,
-    nextRounds = rounds,
   }: {
     nextMode?: GameMode;
     stageId?: StageId;
     characters?: CharacterId[];
     upgrade?: StoryUpgradeId;
     players?: string;
-    nextRounds?: string;
   } = {}) => {
     const stageDefinition = getStageDefinition(stageId);
     const mapData = await fetchMapFromFile(stageDefinition.mapId);
@@ -288,7 +285,7 @@ export const ConfigScreen = () => {
       selectedCharacters: characters,
       selectedUpgrade: upgrade,
     }));
-    navigate(`/game/${players}/${nextRounds}/${stageDefinition.mapId}`);
+    navigate(`/game/${players}/${SINGLE_MATCH_ROUNDS}/${stageDefinition.mapId}`);
   };
 
   const handlePlay = async () => {
@@ -299,7 +296,6 @@ export const ConfigScreen = () => {
     const characters = [storyProgress.lastCharacter ?? DEFAULT_CHARACTER_ID];
     setMode('solo');
     setNumOfPlayers('1');
-    setRounds('1');
     setSelectedStage(storyProgress.lastStage);
     setSelectedUpgrade(storyProgress.selectedUpgrade);
     setSelectedCharacters(characters);
@@ -309,7 +305,6 @@ export const ConfigScreen = () => {
       characters,
       upgrade: storyProgress.selectedUpgrade,
       players: '1',
-      nextRounds: '1',
     });
   };
 
@@ -317,7 +312,6 @@ export const ConfigScreen = () => {
     const characters = [selectedCharacters[0] ?? DEFAULT_CHARACTER_ID];
     setMode('solo');
     setNumOfPlayers('1');
-    setRounds('1');
     setSelectedCharacters(characters);
     await startGame({
       nextMode: 'solo',
@@ -325,7 +319,6 @@ export const ConfigScreen = () => {
       characters,
       upgrade: selectedUpgrade,
       players: '1',
-      nextRounds: '1',
     });
   };
 
@@ -425,14 +418,14 @@ export const ConfigScreen = () => {
   }, []);
 
   const steps = mode === 'solo'
-    ? ['Character', 'Upgrade', 'Controls']
-    : ['Arena Setup', 'Controls'];
+    ? ['Mission', 'Upgrade', 'Controls']
+    : ['Setup', 'Controls'];
 
   return (
     <WelcomeContainer>
       <StyledDialog open aria-labelledby="config-dialog-title">
         <DialogTitle id="config-dialog-title">
-          {activeStep === 0 && 'Story Mode Setup'}
+          {activeStep === 0 && 'Start Game'}
           {activeStep === 1 && mode === 'solo' && 'Upgrade Screen'}
           {((activeStep === 1 && mode === 'local') || activeStep === 2)
             && 'Keyboard Configuration'}
@@ -447,16 +440,6 @@ export const ConfigScreen = () => {
           </Stepper>
           {activeStep === 0 && (
             <StepContent>
-              <ConfigIntro>
-                <Typography variant="h5" fontWeight="bold">
-                  Choose your mission, village, and fighter.
-                </Typography>
-                <CardMeta variant="body2">
-                  Pick a real loadout: each ninja now has a different bomb,
-                  blast shape, and ultimate effect.
-                </CardMeta>
-              </ConfigIntro>
-
               {mode === 'solo' && selectedMission && (
                 <MissionBriefing accent={selectedStageDefinition.palette.accent}>
                   <MissionBriefingPreview>
@@ -614,49 +597,49 @@ export const ConfigScreen = () => {
                 </>
               )}
 
-              <SectionTitle variant="subtitle2">Stage</SectionTitle>
-              <SelectionGrid>
-                {STAGE_DEFINITIONS.map((item) => (
-                  <SelectionCard
-                    key={item.id}
-                    type="button"
-                    selected={selectedStage === item.id}
-                    accent={item.palette.accent}
-                    disabled={mode === 'solo' && !storyProgress.unlockedStages.includes(item.id)}
-                    onClick={() => setSelectedStage(item.id)}
-                    aria-label={item.name}
-                  >
-                    <StagePreview>
-                      <StagePreviewImage
-                        image={StageAtlas}
-                        aria-label={`${item.name} arena preview`}
-                        backgroundPosition={STAGE_PREVIEW_POSITIONS[item.id]}
-                      />
-                    </StagePreview>
-                    <CardHeader>
-                      <ColorOrb color={item.palette.accent} />
-                      <div>
-                        <Typography variant="subtitle2" fontWeight="bold">{item.name}</Typography>
-                        <CardMeta variant="caption">{item.mechanic}</CardMeta>
-                      </div>
-                    </CardHeader>
-                    {item.bossId && (
-                      <AbilityLine color={item.palette.accent}>
-                        Boss:
-                        {' '}
-                        {getBossDefinition(item.bossId).name}
-                        {' '}
-                        ·
-                        {' '}
-                        {getBossDefinition(item.bossId).attacks.join(' / ')}
-                      </AbilityLine>
-                    )}
-                    {mode === 'solo' && !storyProgress.unlockedStages.includes(item.id) && (
-                      <Chip size="small" label="Locked" />
-                    )}
-                  </SelectionCard>
-                ))}
-              </SelectionGrid>
+              {mode === 'local' && (
+                <>
+                  <SectionTitle variant="subtitle2">Stage</SectionTitle>
+                  <SelectionGrid>
+                    {STAGE_DEFINITIONS.map((item) => (
+                      <SelectionCard
+                        key={item.id}
+                        type="button"
+                        selected={selectedStage === item.id}
+                        accent={item.palette.accent}
+                        onClick={() => setSelectedStage(item.id)}
+                        aria-label={item.name}
+                      >
+                        <StagePreview>
+                          <StagePreviewImage
+                            image={StageAtlas}
+                            aria-label={`${item.name} arena preview`}
+                            backgroundPosition={STAGE_PREVIEW_POSITIONS[item.id]}
+                          />
+                        </StagePreview>
+                        <CardHeader>
+                          <ColorOrb color={item.palette.accent} />
+                          <div>
+                            <Typography variant="subtitle2" fontWeight="bold">{item.name}</Typography>
+                            <CardMeta variant="caption">{item.mechanic}</CardMeta>
+                          </div>
+                        </CardHeader>
+                        {item.bossId && (
+                          <AbilityLine color={item.palette.accent}>
+                            Boss:
+                            {' '}
+                            {getBossDefinition(item.bossId).name}
+                            {' '}
+                            ·
+                            {' '}
+                            {getBossDefinition(item.bossId).attacks.join(' / ')}
+                          </AbilityLine>
+                        )}
+                      </SelectionCard>
+                    ))}
+                  </SelectionGrid>
+                </>
+              )}
 
               <SectionTitle variant="subtitle2">Character Select</SectionTitle>
               {Array.from({ length: activePlayerCount }, (_, playerIndex) => (
@@ -721,20 +704,6 @@ export const ConfigScreen = () => {
               {mode === 'local' && (
                 <>
                   <Divider style={{ margin: '20px 0' }} />
-                  <Row>
-                    <Typography variant="h6">Victory Seals:</Typography>
-                    <ToggleButtonGroup
-                      size="large"
-                      value={rounds}
-                      exclusive
-                      onChange={(_e, newRounds) => newRounds && setRounds(newRounds)}
-                      aria-label="number of victory seals"
-                    >
-                      <ToggleButton value="1">1</ToggleButton>
-                      <ToggleButton value="2">2</ToggleButton>
-                      <ToggleButton value="3">3</ToggleButton>
-                    </ToggleButtonGroup>
-                  </Row>
                   <Row>
                     <Typography variant="h6">Shinobi Count:</Typography>
                     <ToggleButtonGroup

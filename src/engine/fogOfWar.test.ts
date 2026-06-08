@@ -1,5 +1,5 @@
 import { CharacterId } from '../content/types';
-import { calculateFogOfWar, cellKey } from './fogOfWar';
+import { calculateFogOfWar, cellKey, withUpdatedFogOfWar } from './fogOfWar';
 import { createInitialState } from './initialState';
 import { parseMapRows } from './mapLoader';
 import { GameConfig, MonsterState } from './types';
@@ -88,5 +88,11 @@ describe('fogOfWar', () => {
     expect(fog.visible).not.toContain(wallCell);
     expect(fog.explored).not.toContain(wallCell);
     expect(fog.sensedWalls).toContain(wallCell);
+  });
+
+  it('does not replace state when fog cells are unchanged', () => {
+    const state = createInitialState(createSoloConfig('naruto'));
+
+    expect(withUpdatedFogOfWar(state)).toBe(state);
   });
 });

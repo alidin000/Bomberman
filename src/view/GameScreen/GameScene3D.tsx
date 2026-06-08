@@ -27,7 +27,7 @@ import {
 } from '../../model/gameItem';
 import { isPowerUpActive } from '../../engine/players';
 import { EXPLOSION_MS } from '../../engine/constants';
-import { cellKey, getCellVisibility, isCellVisible } from '../../engine/fogOfWar';
+import { cellKey } from '../../engine/fogOfWar';
 import { getStageDefinition } from '../../content';
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
 import {
@@ -61,6 +61,22 @@ function getMapDimensions(map: GameMap): { width: number; height: number } {
 
 function getMapWorldCenter(width: number, height: number): [number, number, number] {
   return toWorld((width - 1) / 2, (height - 1) / 2);
+}
+
+function getVisibilityFromSets(
+  visibleCells: Set<string>,
+  exploredCells: Set<string>,
+  x: number,
+  y: number
+): CellVisibility {
+  const key = cellKey(x, y);
+  if (visibleCells.has(key)) return 'visible';
+  if (exploredCells.has(key)) return 'explored';
+  return 'hidden';
+}
+
+function cellVisibleInSet(visibleCells: Set<string>, x: number, y: number): boolean {
+  return visibleCells.has(cellKey(Math.round(x), Math.round(y)));
 }
 
 const POWERUP_VISUALS: Record<Power, {
@@ -2888,17 +2904,17 @@ function MissionMiniBossMarker({ objective }: { objective: CampaignObjectiveStat
 function MissionBossArenaMarker({
   campaign,
   bossName,
-  fogOfWar,
+  visibleCells,
 }: {
   campaign: NonNullable<GameEngineState['campaign']>;
   bossName?: string;
-  fogOfWar: GameEngineState['fogOfWar'];
+  visibleCells: Set<string>;
 }) {
   const ref = useRef<THREE.Group>(null);
   const { bossArena } = campaign;
   const [wx, , wz] = toWorld(bossArena.x, bossArena.y);
   const active = bossArena.unlocked;
-  const visible = isCellVisible(fogOfWar, bossArena.x, bossArena.y);
+  const visible = cellVisibleInSet(visibleCells, bossArena.x, bossArena.y);
   const color = active ? '#fb923c' : '#94a3b8';
   let label = campaign.bossGateLabel;
   if (active) {
@@ -2941,7 +2957,13 @@ function MissionBossArenaMarker({
   );
 }
 
-function MissionObjectiveMarkers({ state }: { state: GameEngineState }) {
+function MissionObjectiveMarkers({
+  state,
+  visibleCells,
+}: {
+  state: GameEngineState;
+  visibleCells: Set<string>;
+}) {
   if (!state.campaign) return null;
 
   return (
@@ -2949,7 +2971,7 @@ function MissionObjectiveMarkers({ state }: { state: GameEngineState }) {
       {state.campaign.objectives.flatMap((objective) => {
         if (objective.kind === 'rescue') {
           return (objective.targets ?? [])
-            .filter((target) => isCellVisible(state.fogOfWar, target.x, target.y))
+            .filter((target) => cellVisibleInSet(visibleCells, target.x, target.y))
             .map((target) => (
               <MissionRescueMarker key={target.id} target={target} />
             ));
@@ -2958,7 +2980,7 @@ function MissionObjectiveMarkers({ state }: { state: GameEngineState }) {
           objective.kind === 'miniBoss'
           && typeof objective.x === 'number'
           && typeof objective.y === 'number'
-          && isCellVisible(state.fogOfWar, objective.x, objective.y)
+          && cellVisibleInSet(visibleCells, objective.x, objective.y)
         ) {
           return [(
             <MissionMiniBossMarker key={objective.id} objective={objective} />
@@ -2967,7 +2989,7 @@ function MissionObjectiveMarkers({ state }: { state: GameEngineState }) {
         if (
           typeof objective.x === 'number'
           && typeof objective.y === 'number'
-          && isCellVisible(state.fogOfWar, objective.x, objective.y)
+          && cellVisibleInSet(visibleCells, objective.x, objective.y)
         ) {
           return [(
             <MissionDefenseMarker key={objective.id} objective={objective} />
@@ -2978,7 +3000,7 @@ function MissionObjectiveMarkers({ state }: { state: GameEngineState }) {
       <MissionBossArenaMarker
         campaign={state.campaign}
         bossName={state.boss?.name}
-        fogOfWar={state.fogOfWar}
+        visibleCells={visibleCells}
       />
     </>
   );
@@ -3059,11 +3081,29 @@ function MapTilesBase({
     () => new Set(fogOfWar.sensedWalls ?? []),
     [fogOfWar.sensedWalls],
   );
+  const visibleCellSet = useMemo(
+    () => new Set(fogOfWar.visible ?? []),
+    [fogOfWar.visible],
+  );
+  const exploredCellSet = useMemo(
+    () => new Set(fogOfWar.explored ?? []),
+    [fogOfWar.explored],
+  );
+  const visibleExplosions = useMemo(
+    () => explosions.filter((explosion) => (
+      cellVisibleInSet(visibleCellSet, explosion.x, explosion.y)
+    )),
+    [explosions, visibleCellSet],
+  );
+  const visibleHazards = useMemo(
+    () => hazards.filter((hazard) => cellVisibleInSet(visibleCellSet, hazard.x, hazard.y)),
+    [hazards, visibleCellSet],
+  );
 
   return (
     <>
       {map.map((row, y) => row.map((cell, x) => {
-        const visibility = getCellVisibility(fogOfWar, x, y);
+        const visibility = getVisibilityFromSets(visibleCellSet, exploredCellSet, x, y);
         const visible = visibility === 'visible';
         const sensedWall = visibility === 'hidden'
           && sensedWallSet.has(cellKey(x, y))
@@ -3125,8 +3165,8 @@ function MapTilesBase({
         }
         return tile;
       }))}
-      <ExplosionField explosions={explosions.filter((explosion) => isCellVisible(fogOfWar, explosion.x, explosion.y))} />
-      {hazards.filter((hazard) => isCellVisible(fogOfWar, hazard.x, hazard.y)).map((hazard) => (
+      <ExplosionField explosions={visibleExplosions} />
+      {visibleHazards.map((hazard) => (
         <HazardMesh key={hazard.id} hazard={hazard} />
       ))}
     </>
@@ -3182,19 +3222,35 @@ function SceneContent({ state }: { state: GameEngineState }) {
     [state.config.stageId]
   );
   const mapDimensions = useMemo(() => getMapDimensions(state.map), [state.map]);
-  const sensedEnemyCells = new Set(state.fogOfWar.sensedEnemies ?? []);
-  const visibleMonsters = state.monsters.filter((m) => (
-    isCellVisible(state.fogOfWar, m.x, m.y)
-  ));
-  const sensedMonsters = state.monsters.filter((m) => (
-    !isCellVisible(state.fogOfWar, m.x, m.y)
-    && sensedEnemyCells.has(cellKey(Math.round(m.x), Math.round(m.y)))
-  ));
+  const visibleCellSet = useMemo(
+    () => new Set(state.fogOfWar.visible ?? []),
+    [state.fogOfWar.visible],
+  );
+  const sensedEnemyCells = useMemo(
+    () => new Set(state.fogOfWar.sensedEnemies ?? []),
+    [state.fogOfWar.sensedEnemies],
+  );
+  const visibleMonsters = useMemo(
+    () => state.monsters.filter((m) => cellVisibleInSet(visibleCellSet, m.x, m.y)),
+    [state.monsters, visibleCellSet],
+  );
+  const sensedMonsters = useMemo(
+    () => state.monsters.filter((m) => (
+      !cellVisibleInSet(visibleCellSet, m.x, m.y)
+      && sensedEnemyCells.has(cellKey(Math.round(m.x), Math.round(m.y)))
+    )),
+    [state.monsters, sensedEnemyCells, visibleCellSet],
+  );
+  const bossCellKey = state.boss
+    ? cellKey(Math.round(state.boss.x), Math.round(state.boss.y))
+    : null;
   const bossVisible = !!state.boss
-    && isCellVisible(state.fogOfWar, state.boss.x, state.boss.y);
+    && !!bossCellKey
+    && visibleCellSet.has(bossCellKey);
   const bossSensed = !!state.boss
     && !bossVisible
-    && sensedEnemyCells.has(cellKey(Math.round(state.boss.x), Math.round(state.boss.y)));
+    && !!bossCellKey
+    && sensedEnemyCells.has(bossCellKey);
 
   return (
     <>
@@ -3220,7 +3276,7 @@ function SceneContent({ state }: { state: GameEngineState }) {
         fogOfWar={state.fogOfWar}
         powerTheme={state.players[0]?.characterId}
       />
-      <MissionObjectiveMarkers state={state} />
+      <MissionObjectiveMarkers state={state} visibleCells={visibleCellSet} />
       {state.players.map((p) => (
         <PlayerMesh key={p.id} player={p} state={state} />
       ))}

@@ -38,7 +38,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (
             Quit
           </Button>
           <Button variant="contained" color="secondary" onClick={onRestart}>
-            Restart
+            Restart Same Setup
           </Button>
           <Button variant="contained" onClick={onModifyControls}>
             Modify Controls

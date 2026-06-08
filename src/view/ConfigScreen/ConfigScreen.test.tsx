@@ -62,7 +62,7 @@ describe('ConfigScreen', () => {
 
   it('should initialize with the game configuration step', () => {
     setup();
-    const title = screen.getByText('Story Mode Setup');
+    const title = screen.getByText('Start Game');
     expect(title).toBeInTheDocument();
   });
 
@@ -114,9 +114,16 @@ describe('ConfigScreen', () => {
 
   it('should render stage selection buttons', () => {
     setup();
+    fireEvent.click(screen.getByText('Local Arena'));
     expect(screen.getByLabelText('Hidden Sand Village')).toBeInTheDocument();
     expect(screen.getByLabelText('Hidden Mist Village')).toBeInTheDocument();
     expect(screen.getByLabelText('Akatsuki Hideout')).toBeInTheDocument();
+  });
+
+  it('should use campaign route cards instead of the arena grid in solo setup', () => {
+    setup();
+    expect(screen.getByLabelText('Hidden Leaf campaign route')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Hidden Leaf Village')).not.toBeInTheDocument();
   });
 
   it('should select a stage when a stage button is clicked', () => {
@@ -125,6 +132,14 @@ describe('ConfigScreen', () => {
     const mistButton = screen.getByLabelText('Hidden Mist Village');
     fireEvent.click(mistButton);
     expect(screen.getByText('Water cannons fire long telegraphed lines.')).toBeInTheDocument();
+  });
+
+  it('should not ask players to choose rounds in local setup', () => {
+    setup();
+    fireEvent.click(screen.getByText('Local Arena'));
+
+    expect(screen.queryByText('Victory Seals:')).not.toBeInTheDocument();
+    expect(screen.getByText('Shinobi Count:')).toBeInTheDocument();
   });
 
   it('should continue campaign from the saved village', async () => {
@@ -143,12 +158,13 @@ describe('ConfigScreen', () => {
     }));
     setup();
 
-    fireEvent.click(screen.getByText('Continue Campaign'));
+    const [continueButton] = screen.getAllByText('Continue Campaign');
+    fireEvent.click(continueButton);
 
     await waitFor(() => {
       expect(localStorage.getItem('selectedMap')).not.toBeNull();
       expect(localStorage.getItem('gameSetup')).toContain('hiddenMist');
-      expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/\/game\/1\/1\/hiddenMist/));
+      expect(mockNavigate).toHaveBeenCalledWith('/game/1/1/hiddenMist');
     });
   });
 
@@ -160,7 +176,7 @@ describe('ConfigScreen', () => {
     await waitFor(() => {
       expect(localStorage.getItem('selectedMap')).not.toBeNull();
       expect(localStorage.getItem('gameSetup')).toContain('hiddenLeaf');
-      expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/\/game\/1\/1\/hiddenLeaf/));
+      expect(mockNavigate).toHaveBeenCalledWith('/game/1/1/hiddenLeaf');
     });
   });
 
@@ -171,7 +187,7 @@ describe('ConfigScreen', () => {
     await waitFor(() => {
       expect(localStorage.getItem('playerKeyBindings')).not.toBeNull();
       expect(localStorage.getItem('gameSetup')).not.toBeNull();
-      expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/\/game\/\d+\/\d+\/hiddenLeaf/));
+      expect(mockNavigate).toHaveBeenCalledWith('/game/1/1/hiddenLeaf');
     });
   });
 });
