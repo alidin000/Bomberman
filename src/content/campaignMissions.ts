@@ -1,4 +1,6 @@
 import { StageId } from './types';
+import { EnemyArchetype } from './enemies';
+import { Power } from '../model/gameItem';
 
 export type CampaignMissionId = 'hiddenLeafOpening';
 
@@ -57,6 +59,28 @@ export interface CampaignSpawnPointDefinition {
   label: string;
   x: number;
   y: number;
+  archetypes: EnemyArchetype[];
+  respawnMs: number;
+  maxActive: number;
+  initialCount: number;
+}
+
+export type CampaignHiddenAreaKind =
+  | 'secretRoom'
+  | 'scroll'
+  | 'fragment'
+  | 'zetsuBurrow'
+  | 'rareReward';
+
+export interface CampaignHiddenAreaDefinition {
+  id: string;
+  label: string;
+  description: string;
+  x: number;
+  y: number;
+  kind: CampaignHiddenAreaKind;
+  rewardPowerUp?: Power;
+  enemyArchetype?: EnemyArchetype;
 }
 
 export interface CampaignBossArenaDefinition {
@@ -73,6 +97,7 @@ export interface CampaignMissionDefinition {
   villageName: string;
   districts: CampaignDistrictDefinition[];
   spawnPoints: CampaignSpawnPointDefinition[];
+  hiddenAreas: CampaignHiddenAreaDefinition[];
   discoveredSecrets: string[];
   miniBossGateLabel: string;
   bossGateLabel: string;
@@ -120,8 +145,61 @@ export const CAMPAIGN_MISSIONS: CampaignMissionDefinition[] = [
       {
         id: 'leaf-main-gate',
         label: 'Main Gate',
-        x: 1,
-        y: 1,
+        x: 6,
+        y: 5,
+        archetypes: ['rogueGenin', 'anbu'],
+        respawnMs: 20000,
+        maxActive: 3,
+        initialCount: 1,
+      },
+      {
+        id: 'leaf-training-grounds',
+        label: 'Training Grounds Burrow',
+        x: 13,
+        y: 8,
+        archetypes: ['mistNinja', 'sandNinja', 'whiteZetsu'],
+        respawnMs: 20000,
+        maxActive: 3,
+        initialCount: 1,
+      },
+      {
+        id: 'leaf-forest-gate',
+        label: 'Forest Gate Burrow',
+        x: 28,
+        y: 28,
+        archetypes: ['cloudNinja', 'whiteZetsu', 'blackZetsu'],
+        respawnMs: 20000,
+        maxActive: 4,
+        initialCount: 0,
+      },
+    ],
+    hiddenAreas: [
+      {
+        id: 'leaf-scroll-cache',
+        label: 'Training Grounds Secret Scroll',
+        description: 'A scroll cache hidden behind a destructible training crate.',
+        x: 3,
+        y: 2,
+        kind: 'scroll',
+        rewardPowerUp: 'Rasengan',
+      },
+      {
+        id: 'leaf-archive-fragment',
+        label: 'Hokage Archive Fragment',
+        description: 'A character fragment sealed into an old Hokage archive crate.',
+        x: 18,
+        y: 12,
+        kind: 'fragment',
+        rewardPowerUp: 'CharacterFragment',
+      },
+      {
+        id: 'leaf-zetsu-burrow',
+        label: 'Forest Zetsu Burrow',
+        description: 'A cracked root wall that hides an elite Zetsu ambush.',
+        x: 28,
+        y: 31,
+        kind: 'zetsuBurrow',
+        enemyArchetype: 'blackZetsu',
       },
     ],
     discoveredSecrets: [],

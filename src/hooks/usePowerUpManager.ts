@@ -11,9 +11,11 @@ const usePowerUpManager = (mapRef: React.MutableRefObject<GameMap>, playersRef: 
   const [flashingPowerUps, setFlashingPowerUps] = useState<Record<string, Set<Power>>>({});
 
   const addPowerUp = useCallback((playerId: string, powerUp: Power, duration: number) => {
-    const mutuallyExclusivePowerUps: Record<Power, Power | null> = {
+    const mutuallyExclusivePowerUps: Partial<Record<Power, Power | null>> = {
       'Ghost': 'Invincibility',
       'Invincibility': 'Ghost',
+      'CrowFeather': 'Invincibility',
+      'SandArmor': 'Ghost',
       'AddBomb': null,
       'BlastRangeUp': null,
       'Detonator': null,
@@ -23,7 +25,7 @@ const usePowerUpManager = (mapRef: React.MutableRefObject<GameMap>, playersRef: 
 
     const currentActivePowerUps = activePowerUps[playerId] || new Set();
     const exclusivePowerUp = mutuallyExclusivePowerUps[powerUp];
-    if (exclusivePowerUp !== null && currentActivePowerUps.has(exclusivePowerUp)) {
+    if (exclusivePowerUp && currentActivePowerUps.has(exclusivePowerUp)) {
       return;
     }
     setActivePowerUps((prev) => ({

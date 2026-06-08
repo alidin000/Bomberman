@@ -15,9 +15,11 @@ describe('Game Utilities', () => {
   describe('isPower', () => {
     it('should correctly identify power ups', () => {
       const power: Power = 'AddBomb';
+      const signaturePower: Power = 'Rasengan';
       const nonPower: gameItem = 'Wall';
 
       expect(isPower(power)).toBeTruthy();
+      expect(isPower(signaturePower)).toBeTruthy();
       expect(isPower(nonPower)).toBeFalsy();
     });
   });

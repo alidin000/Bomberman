@@ -1,6 +1,7 @@
-/* eslint-disable object-curly-newline, comma-dangle */
+/* eslint-disable object-curly-newline, comma-dangle, no-use-before-define */
 import { MonsterKind, MonsterState } from './types';
 import { MONSTER_MOVE_MS } from './constants';
+import { EnemyArchetype, getEnemyArchetypeDefinition } from '../content/enemies';
 
 interface SpawnDef {
   id: string;
@@ -8,6 +9,7 @@ interface SpawnDef {
   x: number;
   y: number;
   kind: MonsterKind;
+  archetype?: EnemyArchetype;
 }
 
 const LEGACY_BEAST_NAMES: Record<MonsterKind, string> = {
@@ -18,6 +20,8 @@ const LEGACY_BEAST_NAMES: Record<MonsterKind, string> = {
 };
 
 function spawn(def: SpawnDef): MonsterState {
+  const archetype = def.archetype ?? getArchetypeForSpawn(def);
+  const enemy = getEnemyArchetypeDefinition(archetype);
   return {
     id: def.id,
     name: def.name,
@@ -25,7 +29,34 @@ function spawn(def: SpawnDef): MonsterState {
     y: def.y,
     kind: def.kind,
     moveCooldown: MONSTER_MOVE_MS[def.kind],
+    archetype,
+    abilityKind: enemy.ability,
+    abilityLabel: enemy.abilityLabel,
+    abilityCooldown: 1800,
+    abilityWarningTicks: 0,
+    abilityTarget: null,
+    elite: enemy.elite,
   };
+}
+
+function getArchetypeForKind(kind: MonsterKind): EnemyArchetype {
+  if (kind === 'smart') return 'sandNinja';
+  if (kind === 'ghost') return 'mistNinja';
+  if (kind === 'fork') return 'anbu';
+  return 'rogueGenin';
+}
+
+function getArchetypeForSpawn(def: SpawnDef): EnemyArchetype {
+  const name = def.name.toLowerCase();
+  if (name.includes('black zetsu')) return 'blackZetsu';
+  if (name.includes('zetsu')) return 'whiteZetsu';
+  if (name.includes('mist') || name.includes('clone')) return 'mistNinja';
+  if (name.includes('sand') || name.includes('puppet')) return 'sandNinja';
+  if (name.includes('cloud') || name.includes('lightning') || name.includes('thunder')) {
+    return 'cloudNinja';
+  }
+  if (name.includes('anbu') || name.includes('hunter')) return 'anbu';
+  return getArchetypeForKind(def.kind);
 }
 
 export function getMonstersForMap(

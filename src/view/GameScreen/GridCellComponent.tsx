@@ -33,7 +33,7 @@ import player3Image from '../../assets/player3.png';
 import player3GhostImage from '../../assets/player3ghost.png';
 import player3InvincibleImage from '../../assets/player3armor.png';
 
-const powerUpImgs = {
+const powerUpImgs: Partial<Record<Power, string>> = {
   AddBomb: addBombImage,
   BlastRangeUp: blastRangeUpImage,
   Detonator: detonatorImage,
@@ -136,7 +136,13 @@ export const GridCellComponent = ({
       {isWallCell && <img src={wallImage} alt="Wall" style={{ width: '100%', height: '100%' }} />}
       {isBoxCell && !isExplosion && !isDestroyedBox && <img src={boxImage} alt="Box" style={{ width: '100%', height: '100%' }} />}
       {isBoxCell && isDestroyedBox && <img src={destroyedBoxImage} alt="Destroyed Box" style={{ width: '100%', height: '100%' }} />}
-      {isPowerUpCell && <img src={powerUpImgs[cellContent]} alt="PowerUp" style={{ width: '100%', height: '100%' }} />}
+      {isPowerUpCell && (
+        <img
+          src={powerUpImgs[cellContent] ?? invincibilityImage}
+          alt="PowerUp"
+          style={{ width: '100%', height: '100%' }}
+        />
+      )}
       {player && player.isAlive() && (
         <CharacterContainer>
           <img

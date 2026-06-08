@@ -19,6 +19,7 @@ import { checkMonsterCollisions, tickMonsters } from './monsters';
 import { tickBossEncounter } from './bosses';
 import { withUpdatedFogOfWar } from './fogOfWar';
 import { advanceCampaignObjectives } from './campaignObjectives';
+import { tickCampaignRespawns } from './campaignEnemies';
 
 function getWinnerName(state: GameEngineState, winnerId: string): string {
   return state.players.find((player) => player.id === winnerId)?.name ?? winnerId;
@@ -156,8 +157,9 @@ function processTick(state: GameEngineState, deltaMs: number): GameEngineState {
   next = tickBombs(next, deltaMs);
   next = tickExplosions(next, deltaMs);
   next = advanceCampaignState(next, deltaMs);
+  next = tickCampaignRespawns(next, deltaMs);
   next = tickBossEncounter(next, deltaMs);
-  next = { ...next, monsters: tickMonsters(next, deltaMs) };
+  next = tickMonsters(next, deltaMs);
   next = { ...next, players: checkMonsterCollisions(next) };
   return withUpdatedFogOfWar(checkRoundEnd(next));
 }

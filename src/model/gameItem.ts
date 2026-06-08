@@ -1,4 +1,23 @@
-export type Power = 'AddBomb' | 'BlastRangeUp' | 'Detonator' | 'RollerSkate' | 'Invincibility' | 'Ghost' | 'Obstacle';
+export type GenericPower =
+  | 'AddBomb'
+  | 'BlastRangeUp'
+  | 'Detonator'
+  | 'RollerSkate'
+  | 'Invincibility'
+  | 'Ghost'
+  | 'Obstacle';
+
+export type SignaturePower =
+  | 'ClaySpider'
+  | 'Rasengan'
+  | 'Sharingan'
+  | 'FTGKunai'
+  | 'CrowFeather'
+  | 'SandArmor'
+  | 'ChakraScroll'
+  | 'CharacterFragment';
+
+export type Power = GenericPower | SignaturePower;
 
 export type BaseContent = 'Empty' | 'Box' | 'Wall';
 
@@ -19,10 +38,30 @@ export type Explosion = 'Explosion'; // explosion type
 
 export type GameMap = gameItem[][];
 
-const powerUpOptions: Power[] = ['AddBomb', 'BlastRangeUp', 'Detonator', 'RollerSkate', 'Invincibility', 'Ghost', 'Obstacle'];
+export const genericPowerUpOptions: GenericPower[] = [
+  'AddBomb',
+  'BlastRangeUp',
+  'Detonator',
+  'RollerSkate',
+  'Invincibility',
+  'Ghost',
+  'Obstacle',
+];
 
-export function randomPowerUpGenerator(): Power {
-  return powerUpOptions[Math.floor(Math.random() * powerUpOptions.length)];
+export const powerUpOptions: Power[] = [
+  ...genericPowerUpOptions,
+  'ClaySpider',
+  'Rasengan',
+  'Sharingan',
+  'FTGKunai',
+  'CrowFeather',
+  'SandArmor',
+  'ChakraScroll',
+  'CharacterFragment',
+];
+
+export function randomPowerUpGenerator(): GenericPower {
+  return genericPowerUpOptions[Math.floor(Math.random() * genericPowerUpOptions.length)];
 }
 
 export const isPower = (cell: gameItem): cell is Power => powerUpOptions.includes(cell as Power);

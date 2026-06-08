@@ -162,6 +162,34 @@ class Player {
         this.obstacles += 3;
         this.powerUps.push(powerUp);
         break;
+      case 'ClaySpider':
+        this.bombs += 1;
+        this.bombRange += 1;
+        break;
+      case 'Rasengan':
+      case 'ChakraScroll':
+        this.bombRange += 1;
+        break;
+      case 'Sharingan':
+        if (!this.powerUps.includes('Detonator')) {
+          this.powerUps.push('Detonator');
+        }
+        break;
+      case 'FTGKunai':
+        if (!this.powerUps.includes('RollerSkate')) {
+          this.powerUps.push('RollerSkate');
+        }
+        break;
+      case 'CrowFeather':
+        this.powerUps.push('Ghost');
+        addPowerUp('Ghost', 15000);
+        break;
+      case 'SandArmor':
+        this.powerUps.push('Invincibility');
+        addPowerUp('Invincibility', 15000);
+        break;
+      case 'CharacterFragment':
+        break;
       default:
         console.log('Unknown power-up:', powerUp);
         break;

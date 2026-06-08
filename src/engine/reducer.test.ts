@@ -1,11 +1,13 @@
 import { gameReducer } from './reducer';
 import { createInitialState } from './initialState';
-import { GameConfig } from './types';
+import { GameConfig, MonsterState } from './types';
 import { applyPowerUp } from './players';
 import { cellKey } from './fogOfWar';
 import { parseMapRows } from './mapLoader';
 import { defaultMap } from '../constants/contants';
 import { isObstacle } from '../model/gameItem';
+import { getCampaignPickupPool } from '../content/characterPowerups';
+import { resolveZetsuOutcomeKind } from './campaignExploration';
 
 const baseConfig: GameConfig = {
   numPlayers: 2,
@@ -83,6 +85,28 @@ const hiddenLeafCampaignConfig: GameConfig = {
   map: hiddenLeafCampaignMap,
 };
 
+const abilityTestMap = parseMapRows([
+  'WWWWWWW',
+  'W     W',
+  'W     W',
+  'W     W',
+  'W     W',
+  'W     W',
+  'WWWWWWW',
+].map((row) => row.split('')));
+
+function shinobiEnemy(
+  partial: Partial<MonsterState> & Pick<MonsterState, 'id' | 'name' | 'x' | 'y' | 'kind'>
+): MonsterState {
+  return {
+    moveCooldown: 1000,
+    abilityCooldown: 0,
+    abilityWarningTicks: 0,
+    abilityTarget: null,
+    ...partial,
+  };
+}
+
 describe('gameReducer', () => {
   it('initializes game state', () => {
     const state = gameReducer(null, { type: 'INIT', config: baseConfig });
@@ -142,9 +166,14 @@ describe('gameReducer', () => {
     ]);
     expect(state.campaign?.spawnPoints[0]).toMatchObject({
       id: 'leaf-main-gate',
-      x: 1,
-      y: 1,
+      x: 6,
+      y: 5,
+      respawnMs: 20000,
+      maxActive: 3,
     });
+    expect(state.monsters.map((monster) => monster.archetype)).toEqual(
+      expect.arrayContaining(['rogueGenin', 'mistNinja'])
+    );
     expect(state.boss).toBeNull();
     expect(state.campaign?.objectives[0]).toMatchObject({
       id: 'rescueLeafVillagers',
@@ -160,6 +189,234 @@ describe('gameReducer', () => {
       id: 'confrontIruka',
       status: 'locked',
     });
+  });
+
+  it('uses character-specific campaign pickup pools and the PRD Zetsu outcome bands', () => {
+    expect(getCampaignPickupPool('naruto')).toContain('Rasengan');
+    expect(getCampaignPickupPool('naruto')).not.toContain('Sharingan');
+    expect(getCampaignPickupPool('sasuke')).toContain('Sharingan');
+    expect(getCampaignPickupPool('minato')).toContain('FTGKunai');
+
+    expect(resolveZetsuOutcomeKind(59)).toBe('nothing');
+    expect(resolveZetsuOutcomeKind(60)).toBe('powerUp');
+    expect(resolveZetsuOutcomeKind(79)).toBe('powerUp');
+    expect(resolveZetsuOutcomeKind(80)).toBe('whiteZetsu');
+    expect(resolveZetsuOutcomeKind(95)).toBe('eliteZetsu');
+    expect(resolveZetsuOutcomeKind(99)).toBe('rareReward');
+  });
+
+  it('reveals authored hidden rewards after a campaign crate is destroyed', () => {
+    let state = createInitialState(hiddenLeafCampaignConfig);
+    const map = state.map.map((row) => [...row]);
+    map[2][3] = 'Empty';
+    state = {
+      ...state,
+      map,
+      monsters: [],
+      destroyedBoxes: [{
+        x: 3,
+        y: 2,
+        ticksRemaining: 1,
+        pendingPowerUp: null,
+        pendingOutcome: {
+          kind: 'powerUp',
+          powerUp: 'Rasengan',
+          secretId: 'leaf-scroll-cache',
+          label: 'Training Grounds Secret Scroll',
+        },
+      }],
+    };
+
+    state = gameReducer(state, { type: 'TICK', deltaMs: 2 })!;
+
+    expect(state.map[2][3]).toBe('Rasengan');
+    expect(state.campaign?.discoveredSecrets).toContain('leaf-scroll-cache');
+  });
+
+  it('spawns Zetsu ambushes from campaign destruction outcomes', () => {
+    let state = createInitialState(hiddenLeafCampaignConfig);
+    const map = state.map.map((row) => [...row]);
+    map[31][28] = 'Empty';
+    state = {
+      ...state,
+      map,
+      monsters: [],
+      destroyedBoxes: [{
+        x: 28,
+        y: 31,
+        ticksRemaining: 1,
+        pendingPowerUp: null,
+        pendingOutcome: {
+          kind: 'eliteZetsu',
+          enemyArchetype: 'blackZetsu',
+          secretId: 'leaf-zetsu-burrow',
+          label: 'Forest Zetsu Burrow',
+        },
+      }],
+    };
+
+    state = gameReducer(state, { type: 'TICK', deltaMs: 2 })!;
+
+    expect(state.monsters).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'leaf-zetsu-burrow-enemy',
+        archetype: 'blackZetsu',
+        abilityKind: 'zetsuMelee',
+      }),
+    ]));
+    expect(state.campaign?.discoveredSecrets).toContain('leaf-zetsu-burrow');
+  });
+
+  it('respawns campaign enemies with timers and max-active tracking', () => {
+    let state = createInitialState(hiddenLeafCampaignConfig);
+    state = {
+      ...state,
+      monsters: [],
+      campaign: state.campaign
+        ? {
+          ...state.campaign,
+          spawnPoints: state.campaign.spawnPoints.map((point, index) => ({
+            ...point,
+            activeMonsterIds: [],
+            ticksRemaining: index === 0 ? 1 : point.respawnMs,
+            maxActive: index === 0 ? 2 : point.maxActive,
+          })),
+        }
+        : state.campaign,
+    };
+
+    state = gameReducer(state, { type: 'TICK', deltaMs: 20 })!;
+
+    expect(state.monsters).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'leaf-main-gate-1',
+        spawnPointId: 'leaf-main-gate',
+      }),
+    ]));
+    expect(state.campaign?.spawnPoints[0].activeMonsterIds).toContain('leaf-main-gate-1');
+    expect(state.campaign?.spawnPoints[0].ticksRemaining).toBe(20000);
+  });
+
+  it('starts warned enemy ability state and readable hazard targets', () => {
+    let state = createInitialState({
+      ...baseConfig,
+      map: abilityTestMap,
+      selectedMap: 'ability-test',
+    });
+    state = {
+      ...state,
+      players: state.players.map((player, index) => (
+        index === 0
+          ? { ...player, x: 3, y: 3 }
+          : { ...player, alive: false }
+      )),
+      monsters: [
+        shinobiEnemy({
+          id: 'genin',
+          name: 'Rogue Genin',
+          x: 1,
+          y: 3,
+          kind: 'basic',
+          archetype: 'rogueGenin',
+          abilityKind: 'kunaiThrow',
+          abilityLabel: 'Kunai Throw',
+        }),
+        shinobiEnemy({
+          id: 'sand',
+          name: 'Sand Ninja',
+          x: 3,
+          y: 1,
+          kind: 'smart',
+          archetype: 'sandNinja',
+          abilityKind: 'sandSpike',
+          abilityLabel: 'Sand Spike',
+        }),
+        shinobiEnemy({
+          id: 'cloud',
+          name: 'Cloud Ninja',
+          x: 5,
+          y: 3,
+          kind: 'fork',
+          archetype: 'cloudNinja',
+          abilityKind: 'lightningStrike',
+          abilityLabel: 'Lightning Strike',
+        }),
+      ],
+      hazards: [],
+    };
+
+    state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
+
+    expect(state.monsters.every((monster) => (monster.abilityWarningTicks ?? 0) > 0))
+      .toBe(true);
+    expect(state.monsters[0].abilityTarget).toEqual({ x: 3, y: 3 });
+    expect(state.hazards.map((hazard) => hazard.kind)).toEqual(
+      expect.arrayContaining(['chakraShockwave', 'sandSpikes', 'airStrike'])
+    );
+  });
+
+  it('resolves body flicker, water clone, and Zetsu melee abilities', () => {
+    let state = createInitialState({
+      ...baseConfig,
+      map: abilityTestMap,
+      selectedMap: 'ability-test',
+    });
+    state = {
+      ...state,
+      players: state.players.map((player, index) => (
+        index === 0
+          ? { ...player, x: 3, y: 3 }
+          : { ...player, alive: false }
+      )),
+      monsters: [
+        shinobiEnemy({
+          id: 'anbu',
+          name: 'ANBU',
+          x: 1,
+          y: 1,
+          kind: 'fork',
+          archetype: 'anbu',
+          abilityKind: 'bodyFlicker',
+          abilityLabel: 'Body Flicker',
+          abilityWarningTicks: 1,
+          abilityTarget: { x: 2, y: 3 },
+        }),
+        shinobiEnemy({
+          id: 'mist',
+          name: 'Mist Ninja',
+          x: 5,
+          y: 1,
+          kind: 'ghost',
+          archetype: 'mistNinja',
+          abilityKind: 'waterClone',
+          abilityLabel: 'Water Clone',
+          abilityWarningTicks: 1,
+          abilityTarget: { x: 4, y: 3 },
+        }),
+        shinobiEnemy({
+          id: 'zetsu',
+          name: 'White Zetsu',
+          x: 1,
+          y: 5,
+          kind: 'ghost',
+          archetype: 'whiteZetsu',
+          abilityKind: 'zetsuMelee',
+          abilityLabel: 'Zetsu Ambush',
+          abilityWarningTicks: 1,
+          abilityTarget: { x: 3, y: 3 },
+        }),
+      ],
+    };
+
+    state = gameReducer(state, { type: 'TICK', deltaMs: 10 })!;
+
+    expect(state.monsters.find((monster) => monster.id === 'anbu')).toMatchObject({
+      abilityWarningTicks: 0,
+      abilityTarget: null,
+    });
+    expect(state.monsters.some((monster) => monster.clone && monster.name === 'Water Clone'))
+      .toBe(true);
+    expect(state.players[0].alive).toBe(false);
   });
 
   it('rescues villagers, clears Iruka gate, and spawns Kurama', () => {

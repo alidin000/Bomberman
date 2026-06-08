@@ -90,6 +90,30 @@ const POWERUP_VISUALS: Record<Power, {
   Obstacle: {
     paper: '#e7d2a6', accent: '#6b4f3a', glow: '#a16207', shape: 'tag'
   },
+  ClaySpider: {
+    paper: '#f5efe0', accent: '#f97316', glow: '#ff8a00', shape: 'charm'
+  },
+  Rasengan: {
+    paper: '#eff6ff', accent: '#38bdf8', glow: '#dbeafe', shape: 'seal'
+  },
+  Sharingan: {
+    paper: '#fee2e2', accent: '#ef4444', glow: '#111827', shape: 'tag'
+  },
+  FTGKunai: {
+    paper: '#fef3c7', accent: '#facc15', glow: '#2563eb', shape: 'charm'
+  },
+  CrowFeather: {
+    paper: '#e5e7eb', accent: '#111827', glow: '#ef4444', shape: 'fragment'
+  },
+  SandArmor: {
+    paper: '#f5deb3', accent: '#c48a4a', glow: '#fff7ed', shape: 'fragment'
+  },
+  ChakraScroll: {
+    paper: '#ecfccb', accent: '#22c55e', glow: '#dcfce7', shape: 'scroll'
+  },
+  CharacterFragment: {
+    paper: '#ede9fe', accent: '#a855f7', glow: '#fef3c7', shape: 'fragment'
+  },
 };
 
 const BEAST_TAILS: Record<MonsterKind, number> = {
@@ -1752,6 +1776,32 @@ function MonsterAttackTell({ monster, visual }: { monster: MonsterState; visual:
   );
 }
 
+function MonsterAbilityWarning({
+  monster,
+  visual,
+}: {
+  monster: MonsterState;
+  visual: typeof MONSTER_VISUALS[MonsterKind];
+}) {
+  if ((monster.abilityWarningTicks ?? 0) <= 0 || !monster.abilityKind) return null;
+  const label = monster.abilityLabel ?? monster.abilityKind;
+  return (
+    <group position={[0, -0.42, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.52, 0.68, 30]} />
+        <meshBasicMaterial color="#facc15" transparent opacity={0.72} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, Math.PI / 4]}>
+        <ringGeometry args={[0.28, 0.32, 22]} />
+        <meshBasicMaterial color={visual.glow} transparent opacity={0.66} />
+      </mesh>
+      <group position={[0, 0.95, 0.08]} rotation={[-0.35, 0, 0]}>
+        <TextSprite text={label} color="#facc15" width={label.length > 12 ? 0.82 : 0.64} />
+      </group>
+    </group>
+  );
+}
+
 function MonsterMesh({ monster }: { monster: MonsterState }) {
   const ref = useRef<THREE.Group>(null);
   const visual = MONSTER_VISUALS[monster.kind];
@@ -1912,6 +1962,7 @@ function MonsterMesh({ monster }: { monster: MonsterState }) {
         </mesh>
       ))}
       <MonsterAttackTell monster={monster} visual={visual} />
+      <MonsterAbilityWarning monster={monster} visual={visual} />
       <MonsterNameplate monster={monster} visual={visual} />
     </group>
   );
@@ -2426,6 +2477,118 @@ function PowerupSymbol({
           <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.45} />
         </mesh>
       </>
+    );
+  }
+  if (power === 'Rasengan') {
+    return (
+      <group position={[0, 0.13, 0.04]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.14, 0.018, 8, 30]} />
+          <meshStandardMaterial color="#dbeafe" emissive={accent} emissiveIntensity={0.9} />
+        </mesh>
+        <mesh>
+          <sphereGeometry args={[0.08, 14, 14]} />
+          <meshStandardMaterial color="#eff6ff" emissive={accent} emissiveIntensity={0.75} transparent opacity={0.72} />
+        </mesh>
+      </group>
+    );
+  }
+  if (power === 'Sharingan') {
+    return (
+      <group position={[0, 0.13, 0.04]}>
+        <mesh>
+          <sphereGeometry args={[0.13, 18, 18]} />
+          <meshStandardMaterial color="#ef4444" emissive={accent} emissiveIntensity={0.72} />
+        </mesh>
+        {[0, 1, 2].map((index) => {
+          const angle = index * ((Math.PI * 2) / 3);
+          return (
+            <mesh
+              key={`sharingan-dot-${index}`}
+              position={[
+                Math.cos(angle) * 0.065,
+                Math.sin(angle) * 0.065,
+                0.08,
+              ]}
+            >
+              <sphereGeometry args={[0.022, 8, 8]} />
+              <meshStandardMaterial color="#111827" />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+  }
+  if (power === 'FTGKunai') {
+    return (
+      <group position={[0, 0.13, 0.04]} rotation={[0, 0, -0.5]}>
+        <mesh>
+          <coneGeometry args={[0.055, 0.28, 4]} />
+          <meshStandardMaterial color="#f8fafc" metalness={0.4} roughness={0.28} emissive={accent} emissiveIntensity={0.35} />
+        </mesh>
+        <mesh position={[0, -0.14, 0]}>
+          <boxGeometry args={[0.035, 0.16, 0.028]} />
+          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.48} />
+        </mesh>
+      </group>
+    );
+  }
+  if (power === 'CrowFeather') {
+    return (
+      <group position={[0, 0.12, 0.04]} rotation={[0.2, 0.1, -0.35]}>
+        <mesh>
+          <coneGeometry args={[0.055, 0.34, 8]} />
+          <meshStandardMaterial color="#111827" emissive={accent} emissiveIntensity={0.55} />
+        </mesh>
+        <mesh position={[0.08, 0.04, 0]}>
+          <coneGeometry args={[0.03, 0.2, 8]} />
+          <meshStandardMaterial color="#374151" emissive={accent} emissiveIntensity={0.28} />
+        </mesh>
+      </group>
+    );
+  }
+  if (power === 'SandArmor') {
+    return (
+      <group position={[0, 0.13, 0.04]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.13, 0.026, 8, 28]} />
+          <meshStandardMaterial color="#c48a4a" emissive={accent} emissiveIntensity={0.56} />
+        </mesh>
+        <mesh>
+          <icosahedronGeometry args={[0.1, 0]} />
+          <meshStandardMaterial color="#f5deb3" emissive="#f59e0b" emissiveIntensity={0.32} />
+        </mesh>
+      </group>
+    );
+  }
+  if (power === 'ClaySpider') {
+    return (
+      <group position={[0, 0.12, 0.04]}>
+        <mesh>
+          <sphereGeometry args={[0.09, 12, 12]} />
+          <meshStandardMaterial color="#f5efe0" emissive={accent} emissiveIntensity={0.38} />
+        </mesh>
+        {[-0.12, -0.06, 0.06, 0.12].map((offset) => (
+          <mesh key={`clay-leg-${offset}`} position={[offset, -0.02, 0]} rotation={[0, 0, offset > 0 ? -0.8 : 0.8]}>
+            <capsuleGeometry args={[0.012, 0.14, 4, 6]} />
+            <meshStandardMaterial color={accent} />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+  if (power === 'ChakraScroll' || power === 'CharacterFragment') {
+    return (
+      <group position={[0, 0.13, 0.04]}>
+        <mesh rotation={[0.3, 0.4, 0.2]}>
+          <octahedronGeometry args={[power === 'CharacterFragment' ? 0.14 : 0.1, 0]} />
+          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.72} transparent opacity={0.84} />
+        </mesh>
+        <mesh position={[0.09, -0.03, 0.04]}>
+          <octahedronGeometry args={[0.055, 0]} />
+          <meshStandardMaterial color="#fef3c7" emissive={accent} emissiveIntensity={0.42} />
+        </mesh>
+      </group>
     );
   }
   return (

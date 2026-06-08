@@ -1,5 +1,5 @@
 /* eslint-disable object-curly-newline, comma-dangle */
-import { Power } from '../model/gameItem';
+import { GenericPower, Power } from '../model/gameItem';
 import { CharacterId } from './types';
 
 export type CharacterPowerTheme = {
@@ -33,9 +33,33 @@ const DEFAULT_POWER_THEMES: Record<Power, CharacterPowerTheme> = {
   Obstacle: {
     label: 'Barrier Drop', shortLabel: 'Barrier', effect: 'Adds three cover charges; use the cover key to place one ahead.', color: '#a16207', accent: '#fde68a', paper: '#e7d2a6'
   },
+  ClaySpider: {
+    label: 'Clay Spider', shortLabel: 'Clay', effect: 'Adds a bomb charge and improves blast reach for Deidara-style pressure.', color: '#f97316', accent: '#fff7ed', paper: '#f5efe0'
+  },
+  Rasengan: {
+    label: 'Rasengan Scroll', shortLabel: 'Rasengan', effect: 'Extends blast reach and restores ultimate charge.', color: '#38bdf8', accent: '#dbeafe', paper: '#eff6ff'
+  },
+  Sharingan: {
+    label: 'Sharingan Timing', shortLabel: 'Sharingan', effect: 'Grants manual detonation timing and restores ultimate charge.', color: '#ef4444', accent: '#111827', paper: '#fee2e2'
+  },
+  FTGKunai: {
+    label: 'FTG Kunai', shortLabel: 'FTG', effect: 'Grants Yellow Flash movement speed and restores ultimate charge.', color: '#facc15', accent: '#2563eb', paper: '#fef3c7'
+  },
+  CrowFeather: {
+    label: 'Crow Feather', shortLabel: 'Crow', effect: 'Triggers a temporary phase dodge through walls, boxes, and bombs.', color: '#111827', accent: '#ef4444', paper: '#e5e7eb'
+  },
+  SandArmor: {
+    label: 'Sand Armor', shortLabel: 'Armor', effect: 'Triggers a temporary chakra shield against blasts, monsters, and hazards.', color: '#c48a4a', accent: '#fff7ed', paper: '#f5deb3'
+  },
+  ChakraScroll: {
+    label: 'Chakra Scroll', shortLabel: 'Scroll', effect: 'Improves blast reach and restores a large chunk of ultimate charge.', color: '#22c55e', accent: '#dcfce7', paper: '#ecfccb'
+  },
+  CharacterFragment: {
+    label: 'Character Fragment', shortLabel: 'Fragment', effect: 'Rare campaign reward that immediately fills ultimate charge.', color: '#a855f7', accent: '#fef3c7', paper: '#ede9fe'
+  },
 };
 
-const POWER_ORDER: Power[] = [
+const GENERIC_POWER_ORDER: GenericPower[] = [
   'AddBomb',
   'BlastRangeUp',
   'Detonator',
@@ -44,6 +68,15 @@ const POWER_ORDER: Power[] = [
   'Ghost',
   'Obstacle',
 ];
+
+const CHARACTER_CAMPAIGN_PICKUP_POOLS: Record<CharacterId, Power[]> = {
+  deidara: ['ClaySpider', 'AddBomb', 'BlastRangeUp', 'Detonator', 'ChakraScroll', 'CharacterFragment'],
+  naruto: ['Rasengan', 'AddBomb', 'BlastRangeUp', 'RollerSkate', 'ChakraScroll', 'CharacterFragment'],
+  sasuke: ['Sharingan', 'BlastRangeUp', 'Detonator', 'RollerSkate', 'ChakraScroll', 'CharacterFragment'],
+  gaara: ['SandArmor', 'BlastRangeUp', 'Obstacle', 'Invincibility', 'ChakraScroll', 'CharacterFragment'],
+  minato: ['FTGKunai', 'RollerSkate', 'Detonator', 'AddBomb', 'ChakraScroll', 'CharacterFragment'],
+  itachi: ['CrowFeather', 'Sharingan', 'Ghost', 'Detonator', 'ChakraScroll', 'CharacterFragment'],
+};
 
 const CHARACTER_POWER_THEMES: Record<
 CharacterId,
@@ -115,10 +148,26 @@ export function getCharacterPowerTheme(
   };
 }
 
+export function getCampaignPickupPool(
+  characterId: CharacterId | undefined,
+): Power[] {
+  return characterId
+    ? CHARACTER_CAMPAIGN_PICKUP_POOLS[characterId]
+    : GENERIC_POWER_ORDER;
+}
+
+export function getCampaignPowerUp(
+  characterId: CharacterId | undefined,
+  seed: number,
+): Power {
+  const pool = getCampaignPickupPool(characterId);
+  return pool[Math.abs(seed) % pool.length];
+}
+
 export function getCharacterPowerLoadout(
   characterId: CharacterId | undefined,
 ): Array<CharacterPowerTheme & { power: Power }> {
-  return POWER_ORDER.map((power) => ({
+  return getCampaignPickupPool(characterId).map((power) => ({
     power,
     ...getCharacterPowerTheme(characterId, power),
   }));

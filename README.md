@@ -15,17 +15,20 @@ A 3D browser arena game built with React, TypeScript, Three.js, and React Three 
 - **Longer ultimate fuses** give players time to escape oversized signature blasts after activating them.
 - **Character-specific explosion visuals**: Deidara clay/fire bursts, Naruto Rasengan chakra swirls, Sasuke lightning with black flame accents, Gaara sand clouds, Minato teleport seals, and Itachi genjutsu/crow effects.
 - **Character-themed power-up UI** with profile-card and manual notes for every pickup effect, using labels such as Clone Training, FTG Kunai, Sand Armor, Sharingan Timing, and Yata Mirror.
+- **Campaign-specific pickup pools** with signature rewards such as Rasengan, Sharingan, FTG Kunai, Crow Feather, Sand Armor, Clay Spider, Chakra Scroll, and Character Fragment while local arena crates keep the generic legacy pool.
 - **Verified power-up mechanics** for bomb capacity, blast range, manual detonation, speed boosts, guard shields, phase movement, and placeable cover. Manual bombs use a dedicated detonate key, and cover pickups use a dedicated cover key.
 - **Character passives**: Minato has faster movement, while Gaara and Itachi can spend defensive passives to survive an otherwise lethal hit.
 - **Character notes** in the roster, manual, and loadout picker explain each shinobi's bomb, ultimate, passive, and playstyle before a match starts.
-- **Village-themed enemies** such as Rogue Genin, Sand Ninja, Mist Ninja, Thunder Hawk, White Zetsu, and Akatsuki Cultist. Monsters only seal players on contact, while their visual tells show threat identity.
+- **Village-themed enemies** such as Rogue Genin, ANBU, Mist Ninja, Sand Ninja, Cloud Ninja, White Zetsu, and Black Zetsu, each with deterministic ability warning state.
+- **Campaign exploration rewards** where destroyed crates can reveal nothing, character-specific rewards, White Zetsu, elite Black Zetsu, rare fragments, or authored hidden-area secrets.
+- **Campaign respawn points** with timers, active-enemy caps, and deterministic archetype rotation so solo villages stay dangerous while objectives unfold.
 - **Safe round starts** with spawn cells and escape lanes cleared across village maps, including local arena resets.
 - **Optimized explosion flow** that computes only affected cells, reduces blast-loop allocations, and avoids unnecessary 3D scene rerenders during explosion timers.
 - **Future multiplayer groundwork** through serializable engine actions, replay helpers, and room-selection message types.
 
 ## Current Project State vs. v2.0 PRD
 
-The latest product direction is larger than the current implementation. Phase 1 of the campaign foundation is now implemented for the Hidden Leaf loop, while later v2.0 adventure, enemy, reward, and multiplayer phases remain planned work.
+The latest product direction is larger than the current implementation. Phases 1 and 2 are now implemented for the Hidden Leaf campaign loop: the game has objective progression, fogged exploration, character-specific rewards, hidden-area discoveries, Zetsu surprises, ability-driven shinobi enemies, and respawn pressure. Later v2.0 mission-variety, presentation, and multiplayer phases remain planned work.
 
 Implemented today:
 
@@ -38,6 +41,11 @@ Implemented today:
 - Solo boss encounters using the existing tailed-beast boss engine.
 - Character vision radii, campaign fog of war, Deidara explosion reveal, Sasuke/Itachi/Minato enemy sensing, and Gaara wall sensing.
 - Character-themed bomb behavior, ultimate effects, passives, power-up labels, and HUD/manual presentation.
+- Per-character campaign pickup pools with PRD signature rewards and procedural 3D pickup fallbacks.
+- Hidden-area metadata on the Hidden Leaf campaign map, including a scroll cache, archive fragment, and elite Zetsu burrow.
+- Deterministic destroyed-crate outcome table: 60% nothing, 20% power-up, 15% White Zetsu, 4% elite Zetsu, and 1% rare reward.
+- Shinobi enemy archetypes with warned ability state for Kunai Throw, Body Flicker, Water Clone, Sand Spike, Lightning Strike, and Zetsu Ambush.
+- Campaign respawn point state with timers, max-active caps, active monster tracking, and deterministic archetype rotation.
 - Local PvP-style arena support for two or three players.
 - Deterministic engine actions and replay/network type groundwork.
 
@@ -48,9 +56,8 @@ Not implemented yet:
 - Village hubs, NPCs, currency, reputation, fragments, hidden areas, or lore collectibles.
 - Full mini-boss combat entities beyond the current Iruka gate encounter.
 - Multi-village defense missions with building HP and enemy waves.
-- Zetsu surprise spawns from destroyed walls and timed enemy respawn points.
-- Ability-driven shinobi enemies with ranged attacks, teleports, clones, and elite behavior.
-- Fully character-specific power-up pools and 3D pickup models.
+- Full collectible persistence for rare fragments and scroll lore beyond in-mission discovery state.
+- Fully bespoke `.glb` pickup and enemy models beyond the current procedural fallbacks.
 - Transformation overlays, boss cinematics, custom boss models for every beast, and online multiplayer.
 
 ## Implementation Plan
@@ -75,6 +82,8 @@ Exit criteria:
 - Campaign logic has reducer tests for objective progress, save migration, fog reveal, and boss unlock gates.
 
 ### Phase 2 - Powerups, Enemies, and Exploration Rewards
+
+Status: implemented for the current Hidden Leaf campaign loop.
 
 Goal: make exploration feel dangerous and character-specific.
 
@@ -138,14 +147,14 @@ Exit criteria:
 
 ## Immediate Next Slice
 
-The next engineering slice should be **Phase 2 - Powerups, Enemies, and Exploration Rewards**:
+The next engineering slice should be **Phase 3 - Mission Variety**:
 
-1. Replace generic campaign pickup pools with per-character pools while preserving local arena compatibility.
-2. Add PRD pickup definitions such as Rasengan, Sharingan, FTG Kunai, Crow Feather, Sand Armor, and Clay Spider.
-3. Add hidden-area metadata and destroyed-wall outcome tables for secrets, rewards, and Zetsu spawns.
-4. Convert monsters into deterministic shinobi enemy archetypes with ability state and readable warnings.
-5. Add respawn point timers and max-active limits.
-6. Add reducer tests for pickup pools, hidden rewards, Zetsu spawns, enemy abilities, and respawn behavior.
+1. Implement mini-boss combat entities and objective gates for Iruka, Kankuro, Haku, Darui, Akatsuchi, Obito, and other route defenders.
+2. Add village defense missions with structure HP, enemy wave timers, success/fail conditions, and reward resolution beyond the first Hidden Leaf chain.
+3. Add random village events such as Nine Tails Alert, Sandstorm, Dense Fog, Lightning Storm, and Rockslide.
+4. Persist reputation, character fragments, and rare scroll discoveries in `src/story/`.
+5. Add campaign UI panels for objective tracker, structure HP, wave timers, fragments, reputation, discovery summaries, and reward summaries.
+6. Add reducer tests for mini-boss entities, event modifiers, wave timers, retry/fail handling, and story persistence.
 
 ## Character Loadouts
 

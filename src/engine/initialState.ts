@@ -12,6 +12,7 @@ import {
 } from '../content';
 import { withUpdatedFogOfWar } from './fogOfWar';
 import { createCampaignRuntimeState } from './campaignObjectives';
+import { initializeCampaignEnemies } from './campaignEnemies';
 
 const PLAYER_NAMES = ['player1', 'player2', 'player3'];
 const ULTIMATE_COOLDOWN_MS = 12000;
@@ -114,13 +115,17 @@ export function createInitialState(config: GameConfig): GameEngineState {
   resetBombIdCounter();
   const players = Array.from({ length: config.numPlayers }, (_, i) => createPlayer(i, config));
   const map = createSpawnSafeMap(config.map, players);
-  const campaign = createCampaignRuntimeState(config);
+  const campaignRuntime = createCampaignRuntimeState(config);
+  const {
+    campaign,
+    monsters: campaignMonsters,
+  } = initializeCampaignEnemies(campaignRuntime, map);
 
   const state: GameEngineState = {
     map,
     players,
     monsters: config.mode === 'solo'
-      ? []
+      ? campaignMonsters
       : getMonstersForMap(config.selectedMap, config.numPlayers),
     bombs: [],
     explosions: [],
@@ -159,14 +164,18 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     (_, i) => createPlayer(i, state.config),
   );
   const map = createSpawnSafeMap(state.config.map, players);
-  const campaign = createCampaignRuntimeState(state.config);
+  const campaignRuntime = createCampaignRuntimeState(state.config);
+  const {
+    campaign,
+    monsters: campaignMonsters,
+  } = initializeCampaignEnemies(campaignRuntime, map);
 
   const next: GameEngineState = {
     ...state,
     map,
     players,
     monsters: state.config.mode === 'solo'
-      ? []
+      ? campaignMonsters
       : getMonstersForMap(state.config.selectedMap, state.config.numPlayers),
     bombs: [],
     explosions: [],

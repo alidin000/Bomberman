@@ -5,12 +5,14 @@ import {
 import {
   CampaignBossArenaDefinition,
   CampaignDistrictDefinition,
+  CampaignHiddenAreaDefinition,
   CampaignMissionId,
   CampaignMissionStep,
   CampaignObjectiveId,
   CampaignObjectiveKind,
   CampaignSpawnPointDefinition,
 } from '../content/campaignMissions';
+import { EnemyAbilityKind, EnemyArchetype } from '../content/enemies';
 import { StoryUpgradeId } from '../story/progress';
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
@@ -33,6 +35,11 @@ export type BombKind =
   | 'sandTsunami'
   | 'instantTeleport'
   | 'tsukuyomi';
+
+export interface Point {
+  x: number;
+  y: number;
+}
 
 export type HazardKind =
   | 'sandTornado'
@@ -75,6 +82,15 @@ export interface MonsterState {
   y: number;
   kind: MonsterKind;
   moveCooldown: number;
+  archetype?: EnemyArchetype;
+  abilityKind?: EnemyAbilityKind;
+  abilityLabel?: string;
+  abilityCooldown?: number;
+  abilityWarningTicks?: number;
+  abilityTarget?: Point | null;
+  spawnPointId?: string;
+  clone?: boolean;
+  elite?: boolean;
 }
 
 export interface BombState {
@@ -121,11 +137,27 @@ export interface ExplosionCell {
   kind?: BombKind;
 }
 
+export type CampaignDestructionOutcomeKind =
+  | 'nothing'
+  | 'powerUp'
+  | 'whiteZetsu'
+  | 'eliteZetsu'
+  | 'rareReward';
+
+export interface CampaignDestructionOutcome {
+  kind: CampaignDestructionOutcomeKind;
+  powerUp?: Power;
+  enemyArchetype?: EnemyArchetype;
+  secretId?: string;
+  label?: string;
+}
+
 export interface DestroyedBox {
   x: number;
   y: number;
   ticksRemaining: number;
   pendingPowerUp: Power | null;
+  pendingOutcome?: CampaignDestructionOutcome | null;
 }
 
 export interface TimedPowerUp {
@@ -190,6 +222,12 @@ export interface CampaignBossArenaState extends CampaignBossArenaDefinition {
   unlocked: boolean;
 }
 
+export interface CampaignRespawnPointState extends CampaignSpawnPointDefinition {
+  ticksRemaining: number;
+  activeMonsterIds: string[];
+  spawnCount: number;
+}
+
 export interface CampaignRuntimeState {
   missionId: CampaignMissionId;
   stageId: StageId;
@@ -200,7 +238,8 @@ export interface CampaignRuntimeState {
   missionResult: CampaignMissionResult;
   currentDistrictId: string;
   districts: CampaignDistrictDefinition[];
-  spawnPoints: CampaignSpawnPointDefinition[];
+  spawnPoints: CampaignRespawnPointState[];
+  hiddenAreas: CampaignHiddenAreaDefinition[];
   discoveredSecrets: string[];
   structures: CampaignStructureState[];
   miniBossGateLabel: string;
@@ -253,9 +292,4 @@ export interface GameEngineState {
   tick: number;
   config: GameConfig;
   roundProcessed: boolean;
-}
-
-export interface Point {
-  x: number;
-  y: number;
 }

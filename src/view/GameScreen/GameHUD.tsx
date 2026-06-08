@@ -50,6 +50,14 @@ const POWER_LABELS: Record<Power, string> = {
   Invincibility: 'Shield',
   Ghost: 'Phase survival',
   Obstacle: 'Placeable cover',
+  ClaySpider: 'Clay Spider',
+  Rasengan: 'Rasengan',
+  Sharingan: 'Sharingan',
+  FTGKunai: 'FTG Kunai',
+  CrowFeather: 'Crow Feather',
+  SandArmor: 'Sand Armor',
+  ChakraScroll: 'Chakra Scroll',
+  CharacterFragment: 'Fragment',
 };
 
 const MONSTER_BADGE_COLORS: Record<MonsterKind, string> = {

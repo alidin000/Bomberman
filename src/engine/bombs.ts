@@ -11,6 +11,10 @@ import {
 } from './constants';
 import { applyCharacterSurvival, isPowerUpActive } from './players';
 import { getCell, getPlayerCell, positionOverlapsCell } from './grid';
+import {
+  getCampaignDestructionOutcome,
+  resolveCampaignDestroyedBox,
+} from './campaignExploration';
 
 let bombIdCounter = 0;
 
@@ -490,7 +494,10 @@ export function explodeBombs(state: GameEngineState, bombsToExplode: BombState[]
           x,
           y,
           ticksRemaining: BOX_DESTROY_MS,
-          pendingPowerUp: randomPowerUpGenerator(),
+          pendingPowerUp: state.campaign ? null : randomPowerUpGenerator(),
+          pendingOutcome: state.campaign
+            ? getCampaignDestructionOutcome(state, x, y, bomb.ownerId)
+            : null,
         });
         map[y][x] = 'Empty';
       }
@@ -578,6 +585,8 @@ export function tickExplosions(state: GameEngineState, deltaMs: number): GameEng
     .filter((e) => e.ticksRemaining > 0);
 
   let map = state.map;
+  let monsters = state.monsters;
+  let campaign = state.campaign;
   const destroyedBoxes: DestroyedBox[] = [];
 
   state.destroyedBoxes.forEach((box) => {
@@ -587,10 +596,25 @@ export function tickExplosions(state: GameEngineState, deltaMs: number): GameEng
     } else if (box.pendingPowerUp) {
       map = map.map((row) => [...row]);
       map[box.y][box.x] = box.pendingPowerUp;
+    } else if (box.pendingOutcome) {
+      const resolved = resolveCampaignDestroyedBox(
+        { ...state, map, monsters, campaign },
+        box
+      );
+      map = resolved.map;
+      monsters = resolved.monsters;
+      campaign = resolved.campaign;
     }
   });
 
-  return { ...state, map, explosions, destroyedBoxes };
+  return {
+    ...state,
+    map,
+    monsters,
+    campaign,
+    explosions,
+    destroyedBoxes,
+  };
 }
 
 export function killPlayersInExplosions(

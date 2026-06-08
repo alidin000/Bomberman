@@ -22,6 +22,8 @@ import {
 const MUTUALLY_EXCLUSIVE: Partial<Record<Power, Power | null>> = {
   Ghost: 'Invincibility',
   Invincibility: 'Ghost',
+  CrowFeather: 'Invincibility',
+  SandArmor: 'Ghost',
 };
 
 const PICKUP_MESSAGE_MS = 3600;
@@ -68,6 +70,10 @@ function isGhostActive(state: GameEngineState, playerId: string): boolean {
   return state.timedPowerUps[playerId]?.some(
     (tp) => tp.power === 'Ghost' && tp.ticksRemaining > 0,
   ) ?? false;
+}
+
+function addUniquePower(powerUps: Power[], power: Power): Power[] {
+  return powerUps.includes(power) ? powerUps : [...powerUps, power];
 }
 
 function isCellValidForPlayer(
@@ -289,10 +295,10 @@ export function applyPowerUp(
         next.bombRange += 1;
         break;
       case 'Detonator':
-        if (!next.powerUps.includes('Detonator')) next.powerUps = [...next.powerUps, 'Detonator'];
+        next.powerUps = addUniquePower(next.powerUps, 'Detonator');
         break;
       case 'RollerSkate':
-        if (!next.powerUps.includes('RollerSkate')) next.powerUps = [...next.powerUps, 'RollerSkate'];
+        next.powerUps = addUniquePower(next.powerUps, 'RollerSkate');
         break;
       case 'Invincibility':
         next.powerUps = [
@@ -308,7 +314,45 @@ export function applyPowerUp(
         break;
       case 'Obstacle':
         next.obstacles += 3;
-        if (!next.powerUps.includes('Obstacle')) next.powerUps = [...next.powerUps, 'Obstacle'];
+        next.powerUps = addUniquePower(next.powerUps, 'Obstacle');
+        break;
+      case 'ClaySpider':
+        next.maxBombs += 1;
+        next.bombRange += 1;
+        next.ultimateCharge = Math.min(100, next.ultimateCharge + 15);
+        break;
+      case 'Rasengan':
+        next.bombRange += 1;
+        next.ultimateCharge = Math.min(100, next.ultimateCharge + 25);
+        break;
+      case 'Sharingan':
+        next.powerUps = addUniquePower(next.powerUps, 'Detonator');
+        next.ultimateCharge = Math.min(100, next.ultimateCharge + 25);
+        break;
+      case 'FTGKunai':
+        next.powerUps = addUniquePower(next.powerUps, 'RollerSkate');
+        next.ultimateCharge = Math.min(100, next.ultimateCharge + 20);
+        break;
+      case 'CrowFeather':
+        next.powerUps = [
+          ...next.powerUps.filter((pw) => pw !== 'Ghost'),
+          'Ghost',
+        ];
+        next.ultimateCharge = Math.min(100, next.ultimateCharge + 10);
+        break;
+      case 'SandArmor':
+        next.powerUps = [
+          ...next.powerUps.filter((pw) => pw !== 'Invincibility'),
+          'Invincibility',
+        ];
+        next.passiveState = 'Sand Armor Reinforced';
+        break;
+      case 'ChakraScroll':
+        next.bombRange += 1;
+        next.ultimateCharge = Math.min(100, next.ultimateCharge + 35);
+        break;
+      case 'CharacterFragment':
+        next.ultimateCharge = 100;
         break;
       default:
         break;
@@ -317,18 +361,23 @@ export function applyPowerUp(
   });
 
   let timedPowerUps = { ...state.timedPowerUps };
-  const durationMs = powerUp === 'Ghost'
+  const timedPower = powerUp === 'CrowFeather'
+    ? 'Ghost'
+    : powerUp === 'SandArmor'
+      ? 'Invincibility'
+      : powerUp;
+  const durationMs = timedPower === 'Ghost'
     ? GHOST_POWER_MS
-    : powerUp === 'Invincibility'
+    : timedPower === 'Invincibility'
       ? INVINCIBILITY_POWER_MS
       : 0;
 
   if (durationMs > 0) {
     const list = (timedPowerUps[playerId] ?? []).filter(
-      (tp) => tp.power !== powerUp,
+      (tp) => tp.power !== timedPower,
     );
     list.push({
-      power: powerUp,
+      power: timedPower,
       ticksRemaining: durationMs,
       flashTicksRemaining: POWER_FLASH_MS,
     });
