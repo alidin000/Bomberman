@@ -1,4 +1,11 @@
-import { BossId, CharacterId, StageId } from '../content';
+import {
+  BossId,
+  CampaignFlowStepId,
+  CharacterId,
+  StageId,
+  getCampaignVillage,
+  getNextCampaignStageId,
+} from '../content';
 
 export type StoryUpgradeId =
   | 'extraClay'
@@ -7,14 +14,25 @@ export type StoryUpgradeId =
   | 'sandGuard';
 
 export interface StoryProgress {
-  version: 1;
+  version: 2;
   completedBosses: BossId[];
+  completedStages: StageId[];
   unlockedCharacters: CharacterId[];
   unlockedStages: StageId[];
   unlockedUpgrades: StoryUpgradeId[];
   selectedUpgrade: StoryUpgradeId;
   lastCharacter: CharacterId;
   lastStage: StageId;
+  currentFlowStep: CampaignFlowStepId;
+  objectiveProgress: Record<string, {
+    current: number;
+    target: number;
+    status: string;
+  }>;
+  missionResults: Partial<Record<StageId, 'success' | 'failed'>>;
+  fragments: Partial<Record<CharacterId, number>>;
+  reputation: Partial<Record<StageId, number>>;
+  storyCompleted: boolean;
 }
 
 export interface StoryUpgradeDefinition {
@@ -54,24 +72,47 @@ export const STORY_UPGRADES: StoryUpgradeDefinition[] = [
 export const STORY_PROGRESS_KEY = 'shinobiArenaStoryProgress';
 
 export const DEFAULT_STORY_PROGRESS: StoryProgress = {
-  version: 1,
+  version: 2,
   completedBosses: [],
-  unlockedCharacters: ['deidara', 'naruto', 'sasuke'],
-  unlockedStages: ['hiddenSand', 'hiddenLeaf', 'hiddenMist'],
+  completedStages: [],
+  unlockedCharacters: ['deidara'],
+  unlockedStages: ['hiddenLeaf'],
   unlockedUpgrades: ['extraClay', 'blastTraining', 'quickUltimate'],
   selectedUpgrade: 'extraClay',
   lastCharacter: 'deidara',
-  lastStage: 'hiddenSand',
+  lastStage: 'hiddenLeaf',
+  currentFlowStep: 'exploration',
+  objectiveProgress: {},
+  missionResults: {},
+  fragments: {},
+  reputation: {},
+  storyCompleted: false,
 };
+
+function migrateStoryProgress(stored: Partial<StoryProgress>): StoryProgress {
+  return {
+    ...DEFAULT_STORY_PROGRESS,
+    ...stored,
+    version: 2,
+    completedBosses: stored.completedBosses ?? DEFAULT_STORY_PROGRESS.completedBosses,
+    completedStages: stored.completedStages ?? DEFAULT_STORY_PROGRESS.completedStages,
+    unlockedCharacters: stored.unlockedCharacters
+      ?? DEFAULT_STORY_PROGRESS.unlockedCharacters,
+    unlockedStages: stored.unlockedStages ?? DEFAULT_STORY_PROGRESS.unlockedStages,
+    unlockedUpgrades: stored.unlockedUpgrades ?? DEFAULT_STORY_PROGRESS.unlockedUpgrades,
+    objectiveProgress: stored.objectiveProgress ?? {},
+    missionResults: stored.missionResults ?? {},
+    fragments: stored.fragments ?? {},
+    reputation: stored.reputation ?? {},
+    storyCompleted: stored.storyCompleted ?? false,
+  };
+}
 
 export function loadStoryProgress(): StoryProgress {
   const stored = localStorage.getItem(STORY_PROGRESS_KEY);
   if (!stored) return DEFAULT_STORY_PROGRESS;
   try {
-    return {
-      ...DEFAULT_STORY_PROGRESS,
-      ...JSON.parse(stored),
-    };
+    return migrateStoryProgress(JSON.parse(stored));
   } catch {
     return DEFAULT_STORY_PROGRESS;
   }
@@ -87,11 +128,12 @@ export function selectStoryLoadout(
   upgradeId: StoryUpgradeId
 ): StoryProgress {
   const progress = loadStoryProgress();
-  const next = {
+  const next: StoryProgress = {
     ...progress,
     lastCharacter: characterId,
     lastStage: stageId,
     selectedUpgrade: upgradeId,
+    currentFlowStep: 'exploration',
   };
   saveStoryProgress(next);
   return next;
@@ -103,7 +145,7 @@ export function completeBossReward(
   rewardStage?: StageId
 ): StoryProgress {
   const progress = loadStoryProgress();
-  const next = {
+  const next: StoryProgress = {
     ...progress,
     completedBosses: Array.from(new Set([...progress.completedBosses, bossId])),
     unlockedCharacters: Array.from(new Set([
@@ -114,6 +156,43 @@ export function completeBossReward(
       ...progress.unlockedStages,
       ...(rewardStage ? [rewardStage] : []),
     ])),
+  };
+  saveStoryProgress(next);
+  return next;
+}
+
+export function completeCampaignStage(stageId: StageId, bossId: BossId): StoryProgress {
+  const progress = loadStoryProgress();
+  const campaignVillage = getCampaignVillage(stageId);
+  const nextStageId = getNextCampaignStageId(stageId);
+  const next: StoryProgress = {
+    ...progress,
+    completedBosses: Array.from(new Set([...progress.completedBosses, bossId])),
+    completedStages: Array.from(new Set([...progress.completedStages, stageId])),
+    missionResults: {
+      ...progress.missionResults,
+      [stageId]: 'success',
+    },
+    reputation: {
+      ...progress.reputation,
+      [stageId]: (progress.reputation[stageId] ?? 0) + 10,
+    },
+    unlockedCharacters: Array.from(new Set([
+      ...progress.unlockedCharacters,
+      ...(campaignVillage.rewardCharacter ? [campaignVillage.rewardCharacter] : []),
+    ])),
+    unlockedStages: Array.from(new Set([
+      ...progress.unlockedStages,
+      stageId,
+      ...(nextStageId ? [nextStageId] : []),
+    ])),
+    unlockedUpgrades: Array.from(new Set([
+      ...progress.unlockedUpgrades,
+      ...(campaignVillage.rewardUpgrade ? [campaignVillage.rewardUpgrade] : []),
+    ])),
+    lastStage: nextStageId ?? stageId,
+    currentFlowStep: nextStageId ? 'exploration' : 'reward',
+    storyCompleted: !nextStageId,
   };
   saveStoryProgress(next);
   return next;

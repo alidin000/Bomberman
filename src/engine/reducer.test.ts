@@ -2,6 +2,7 @@ import { gameReducer } from './reducer';
 import { createInitialState } from './initialState';
 import { GameConfig } from './types';
 import { applyPowerUp } from './players';
+import { cellKey } from './fogOfWar';
 import { parseMapRows } from './mapLoader';
 import { defaultMap } from '../constants/contants';
 import { isObstacle } from '../model/gameItem';
@@ -34,6 +35,54 @@ const akatsukiMap = parseMapRows([
   'WWWWWWWWWWWWWWW',
 ].map((row) => row.split('')));
 
+const hiddenLeafCampaignMap = parseMapRows([
+  'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW',
+  'W                                 W',
+  'W  B    B    B    B    B    B     W',
+  'W                                 W',
+  'W     B      B      B      B      W',
+  'W                                 W',
+  'W                                 W',
+  'W  B    B    B    B    B    B     W',
+  'W                                 W',
+  'W     B      B      B      B      W',
+  'W                                 W',
+  'W                                 W',
+  'W  B    B    B    B    B    B     W',
+  'W                                 W',
+  'W     B      B      B      B      W',
+  'W                                 W',
+  'W                                 W',
+  'W                                 W',
+  'W                                 W',
+  'W     B      B      B      B      W',
+  'W                                 W',
+  'W  B    B    B    B    B    B     W',
+  'W                                 W',
+  'W     B      B      B      B      W',
+  'W                                 W',
+  'W                                 W',
+  'W  B    B    B    B    B    B     W',
+  'W                                 W',
+  'W     B      B      B      B      W',
+  'W                                 W',
+  'W                                 W',
+  'W  B    B    B    B    B    B     W',
+  'W                                 W',
+  'W                                 W',
+  'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW',
+].map((row) => row.split('')));
+
+const hiddenLeafCampaignConfig: GameConfig = {
+  ...baseConfig,
+  mode: 'solo',
+  numPlayers: 1,
+  selectedMap: 'hiddenLeaf',
+  stageId: 'hiddenLeaf',
+  selectedCharacters: ['naruto'],
+  map: hiddenLeafCampaignMap,
+};
+
 describe('gameReducer', () => {
   it('initializes game state', () => {
     const state = gameReducer(null, { type: 'INIT', config: baseConfig });
@@ -52,6 +101,163 @@ describe('gameReducer', () => {
 
     expect(state.monsters.length).toBeGreaterThan(0);
     expect(state.monsters.map((monster) => monster.name)).toContain('Puppet Scout');
+  });
+
+  it('keeps local arena maps fully visible', () => {
+    const state = createInitialState(baseConfig);
+    const mapCells = state.map.reduce((count, row) => count + row.length, 0);
+
+    expect(state.fogOfWar.visible).toHaveLength(mapCells);
+    expect(state.fogOfWar.explored).toHaveLength(mapCells);
+  });
+
+  it('initializes campaign fog from character vision radius', () => {
+    const narutoState = createInitialState({
+      ...soloConfig,
+      selectedCharacters: ['naruto'],
+    });
+    const sasukeState = createInitialState({
+      ...soloConfig,
+      selectedCharacters: ['sasuke'],
+    });
+
+    expect(narutoState.fogOfWar.visible).toContain(cellKey(4, 1));
+    expect(narutoState.fogOfWar.visible).not.toContain(cellKey(6, 1));
+    expect(sasukeState.fogOfWar.visible).toContain(cellKey(6, 1));
+  });
+
+  it('gates the Hidden Leaf boss behind campaign objectives', () => {
+    const state = createInitialState(hiddenLeafCampaignConfig);
+
+    expect(state.map).toHaveLength(35);
+    expect(state.map[0]).toHaveLength(35);
+    expect(state.campaign?.title).toBe('Hidden Leaf Emergency');
+    expect(state.campaign?.missionStep).toBe('rescue');
+    expect(state.campaign?.missionResult).toBe('in_progress');
+    expect(state.campaign?.districts.map((district) => district.id)).toEqual([
+      'villageEntrance',
+      'trainingGrounds',
+      'villageCenter',
+      'forestGate',
+    ]);
+    expect(state.campaign?.spawnPoints[0]).toMatchObject({
+      id: 'leaf-main-gate',
+      x: 1,
+      y: 1,
+    });
+    expect(state.boss).toBeNull();
+    expect(state.campaign?.objectives[0]).toMatchObject({
+      id: 'rescueLeafVillagers',
+      status: 'active',
+      current: 0,
+      target: 2,
+    });
+    expect(state.campaign?.objectives[1]).toMatchObject({
+      id: 'protectHokageBuilding',
+      status: 'locked',
+    });
+    expect(state.campaign?.objectives[2]).toMatchObject({
+      id: 'confrontIruka',
+      status: 'locked',
+    });
+  });
+
+  it('rescues villagers, clears Iruka gate, and spawns Kurama', () => {
+    let state = createInitialState(hiddenLeafCampaignConfig);
+
+    state = {
+      ...state,
+      players: state.players.map((player) => ({ ...player, x: 3, y: 1 })),
+    };
+    state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
+    expect(state.campaign?.objectives[0]).toMatchObject({
+      current: 1,
+      status: 'active',
+    });
+    expect(state.campaign?.missionStep).toBe('rescue');
+    expect(state.boss).toBeNull();
+
+    state = {
+      ...state,
+      players: state.players.map((player) => ({ ...player, x: 10, y: 6 })),
+    };
+    state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
+    expect(state.campaign?.objectives[0].status).toBe('complete');
+    expect(state.campaign?.objectives[1].status).toBe('active');
+    expect(state.campaign?.missionStep).toBe('defense');
+    expect(state.boss).toBeNull();
+
+    state = gameReducer(state, { type: 'TICK', deltaMs: 20000 })!;
+
+    expect(state.campaign?.objectives[1].status).toBe('complete');
+    expect(state.campaign?.objectives[2].status).toBe('active');
+    expect(state.campaign?.missionStep).toBe('miniBoss');
+    expect(state.campaign?.bossUnlocked).toBe(false);
+    expect(state.boss).toBeNull();
+
+    state = {
+      ...state,
+      players: state.players.map((player) => ({ ...player, x: 29, y: 29 })),
+    };
+    state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
+
+    expect(state.campaign?.objectives[2].status).toBe('complete');
+    expect(state.campaign?.missionStep).toBe('boss');
+    expect(state.campaign?.bossArena.unlocked).toBe(true);
+    expect(state.campaign?.bossUnlocked).toBe(true);
+    expect(state.boss?.name).toBe('Kurama');
+    expect(state.boss).toMatchObject({ x: 17, y: 17 });
+  });
+
+  it('fails the Hidden Leaf mission when Hokage Building is destroyed', () => {
+    let state = createInitialState(hiddenLeafCampaignConfig);
+    state = {
+      ...state,
+      players: state.players.map((player) => ({ ...player, x: 3, y: 1 })),
+    };
+    state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
+    state = {
+      ...state,
+      players: state.players.map((player) => ({ ...player, x: 10, y: 6 })),
+    };
+    state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
+
+    state = {
+      ...state,
+      explosions: [{ x: 17, y: 16, ticksRemaining: 300 }],
+      campaign: state.campaign
+        ? {
+          ...state.campaign,
+          objectives: state.campaign.objectives.map((objective) => (
+            objective.id === 'protectHokageBuilding'
+              ? { ...objective, structureHp: 40 }
+              : objective
+          )),
+        }
+        : state.campaign,
+    };
+    state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
+
+    expect(state.campaign?.missionResult).toBe('failed');
+    expect(state.campaign?.missionStep).toBe('failed');
+    expect(state.phase).toBe('game_over');
+    expect(state.resultMessage).toContain('mission failed');
+    expect(state.boss).toBeNull();
+  });
+
+  it('keeps explored campaign cells in memory after moving out of sight', () => {
+    let state = createInitialState({
+      ...soloConfig,
+      selectedCharacters: ['naruto'],
+    });
+    const rememberedCell = cellKey(1, 4);
+
+    for (let step = 0; step < 20; step += 1) {
+      state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'right' })!;
+    }
+
+    expect(state.fogOfWar.visible).not.toContain(rememberedCell);
+    expect(state.fogOfWar.explored).toContain(rememberedCell);
   });
 
   it('moves player within bounds', () => {
@@ -481,6 +687,49 @@ describe('gameReducer', () => {
     expect(state.players[0].powerUps).not.toContain('Ghost');
   });
 
+  it('lets Ghost phase through walls, boxes, and bombs', () => {
+    const blockers = [
+      { cell: 'Wall' as const },
+      { cell: 'Box' as const },
+      {
+        cell: {
+          range: 2,
+          coords: { x: 2, y: 1 },
+          ownerId: 'player2',
+        },
+      },
+    ];
+
+    blockers.forEach(({ cell }) => {
+      let state = createInitialState(baseConfig);
+      const map = state.map.map((row) => [...row]);
+      map[1][2] = cell;
+      state = {
+        ...state,
+        map,
+        players: state.players.map((player) => (
+          player.id === 'player1'
+            ? {
+              ...player, x: 1.6, y: 1, powerUps: ['Ghost'],
+            }
+            : player
+        )),
+        timedPowerUps: {
+          player1: [{
+            power: 'Ghost',
+            ticksRemaining: 1000,
+            flashTicksRemaining: 0,
+          }],
+        },
+      };
+
+      state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'right' })!;
+
+      expect(state.players[0].x).toBeCloseTo(1.7);
+      expect(state.players[0].powerUps).toContain('Ghost');
+    });
+  });
+
   it('lets blasts destroy player-placed cover', () => {
     let state = createInitialState(baseConfig);
     const map = state.map.map((row) => [...row]);
@@ -579,6 +828,47 @@ describe('gameReducer', () => {
     expect(state.bombs[0].kind).toBe('giantClay');
     expect(state.bombs[0].ticksRemaining).toBe(2600);
     expect(state.players[0].ultimateCooldownRemaining).toBeGreaterThan(0);
+  });
+
+  it('temporarily reveals campaign cells around Deidara explosions', () => {
+    const openMap = parseMapRows([
+      'WWWWWWWWWWWWWWW',
+      'W             W',
+      'W             W',
+      'W             W',
+      'W             W',
+      'W             W',
+      'W             W',
+      'W             W',
+      'W             W',
+      'WWWWWWWWWWWWWWW',
+    ].map((row) => row.split('')));
+    let state = createInitialState({
+      ...soloConfig,
+      map: openMap,
+    });
+    state = {
+      ...state,
+      players: state.players.map((player) => (
+        player.id === 'player1'
+          ? {
+            ...player,
+            x: 7,
+            y: 5,
+            ultimateCharge: 100,
+          }
+          : player
+      )),
+    };
+    state = gameReducer(state, { type: 'USE_ULTIMATE', playerId: 'player1' })!;
+    state = gameReducer(state, { type: 'TICK', deltaMs: 2550 })!;
+    state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
+
+    expect(state.explosions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'giantClay' }),
+    ]));
+    expect(state.fogOfWar.visible).toContain(cellKey(13, 5));
+    expect(state.fogOfWar.explored).toContain(cellKey(13, 5));
   });
 
   it('gives ultimate bombs enough fuse time to escape after decimal movement', () => {

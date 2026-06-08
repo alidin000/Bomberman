@@ -12,7 +12,9 @@ export type GameAction =
   | { type: 'INIT'; config: GameConfig }
   | { type: 'MOVE'; playerId: string; direction: Direction }
   | { type: 'DROP_BOMB'; playerId: string }
+  | { type: 'DETONATE_BOMBS'; playerId: string }
   | { type: 'USE_ULTIMATE'; playerId: string }
+  | { type: 'PLACE_OBSTACLE'; playerId: string }
   | { type: 'TICK'; deltaMs: number }
   | { type: 'PAUSE' }
   | { type: 'RESUME' }

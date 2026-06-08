@@ -2,6 +2,15 @@ import { GameMap, Power } from '../model/gameItem';
 import {
   BossId, CharacterId, GameMode, StageId,
 } from '../content/types';
+import {
+  CampaignBossArenaDefinition,
+  CampaignDistrictDefinition,
+  CampaignMissionId,
+  CampaignMissionStep,
+  CampaignObjectiveId,
+  CampaignObjectiveKind,
+  CampaignSpawnPointDefinition,
+} from '../content/campaignMissions';
 import { StoryUpgradeId } from '../story/progress';
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
@@ -132,6 +141,85 @@ export interface PowerUpMessage {
   ticksRemaining: number;
 }
 
+export type CampaignObjectiveStatus = 'locked' | 'active' | 'complete' | 'failed';
+
+export interface CampaignRescueTargetState {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  rescued: boolean;
+}
+
+export interface CampaignObjectiveState {
+  id: CampaignObjectiveId;
+  kind: CampaignObjectiveKind;
+  label: string;
+  description: string;
+  districtId?: string;
+  status: CampaignObjectiveStatus;
+  current: number;
+  target: number;
+  targets?: CampaignRescueTargetState[];
+  ticksRemaining?: number;
+  durationMs?: number;
+  structureLabel?: string;
+  structureHp?: number;
+  structureMaxHp?: number;
+  structureDamageCooldownMs?: number;
+  miniBossLabel?: string;
+  gateLabel?: string;
+  x?: number;
+  y?: number;
+  requires?: CampaignObjectiveId[];
+}
+
+export type CampaignMissionResult = 'in_progress' | 'success' | 'failed';
+
+export interface CampaignStructureState {
+  id: CampaignObjectiveId;
+  label: string;
+  x: number;
+  y: number;
+  hp: number;
+  maxHp: number;
+  status: CampaignObjectiveStatus;
+}
+
+export interface CampaignBossArenaState extends CampaignBossArenaDefinition {
+  unlocked: boolean;
+}
+
+export interface CampaignRuntimeState {
+  missionId: CampaignMissionId;
+  stageId: StageId;
+  currentVillage: StageId;
+  title: string;
+  villageName: string;
+  missionStep: CampaignMissionStep;
+  missionResult: CampaignMissionResult;
+  currentDistrictId: string;
+  districts: CampaignDistrictDefinition[];
+  spawnPoints: CampaignSpawnPointDefinition[];
+  discoveredSecrets: string[];
+  structures: CampaignStructureState[];
+  miniBossGateLabel: string;
+  bossGateLabel: string;
+  bossArena: CampaignBossArenaState;
+  objectives: CampaignObjectiveState[];
+  bossUnlocked: boolean;
+  message: string;
+}
+
+export type CellVisibility = 'hidden' | 'explored' | 'visible';
+
+export interface FogOfWarState {
+  visible: string[];
+  explored: string[];
+  sensedEnemies: string[];
+  sensedWalls: string[];
+}
+
 export interface GameConfig {
   mode?: GameMode;
   numPlayers: number;
@@ -152,7 +240,9 @@ export interface GameEngineState {
   destroyedBoxes: DestroyedBox[];
   timedPowerUps: Record<string, TimedPowerUp[]>;
   pickupMessages: PowerUpMessage[];
+  campaign: CampaignRuntimeState | null;
   boss: BossState | null;
+  fogOfWar: FogOfWarState;
   hazards: BossHazard[];
   round: number;
   totalRounds: number;

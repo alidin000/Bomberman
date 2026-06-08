@@ -6,6 +6,7 @@ import {
 } from '@testing-library/react';
 import { BrowserRouter, useNavigate, NavigateFunction } from 'react-router-dom';
 import { ConfigScreen } from './ConfigScreen';
+import { STORY_PROGRESS_KEY } from '../../story/progress';
 
 vi.mock('react-router-dom', async () => {
   const originalModule = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -65,6 +66,14 @@ describe('ConfigScreen', () => {
     expect(title).toBeInTheDocument();
   });
 
+  it('should show the selected campaign mission briefing', () => {
+    setup();
+    expect(screen.getByText('Hidden Leaf Emergency')).toBeInTheDocument();
+    expect(screen.getByText('Rescue Villagers')).toBeInTheDocument();
+    expect(screen.getByText('Protect Hokage Building')).toBeInTheDocument();
+    expect(screen.getByText('Start Mission')).toBeInTheDocument();
+  });
+
   it('should navigate to the home page when the cancel button is clicked', () => {
     setup();
     const cancelButton = screen.getByText('Cancel');
@@ -112,9 +121,47 @@ describe('ConfigScreen', () => {
 
   it('should select a stage when a stage button is clicked', () => {
     setup();
+    fireEvent.click(screen.getByText('Local Arena'));
     const mistButton = screen.getByLabelText('Hidden Mist Village');
     fireEvent.click(mistButton);
     expect(screen.getByText('Water cannons fire long telegraphed lines.')).toBeInTheDocument();
+  });
+
+  it('should continue campaign from the saved village', async () => {
+    localStorage.setItem(STORY_PROGRESS_KEY, JSON.stringify({
+      version: 1,
+      completedBosses: ['shukaku'],
+      completedStages: ['hiddenSand'],
+      unlockedCharacters: ['deidara', 'gaara'],
+      unlockedStages: ['hiddenLeaf', 'hiddenSand', 'hiddenMist'],
+      unlockedUpgrades: ['extraClay'],
+      selectedUpgrade: 'extraClay',
+      lastCharacter: 'gaara',
+      lastStage: 'hiddenMist',
+      currentFlowStep: 'exploration',
+      storyCompleted: false,
+    }));
+    setup();
+
+    fireEvent.click(screen.getByText('Continue Campaign'));
+
+    await waitFor(() => {
+      expect(localStorage.getItem('selectedMap')).not.toBeNull();
+      expect(localStorage.getItem('gameSetup')).toContain('hiddenMist');
+      expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/\/game\/1\/1\/hiddenMist/));
+    });
+  });
+
+  it('should start the selected campaign mission directly from the briefing', async () => {
+    setup();
+
+    fireEvent.click(screen.getByText('Start Mission'));
+
+    await waitFor(() => {
+      expect(localStorage.getItem('selectedMap')).not.toBeNull();
+      expect(localStorage.getItem('gameSetup')).toContain('hiddenLeaf');
+      expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/\/game\/1\/1\/hiddenLeaf/));
+    });
   });
 
   it('should save configuration and navigate to game screen on play', async () => {
@@ -124,7 +171,7 @@ describe('ConfigScreen', () => {
     await waitFor(() => {
       expect(localStorage.getItem('playerKeyBindings')).not.toBeNull();
       expect(localStorage.getItem('gameSetup')).not.toBeNull();
-      expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/\/game\/\d+\/\d+\/hiddenSand/));
+      expect(mockNavigate).toHaveBeenCalledWith(expect.stringMatching(/\/game\/\d+\/\d+\/hiddenLeaf/));
     });
   });
 });

@@ -66,6 +66,7 @@ const STAGE_PREVIEW_POSITIONS: Record<StageId, string> = {
   hiddenCloud: '0% 100%',
   hiddenStone: '50% 100%',
   akatsukiHideout: '100% 100%',
+  greatShinobiWar: '50% 50%',
 };
 
 const POWER_ITEMS = [

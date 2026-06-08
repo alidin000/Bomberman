@@ -3,13 +3,18 @@
 import React, {
   useEffect, useMemo, useRef, useState,
 } from 'react';
-import { Canvas, useFrame, useLoader } from '@react-three/fiber';
+import {
+  Canvas, useFrame, useLoader, useThree,
+} from '@react-three/fiber';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils';
 import {
   BombKind,
   BossHazard,
+  CampaignObjectiveState,
+  CampaignRescueTargetState,
+  CellVisibility,
   ExplosionCell,
   GameEngineState,
   HazardKind,
@@ -22,6 +27,7 @@ import {
 } from '../../model/gameItem';
 import { isPowerUpActive } from '../../engine/players';
 import { EXPLOSION_MS } from '../../engine/constants';
+import { cellKey, getCellVisibility, isCellVisible } from '../../engine/fogOfWar';
 import { getStageDefinition } from '../../content';
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
 import {
@@ -44,6 +50,17 @@ type TextureCrop = {
 
 function toWorld(x: number, y: number): [number, number, number] {
   return [(x + MAP_OFFSET_X) * TILE_SIZE, 0, (y + MAP_OFFSET_Z) * TILE_SIZE];
+}
+
+function getMapDimensions(map: GameMap): { width: number; height: number } {
+  return {
+    width: Math.max(1, ...map.map((row) => row.length)),
+    height: Math.max(1, map.length),
+  };
+}
+
+function getMapWorldCenter(width: number, height: number): [number, number, number] {
+  return toWorld((width - 1) / 2, (height - 1) / 2);
 }
 
 const POWERUP_VISUALS: Record<Power, {
@@ -177,6 +194,9 @@ const STAGE_CROPS: Record<StageId, TextureCrop> = {
   },
   akatsukiHideout: {
     x: 2 / 3, y: 0.5, width: 1 / 3, height: 0.5
+  },
+  greatShinobiWar: {
+    x: 1 / 3, y: 0.25, width: 1 / 3, height: 0.5
   },
 };
 
@@ -455,18 +475,24 @@ function TextSprite({
 function Floor({
   palette,
   stageId,
+  width,
+  height,
 }: {
   palette: StageDefinition['palette'];
   stageId: StageId;
+  width: number;
+  height: number;
 }) {
   const floorTexture = useCroppedTexture(StageAtlas, STAGE_CROPS[stageId]);
+  const [centerX, , centerZ] = getMapWorldCenter(width, height);
+  const gridSize = Math.max(width, height);
   return (
     <>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
-        <planeGeometry args={[20, 14]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.05, centerZ]} receiveShadow>
+        <planeGeometry args={[width + 3, height + 3]} />
         <meshStandardMaterial map={floorTexture} color="#ffffff" roughness={0.92} />
       </mesh>
-      <gridHelper args={[16, 16, palette.accent, palette.groundA]} position={[0, 0.01, 0]} />
+      <gridHelper args={[gridSize, gridSize, palette.accent, palette.groundA]} position={[centerX, 0.01, centerZ]} />
     </>
   );
 }
@@ -475,20 +501,33 @@ function GroundTile({
   x,
   y,
   palette,
+  visibility = 'visible',
 }: {
   x: number;
   y: number;
   palette: StageDefinition['palette'];
+  visibility?: CellVisibility;
 }) {
   const [wx, , wz] = toWorld(x, y);
+  const hidden = visibility === 'hidden';
+  const explored = visibility === 'explored';
+  let tileColor = (x + y) % 2 ? palette.groundA : palette.groundB;
+  let tileOpacity = 0.48;
+  if (hidden) {
+    tileColor = '#020617';
+    tileOpacity = 0.96;
+  } else if (explored) {
+    tileColor = '#111827';
+    tileOpacity = 0.68;
+  }
   return (
     <mesh position={[wx, 0, wz]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
       <planeGeometry args={[0.96, 0.96]} />
       <meshStandardMaterial
-        color={(x + y) % 2 ? palette.groundA : palette.groundB}
+        color={tileColor}
         roughness={0.92}
         transparent
-        opacity={0.48}
+        opacity={tileOpacity}
       />
     </mesh>
   );
@@ -551,19 +590,22 @@ function WallBlock({
   x,
   y,
   palette,
+  visibility = 'visible',
 }: {
   x: number;
   y: number;
   palette: StageDefinition['palette'];
+  visibility?: CellVisibility;
 }) {
   const [wx, , wz] = toWorld(x, y);
+  const explored = visibility === 'explored';
   return (
     <mesh position={[wx, 0.5, wz]} castShadow receiveShadow>
       <boxGeometry args={[0.92, 1, 0.92]} />
       <meshStandardMaterial
-        color={palette.wall}
-        emissive={palette.wall}
-        emissiveIntensity={0.08}
+        color={explored ? '#1f2937' : palette.wall}
+        emissive={explored ? '#020617' : palette.wall}
+        emissiveIntensity={explored ? 0.02 : 0.08}
         metalness={0.08}
         roughness={0.72}
       />
@@ -576,23 +618,65 @@ function CrateBlock({
   y,
   palette,
   destroyed,
+  visibility = 'visible',
 }: {
   x: number;
   y: number;
   palette: StageDefinition['palette'];
   destroyed?: boolean;
+  visibility?: CellVisibility;
 }) {
   const [wx, , wz] = toWorld(x, y);
+  const explored = visibility === 'explored';
+  let color = palette.crate;
+  let emissive = palette.crate;
+  if (destroyed) {
+    color = '#5d4037';
+    emissive = '#2f1c16';
+  }
+  if (explored) {
+    color = '#2a211c';
+    emissive = '#020617';
+  }
   return (
     <mesh position={[wx, 0.4, wz]} castShadow>
       <boxGeometry args={[0.85, 0.8, 0.85]} />
       <meshStandardMaterial
-        color={destroyed ? '#5d4037' : palette.crate}
-        emissive={destroyed ? '#2f1c16' : palette.crate}
-        emissiveIntensity={0.04}
+        color={color}
+        emissive={emissive}
+        emissiveIntensity={explored ? 0.02 : 0.04}
         roughness={0.76}
       />
     </mesh>
+  );
+}
+
+function SensedWallMarker({
+  x,
+  y,
+}: {
+  x: number;
+  y: number;
+}) {
+  const ref = useRef<THREE.Group>(null);
+  const [wx, , wz] = toWorld(x, y);
+
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.rotation.y = Math.sin(clock.elapsedTime * 0.7) * 0.05;
+  });
+
+  return (
+    <group ref={ref} position={[wx, 0.17, wz]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.12, 0]}>
+        <ringGeometry args={[0.28, 0.5, 32]} />
+        <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={0.54} transparent opacity={0.36} />
+      </mesh>
+      <mesh position={[0, 0.08, 0]}>
+        <boxGeometry args={[0.62, 0.34, 0.62]} />
+        <meshStandardMaterial color="#d6a45d" emissive="#f59e0b" emissiveIntensity={0.22} transparent opacity={0.28} wireframe />
+      </mesh>
+    </group>
   );
 }
 
@@ -1833,6 +1917,50 @@ function MonsterMesh({ monster }: { monster: MonsterState }) {
   );
 }
 
+function SensedEnemyMarker({
+  x,
+  y,
+  label,
+  color,
+  scale = 1,
+}: {
+  x: number;
+  y: number;
+  label: string;
+  color: string;
+  scale?: number;
+}) {
+  const ref = useRef<THREE.Group>(null);
+  const [wx, , wz] = toWorld(x, y);
+
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.position.y = 0.32 + Math.sin(clock.elapsedTime * 3.2) * 0.04;
+    ref.current.rotation.y = clock.elapsedTime * 0.4;
+  });
+
+  return (
+    <group ref={ref} position={[wx, 0.32, wz]} scale={scale}>
+      <pointLight color={color} distance={2.6} intensity={0.5} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.28, 0]}>
+        <ringGeometry args={[0.24, 0.52, 34]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.9} transparent opacity={0.42} />
+      </mesh>
+      <mesh position={[0, 0.02, 0]} castShadow>
+        <capsuleGeometry args={[0.16, 0.42, 8, 14]} />
+        <meshStandardMaterial color="#020617" emissive={color} emissiveIntensity={0.48} transparent opacity={0.38} roughness={0.34} />
+      </mesh>
+      <mesh position={[0, 0.34, 0.02]}>
+        <sphereGeometry args={[0.16, 14, 14]} />
+        <meshStandardMaterial color="#020617" emissive={color} emissiveIntensity={0.52} transparent opacity={0.42} />
+      </mesh>
+      <group position={[0, 0.78, 0]}>
+        <TextSprite text={label} color="#e0f2fe" width={0.72} />
+      </group>
+    </group>
+  );
+}
+
 function BossStyleDetails({
   bossId,
   visual,
@@ -2431,6 +2559,268 @@ function PowerUpMesh({
   );
 }
 
+function MissionRescueMarker({ target }: { target: CampaignRescueTargetState }) {
+  const ref = useRef<THREE.Group>(null);
+  const [wx, , wz] = toWorld(target.x, target.y);
+  const { rescued } = target;
+  const robe = rescued ? '#22c55e' : '#f8fafc';
+  const accent = rescued ? '#86efac' : '#f97316';
+  const label = rescued ? 'Safe' : target.label;
+
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.position.y = 0.4 + Math.sin(clock.elapsedTime * 4 + target.x) * 0.045;
+    ref.current.rotation.y = Math.sin(clock.elapsedTime * 1.3 + target.y) * 0.22;
+  });
+
+  return (
+    <group ref={ref} position={[wx, 0.4, wz]}>
+      <pointLight color={accent} distance={2.2} intensity={rescued ? 0.55 : 1.05} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.38, 0]}>
+        <ringGeometry args={[0.18, 0.5, 34]} />
+        <meshStandardMaterial
+          color={accent}
+          emissive={accent}
+          emissiveIntensity={1}
+          transparent
+          opacity={rescued ? 0.42 : 0.72}
+        />
+      </mesh>
+      {!rescued && (
+        <mesh position={[0, 0.84, 0]} rotation={[0, 0, Math.PI]}>
+          <coneGeometry args={[0.1, 0.34, 5]} />
+          <meshStandardMaterial color="#fde68a" emissive="#f97316" emissiveIntensity={0.7} />
+        </mesh>
+      )}
+      <ShadowBlob />
+      <mesh position={[0, -0.08, 0]} castShadow>
+        <capsuleGeometry args={[0.16, 0.42, 8, 16]} />
+        <meshStandardMaterial
+          color={robe}
+          emissive={accent}
+          emissiveIntensity={rescued ? 0.12 : 0.22}
+          roughness={0.55}
+        />
+      </mesh>
+      <mesh position={[0, 0.32, 0.02]} castShadow>
+        <sphereGeometry args={[0.15, 16, 16]} />
+        <meshStandardMaterial color="#f2c7a2" roughness={0.48} />
+      </mesh>
+      <mesh position={[0, 0.36, 0.18]} castShadow>
+        <boxGeometry args={[0.34, 0.05, 0.035]} />
+        <meshStandardMaterial color="#166534" emissive={accent} emissiveIntensity={0.16} />
+      </mesh>
+      {[-0.17, 0.17].map((side) => (
+        <mesh
+          key={`${target.id}-arm-${side}`}
+          position={[side, 0.02, 0.03]}
+          rotation={[0.25, 0, side > 0 ? -0.58 : 0.58]}
+          castShadow
+        >
+          <capsuleGeometry args={[0.042, 0.26, 5, 8]} />
+          <meshStandardMaterial color={rescued ? '#bbf7d0' : '#fed7aa'} roughness={0.5} />
+        </mesh>
+      ))}
+      <group position={[0, 0.83, 0]}>
+        <TextSprite text={label} color={rescued ? '#bbf7d0' : '#fff7ed'} width={0.82} />
+      </group>
+    </group>
+  );
+}
+
+function MissionDefenseMarker({ objective }: { objective: CampaignObjectiveState }) {
+  const ref = useRef<THREE.Group>(null);
+  const x = objective.x ?? 0;
+  const y = objective.y ?? 0;
+  const [wx, , wz] = toWorld(x, y);
+  const active = objective.status === 'active';
+  const complete = objective.status === 'complete';
+  let color = '#94a3b8';
+  if (active) color = '#facc15';
+  if (complete) color = '#22c55e';
+  const label = objective.structureLabel ?? objective.label;
+
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.rotation.y = Math.sin(clock.elapsedTime * 0.6) * 0.08;
+  });
+
+  return (
+    <group ref={ref} position={[wx, 0.34, wz]}>
+      <pointLight color={color} distance={2.8} intensity={active ? 1.1 : 0.45} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.3, 0]}>
+        <ringGeometry args={[0.28, active ? 0.66 : 0.52, 34]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.9} transparent opacity={active ? 0.58 : 0.34} />
+      </mesh>
+      <mesh position={[0, 0.05, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.72, 0.58, 0.72]} />
+        <meshStandardMaterial color="#8b5e34" emissive={color} emissiveIntensity={0.12} roughness={0.62} />
+      </mesh>
+      <mesh position={[0, 0.44, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
+        <coneGeometry args={[0.6, 0.42, 4]} />
+        <meshStandardMaterial color="#f97316" emissive={color} emissiveIntensity={0.2} roughness={0.58} />
+      </mesh>
+      <mesh position={[0, 0.12, 0.38]} castShadow>
+        <boxGeometry args={[0.22, 0.28, 0.035]} />
+        <meshStandardMaterial color="#111827" emissive="#facc15" emissiveIntensity={active ? 0.34 : 0.08} />
+      </mesh>
+      <group position={[0, 0.96, 0]}>
+        <TextSprite text={label} color="#fff7ed" width={0.86} />
+      </group>
+    </group>
+  );
+}
+
+function MissionMiniBossMarker({ objective }: { objective: CampaignObjectiveState }) {
+  const ref = useRef<THREE.Group>(null);
+  const x = objective.x ?? 0;
+  const y = objective.y ?? 0;
+  const [wx, , wz] = toWorld(x, y);
+  const active = objective.status === 'active';
+  const complete = objective.status === 'complete';
+  const color = complete ? '#22c55e' : '#ef4444';
+  const label = complete ? 'Gate Open' : objective.miniBossLabel ?? objective.label;
+
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.position.y = 0.46 + Math.sin(clock.elapsedTime * 3.6) * 0.035;
+    ref.current.rotation.y = Math.sin(clock.elapsedTime * 1.1) * 0.18;
+  });
+
+  return (
+    <group ref={ref} position={[wx, 0.46, wz]}>
+      <pointLight color={color} distance={2.4} intensity={active ? 1.1 : 0.45} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.42, 0]}>
+        <ringGeometry args={[0.22, active ? 0.58 : 0.44, 34]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1} transparent opacity={active ? 0.68 : 0.38} />
+      </mesh>
+      <ShadowBlob />
+      <mesh position={[0, -0.08, 0]} castShadow>
+        <capsuleGeometry args={[0.18, 0.48, 8, 16]} />
+        <meshStandardMaterial color="#166534" emissive={color} emissiveIntensity={0.2} roughness={0.48} />
+      </mesh>
+      <mesh position={[0, 0.35, 0.02]} castShadow>
+        <sphereGeometry args={[0.17, 16, 16]} />
+        <meshStandardMaterial color="#f2c7a2" roughness={0.45} />
+      </mesh>
+      <mesh position={[0, 0.39, 0.19]} castShadow>
+        <boxGeometry args={[0.36, 0.05, 0.035]} />
+        <meshStandardMaterial color="#111827" emissive={color} emissiveIntensity={0.2} />
+      </mesh>
+      <mesh position={[0.25, 0.04, 0.08]} rotation={[0.3, 0, -0.72]} castShadow>
+        <capsuleGeometry args={[0.04, 0.36, 5, 8]} />
+        <meshStandardMaterial color="#f8fafc" emissive={color} emissiveIntensity={0.16} />
+      </mesh>
+      <mesh position={[0.36, 0.2, 0.1]} rotation={[0.2, 0, -0.7]} castShadow>
+        <boxGeometry args={[0.08, 0.42, 0.035]} />
+        <meshStandardMaterial color="#fde68a" emissive="#facc15" emissiveIntensity={0.5} />
+      </mesh>
+      <group position={[0, 0.86, 0]}>
+        <TextSprite text={label} color="#fff7ed" width={0.78} />
+      </group>
+    </group>
+  );
+}
+
+function MissionBossArenaMarker({
+  campaign,
+  bossName,
+  fogOfWar,
+}: {
+  campaign: NonNullable<GameEngineState['campaign']>;
+  bossName?: string;
+  fogOfWar: GameEngineState['fogOfWar'];
+}) {
+  const ref = useRef<THREE.Group>(null);
+  const { bossArena } = campaign;
+  const [wx, , wz] = toWorld(bossArena.x, bossArena.y);
+  const active = bossArena.unlocked;
+  const visible = isCellVisible(fogOfWar, bossArena.x, bossArena.y);
+  const color = active ? '#fb923c' : '#94a3b8';
+  let label = campaign.bossGateLabel;
+  if (active) {
+    label = bossName ? `${bossName} Arena` : bossArena.label;
+  }
+
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.rotation.y = clock.elapsedTime * 0.35;
+    ref.current.position.y = 0.24 + Math.sin(clock.elapsedTime * 2.4) * 0.025;
+  });
+
+  if (!visible) return null;
+
+  return (
+    <group ref={ref} position={[wx, 0.24, wz]}>
+      <pointLight color={color} distance={3.2} intensity={active ? 1.2 : 0.42} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.18, 0]}>
+        <ringGeometry args={[0.42, active ? 0.82 : 0.66, 48]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.05} transparent opacity={active ? 0.66 : 0.32} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, Math.PI / 4]} position={[0, -0.16, 0]}>
+        <ringGeometry args={[0.18, 0.34, 36]} />
+        <meshStandardMaterial color="#fef3c7" emissive={color} emissiveIntensity={0.8} transparent opacity={active ? 0.72 : 0.36} />
+      </mesh>
+      {[0, Math.PI / 2, Math.PI, Math.PI * 1.5].map((rotation) => (
+        <mesh
+          key={`arena-seal-${rotation}`}
+          position={[Math.sin(rotation) * 0.48, 0.06, Math.cos(rotation) * 0.48]}
+          rotation={[0, rotation, 0]}
+        >
+          <boxGeometry args={[0.09, 0.26, 0.035]} />
+          <meshStandardMaterial color="#fef3c7" emissive={color} emissiveIntensity={active ? 0.7 : 0.24} />
+        </mesh>
+      ))}
+      <group position={[0, 0.58, 0]}>
+        <TextSprite text={label} color="#fff7ed" width={0.9} />
+      </group>
+    </group>
+  );
+}
+
+function MissionObjectiveMarkers({ state }: { state: GameEngineState }) {
+  if (!state.campaign) return null;
+
+  return (
+    <>
+      {state.campaign.objectives.flatMap((objective) => {
+        if (objective.kind === 'rescue') {
+          return (objective.targets ?? [])
+            .filter((target) => isCellVisible(state.fogOfWar, target.x, target.y))
+            .map((target) => (
+              <MissionRescueMarker key={target.id} target={target} />
+            ));
+        }
+        if (
+          objective.kind === 'miniBoss'
+          && typeof objective.x === 'number'
+          && typeof objective.y === 'number'
+          && isCellVisible(state.fogOfWar, objective.x, objective.y)
+        ) {
+          return [(
+            <MissionMiniBossMarker key={objective.id} objective={objective} />
+          )];
+        }
+        if (
+          typeof objective.x === 'number'
+          && typeof objective.y === 'number'
+          && isCellVisible(state.fogOfWar, objective.x, objective.y)
+        ) {
+          return [(
+            <MissionDefenseMarker key={objective.id} objective={objective} />
+          )];
+        }
+        return [];
+      })}
+      <MissionBossArenaMarker
+        campaign={state.campaign}
+        bossName={state.boss?.name}
+        fogOfWar={state.fogOfWar}
+      />
+    </>
+  );
+}
+
 type MapTilesProps = {
   map: GameMap;
   bombs: GameEngineState['bombs'];
@@ -2438,6 +2828,7 @@ type MapTilesProps = {
   explosions: GameEngineState['explosions'];
   hazards: GameEngineState['hazards'];
   palette: StageDefinition['palette'];
+  fogOfWar: GameEngineState['fogOfWar'];
   powerTheme?: CharacterId;
 };
 
@@ -2468,6 +2859,21 @@ function sameTimedCells(
   });
 }
 
+function sameCellKeys(prev: string[] = [], next: string[] = []): boolean {
+  return prev.length === next.length
+    && prev.every((cell, index) => cell === next[index]);
+}
+
+function sameFogCells(
+  prev: GameEngineState['fogOfWar'],
+  next: GameEngineState['fogOfWar']
+): boolean {
+  return sameCellKeys(prev.visible, next.visible)
+    && sameCellKeys(prev.explored, next.explored)
+    && sameCellKeys(prev.sensedEnemies, next.sensedEnemies)
+    && sameCellKeys(prev.sensedWalls, next.sensedWalls);
+}
+
 function MapTilesBase({
   map,
   bombs,
@@ -2475,6 +2881,7 @@ function MapTilesBase({
   explosions,
   hazards,
   palette,
+  fogOfWar,
   powerTheme,
 }: MapTilesProps) {
   const destroyedSet = useMemo(
@@ -2485,16 +2892,37 @@ function MapTilesBase({
     () => new Map(bombs.map((bomb) => [`${bomb.x},${bomb.y}`, bomb])),
     [bombs],
   );
+  const sensedWallSet = useMemo(
+    () => new Set(fogOfWar.sensedWalls ?? []),
+    [fogOfWar.sensedWalls],
+  );
 
   return (
     <>
       {map.map((row, y) => row.map((cell, x) => {
-        const tile = <GroundTile key={`tile-${x}-${y}`} x={x} y={y} palette={palette} />;
+        const visibility = getCellVisibility(fogOfWar, x, y);
+        const visible = visibility === 'visible';
+        const sensedWall = visibility === 'hidden'
+          && sensedWallSet.has(cellKey(x, y))
+          && (cell === 'Wall' || cell === 'Box' || isObstacle(cell));
+        const tile = (
+          <GroundTile key={`tile-${x}-${y}`} x={x} y={y} palette={palette} visibility={visibility} />
+        );
+        if (visibility === 'hidden') {
+          if (!sensedWall) return tile;
+          return (
+            <React.Fragment key={`cell-${x}-${y}`}>
+              {tile}
+              <SensedWallMarker x={x} y={y} />
+            </React.Fragment>
+          );
+        }
+
         if (cell === 'Wall') {
           return (
             <React.Fragment key={`cell-${x}-${y}`}>
               {tile}
-              <WallBlock x={x} y={y} palette={palette} />
+              <WallBlock x={x} y={y} palette={palette} visibility={visibility} />
             </React.Fragment>
           );
         }
@@ -2503,11 +2931,11 @@ function MapTilesBase({
           return (
             <React.Fragment key={`cell-${x}-${y}`}>
               {tile}
-              <CrateBlock x={x} y={y} palette={palette} destroyed={destroyed} />
+              <CrateBlock x={x} y={y} palette={palette} destroyed={destroyed} visibility={visibility} />
             </React.Fragment>
           );
         }
-        if (isPower(cell)) {
+        if (visible && isPower(cell)) {
           return (
             <React.Fragment key={`cell-${x}-${y}`}>
               {tile}
@@ -2515,7 +2943,7 @@ function MapTilesBase({
             </React.Fragment>
           );
         }
-        if (isBomb(cell)) {
+        if (visible && isBomb(cell)) {
           const bomb = bombByCell.get(`${x},${y}`);
           return (
             <React.Fragment key={`cell-${x}-${y}`}>
@@ -2528,14 +2956,14 @@ function MapTilesBase({
           return (
             <React.Fragment key={`cell-${x}-${y}`}>
               {tile}
-              <CrateBlock x={x} y={y} palette={palette} />
+              <CrateBlock x={x} y={y} palette={palette} visibility={visibility} />
             </React.Fragment>
           );
         }
         return tile;
       }))}
-      <ExplosionField explosions={explosions} />
-      {hazards.map((hazard) => (
+      <ExplosionField explosions={explosions.filter((explosion) => isCellVisible(fogOfWar, explosion.x, explosion.y))} />
+      {hazards.filter((hazard) => isCellVisible(fogOfWar, hazard.x, hazard.y)).map((hazard) => (
         <HazardMesh key={hazard.id} hazard={hazard} />
       ))}
     </>
@@ -2549,22 +2977,76 @@ const MapTiles = React.memo(MapTilesBase, (prev, next) => (
   && sameTimedCells(prev.destroyedBoxes, next.destroyedBoxes)
   && sameTimedCells(prev.explosions, next.explosions)
   && prev.hazards === next.hazards
+  && sameFogCells(prev.fogOfWar, next.fogOfWar)
   && prev.powerTheme === next.powerTheme
 ));
+
+function CameraRig({ state }: { state: GameEngineState }) {
+  const { camera } = useThree();
+  const lookAtRef = useRef(new THREE.Vector3());
+  const cameraTargetRef = useRef(new THREE.Vector3());
+
+  useFrame(() => {
+    const trackedPlayers = state.players.filter((player) => player.alive);
+    const players = trackedPlayers.length > 0 ? trackedPlayers : state.players;
+    const fallbackCenter = getMapWorldCenter(
+      state.map[0]?.length ?? 15,
+      state.map.length || 10,
+    );
+    const target = players.length > 0
+      ? players.reduce(
+        (sum, player) => ({
+          x: sum.x + player.x / players.length,
+          y: sum.y + player.y / players.length,
+        }),
+        { x: 0, y: 0 }
+      )
+      : { x: fallbackCenter[0] - MAP_OFFSET_X, y: fallbackCenter[2] - MAP_OFFSET_Z };
+    const [targetX, , targetZ] = toWorld(target.x, target.y);
+
+    lookAtRef.current.set(targetX, 0, targetZ);
+    cameraTargetRef.current.set(targetX, 13.2, targetZ + 9.6);
+    camera.position.lerp(cameraTargetRef.current, 0.12);
+    camera.lookAt(lookAtRef.current);
+  });
+
+  return null;
+}
 
 function SceneContent({ state }: { state: GameEngineState }) {
   const stage = useMemo(
     () => getStageDefinition(state.config.stageId),
     [state.config.stageId]
   );
+  const mapDimensions = useMemo(() => getMapDimensions(state.map), [state.map]);
+  const sensedEnemyCells = new Set(state.fogOfWar.sensedEnemies ?? []);
+  const visibleMonsters = state.monsters.filter((m) => (
+    isCellVisible(state.fogOfWar, m.x, m.y)
+  ));
+  const sensedMonsters = state.monsters.filter((m) => (
+    !isCellVisible(state.fogOfWar, m.x, m.y)
+    && sensedEnemyCells.has(cellKey(Math.round(m.x), Math.round(m.y)))
+  ));
+  const bossVisible = !!state.boss
+    && isCellVisible(state.fogOfWar, state.boss.x, state.boss.y);
+  const bossSensed = !!state.boss
+    && !bossVisible
+    && sensedEnemyCells.has(cellKey(Math.round(state.boss.x), Math.round(state.boss.y)));
+
   return (
     <>
+      <CameraRig state={state} />
       <ambientLight intensity={0.72} />
       <hemisphereLight args={['#fef3c7', '#111827', 0.55]} />
       <directionalLight position={[8, 15, 6]} intensity={1.65} castShadow />
       <pointLight position={[-5, 8, -3]} intensity={0.95} color={stage.palette.accent} />
       <pointLight position={[5, 5, 4]} intensity={0.45} color="#f8fafc" />
-      <Floor palette={stage.palette} stageId={stage.id} />
+      <Floor
+        palette={stage.palette}
+        stageId={stage.id}
+        width={mapDimensions.width}
+        height={mapDimensions.height}
+      />
       <MapTiles
         map={state.map}
         bombs={state.bombs}
@@ -2572,15 +3054,37 @@ function SceneContent({ state }: { state: GameEngineState }) {
         explosions={state.explosions}
         hazards={state.hazards}
         palette={stage.palette}
+        fogOfWar={state.fogOfWar}
         powerTheme={state.players[0]?.characterId}
       />
+      <MissionObjectiveMarkers state={state} />
       {state.players.map((p) => (
         <PlayerMesh key={p.id} player={p} state={state} />
       ))}
-      {state.monsters.map((m) => (
+      {visibleMonsters.map((m) => (
         <MonsterMesh key={m.id} monster={m} />
       ))}
-      <BossMesh state={state} />
+      {sensedMonsters.map((m) => (
+        <SensedEnemyMarker
+          key={`sensed-${m.id}`}
+          x={Math.round(m.x)}
+          y={Math.round(m.y)}
+          label={m.name}
+          color={MONSTER_VISUALS[m.kind].glow}
+        />
+      ))}
+      {state.boss && bossVisible && (
+        <BossMesh state={state} />
+      )}
+      {state.boss && bossSensed && (
+        <SensedEnemyMarker
+          x={Math.round(state.boss.x)}
+          y={Math.round(state.boss.y)}
+          label={state.boss.name}
+          color={BOSS_VISUALS[state.boss.id].glow}
+          scale={1.25}
+        />
+      )}
     </>
   );
 }

@@ -1,5 +1,10 @@
 /* eslint-disable max-len */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -18,7 +23,7 @@ import { GameHUD } from './GameHUD';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { GameConfig, loadMapFromStorage } from '../../engine';
 import { DEFAULT_CHARACTER_ID, DEFAULT_STAGE_ID, GameMode } from '../../content';
-import { completeBossReward } from '../../story/progress';
+import { completeCampaignStage } from '../../story/progress';
 import {
   GameSceneContainer,
   TopControls,
@@ -67,6 +72,8 @@ export const GameScreen = () => {
   const bossId = state?.boss?.id;
   const gamePhase = state?.phase;
   const gameMode = state?.config.mode;
+  const stageId = state?.config.stageId;
+  const rewardedStages = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const stored = localStorage.getItem('playerKeyBindings');
@@ -80,12 +87,17 @@ export const GameScreen = () => {
       gameMode === 'solo'
       && gamePhase === 'game_over'
       && bossId
+      && stageId
       && typeof bossHealth === 'number'
       && bossHealth <= 0
     ) {
-      completeBossReward(bossId, 'gaara', 'hiddenCloud');
+      const rewardKey = `${stageId}:${bossId}`;
+      if (!rewardedStages.current.has(rewardKey)) {
+        rewardedStages.current.add(rewardKey);
+        completeCampaignStage(stageId, bossId);
+      }
     }
-  }, [bossHealth, bossId, gameMode, gamePhase]);
+  }, [bossHealth, bossId, gameMode, gamePhase, stageId]);
 
   const isPaused = state?.paused ?? false;
   const dialogOpen = state?.phase === 'round_end' || state?.phase === 'game_over';

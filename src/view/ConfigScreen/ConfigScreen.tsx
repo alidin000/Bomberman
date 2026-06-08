@@ -44,6 +44,17 @@ import {
   LoadoutGrid,
   LoadoutKey,
   LoadoutRow,
+  CampaignRoute,
+  CampaignRouteCard,
+  RouteStatusBadge,
+  FlowStepStrip,
+  FlowStepPill,
+  MissionBriefing,
+  MissionBriefingPreview,
+  MissionBriefingDetails,
+  MissionObjectiveList,
+  MissionObjectiveItem,
+  MissionActionRow,
 } from './ConfigScreen.styles';
 import { WelcomeContainer } from '../WelcomeScreen/WelcomeScreen.styles';
 import {
@@ -57,13 +68,18 @@ import RosterBoard from '../../assets/ninja-bomber-roster-board.png';
 import StageAtlas from '../../assets/ninja-bomber-stage-atlas.png';
 import {
   CHARACTER_DEFINITIONS,
+  CAMPAIGN_FLOW_STEPS,
+  CAMPAIGN_VILLAGES,
+  CampaignObjectiveDefinition,
   CharacterId,
   DEFAULT_CHARACTER_ID,
-  DEFAULT_STAGE_ID,
   GameMode,
   STAGE_DEFINITIONS,
   StageId,
   getBossDefinition,
+  getCampaignVillage,
+  getCampaignMission,
+  getStageDefinition,
 } from '../../content';
 import {
   loadStoryProgress,
@@ -71,6 +87,7 @@ import {
   STORY_UPGRADES,
   StoryUpgradeId,
 } from '../../story/progress';
+import { fetchMapFromFile } from '../../engine';
 
 type KeyErrors = {
   [key: string]: boolean;
@@ -107,6 +124,7 @@ const STAGE_PREVIEW_POSITIONS: Record<StageId, string> = {
   hiddenCloud: '0% 100%',
   hiddenStone: '50% 100%',
   akatsukiHideout: '100% 100%',
+  greatShinobiWar: '50% 50%',
 };
 
 const CHARACTER_POSITIONS: Record<CharacterId, string> = {
@@ -118,27 +136,71 @@ const CHARACTER_POSITIONS: Record<CharacterId, string> = {
   itachi: '100% 0%',
 };
 
+function loadStoredKeyBindings(): KeyBindings {
+  const stored = localStorage.getItem('playerKeyBindings');
+  if (!stored) return normalizeKeyBindings(DEFAULT_KEY_BINDINGS);
+  try {
+    return normalizeKeyBindings(JSON.parse(stored));
+  } catch {
+    return normalizeKeyBindings(DEFAULT_KEY_BINDINGS);
+  }
+}
+
+function getMissionObjectiveSummary(objective: CampaignObjectiveDefinition): string {
+  if (objective.kind === 'rescue') {
+    return `${objective.targetCount ?? objective.targets?.length ?? 0} rescue targets`;
+  }
+  if (objective.kind === 'defense') {
+    return `${Math.ceil((objective.durationMs ?? 0) / 1000)}s defense hold`;
+  }
+  return `Mini-boss gate: ${objective.miniBossLabel ?? objective.label}`;
+}
+
 export const ConfigScreen = () => {
+  const initialStoryProgress = useMemo(() => loadStoryProgress(), []);
   const [activeStep, setActiveStep] = useState(0);
   const [rounds, setRounds] = useState('1');
   const [mode, setMode] = useState<GameMode>('solo');
   const [numOfPlayers, setNumOfPlayers] = useState('1');
-  const [selectedStage, setSelectedStage] = useState<StageId>(DEFAULT_STAGE_ID);
+  const [selectedStage, setSelectedStage] = useState<StageId>(
+    initialStoryProgress.lastStage
+  );
   const [selectedCharacters, setSelectedCharacters] = useState<CharacterId[]>([
-    DEFAULT_CHARACTER_ID,
+    initialStoryProgress.lastCharacter ?? DEFAULT_CHARACTER_ID,
   ]);
-  const [selectedUpgrade, setSelectedUpgrade] = useState<StoryUpgradeId>('extraClay');
+  const [selectedUpgrade, setSelectedUpgrade] = useState<StoryUpgradeId>(
+    initialStoryProgress.selectedUpgrade
+  );
   const [playerKeyBindings, setPlayerKeyBindings] = useState<KeyBindings>(
-    () => normalizeKeyBindings(DEFAULT_KEY_BINDINGS)
+    loadStoredKeyBindings
   );
   const navigate = useNavigate();
   const [keyErrors, setKeyErrors] = useState<KeyErrors>({});
-  const [storyProgress, setStoryProgress] = useState(loadStoryProgress);
+  const [storyProgress, setStoryProgress] = useState(initialStoryProgress);
 
   const activePlayerCount = parseInt(numOfPlayers, 10);
-  const stage = useMemo(
-    () => STAGE_DEFINITIONS.find((item) => item.id === selectedStage) ?? STAGE_DEFINITIONS[0],
+  const currentCampaignVillage = useMemo(
+    () => getCampaignVillage(storyProgress.lastStage),
+    [storyProgress.lastStage]
+  );
+  const currentFlowLabel = CAMPAIGN_FLOW_STEPS.find(
+    (step) => step.id === storyProgress.currentFlowStep
+  )?.label ?? 'Exploration';
+  const selectedStageDefinition = useMemo(
+    () => getStageDefinition(selectedStage),
     [selectedStage]
+  );
+  const selectedMission = useMemo(
+    () => getCampaignMission(selectedStage),
+    [selectedStage]
+  );
+  const selectedBoss = useMemo(
+    () => (
+      selectedStageDefinition.bossId
+        ? getBossDefinition(selectedStageDefinition.bossId)
+        : null
+    ),
+    [selectedStageDefinition]
   );
 
   const handleModeSelect = (nextMode: GameMode) => {
@@ -192,32 +254,79 @@ export const ConfigScreen = () => {
     setKeyErrors({});
   };
 
-  const fetchMap = async (mapName: string) => {
-    const response = await fetch(`/maps/${mapName}.txt`);
-    const mapText = await response.text();
-    return mapText.split(/\r?\n/).map((row) => row.trim().split('').slice(0, 15));
-  };
-
-  const handlePlay = async () => {
-    const mapData = await fetchMap(stage.mapId);
-    const characterId = selectedCharacters[0] ?? DEFAULT_CHARACTER_ID;
-    if (mode === 'solo') {
+  const startGame = async ({
+    nextMode = mode,
+    stageId = selectedStage,
+    characters = selectedCharacters,
+    upgrade = selectedUpgrade,
+    players = numOfPlayers,
+    nextRounds = rounds,
+  }: {
+    nextMode?: GameMode;
+    stageId?: StageId;
+    characters?: CharacterId[];
+    upgrade?: StoryUpgradeId;
+    players?: string;
+    nextRounds?: string;
+  } = {}) => {
+    const stageDefinition = getStageDefinition(stageId);
+    const mapData = await fetchMapFromFile(stageDefinition.mapId);
+    const characterId = characters[0] ?? DEFAULT_CHARACTER_ID;
+    if (nextMode === 'solo') {
       const progress = selectStoryLoadout(
         characterId,
-        selectedStage,
-        selectedUpgrade
+        stageDefinition.id,
+        upgrade
       );
       setStoryProgress(progress);
     }
     localStorage.setItem('selectedMap', JSON.stringify(mapData));
     localStorage.setItem('playerKeyBindings', JSON.stringify(normalizeKeyBindings(playerKeyBindings)));
     localStorage.setItem('gameSetup', JSON.stringify({
-      mode,
-      stageId: selectedStage,
-      selectedCharacters,
-      selectedUpgrade,
+      mode: nextMode,
+      stageId: stageDefinition.id,
+      selectedCharacters: characters,
+      selectedUpgrade: upgrade,
     }));
-    navigate(`/game/${numOfPlayers}/${rounds}/${stage.mapId}`);
+    navigate(`/game/${players}/${nextRounds}/${stageDefinition.mapId}`);
+  };
+
+  const handlePlay = async () => {
+    await startGame();
+  };
+
+  const handleContinueCampaign = async () => {
+    const characters = [storyProgress.lastCharacter ?? DEFAULT_CHARACTER_ID];
+    setMode('solo');
+    setNumOfPlayers('1');
+    setRounds('1');
+    setSelectedStage(storyProgress.lastStage);
+    setSelectedUpgrade(storyProgress.selectedUpgrade);
+    setSelectedCharacters(characters);
+    await startGame({
+      nextMode: 'solo',
+      stageId: storyProgress.lastStage,
+      characters,
+      upgrade: storyProgress.selectedUpgrade,
+      players: '1',
+      nextRounds: '1',
+    });
+  };
+
+  const handleStartSelectedMission = async () => {
+    const characters = [selectedCharacters[0] ?? DEFAULT_CHARACTER_ID];
+    setMode('solo');
+    setNumOfPlayers('1');
+    setRounds('1');
+    setSelectedCharacters(characters);
+    await startGame({
+      nextMode: 'solo',
+      stageId: selectedStage,
+      characters,
+      upgrade: selectedUpgrade,
+      players: '1',
+      nextRounds: '1',
+    });
   };
 
   const handleKeyDown = (
@@ -340,13 +449,63 @@ export const ConfigScreen = () => {
             <StepContent>
               <ConfigIntro>
                 <Typography variant="h5" fontWeight="bold">
-                  Choose your fighter, village, and challenge.
+                  Choose your mission, village, and fighter.
                 </Typography>
                 <CardMeta variant="body2">
                   Pick a real loadout: each ninja now has a different bomb,
                   blast shape, and ultimate effect.
                 </CardMeta>
               </ConfigIntro>
+
+              {mode === 'solo' && selectedMission && (
+                <MissionBriefing accent={selectedStageDefinition.palette.accent}>
+                  <MissionBriefingPreview>
+                    <StagePreviewImage
+                      image={StageAtlas}
+                      aria-label={`${selectedStageDefinition.name} mission preview`}
+                      backgroundPosition={STAGE_PREVIEW_POSITIONS[selectedStageDefinition.id]}
+                    />
+                  </MissionBriefingPreview>
+                  <MissionBriefingDetails>
+                    <Typography variant="overline" fontWeight="bold">
+                      {selectedMission.villageName}
+                      {' '}
+                      Campaign
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold">
+                      {selectedMission.title}
+                    </Typography>
+                    <CardMeta variant="body2">
+                      Gate:
+                      {' '}
+                      {selectedMission.bossGateLabel}
+                      {' '}
+                      · Boss:
+                      {' '}
+                      {selectedBoss?.name ?? 'Village Boss'}
+                    </CardMeta>
+                    <MissionObjectiveList>
+                      {selectedMission.objectives.map((objective) => (
+                        <MissionObjectiveItem
+                          key={objective.id}
+                          accent={selectedStageDefinition.palette.accent}
+                        >
+                          <strong>{objective.label}</strong>
+                          <span>{getMissionObjectiveSummary(objective)}</span>
+                        </MissionObjectiveItem>
+                      ))}
+                    </MissionObjectiveList>
+                    <MissionActionRow>
+                      <Button variant="contained" size="small" onClick={handleStartSelectedMission}>
+                        Start Mission
+                      </Button>
+                      <Button variant="contained" size="small" onClick={handleContinueCampaign}>
+                        Continue Campaign
+                      </Button>
+                    </MissionActionRow>
+                  </MissionBriefingDetails>
+                </MissionBriefing>
+              )}
 
               <SectionTitle variant="subtitle2">Mode</SectionTitle>
               <ModeGrid>
@@ -365,6 +524,95 @@ export const ConfigScreen = () => {
                   </SelectionCard>
                 ))}
               </ModeGrid>
+
+              {mode === 'solo' && (
+                <>
+                  <SectionTitle variant="subtitle2">Campaign Route</SectionTitle>
+                  <ConfigIntro>
+                    <Typography variant="subtitle2" fontWeight="bold">
+                      Continue:
+                      {' '}
+                      {currentCampaignVillage.villageName}
+                    </Typography>
+                    <CardMeta variant="body2">
+                      Saved flow:
+                      {' '}
+                      {currentFlowLabel}
+                      {' '}
+                      · Reward:
+                      {' '}
+                      {currentCampaignVillage.reward}
+                    </CardMeta>
+                    <FlowStepStrip>
+                      {CAMPAIGN_FLOW_STEPS.map((step) => (
+                        <FlowStepPill
+                          key={step.id}
+                          active={storyProgress.currentFlowStep === step.id}
+                        >
+                          {step.label}
+                        </FlowStepPill>
+                      ))}
+                    </FlowStepStrip>
+                    <Button variant="contained" size="small" onClick={handleContinueCampaign}>
+                      Continue Campaign
+                    </Button>
+                  </ConfigIntro>
+                  <CampaignRoute>
+                    {CAMPAIGN_VILLAGES.map((village) => {
+                      const stageDefinition = STAGE_DEFINITIONS.find(
+                        (item) => item.id === village.stageId
+                      );
+                      const accent = stageDefinition?.palette.accent ?? '#f59e0b';
+                      const completed = storyProgress.completedStages.includes(village.stageId);
+                      const active = storyProgress.lastStage === village.stageId;
+                      const locked = mode === 'solo'
+                        && !storyProgress.unlockedStages.includes(village.stageId);
+                      let status = 'Unlocked';
+                      if (completed) status = 'Cleared';
+                      if (active) status = 'Current';
+                      if (locked) status = 'Locked';
+                      return (
+                        <CampaignRouteCard
+                          key={village.stageId}
+                          type="button"
+                          active={active}
+                          completed={completed}
+                          locked={locked}
+                          accent={accent}
+                          disabled={locked}
+                          onClick={() => {
+                            if (!locked) setSelectedStage(village.stageId);
+                          }}
+                          aria-label={`${village.villageName} campaign route`}
+                        >
+                          <RouteStatusBadge accent={accent}>
+                            {village.order}
+                            {' '}
+                            ·
+                            {' '}
+                            {status}
+                          </RouteStatusBadge>
+                          <Typography variant="subtitle2" fontWeight="bold" sx={{ mt: 1 }}>
+                            {village.villageName}
+                          </Typography>
+                          <CardMeta variant="caption">
+                            {village.theme}
+                            {' '}
+                            · Mini:
+                            {' '}
+                            {village.miniBoss}
+                            {' '}
+                            · Boss:
+                            {' '}
+                            {village.villageBoss}
+                          </CardMeta>
+                          <AbilityLine color={accent}>{village.reward}</AbilityLine>
+                        </CampaignRouteCard>
+                      );
+                    })}
+                  </CampaignRoute>
+                </>
+              )}
 
               <SectionTitle variant="subtitle2">Stage</SectionTitle>
               <SelectionGrid>

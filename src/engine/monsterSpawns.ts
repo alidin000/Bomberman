@@ -106,6 +106,17 @@ export function getMonstersForMap(
           spawn({ id: 'monster1', name: 'Crow Swarm', x: 7, y: 4, kind: 'ghost' }),
           spawn({ id: 'monster2', name: 'Akatsuki Cultist', x: 5, y: 8, kind: 'smart' }),
         ];
+    case 'greatShinobiWar':
+      return twoPlayer
+        ? [
+          spawn({ id: 'monster1', name: 'War Zetsu', x: 6, y: 5, kind: 'smart' }),
+          spawn({ id: 'monster2', name: 'Masked Clone', x: 10, y: 2, kind: 'ghost' }),
+          spawn({ id: 'monster3', name: 'Battlefield Shinobi', x: 4, y: 8, kind: 'fork' }),
+        ]
+        : [
+          spawn({ id: 'monster1', name: 'War Zetsu', x: 6, y: 5, kind: 'smart' }),
+          spawn({ id: 'monster2', name: 'Masked Clone', x: 10, y: 2, kind: 'ghost' }),
+        ];
     default:
       return [];
   }

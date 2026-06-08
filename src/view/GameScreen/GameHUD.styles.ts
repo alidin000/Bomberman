@@ -75,7 +75,7 @@ export const PlayerAvatar = styled(Box)<{ color: string }>(({ color }) => ({
 
 export const PlayerStats = styled(Box)({
   display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
+  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
   gap: 5,
   marginTop: 8,
 });
@@ -191,6 +191,73 @@ export const RoundProgress = styled(LinearProgress)({
   backgroundColor: 'rgba(255, 230, 176, 0.18)',
   '& .MuiLinearProgress-bar': {
     background: 'linear-gradient(90deg, #f59e0b, #fb923c)',
+  },
+});
+
+export const ObjectivePaper = styled(Paper)({
+  padding: 11,
+  width: 278,
+  color: '#f8fafc',
+  background: `linear-gradient(90deg, rgba(34, 197, 94, 0.2), transparent 68%), ${PANEL_SURFACE}`,
+  border: '1px solid rgba(134, 239, 172, 0.44)',
+  borderRadius: 6,
+  boxShadow: PANEL_SHADOW,
+  backdropFilter: 'blur(6px)',
+});
+
+export const ObjectiveList = styled(Box)({
+  display: 'grid',
+  gap: 7,
+  marginTop: 8,
+});
+
+export const ObjectiveItem = styled(Box)({
+  display: 'grid',
+  gap: 5,
+  padding: 8,
+  borderRadius: 6,
+  background: 'linear-gradient(180deg, rgba(255, 230, 176, 0.12), rgba(0, 0, 0, 0.22))',
+  border: '1px solid rgba(255, 230, 176, 0.18)',
+});
+
+export const ObjectiveMeta = styled(Box)({
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 8,
+});
+
+export const ObjectiveStatusBadge = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'status',
+})<{ status: string }>(({ status }) => {
+  const colors: Record<string, string> = {
+    active: '#22c55e',
+    complete: '#facc15',
+    failed: '#ef4444',
+    locked: '#94a3b8',
+  };
+  const color = colors[status] ?? colors.locked;
+  return {
+    minWidth: 64,
+    padding: '3px 6px',
+    borderRadius: 5,
+    color: '#0f172a',
+    background: color,
+    boxShadow: `0 0 12px ${color}38`,
+    fontSize: '0.62rem',
+    fontWeight: 900,
+    lineHeight: 1.1,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  };
+});
+
+export const ObjectiveProgress = styled(LinearProgress)({
+  height: 6,
+  borderRadius: 3,
+  backgroundColor: 'rgba(255, 230, 176, 0.16)',
+  '& .MuiLinearProgress-bar': {
+    background: 'linear-gradient(90deg, #22c55e, #facc15)',
   },
 });
 

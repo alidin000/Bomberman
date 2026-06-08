@@ -47,5 +47,8 @@ export function loadMapFromStorage(): GameMap {
 export async function fetchMapFromFile(mapName: string): Promise<string[][]> {
   const response = await fetch(`/maps/${mapName}.txt`);
   const mapText = await response.text();
-  return mapText.split(/\r?\n/).map((row) => row.trim().split('').slice(0, 15));
+  return mapText
+    .split(/\r?\n/)
+    .filter((row) => row.trim().length > 0)
+    .map((row) => row.trimEnd().split(''));
 }

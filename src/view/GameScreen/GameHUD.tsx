@@ -1,7 +1,12 @@
 /* eslint-disable object-curly-newline, comma-dangle */
 import React from 'react';
 import { Typography } from '@mui/material';
-import { GameEngineState, MonsterKind } from '../../engine/types';
+import {
+  CampaignObjectiveState,
+  CampaignObjectiveStatus,
+  GameEngineState,
+  MonsterKind,
+} from '../../engine/types';
 import { Power } from '../../model/gameItem';
 import { isPowerUpActive } from '../../engine/players';
 import {
@@ -27,6 +32,12 @@ import {
   BossPaper,
   AbilityPanel,
   AbilityRow,
+  ObjectivePaper,
+  ObjectiveList,
+  ObjectiveItem,
+  ObjectiveMeta,
+  ObjectiveStatusBadge,
+  ObjectiveProgress,
 } from './GameHUD.styles';
 import { getCharacterDefinition } from '../../content';
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
@@ -46,6 +57,13 @@ const MONSTER_BADGE_COLORS: Record<MonsterKind, string> = {
   smart: '#d6a45d',
   ghost: '#38bdf8',
   fork: '#a855f7',
+};
+
+const OBJECTIVE_STATUS_LABELS: Record<CampaignObjectiveStatus, string> = {
+  active: 'Active',
+  complete: 'Done',
+  failed: 'Failed',
+  locked: 'Locked',
 };
 
 type GameHUDProps = {
@@ -94,6 +112,11 @@ function PlayerCard({
           {' '}
           {player.bombRange}
         </StatPill>
+        <StatPill>
+          Vision
+          {' '}
+          {character.visionRadius}
+        </StatPill>
       </PlayerStats>
       <PowerChips>
         {activePowers.map((power) => {
@@ -135,6 +158,77 @@ function PlayerCard({
       </AbilityPanel>
       <UltimateProgress variant="determinate" value={player.ultimateCharge} />
     </PlayerCardPaper>
+  );
+}
+
+function getObjectiveProgress(objective: CampaignObjectiveState): number {
+  if (objective.target <= 0) return 0;
+  return Math.min(100, Math.max(0, (objective.current / objective.target) * 100));
+}
+
+function formatObjectiveDetail(objective: CampaignObjectiveState): string {
+  if (objective.kind === 'rescue') {
+    return `${objective.current}/${objective.target} villagers rescued`;
+  }
+
+  if (objective.kind === 'miniBoss') {
+    if (objective.status === 'complete') {
+      return `${objective.gateLabel ?? objective.label} opened`;
+    }
+    return `Reach ${objective.miniBossLabel ?? objective.label}`;
+  }
+
+  const secondsRemaining = Math.ceil((objective.ticksRemaining ?? 0) / 1000);
+  const structureHp = objective.structureHp ?? objective.structureMaxHp ?? 0;
+  const structureMaxHp = objective.structureMaxHp ?? structureHp;
+  return `${secondsRemaining}s hold · ${structureHp}/${structureMaxHp} HP`;
+}
+
+function CampaignSummary({ state }: GameHUDProps) {
+  if (!state.campaign) return null;
+
+  return (
+    <ObjectivePaper elevation={4}>
+      <Typography variant="overline" fontWeight="bold" letterSpacing="0.12em">
+        {state.campaign.title}
+      </Typography>
+      <Typography variant="caption" display="block" color="#d1fae5">
+        {state.campaign.message}
+      </Typography>
+      <ObjectiveList>
+        {state.campaign.objectives.map((objective) => (
+          <ObjectiveItem key={objective.id}>
+            <ObjectiveMeta>
+              <Typography variant="subtitle2" fontWeight="bold">
+                {objective.label}
+              </Typography>
+              <ObjectiveStatusBadge status={objective.status}>
+                {OBJECTIVE_STATUS_LABELS[objective.status]}
+              </ObjectiveStatusBadge>
+            </ObjectiveMeta>
+            <ObjectiveProgress
+              variant="determinate"
+              value={getObjectiveProgress(objective)}
+            />
+            <Typography variant="caption" color="#e5e7eb">
+              {formatObjectiveDetail(objective)}
+            </Typography>
+          </ObjectiveItem>
+        ))}
+      </ObjectiveList>
+      <Typography
+        variant="caption"
+        color={state.campaign.bossUnlocked ? '#86efac' : '#cbd5e1'}
+        display="block"
+        marginTop={1}
+      >
+        {state.campaign.bossGateLabel}
+        {' '}
+        ·
+        {' '}
+        {state.campaign.bossUnlocked ? 'Open' : 'Sealed'}
+      </Typography>
+    </ObjectivePaper>
   );
 }
 
@@ -247,6 +341,7 @@ export function GameHUD({ state }: GameHUDProps) {
             </Typography>
           )}
         </RoundPaper>
+        <CampaignSummary state={state} />
         <BossSummary state={state} />
         <MonsterSummary state={state} />
       </HudRight>

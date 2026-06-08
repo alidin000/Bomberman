@@ -232,6 +232,136 @@ export const ConfigIntro = styled.div`
   border: 1px solid rgba(255,255,255,0.1);
 `;
 
+export const MissionBriefing = styled.div<{ accent: string }>`
+  display: grid;
+  grid-template-columns: minmax(220px, 0.86fr) minmax(320px, 1.14fr);
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid ${(props) => props.accent}88;
+  background: ${(props) => `linear-gradient(135deg, ${props.accent}26, rgba(7, 8, 12, 0.94) 48%, rgba(0, 0, 0, 0.72))`};
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+  @media (max-width: 780px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+export const MissionBriefingPreview = styled.div`
+  min-height: 238px;
+  overflow: hidden;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.34);
+`;
+
+export const MissionBriefingDetails = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+`;
+
+export const MissionObjectiveList = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+
+  @media (max-width: 620px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+export const MissionObjectiveItem = styled.div<{ accent: string }>`
+  min-height: 60px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid ${(props) => props.accent}66;
+
+  & strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #fff7ed;
+    font-size: 0.82rem;
+  }
+
+  & span {
+    color: rgba(248, 250, 252, 0.72);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+`;
+
+export const MissionActionRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+`;
+
+export const CampaignRoute = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 10px 0 16px;
+`;
+
+export const CampaignRouteCard = styled.button<{
+  active: boolean;
+  completed: boolean;
+  locked: boolean;
+  accent: string;
+}>`
+  min-height: 112px;
+  padding: 10px;
+  border-radius: 7px;
+  border: 1px solid ${(props) => (props.active ? props.accent : 'rgba(255, 255, 255, 0.14)')};
+  background: ${(props) => {
+    if (props.locked) return 'linear-gradient(180deg, rgba(15, 23, 42, 0.62), rgba(3, 7, 18, 0.74))';
+    if (props.completed) return `linear-gradient(135deg, ${props.accent}30, rgba(10, 12, 18, 0.86))`;
+    return `linear-gradient(135deg, ${props.accent}20, rgba(7, 8, 12, 0.9))`;
+  }};
+  color: #f8fafc;
+  text-align: left;
+  cursor: ${(props) => (props.locked ? 'not-allowed' : 'pointer')};
+  opacity: ${(props) => (props.locked ? 0.54 : 1)};
+  box-shadow: ${(props) => (props.active ? `0 0 0 2px ${props.accent}44, 0 14px 26px rgba(0, 0, 0, 0.28)` : 'none')};
+`;
+
+export const RouteStatusBadge = styled.span<{ accent: string }>`
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  color: #111827;
+  background: ${(props) => props.accent};
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+`;
+
+export const FlowStepStrip = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 8px 0 16px;
+`;
+
+export const FlowStepPill = styled.span<{ active?: boolean }>`
+  padding: 5px 7px;
+  border-radius: 5px;
+  color: ${(props) => (props.active ? '#111827' : '#f8fafc')};
+  background: ${(props) => (props.active ? '#ffd166' : 'rgba(255, 255, 255, 0.1)')};
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 0.68rem;
+  font-weight: 900;
+`;
+
 export const ReferenceBoard = styled.div`
   display: grid;
   grid-template-columns: minmax(220px, 0.9fr) minmax(300px, 1.1fr);

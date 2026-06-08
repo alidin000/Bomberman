@@ -25,7 +25,8 @@ export type StageId =
   | 'hiddenMist'
   | 'hiddenCloud'
   | 'hiddenStone'
-  | 'akatsukiHideout';
+  | 'akatsukiHideout'
+  | 'greatShinobiWar';
 
 export interface LicensedAssetSlots {
   portrait?: string;
@@ -44,6 +45,7 @@ export interface CharacterDefinition {
   description: string;
   primaryColor: string;
   secondaryColor: string;
+  visionRadius: number;
   assetSlots: LicensedAssetSlots;
   implemented: boolean;
 }

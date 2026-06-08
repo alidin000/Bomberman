@@ -1,7 +1,7 @@
 /* eslint-disable comma-dangle */
 import { GameAction } from './actions';
 import { GameEngineState } from './types';
-import { createInitialState, resetRoundState } from './initialState';
+import { createBossForConfig, createInitialState, resetRoundState } from './initialState';
 import {
   movePlayer,
   placeObstacle,
@@ -17,6 +17,8 @@ import {
 } from './bombs';
 import { checkMonsterCollisions, tickMonsters } from './monsters';
 import { tickBossEncounter } from './bosses';
+import { withUpdatedFogOfWar } from './fogOfWar';
+import { advanceCampaignObjectives } from './campaignObjectives';
 
 function getWinnerName(state: GameEngineState, winnerId: string): string {
   return state.players.find((player) => player.id === winnerId)?.name ?? winnerId;
@@ -38,12 +40,53 @@ function getMatchWinnerId(state: GameEngineState, roundWinners: string[]): strin
   return best.wins > 0 && tied.length === 1 ? best.id : null;
 }
 
+function spawnUnlockedCampaignBoss(state: GameEngineState): GameEngineState {
+  if (!state.campaign?.bossUnlocked || state.boss) return state;
+  const boss = createBossForConfig({ ...state.config, map: state.map });
+  return {
+    ...state,
+    boss,
+    campaign: {
+      ...state.campaign,
+      missionStep: 'boss',
+      message: boss
+        ? `${state.campaign.bossArena.label} active. Defeat ${boss.name}.`
+        : state.campaign.message,
+    },
+  };
+}
+
+function advanceCampaignState(
+  state: GameEngineState,
+  deltaMs = 0
+): GameEngineState {
+  return spawnUnlockedCampaignBoss(advanceCampaignObjectives(state, deltaMs));
+}
+
 function checkRoundEnd(state: GameEngineState): GameEngineState {
   if (state.roundProcessed || state.phase !== 'playing') return state;
+
+  if (state.campaign?.missionResult === 'failed') {
+    return {
+      ...state,
+      resultMessage: `${state.campaign.villageName} mission failed. Regroup and try again.`,
+      phase: 'game_over',
+      roundProcessed: true,
+      paused: true,
+    };
+  }
 
   if (state.config.mode === 'solo' && state.boss && state.boss.health <= 0) {
     return {
       ...state,
+      campaign: state.campaign
+        ? {
+          ...state.campaign,
+          missionResult: 'success',
+          missionStep: 'complete',
+          message: `${state.campaign.villageName} secured. Reward unlocked.`,
+        }
+        : state.campaign,
       resultMessage: `${state.boss.name} has been sealed! New reward unlocked.`,
       phase: 'game_over',
       roundProcessed: true,
@@ -112,10 +155,11 @@ function processTick(state: GameEngineState, deltaMs: number): GameEngineState {
   next = tickPickupMessages(next, deltaMs);
   next = tickBombs(next, deltaMs);
   next = tickExplosions(next, deltaMs);
+  next = advanceCampaignState(next, deltaMs);
   next = tickBossEncounter(next, deltaMs);
   next = { ...next, monsters: tickMonsters(next, deltaMs) };
   next = { ...next, players: checkMonsterCollisions(next) };
-  return checkRoundEnd(next);
+  return withUpdatedFogOfWar(checkRoundEnd(next));
 }
 
 export function gameReducer(
@@ -128,23 +172,31 @@ export function gameReducer(
 
     case 'MOVE':
       if (!state || state.phase !== 'playing' || state.paused) return state;
-      return movePlayer(state, action.playerId, action.direction);
+      return withUpdatedFogOfWar(advanceCampaignState(
+        movePlayer(state, action.playerId, action.direction)
+      ));
 
     case 'DROP_BOMB':
       if (!state || state.phase !== 'playing' || state.paused) return state;
-      return placeBomb(state, action.playerId);
+      return withUpdatedFogOfWar(advanceCampaignState(placeBomb(state, action.playerId)));
 
     case 'DETONATE_BOMBS':
       if (!state || state.phase !== 'playing' || state.paused) return state;
-      return detonatePlayerBombs(state, action.playerId);
+      return withUpdatedFogOfWar(advanceCampaignState(detonatePlayerBombs(
+        state,
+        action.playerId
+      )));
 
     case 'USE_ULTIMATE':
       if (!state || state.phase !== 'playing' || state.paused) return state;
-      return placeUltimateBomb(state, action.playerId);
+      return withUpdatedFogOfWar(advanceCampaignState(placeUltimateBomb(
+        state,
+        action.playerId
+      )));
 
     case 'PLACE_OBSTACLE':
       if (!state || state.phase !== 'playing' || state.paused) return state;
-      return placeObstacle(state, action.playerId);
+      return withUpdatedFogOfWar(advanceCampaignState(placeObstacle(state, action.playerId)));
 
     case 'TICK':
       if (!state) return state;

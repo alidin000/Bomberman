@@ -103,10 +103,27 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     assetSlots: {},
     implemented: true,
   },
+  {
+    id: 'greatShinobiWar',
+    name: 'Great Shinobi War',
+    mapId: 'greatShinobiWar',
+    theme: 'Final battlefield lanes with broken cover, war banners, and chakra-scarred ground.',
+    mechanic: 'Kurama shockwaves and beast bombs punish players who stay grouped too long.',
+    bossId: 'kurama',
+    palette: {
+      groundA: '#30313a',
+      groundB: '#171720',
+      wall: '#4b5563',
+      crate: '#7f1d1d',
+      accent: '#fb923c',
+    },
+    assetSlots: {},
+    implemented: true,
+  },
 ];
 
-export const DEFAULT_STAGE_ID: StageId = 'hiddenSand';
+export const DEFAULT_STAGE_ID: StageId = 'hiddenLeaf';
 
 export function getStageDefinition(id?: string): StageDefinition {
-  return STAGE_DEFINITIONS.find((stage) => stage.id === id) ?? STAGE_DEFINITIONS[1];
+  return STAGE_DEFINITIONS.find((stage) => stage.id === id) ?? STAGE_DEFINITIONS[0];
 }

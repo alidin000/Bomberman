@@ -10,6 +10,8 @@ import {
   getCharacterDefinition,
   getStageDefinition,
 } from '../content';
+import { withUpdatedFogOfWar } from './fogOfWar';
+import { createCampaignRuntimeState } from './campaignObjectives';
 
 const PLAYER_NAMES = ['player1', 'player2', 'player3'];
 const ULTIMATE_COOLDOWN_MS = 12000;
@@ -87,7 +89,7 @@ function getBossSpawn(config: GameConfig): { x: number; y: number } {
     ?? { x: centerX, y: centerY };
 }
 
-function createBoss(config: GameConfig): GameEngineState['boss'] {
+export function createBossForConfig(config: GameConfig): GameEngineState['boss'] {
   if (config.mode !== 'solo') return null;
   const stage = getStageDefinition(config.stageId);
   const boss = getBossDefinition(stage.bossId);
@@ -112,8 +114,9 @@ export function createInitialState(config: GameConfig): GameEngineState {
   resetBombIdCounter();
   const players = Array.from({ length: config.numPlayers }, (_, i) => createPlayer(i, config));
   const map = createSpawnSafeMap(config.map, players);
+  const campaign = createCampaignRuntimeState(config);
 
-  return {
+  const state: GameEngineState = {
     map,
     players,
     monsters: config.mode === 'solo'
@@ -124,7 +127,16 @@ export function createInitialState(config: GameConfig): GameEngineState {
     destroyedBoxes: [],
     timedPowerUps: {},
     pickupMessages: [],
-    boss: createBoss({ ...config, map }),
+    campaign,
+    boss: campaign && !campaign.bossUnlocked
+      ? null
+      : createBossForConfig({ ...config, map }),
+    fogOfWar: {
+      visible: [],
+      explored: [],
+      sensedEnemies: [],
+      sensedWalls: [],
+    },
     hazards: [],
     round: 1,
     totalRounds: config.totalRounds,
@@ -136,6 +148,8 @@ export function createInitialState(config: GameConfig): GameEngineState {
     config: { ...config, map },
     roundProcessed: false,
   };
+
+  return withUpdatedFogOfWar(state);
 }
 
 export function resetRoundState(state: GameEngineState): GameEngineState {
@@ -145,8 +159,9 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     (_, i) => createPlayer(i, state.config),
   );
   const map = createSpawnSafeMap(state.config.map, players);
+  const campaign = createCampaignRuntimeState(state.config);
 
-  return {
+  const next: GameEngineState = {
     ...state,
     map,
     players,
@@ -158,11 +173,22 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     destroyedBoxes: [],
     timedPowerUps: {},
     pickupMessages: [],
-    boss: createBoss({ ...state.config, map }),
+    campaign,
+    boss: campaign && !campaign.bossUnlocked
+      ? null
+      : createBossForConfig({ ...state.config, map }),
+    fogOfWar: {
+      visible: [],
+      explored: [],
+      sensedEnemies: [],
+      sensedWalls: [],
+    },
     hazards: [],
     phase: 'playing',
     resultMessage: '',
     roundProcessed: false,
     paused: false,
   };
+
+  return withUpdatedFogOfWar(next);
 }

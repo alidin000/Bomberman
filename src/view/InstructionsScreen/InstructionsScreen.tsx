@@ -21,6 +21,8 @@ import {
 } from './InstructionsScreen.styles';
 import {
   CHARACTER_DEFINITIONS,
+  CAMPAIGN_FLOW_STEPS,
+  CAMPAIGN_VILLAGES,
   STAGE_DEFINITIONS,
   getBossDefinition,
 } from '../../content';
@@ -54,7 +56,7 @@ export const InstructionsScreen = () => {
         </StyledDialogTitle>
         <StyledDialogContent dividers>
           <ManualIntro>
-            Plant character-specific bombs, manage blast routes, and defeat the village boss in solo mode or outlast rival shinobi in local arena mode.
+            Explore villages under fog of war, plant character-specific bombs, and defeat the village boss in campaign mode or outlast rival shinobi in local arena mode.
           </ManualIntro>
 
           <ManualGrid>
@@ -77,8 +79,8 @@ export const InstructionsScreen = () => {
               <ManualSectionTitle>Modes</ManualSectionTitle>
               <ManualList>
                 <ManualItem>
-                  <ManualBadge>Solo</ManualBadge>
-                  Defeat the current stage boss before your shinobi is sealed.
+                  <ManualBadge>Campaign</ManualBadge>
+                  Continue Campaign resumes the saved village, unlocks the next village after boss victory, and preserves story rewards.
                 </ManualItem>
                 <ManualItem>
                   <ManualBadge>Local</ManualBadge>
@@ -142,11 +144,59 @@ export const InstructionsScreen = () => {
               </ManualList>
             </ManualSection>
 
+            <ManualSection wide>
+              <ManualSectionTitle>Campaign Route</ManualSectionTitle>
+              <ManualList compact>
+                <ManualItem>
+                  <ManualBadge>Flow</ManualBadge>
+                  {CAMPAIGN_FLOW_STEPS.map((step) => step.label).join(' -> ')}
+                </ManualItem>
+                {CAMPAIGN_VILLAGES.map((village) => (
+                  <ManualItem key={village.stageId}>
+                    <ManualBadge>
+                      {village.order}
+                      {' '}
+                      {village.villageName}
+                    </ManualBadge>
+                    Mini:
+                    {' '}
+                    {village.miniBoss}
+                    {' '}
+                    · Boss:
+                    {' '}
+                    {village.villageBoss}
+                    {' '}
+                    · Reward:
+                    {' '}
+                    {village.reward}
+                  </ManualItem>
+                ))}
+              </ManualList>
+            </ManualSection>
+
             <ManualSection>
               <ManualSectionTitle>Local Beasts</ManualSectionTitle>
               <ManualList>
                 {LOCAL_BEASTS.map((beast) => (
                   <ManualItem key={beast}>{beast}</ManualItem>
+                ))}
+              </ManualList>
+            </ManualSection>
+
+            <ManualSection>
+              <ManualSectionTitle>Fog of War</ManualSectionTitle>
+              <ManualList>
+                {CHARACTER_DEFINITIONS.filter((character) => character.implemented).map((character) => (
+                  <ManualItem key={`${character.id}-vision`}>
+                    <ManualBadge>
+                      Vision
+                      {' '}
+                      {character.visionRadius}
+                    </ManualBadge>
+                    {character.name}
+                    {' '}
+                    reveals nearby campaign tiles; visited cells stay mapped in shadow.
+                  </ManualItem>
                 ))}
               </ManualList>
             </ManualSection>
