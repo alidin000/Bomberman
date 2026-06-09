@@ -14,7 +14,7 @@ export type StoryUpgradeId =
   | 'sandGuard';
 
 export interface StoryProgress {
-  version: 2;
+  version: 3;
   completedBosses: BossId[];
   completedStages: StageId[];
   unlockedCharacters: CharacterId[];
@@ -32,6 +32,8 @@ export interface StoryProgress {
   missionResults: Partial<Record<StageId, 'success' | 'failed'>>;
   fragments: Partial<Record<CharacterId, number>>;
   reputation: Partial<Record<StageId, number>>;
+  discoveredSecrets: string[];
+  rareScrolls: string[];
   storyCompleted: boolean;
 }
 
@@ -72,7 +74,7 @@ export const STORY_UPGRADES: StoryUpgradeDefinition[] = [
 export const STORY_PROGRESS_KEY = 'shinobiArenaStoryProgress';
 
 export const DEFAULT_STORY_PROGRESS: StoryProgress = {
-  version: 2,
+  version: 3,
   completedBosses: [],
   completedStages: [],
   unlockedCharacters: ['deidara'],
@@ -86,6 +88,8 @@ export const DEFAULT_STORY_PROGRESS: StoryProgress = {
   missionResults: {},
   fragments: {},
   reputation: {},
+  discoveredSecrets: [],
+  rareScrolls: [],
   storyCompleted: false,
 };
 
@@ -93,7 +97,7 @@ function migrateStoryProgress(stored: Partial<StoryProgress>): StoryProgress {
   return {
     ...DEFAULT_STORY_PROGRESS,
     ...stored,
-    version: 2,
+    version: 3,
     completedBosses: stored.completedBosses ?? DEFAULT_STORY_PROGRESS.completedBosses,
     completedStages: stored.completedStages ?? DEFAULT_STORY_PROGRESS.completedStages,
     unlockedCharacters: stored.unlockedCharacters
@@ -104,6 +108,8 @@ function migrateStoryProgress(stored: Partial<StoryProgress>): StoryProgress {
     missionResults: stored.missionResults ?? {},
     fragments: stored.fragments ?? {},
     reputation: stored.reputation ?? {},
+    discoveredSecrets: stored.discoveredSecrets ?? [],
+    rareScrolls: stored.rareScrolls ?? [],
     storyCompleted: stored.storyCompleted ?? false,
   };
 }
@@ -193,6 +199,48 @@ export function completeCampaignStage(stageId: StageId, bossId: BossId): StoryPr
     lastStage: nextStageId ?? stageId,
     currentFlowStep: nextStageId ? 'exploration' : 'reward',
     storyCompleted: !nextStageId,
+  };
+  saveStoryProgress(next);
+  return next;
+}
+
+export function recordCampaignDiscoveries(
+  stageId: StageId,
+  characterId: CharacterId,
+  secretIds: string[]
+): StoryProgress {
+  const progress = loadStoryProgress();
+  const nextSecretIds = secretIds.filter((secretId) => (
+    !progress.discoveredSecrets.includes(secretId)
+  ));
+  if (nextSecretIds.length === 0) return progress;
+
+  const fragmentCount = nextSecretIds.filter((secretId) => (
+    secretId.includes('archive-fragment')
+  )).length;
+  const rareScrolls = nextSecretIds.filter((secretId) => (
+    secretId.includes('scroll-cache')
+  ));
+  const next: StoryProgress = {
+    ...progress,
+    discoveredSecrets: Array.from(new Set([
+      ...progress.discoveredSecrets,
+      ...nextSecretIds,
+    ])),
+    rareScrolls: Array.from(new Set([
+      ...progress.rareScrolls,
+      ...rareScrolls,
+    ])),
+    fragments: fragmentCount > 0
+      ? {
+        ...progress.fragments,
+        [characterId]: (progress.fragments[characterId] ?? 0) + fragmentCount,
+      }
+      : progress.fragments,
+    reputation: {
+      ...progress.reputation,
+      [stageId]: (progress.reputation[stageId] ?? 0) + nextSecretIds.length,
+    },
   };
   saveStoryProgress(next);
   return next;

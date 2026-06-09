@@ -62,6 +62,31 @@ function distanceTo(x: number, y: number, target: PlayerState): number {
   return Math.abs(x - target.x) + Math.abs(y - target.y);
 }
 
+function getHazardDeathLabel(kind: BossHazard['kind']): string {
+  const labels: Record<BossHazard['kind'], string> = {
+    sandTornado: 'Sand Tornado',
+    sandSpikes: 'Sand Spikes',
+    blueFireTrail: 'Blue Fire Trail',
+    waterCannon: 'Water Cannon',
+    lavaBurst: 'Lava Burst',
+    steamCharge: 'Steam Charge',
+    acidBubble: 'Acid Bubble',
+    airStrike: 'Air Strike',
+    tentacleSlam: 'Tentacle Slam',
+    beastBomb: 'Tailed Beast Bomb',
+    chakraShockwave: 'Chakra Shockwave',
+  };
+  return labels[kind];
+}
+
+function formatHazardDeathReason(player: PlayerState, hazard: BossHazard): string {
+  const label = hazard.sourceAbility || getHazardDeathLabel(hazard.kind);
+  if (hazard.sourceName) {
+    return `${player.name} was hit by ${hazard.sourceName}'s ${label}.`;
+  }
+  return `${player.name} was hit by a ${label}.`;
+}
+
 function moveBoss(state: GameEngineState, deltaMs: number): GameEngineState {
   if (!state.boss) return state;
   const moveCooldown = state.boss.moveCooldown - deltaMs;
@@ -207,7 +232,14 @@ function spawnBossHazards(state: GameEngineState): {
     hazards = addHazardAt(state, hazards, 'chakraShockwave', state.boss.x, state.boss.y - 1, color);
   }
 
-  return { ability, hazards };
+  return {
+    ability,
+    hazards: hazards.map((hazard) => ({
+      ...hazard,
+      sourceName: state.boss?.name,
+      sourceAbility: ability || getHazardDeathLabel(hazard.kind),
+    })),
+  };
 }
 
 function hazardIsActive(hazard: BossHazard): boolean {
@@ -226,12 +258,14 @@ function damagePlayersInHazards(
     ) || player.powerUps.includes('Invincibility');
     if (invincible) return player;
 
-    const hit = hazards.some((hazard) => (
+    const hit = hazards.find((hazard) => (
       hazard.damage > 0
       && hazardIsActive(hazard)
       && positionOverlapsCell(player, hazard.x, hazard.y)
     ));
-    return hit ? applyCharacterSurvival(player) : player;
+    return hit
+      ? applyCharacterSurvival(player, formatHazardDeathReason(player, hit))
+      : player;
   });
 }
 

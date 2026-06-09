@@ -150,7 +150,7 @@ function loadStoredKeyBindings(): KeyBindings {
 
 function getMissionObjectiveSummary(objective: CampaignObjectiveDefinition): string {
   if (objective.kind === 'rescue') {
-    return `${objective.targetCount ?? objective.targets?.length ?? 0} rescue targets`;
+    return `${objective.targetCount ?? objective.targets?.length ?? 0} mission targets`;
   }
   if (objective.kind === 'defense') {
     return `${Math.ceil((objective.durationMs ?? 0) / 1000)}s defense hold`;

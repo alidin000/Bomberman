@@ -28,7 +28,7 @@ A 3D browser arena game built with React, TypeScript, Three.js, and React Three 
 
 ## Current Project State vs. v2.0 PRD
 
-The latest product direction is larger than the current implementation. Phases 1 and 2 are now implemented across all seven campaign stages: the game has objective progression, fogged exploration, character-specific rewards, hidden-area discoveries, Zetsu surprises, ability-driven shinobi enemies, respawn pressure, and boss unlocks for every village route stop. Later v2.0 mission-variety, presentation, and multiplayer phases remain planned work.
+The latest product direction is larger than the current implementation. Phases 1 and 2 are implemented across all seven campaign stages, and Phases 3 and 4 now have playable procedural slices: stage-specific objective labels, mini-boss gates, defense HP/failure, deterministic village events, persisted discoveries/fragments/reputation, HUD campaign intel, optional model slots, procedural fallbacks, transformation overlays, boss phase cues, and large-map render optimizations. Fully bespoke hubs, 50x50 maps, custom asset packs, and online multiplayer remain planned work.
 
 Implemented today:
 
@@ -45,8 +45,16 @@ Implemented today:
 - Hidden-area metadata on every campaign map, including a scroll cache, archive fragment, and elite Zetsu burrow per stage.
 - Deterministic destroyed-crate outcome table: 60% nothing, 20% power-up, 15% White Zetsu, 4% elite Zetsu, and 1% rare reward.
 - Shinobi enemy archetypes with warned ability state for Kunai Throw, Body Flicker, Water Clone, Sand Spike, Lightning Strike, and Zetsu Ambush.
+- Finite enemy awareness so Zetsu, patrols, and mini-boss guards only chase or attack after detecting nearby players; tailed-beast bosses keep full-arena pressure.
 - Campaign respawn point state with timers, max-active caps, active monster tracking, and deterministic archetype rotation.
 - Active mini-boss gate guards for every campaign stage; the boss arena opens only after the guard is defeated and the gate is reached.
+- Deterministic village events such as Nine Tails Alert, Sandstorm, Dense Fog, Lightning Storm, Rockslide, Akatsuki Ambush, and Warfront Surge. Events modify visibility, respawn pressure, or defense damage.
+- Persisted discovery tracking for rare scrolls, archive fragments, reputation, and discovered secret IDs.
+- HUD campaign intel for active event, reputation, secret progress, fragments, objective progress, structure HP, and boss gate state.
+- Procedural transformation/ultimate-ready overlays and boss phase presentation cues that work even when optional `.glb` assets are missing.
+- Monster pathfinding optimized with one shared per-tick distance field for smart/fork patrols plus occupied-cell lookup sets.
+- Camera tracking avoids per-frame filter/reduce allocations on every render frame.
+- Vite build output splits the heavy Three.js/R3F renderer from the app and general vendor code for better caching.
 - Local PvP-style arena support for two or three players.
 - Shared-screen movement bounds for local multiplayer so players cannot run out of the camera window.
 - Streamlined setup with single-match launches and in-game restart using the same map, characters, upgrade, and controls.
@@ -55,12 +63,12 @@ Implemented today:
 Not implemented yet:
 
 - Fully bespoke 50x50 campaign maps, physical secret-room geometry, and boss arenas hidden inside larger exploration maps.
-- Unique objective variants for every village beyond the shared rescue, defense, mini-boss gate, and boss arena chain, such as activating shrines, collecting seals, locating bridges, and route-specific puzzles.
-- Village hubs, NPCs, currency, reputation, fragments, hidden areas, or lore collectibles.
-- Multi-village defense missions with building HP and enemy waves.
-- Full collectible persistence for rare fragments and scroll lore beyond in-mission discovery state.
+- Route-specific puzzle mechanics beyond the current touch/defense/mini-boss objective framework.
+- Village hubs, NPCs, currency, shops, and conversation flows.
+- Bespoke enemy-wave scripts beyond the current respawn-pressure and defense HP systems.
+- Lore collectible screens beyond persisted rare scroll and fragment counters.
 - Fully bespoke `.glb` pickup and enemy models beyond the current procedural fallbacks.
-- Transformation overlays, boss cinematics, custom boss models for every beast, and online multiplayer.
+- Boss intro/death cinematics, custom boss models for every beast, and online multiplayer.
 
 ## Implementation Plan
 
@@ -104,11 +112,13 @@ Exit criteria:
 
 ### Phase 3 - Mission Variety
 
+Status: implemented as a deterministic procedural campaign layer, with deeper bespoke mission scripting still available for future polish.
+
 Goal: make villages feel like places with changing objectives rather than boss menus.
 
 1. Implement mini-boss entities and objective gates for Iruka, Kankuro, Haku, Darui, Akatsuchi, Obito, and other route defenders.
 2. Add village defense missions with structure HP, enemy wave timers, success/fail conditions, and reward resolution.
-3. Add random village events such as Nine Tails Alert, Sandstorm, Dense Fog, Lightning Storm, and Rockslide.
+3. Add deterministic village events such as Nine Tails Alert, Sandstorm, Dense Fog, Lightning Storm, and Rockslide.
 4. Add reputation and character fragment progression to `src/story/`.
 5. Add campaign UI panels for objective tracker, structure HP, wave timers, fragments, reputation, and reward summary.
 
@@ -119,13 +129,15 @@ Exit criteria:
 
 ### Phase 4 - Visual and Asset Upgrade
 
+Status: implemented with optional asset slots and procedural fallback presentation; bespoke external asset production remains future work.
+
 Goal: upgrade presentation without tying core gameplay to licensed or heavy assets.
 
 1. Define asset slots for character models, enemy models, mini-bosses, boss models, defense structures, village props, pickup models, and transformation overlays.
 2. Add procedural fallbacks for every required asset slot.
 3. Add transformation overlays as a visual/state layer, not separate playable characters.
 4. Add boss intro, phase transition, death, and reward presentation components.
-5. Optimize large-map rendering with chunked floor/wall layers and memoized visibility groups.
+5. Optimize large-map rendering with memoized visibility groups, shared visibility sets, and lower-allocation camera/pathfinding hot paths.
 
 Exit criteria:
 
@@ -149,14 +161,13 @@ Exit criteria:
 
 ## Immediate Next Slice
 
-The next engineering slice should be **Phase 3 - Mission Variety**:
+The next engineering slice should be **bespoke Phase 4 polish before Phase 5**:
 
-1. Implement mini-boss combat entities and objective gates for Iruka, Kankuro, Haku, Darui, Akatsuchi, Obito, and other route defenders.
-2. Add village defense missions with structure HP, enemy wave timers, success/fail conditions, and reward resolution beyond the first Hidden Leaf chain.
-3. Add random village events such as Nine Tails Alert, Sandstorm, Dense Fog, Lightning Storm, and Rockslide.
-4. Persist reputation, character fragments, and rare scroll discoveries in `src/story/`.
-5. Add campaign UI panels for objective tracker, structure HP, wave timers, fragments, reputation, discovery summaries, and reward summaries.
-6. Add reducer tests for mini-boss entities, event modifiers, wave timers, retry/fail handling, and story persistence.
+1. Add real hub screens for village NPCs, shops, loadout changes, and lore discoveries.
+2. Build route-specific puzzle mechanics beyond touch targets, such as shrine activation orders, bridge switches, earth-seal collection, and puppet tower disabling rules.
+3. Add route-level lazy loading for the heaviest 3D-only screens if real-device profiling still shows slow first loads.
+4. Add browser-level smoke tests for canvas rendering once Playwright or another browser runner is installed.
+5. Start custom `.glb` enemy, pickup, structure, and boss asset production against the existing asset slots.
 
 ## Character Loadouts
 

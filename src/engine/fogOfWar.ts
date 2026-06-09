@@ -117,12 +117,16 @@ export function calculateFogOfWar(state: GameEngineState): FogOfWarState {
   const explored = new Set<string>(state.fogOfWar?.explored ?? []);
   const sensedEnemies = new Set<string>();
   const sensedWalls = new Set<string>();
+  const eventVisionModifier = state.campaign?.event?.visionModifier ?? 0;
 
   state.players
     .filter((player) => player.alive)
     .forEach((player) => {
       const playerCell = getPlayerCell(player);
-      const visionRadius = getVisionRadius(player.characterId);
+      const visionRadius = Math.max(
+        2,
+        getVisionRadius(player.characterId) + eventVisionModifier
+      );
       addRadius(
         state,
         visible,

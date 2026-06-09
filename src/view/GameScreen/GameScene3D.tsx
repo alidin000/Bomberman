@@ -1560,6 +1560,53 @@ function LoadedSceneModel({
   return <primitive object={model} />;
 }
 
+function TransformationOverlay({
+  player,
+  color,
+}: {
+  player: PlayerState;
+  color: string;
+}) {
+  const ref = useRef<THREE.Group>(null);
+  const active = player.ultimateCharge >= 100
+    || player.specialState === 'Kurama Mode'
+    || player.passiveState === 'Sand Armor Reinforced';
+
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.rotation.y = clock.elapsedTime * 1.4;
+    ref.current.position.y = 0.06 + Math.sin(clock.elapsedTime * 3) * 0.02;
+  });
+
+  if (!active) return null;
+
+  return (
+    <group ref={ref}>
+      <pointLight color={color} distance={3.4} intensity={0.95} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.41, 0]}>
+        <ringGeometry args={[0.56, 0.72, 42]} />
+        <meshBasicMaterial color={color} transparent opacity={0.34} depthWrite={false} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, Math.PI / 4]} position={[0, -0.36, 0]}>
+        <ringGeometry args={[0.24, 0.31, 30]} />
+        <meshBasicMaterial color="#fff7ed" transparent opacity={0.52} depthWrite={false} />
+      </mesh>
+      {[0, 1, 2, 3].map((index) => {
+        const rotation = (Math.PI / 2) * index;
+        return (
+          <mesh
+            key={`transform-spark-${index}`}
+            position={[Math.sin(rotation) * 0.44, 0.3, Math.cos(rotation) * 0.44]}
+          >
+            <sphereGeometry args={[0.035, 8, 8]} />
+            <meshBasicMaterial color={index % 2 === 0 ? color : '#fff7ed'} transparent opacity={0.78} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
 function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineState }) {
   const ref = useRef<THREE.Group>(null);
   const motionRef = useRef(0);
@@ -1605,6 +1652,7 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
           opacity={ghost ? 0.25 : 0.46}
         />
       </mesh>
+      <TransformationOverlay player={player} color={visual.aura} />
       {characterModel ? (
         <LoadedSceneModel asset={characterModel} ghost={ghost} motionRef={motionRef} />
       ) : (
@@ -2270,10 +2318,15 @@ function BossMesh({ state }: { state: GameEngineState }) {
         </>
       )}
       {boss.phase > 1 && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.49, 0]}>
-          <ringGeometry args={[0.68, 0.86, 36]} />
-          <meshStandardMaterial color={visual.glow} emissive={visual.glow} emissiveIntensity={0.9} transparent opacity={0.22} />
-        </mesh>
+        <>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.49, 0]}>
+            <ringGeometry args={[0.68, 0.86, 36]} />
+            <meshStandardMaterial color={visual.glow} emissive={visual.glow} emissiveIntensity={0.9} transparent opacity={0.22} />
+          </mesh>
+          <group position={[0, 1.08, 0]}>
+            <TextSprite text={`Phase ${boss.phase}`} color="#fff7ed" width={0.88} />
+          </group>
+        </>
       )}
     </group>
   );
@@ -3190,22 +3243,38 @@ function CameraRig({ state }: { state: GameEngineState }) {
   const cameraTargetRef = useRef(new THREE.Vector3());
 
   useFrame(() => {
-    const trackedPlayers = state.players.filter((player) => player.alive);
-    const players = trackedPlayers.length > 0 ? trackedPlayers : state.players;
     const fallbackCenter = getMapWorldCenter(
       state.map[0]?.length ?? 15,
       state.map.length || 10,
     );
-    const target = players.length > 0
-      ? players.reduce(
-        (sum, player) => ({
-          x: sum.x + player.x / players.length,
-          y: sum.y + player.y / players.length,
-        }),
-        { x: 0, y: 0 }
-      )
-      : { x: fallbackCenter[0] - MAP_OFFSET_X, y: fallbackCenter[2] - MAP_OFFSET_Z };
-    const [targetX, , targetZ] = toWorld(target.x, target.y);
+    let targetXCell = 0;
+    let targetYCell = 0;
+    let count = 0;
+
+    state.players.forEach((player) => {
+      if (!player.alive) return;
+      targetXCell += player.x;
+      targetYCell += player.y;
+      count += 1;
+    });
+
+    if (count === 0) {
+      state.players.forEach((player) => {
+        targetXCell += player.x;
+        targetYCell += player.y;
+        count += 1;
+      });
+    }
+
+    if (count > 0) {
+      targetXCell /= count;
+      targetYCell /= count;
+    } else {
+      targetXCell = fallbackCenter[0] - MAP_OFFSET_X;
+      targetYCell = fallbackCenter[2] - MAP_OFFSET_Z;
+    }
+
+    const [targetX, , targetZ] = toWorld(targetXCell, targetYCell);
 
     lookAtRef.current.set(targetX, 0, targetZ);
     cameraTargetRef.current.set(targetX, 13.2, targetZ + 9.6);

@@ -21,10 +21,12 @@ const DIRECTIONS: Point[] = [
 
 const MONSTER_ABILITY_WARNING_MS = 850;
 const MONSTER_HAZARD_TOTAL_MS = 1650;
+const DEFAULT_DETECTION_RANGE = 5;
+const DETECTION_RETRY_MS = 350;
 let monsterHazardIdCounter = 0;
 
 type MonsterMovementContext = {
-  distanceField: number[][] | null;
+  distanceFields: Map<string, number[][] | null>;
   occupiedCells: Set<string>;
 };
 
@@ -116,14 +118,44 @@ function createDistanceField(map: GameMap, players: PlayerState[]): number[][] |
 }
 
 function createMonsterMovementContext(
-  map: GameMap,
-  players: PlayerState[],
   monsters: MonsterState[],
 ): MonsterMovementContext {
   return {
-    distanceField: createDistanceField(map, players),
+    distanceFields: new Map(),
     occupiedCells: new Set(monsters.map((monster) => cellKey(monster.x, monster.y))),
   };
+}
+
+function getDetectionRange(monster: MonsterState): number {
+  if (typeof monster.detectionRange === 'number') return monster.detectionRange;
+  if (monster.elite) return 7;
+  if (monster.name.toLowerCase().includes('zetsu')) return 4;
+  return DEFAULT_DETECTION_RANGE;
+}
+
+function getMonsterDistanceToPlayer(monster: MonsterState, player: PlayerState): number {
+  return Math.abs(player.x - monster.x) + Math.abs(player.y - monster.y);
+}
+
+function getDetectedPlayers(monster: MonsterState, players: PlayerState[]): PlayerState[] {
+  const detectionRange = getDetectionRange(monster);
+  return players.filter((player) => (
+    player.alive
+    && getMonsterDistanceToPlayer(monster, player) <= detectionRange
+  ));
+}
+
+function getDistanceFieldForTargets(
+  context: MonsterMovementContext,
+  map: GameMap,
+  targets: PlayerState[],
+): number[][] | null {
+  if (targets.length === 0) return null;
+  const key = targets.map((player) => player.id).sort().join('|');
+  if (!context.distanceFields.has(key)) {
+    context.distanceFields.set(key, createDistanceField(map, targets));
+  }
+  return context.distanceFields.get(key) ?? null;
 }
 
 function getDistanceAt(distanceField: number[][], point: Point): number {
@@ -187,10 +219,15 @@ function moveSmartMonster(
     const chosen = chooseDeterministic(options, monster, tick);
     return chosen ? { ...monster, x: chosen.x, y: chosen.y } : monster;
   }
+  const detectedPlayers = getDetectedPlayers(monster, alivePlayers);
+  if (detectedPlayers.length === 0) {
+    const chosen = chooseDeterministic(options, monster, tick);
+    return chosen ? { ...monster, x: chosen.x, y: chosen.y } : monster;
+  }
 
   const pathMove = chooseDistanceFieldMove(
     options,
-    context.distanceField,
+    getDistanceFieldForTargets(context, map, detectedPlayers),
     monster,
     tick
   );
@@ -230,7 +267,13 @@ function moveForkMonster(
     return chosen ? { ...monster, x: chosen.x, y: chosen.y } : monster;
   }
 
-  const closest = alivePlayers.reduce((best, p) => {
+  const detectedPlayers = getDetectedPlayers(monster, alivePlayers);
+  if (detectedPlayers.length === 0) {
+    const chosen = chooseDeterministic(options, monster, tick);
+    return chosen ? { ...monster, x: chosen.x, y: chosen.y } : monster;
+  }
+
+  const closest = detectedPlayers.reduce((best, p) => {
     const bestDist = Math.abs(best.x - monster.x) + Math.abs(best.y - monster.y);
     const pDist = Math.abs(p.x - monster.x) + Math.abs(p.y - monster.y);
     return pDist < bestDist ? p : best;
@@ -253,7 +296,7 @@ function moveForkMonster(
   }
   const pathMove = chooseDistanceFieldMove(
     options,
-    context.distanceField,
+    getDistanceFieldForTargets(context, map, detectedPlayers),
     monster,
     tick,
     23
@@ -282,7 +325,7 @@ function moveMonsterByKind(
 }
 
 function getNearestPlayer(monster: MonsterState, players: PlayerState[]): PlayerState | null {
-  const alivePlayers = players.filter((player) => player.alive);
+  const alivePlayers = getDetectedPlayers(monster, players);
   if (alivePlayers.length === 0) return null;
   return alivePlayers.reduce((nearest, player) => {
     const nearestDistance = Math.abs(nearest.x - monster.x) + Math.abs(nearest.y - monster.y);
@@ -330,6 +373,8 @@ function createMonsterHazard(
   x: number,
   y: number,
   color: string,
+  sourceName?: string,
+  sourceAbility?: string,
 ): BossHazard {
   monsterHazardIdCounter += 1;
   return {
@@ -341,6 +386,8 @@ function createMonsterHazard(
     warningTicks: MONSTER_ABILITY_WARNING_MS,
     color,
     damage: 1,
+    sourceName,
+    sourceAbility,
   };
 }
 
@@ -372,6 +419,8 @@ function damagePlayerAtTarget(
   players: PlayerState[],
   state: GameEngineState,
   target: Point,
+  sourceName: string,
+  sourceAbility?: string,
 ): PlayerState[] {
   return players.map((player) => {
     if (!player.alive) return player;
@@ -379,7 +428,12 @@ function damagePlayerAtTarget(
     if (protectedByShield) return player;
     const playerCell = getPlayerCell(player);
     return playerCell.x === target.x && playerCell.y === target.y
-      ? applyCharacterSurvival(player)
+      ? applyCharacterSurvival(
+        player,
+        sourceAbility
+          ? `${player.name} was hit by ${sourceName}'s ${sourceAbility}.`
+          : `${player.name} was caught by ${sourceName}.`
+      )
       : player;
   });
 }
@@ -463,7 +517,13 @@ function resolveMonsterAbility(
   }
 
   if (abilityKind === 'zetsuMelee') {
-    nextPlayers = damagePlayerAtTarget(players, state, target);
+    nextPlayers = damagePlayerAtTarget(
+      players,
+      state,
+      target,
+      monster.name,
+      monster.abilityLabel
+    );
   }
 
   return { monster: nextMonster, players: nextPlayers, spawned: nextSpawned };
@@ -482,7 +542,9 @@ function startMonsterAbility(
     return {
       monster: {
         ...monster,
-        abilityCooldown: abilityCooldownFor(abilityKind, monster.elite),
+        abilityCooldown: DETECTION_RETRY_MS,
+        abilityTarget: null,
+        abilityWarningTicks: 0,
       },
       hazards,
     };
@@ -496,7 +558,14 @@ function startMonsterAbility(
   const nextHazards = hazardKind
     ? [
       ...hazards,
-      createMonsterHazard(hazardKind, target.x, target.y, colorForAbility(abilityKind)),
+      createMonsterHazard(
+        hazardKind,
+        target.x,
+        target.y,
+        colorForAbility(abilityKind),
+        monster.name,
+        monster.abilityLabel
+      ),
     ]
     : hazards;
 
@@ -589,8 +658,6 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
   let hazards = [...state.hazards];
   let spawned: MonsterState[] = [];
   const movementContext = createMonsterMovementContext(
-    state.map,
-    state.players,
     state.monsters
   );
 
@@ -641,8 +708,10 @@ export function checkMonsterCollisions(state: GameEngineState): PlayerState[] {
     const hasInvincibility = isPowerUpActive(state, player.id, 'Invincibility');
     if (hasInvincibility) return player;
 
-    const hit = state.monsters.some((m) => positionsTouch(m, player));
-    return hit ? applyCharacterSurvival(player) : player;
+    const hit = state.monsters.find((monster) => positionsTouch(monster, player));
+    return hit
+      ? applyCharacterSurvival(player, `${player.name} was caught by ${hit.name}.`)
+      : player;
   });
 }
 

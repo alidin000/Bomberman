@@ -171,10 +171,14 @@ describe('gameReducer', () => {
   it('initializes campaign fog from character vision radius', () => {
     const narutoState = createInitialState({
       ...soloConfig,
+      selectedMap: 'hiddenLeaf',
+      stageId: 'hiddenLeaf',
       selectedCharacters: ['naruto'],
     });
     const sasukeState = createInitialState({
       ...soloConfig,
+      selectedMap: 'hiddenLeaf',
+      stageId: 'hiddenLeaf',
       selectedCharacters: ['sasuke'],
     });
 
@@ -183,12 +187,32 @@ describe('gameReducer', () => {
     expect(sasukeState.fogOfWar.visible).toContain(cellKey(6, 1));
   });
 
+  it('applies campaign event vision modifiers to fog of war', () => {
+    const calmState = createInitialState({
+      ...soloConfig,
+      selectedMap: 'hiddenLeaf',
+      stageId: 'hiddenLeaf',
+      selectedCharacters: ['naruto'],
+    });
+    const sandstormState = createInitialState({
+      ...soloConfig,
+      selectedMap: 'hiddenSand',
+      stageId: 'hiddenSand',
+      selectedCharacters: ['naruto'],
+    });
+
+    expect(calmState.fogOfWar.visible).toContain(cellKey(4, 1));
+    expect(sandstormState.campaign?.event?.name).toBe('Sandstorm');
+    expect(sandstormState.fogOfWar.visible).not.toContain(cellKey(4, 1));
+  });
+
   it('gates the Hidden Leaf boss behind campaign objectives', () => {
     const state = createInitialState(hiddenLeafCampaignConfig);
 
     expect(state.map).toHaveLength(35);
     expect(state.map[0]).toHaveLength(35);
     expect(state.campaign?.title).toBe('Hidden Leaf Emergency');
+    expect(state.campaign?.event?.name).toBe('Nine Tails Alert');
     expect(state.campaign?.missionStep).toBe('rescue');
     expect(state.campaign?.missionResult).toBe('in_progress');
     expect(state.campaign?.districts.map((district) => district.id)).toEqual([
@@ -284,14 +308,6 @@ describe('gameReducer', () => {
         && monster.name === miniBoss?.miniBossLabel
         && monster.elite
       ))).toBe(true);
-      state = {
-        ...state,
-        players: state.players.map((player) => ({
-          ...player,
-          x: miniBoss?.x ?? player.x,
-          y: miniBoss?.y ?? player.y,
-        })),
-      };
       state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
 
       expect(state.campaign?.objectives[2].status).toBe('active');
@@ -299,6 +315,13 @@ describe('gameReducer', () => {
 
       state = {
         ...state,
+        players: state.players.map((player) => ({
+          ...player,
+          alive: true,
+          deathReason: undefined,
+          x: miniBoss?.x ?? player.x,
+          y: miniBoss?.y ?? player.y,
+        })),
         monsters: state.monsters.filter((monster) => monster.id !== guardId),
       };
       state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
@@ -413,6 +436,29 @@ describe('gameReducer', () => {
     ]));
     expect(state.campaign?.spawnPoints[0].activeMonsterIds).toContain('hiddenLeaf-main-gate-1');
     expect(state.campaign?.spawnPoints[0].ticksRemaining).toBe(20000);
+  });
+
+  it('applies campaign event pressure to respawn timers', () => {
+    let state = createInitialState(hiddenLeafCampaignConfig);
+    state = {
+      ...state,
+      monsters: [],
+      campaign: state.campaign
+        ? {
+          ...state.campaign,
+          spawnPoints: state.campaign.spawnPoints.map((point, index) => ({
+            ...point,
+            activeMonsterIds: [],
+            ticksRemaining: index === 0 ? 1000 : point.respawnMs,
+            maxActive: index === 0 ? 2 : point.maxActive,
+          })),
+        }
+        : state.campaign,
+    };
+
+    state = gameReducer(state, { type: 'TICK', deltaMs: 100 })!;
+
+    expect(state.campaign?.spawnPoints[0].ticksRemaining).toBe(895);
   });
 
   it('starts warned enemy ability state and readable hazard targets', () => {
@@ -571,6 +617,47 @@ describe('gameReducer', () => {
     expect(state.monsters.some((monster) => monster.clone && monster.name === 'Water Clone'))
       .toBe(true);
     expect(state.players[0].alive).toBe(false);
+    expect(state.players[0].deathReason).toBe(
+      "Deidara was hit by White Zetsu's Zetsu Ambush."
+    );
+    expect(state.resultMessage).toContain("White Zetsu's Zetsu Ambush");
+  });
+
+  it('keeps distant Zetsu from attacking before detection', () => {
+    let state = createInitialState({
+      ...baseConfig,
+      map: abilityTestMap,
+      selectedMap: 'ability-test',
+    });
+    state = {
+      ...state,
+      players: state.players.map((player, index) => (
+        index === 0
+          ? { ...player, x: 1, y: 1 }
+          : { ...player, alive: false }
+      )),
+      monsters: [
+        shinobiEnemy({
+          id: 'distant-zetsu',
+          name: 'White Zetsu',
+          x: 5,
+          y: 5,
+          kind: 'ghost',
+          archetype: 'whiteZetsu',
+          abilityKind: 'zetsuMelee',
+          abilityLabel: 'Zetsu Ambush',
+          abilityCooldown: 0,
+        }),
+      ],
+      hazards: [],
+    };
+
+    state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
+
+    expect(state.players[0].alive).toBe(true);
+    expect(state.monsters[0].abilityWarningTicks).toBe(0);
+    expect(state.monsters[0].abilityTarget).toBeNull();
+    expect(state.hazards).toHaveLength(0);
   });
 
   it('rescues villagers, clears Iruka gate, and spawns Kurama', () => {
@@ -613,10 +700,6 @@ describe('gameReducer', () => {
       }),
     ]));
 
-    state = {
-      ...state,
-      players: state.players.map((player) => ({ ...player, x: 29, y: 29 })),
-    };
     state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
 
     expect(state.campaign?.objectives[2].status).toBe('active');
@@ -625,6 +708,13 @@ describe('gameReducer', () => {
 
     state = {
       ...state,
+      players: state.players.map((player) => ({
+        ...player,
+        alive: true,
+        deathReason: undefined,
+        x: 29,
+        y: 29,
+      })),
       monsters: state.monsters.filter((monster) => monster.id !== 'confrontIruka-guard'),
     };
     state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
@@ -676,6 +766,8 @@ describe('gameReducer', () => {
   it('keeps explored campaign cells in memory after moving out of sight', () => {
     let state = createInitialState({
       ...soloConfig,
+      selectedMap: 'hiddenLeaf',
+      stageId: 'hiddenLeaf',
       selectedCharacters: ['naruto'],
     });
     const rememberedCell = cellKey(1, 4);
@@ -784,13 +876,32 @@ describe('gameReducer', () => {
     state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'right' })!;
     expect(state.players[0].x).toBeCloseTo(1.1);
 
-    for (let step = 0; step < 7; step += 1) {
+    state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'left' })!;
+    expect(state.players[0].x).toBeCloseTo(1);
+
+    for (let step = 0; step < 8; step += 1) {
       state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'right' })!;
     }
 
     expect(state.players[0].x).toBeCloseTo(1.8);
     state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'left' })!;
     expect(state.players[0].x).toBeCloseTo(1.8);
+  });
+
+  it('lets trapped players leave solid cover without moving deeper into it', () => {
+    let state = createInitialState(baseConfig);
+    const map = state.map.map((row) => [...row]);
+    map[1][1] = {
+      ownerId: 'player2',
+      coords: { x: 1, y: 1 },
+    };
+    state = { ...state, map };
+
+    state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'right' })!;
+    expect(state.players[0].x).toBeCloseTo(1.1);
+
+    state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'left' })!;
+    expect(state.players[0].x).toBeCloseTo(1.1);
   });
 
   it('drops a Naruto shadow clone charge beside the first bomb', () => {
@@ -864,6 +975,24 @@ describe('gameReducer', () => {
 
     expect(state.bombs[0].kind).toBe('thunderMark');
     expect(state.bombs[0].ticksRemaining).toBe(1500);
+  });
+
+  it('records concrete bomb death reasons in round results', () => {
+    let state = createInitialState({
+      ...baseConfig,
+      selectedCharacters: ['sasuke', 'naruto'],
+    });
+    state = { ...state, monsters: [] };
+
+    state = gameReducer(state, { type: 'DROP_BOMB', playerId: 'player1' })!;
+    state = gameReducer(state, { type: 'TICK', deltaMs: 1800 })!;
+
+    expect(state.players[0].alive).toBe(false);
+    expect(state.players[0].deathReason).toBe(
+      'Sasuke was caught in their own Chidori Mine blast.'
+    );
+    expect(state.resultMessage).toContain('Chidori Mine blast');
+    expect(state.resultMessage).not.toContain('overwhelmed');
   });
 
   it('lets Gaara spend his sand shield to survive his first blast hit', () => {

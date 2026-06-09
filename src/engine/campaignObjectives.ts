@@ -1,4 +1,5 @@
 import { getCampaignMission } from '../content/campaignMissions';
+import { getCampaignEvent } from '../content/campaignEvents';
 import { EnemyArchetype } from '../content/enemies';
 import { isBomb, isObstacle } from '../model/gameItem';
 import { createShinobiEnemy } from './campaignEnemies';
@@ -221,6 +222,7 @@ function spawnActiveMiniBossGuards(state: GameEngineState): GameEngineState {
         ...guard,
         name: objective.miniBossLabel ?? guard.name,
         elite: true,
+        detectionRange: 8,
         moveCooldown: Math.min(guard.moveCooldown, 420),
         abilityCooldown: 700,
       },
@@ -304,6 +306,7 @@ export function createCampaignRuntimeState(
     })),
     hiddenAreas: mission.hiddenAreas,
     discoveredSecrets: mission.discoveredSecrets,
+    event: getCampaignEvent(mission.stageId),
     structures: getCampaignStructures(objectives),
     miniBossGateLabel: mission.miniBossGateLabel,
     bossGateLabel: mission.bossGateLabel,
@@ -386,8 +389,10 @@ function updateDefenseObjective(
   );
   const damaged = damageCooldown <= 0
     && objectiveTakesStructureDamage(state, objective);
+  const structureDamage = STRUCTURE_DAMAGE
+    + (state.campaign?.event?.structureDamageBonus ?? 0);
   const structureHp = damaged
-    ? Math.max(0, (objective.structureHp ?? 0) - STRUCTURE_DAMAGE)
+    ? Math.max(0, (objective.structureHp ?? 0) - structureDamage)
     : objective.structureHp;
   if ((structureHp ?? 0) <= 0) {
     return {

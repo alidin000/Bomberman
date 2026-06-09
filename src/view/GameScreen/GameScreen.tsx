@@ -25,7 +25,7 @@ import { GameHUD } from './GameHUD';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { GameConfig, loadMapFromStorage } from '../../engine';
 import { DEFAULT_CHARACTER_ID, DEFAULT_STAGE_ID, GameMode } from '../../content';
-import { completeCampaignStage } from '../../story/progress';
+import { completeCampaignStage, recordCampaignDiscoveries } from '../../story/progress';
 import {
   GameSceneContainer,
   TopControls,
@@ -75,6 +75,9 @@ export const GameScreen = () => {
   const gamePhase = state?.phase;
   const gameMode = state?.config.mode;
   const stageId = state?.config.stageId;
+  const campaignStageId = state?.campaign?.stageId;
+  const campaignSecretsKey = state?.campaign?.discoveredSecrets.join('|') ?? '';
+  const leadCharacterId = state?.players[0]?.characterId;
   const rewardedStages = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -100,6 +103,21 @@ export const GameScreen = () => {
       }
     }
   }, [bossHealth, bossId, gameMode, gamePhase, stageId]);
+
+  useEffect(() => {
+    if (
+      gameMode === 'solo'
+      && campaignStageId
+      && leadCharacterId
+      && campaignSecretsKey.length > 0
+    ) {
+      recordCampaignDiscoveries(
+        campaignStageId,
+        leadCharacterId,
+        campaignSecretsKey.split('|')
+      );
+    }
+  }, [campaignSecretsKey, campaignStageId, gameMode, leadCharacterId]);
 
   const isPaused = state?.paused ?? false;
   const dialogOpen = state?.phase === 'round_end' || state?.phase === 'game_over';

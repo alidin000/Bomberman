@@ -2,6 +2,7 @@ import {
   STORY_PROGRESS_KEY,
   completeCampaignStage,
   loadStoryProgress,
+  recordCampaignDiscoveries,
   selectStoryLoadout,
 } from './progress';
 
@@ -16,11 +17,13 @@ describe('story progress', () => {
     expect(progress.lastStage).toBe('hiddenLeaf');
     expect(progress.unlockedStages).toEqual(['hiddenLeaf']);
     expect(progress.unlockedCharacters).toEqual(['deidara']);
-    expect(progress.version).toBe(2);
+    expect(progress.version).toBe(3);
     expect(progress.objectiveProgress).toEqual({});
     expect(progress.missionResults).toEqual({});
     expect(progress.fragments).toEqual({});
     expect(progress.reputation).toEqual({});
+    expect(progress.discoveredSecrets).toEqual([]);
+    expect(progress.rareScrolls).toEqual([]);
     expect(progress.storyCompleted).toBe(false);
   });
 
@@ -73,11 +76,36 @@ describe('story progress', () => {
     expect(progress.completedStages).toEqual([]);
     expect(progress.currentFlowStep).toBe('exploration');
     expect(progress.completedBosses).toEqual(['shukaku']);
-    expect(progress.version).toBe(2);
+    expect(progress.version).toBe(3);
     expect(progress.objectiveProgress).toEqual({});
     expect(progress.missionResults).toEqual({});
     expect(progress.fragments).toEqual({});
     expect(progress.reputation).toEqual({});
+    expect(progress.discoveredSecrets).toEqual([]);
+    expect(progress.rareScrolls).toEqual([]);
     expect(progress.storyCompleted).toBe(false);
+  });
+
+  it('persists discovered scrolls and fragments only once', () => {
+    let progress = recordCampaignDiscoveries('hiddenLeaf', 'naruto', [
+      'hiddenLeaf-scroll-cache',
+      'hiddenLeaf-archive-fragment',
+    ]);
+
+    expect(progress.discoveredSecrets).toEqual([
+      'hiddenLeaf-scroll-cache',
+      'hiddenLeaf-archive-fragment',
+    ]);
+    expect(progress.rareScrolls).toEqual(['hiddenLeaf-scroll-cache']);
+    expect(progress.fragments.naruto).toBe(1);
+    expect(progress.reputation.hiddenLeaf).toBe(2);
+
+    progress = recordCampaignDiscoveries('hiddenLeaf', 'naruto', [
+      'hiddenLeaf-scroll-cache',
+      'hiddenLeaf-archive-fragment',
+    ]);
+
+    expect(progress.fragments.naruto).toBe(1);
+    expect(progress.reputation.hiddenLeaf).toBe(2);
   });
 });

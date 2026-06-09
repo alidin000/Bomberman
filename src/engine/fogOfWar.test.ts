@@ -35,8 +35,8 @@ function createSoloConfig(characterId: CharacterId): GameConfig {
     mode: 'solo',
     numPlayers: 1,
     totalRounds: 1,
-    selectedMap: 'hiddenSand',
-    stageId: 'hiddenSand',
+    selectedMap: 'hiddenLeaf',
+    stageId: 'hiddenLeaf',
     selectedCharacters: [characterId],
     map: openMap,
   };

@@ -36,9 +36,13 @@ import {
   ObjectiveMeta,
   ObjectiveStatusBadge,
   ObjectiveProgress,
+  CampaignEventBanner,
+  IntelGrid,
+  IntelPill,
 } from './GameHUD.styles';
 import { getCharacterDefinition } from '../../content';
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
+import { loadStoryProgress } from '../../story/progress';
 
 const POWER_LABELS: Record<Power, string> = {
   AddBomb: 'Bomb capacity',
@@ -103,6 +107,11 @@ function PlayerCard({
           <Typography variant="caption" color={player.alive ? '#86efac' : '#fca5a5'}>
             {player.alive ? character.title : 'Sealed'}
           </Typography>
+          {!player.alive && player.deathReason && (
+            <Typography variant="caption" display="block" color="#fecaca">
+              {player.deathReason}
+            </Typography>
+          )}
         </div>
       </PlayerHeader>
       <PlayerStats>
@@ -174,7 +183,7 @@ function getObjectiveProgress(objective: CampaignObjectiveState): number {
 
 function formatObjectiveDetail(objective: CampaignObjectiveState): string {
   if (objective.kind === 'rescue') {
-    return `${objective.current}/${objective.target} villagers rescued`;
+    return `${objective.current}/${objective.target} targets reached`;
   }
 
   if (objective.kind === 'miniBoss') {
@@ -191,7 +200,18 @@ function formatObjectiveDetail(objective: CampaignObjectiveState): string {
 }
 
 function CampaignSummary({ state }: GameHUDProps) {
+  const storyProgress = React.useMemo(() => loadStoryProgress(), [
+    state.campaign?.stageId,
+    state.campaign?.discoveredSecrets.length,
+    state.phase,
+  ]);
   if (!state.campaign) return null;
+  const { event, stageId } = state.campaign;
+  const stageReputation = storyProgress.reputation[stageId] ?? 0;
+  const fragmentCount = Object.values(storyProgress.fragments).reduce(
+    (sum, count) => sum + (count ?? 0),
+    0
+  );
 
   return (
     <ObjectivePaper elevation={4}>
@@ -201,6 +221,34 @@ function CampaignSummary({ state }: GameHUDProps) {
       <Typography variant="caption" display="block" color="#d1fae5">
         {state.campaign.message}
       </Typography>
+      {event && (
+        <CampaignEventBanner color={event.color}>
+          <Typography variant="caption" display="block" fontWeight="bold">
+            {event.name}
+          </Typography>
+          <Typography variant="caption" color="#e5e7eb">
+            {event.effectLabel}
+          </Typography>
+        </CampaignEventBanner>
+      )}
+      <IntelGrid>
+        <IntelPill>
+          <strong>{stageReputation}</strong>
+          Reputation
+        </IntelPill>
+        <IntelPill>
+          <strong>
+            {state.campaign.discoveredSecrets.length}
+            /
+            {state.campaign.hiddenAreas.length}
+          </strong>
+          Secrets
+        </IntelPill>
+        <IntelPill>
+          <strong>{fragmentCount}</strong>
+          Fragments
+        </IntelPill>
+      </IntelGrid>
       <ObjectiveList>
         {state.campaign.objectives.map((objective) => (
           <ObjectiveItem key={objective.id}>
@@ -292,7 +340,7 @@ function MonsterSummary({ state }: GameHUDProps) {
   return (
     <MonsterPaper elevation={4}>
       <Typography variant="subtitle2" fontWeight="bold">
-        Chakra Beasts
+        Enemy Patrols
         {' '}
         ·
         {' '}

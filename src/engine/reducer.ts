@@ -41,6 +41,30 @@ function getMatchWinnerId(state: GameEngineState, roundWinners: string[]): strin
   return best.wins > 0 && tied.length === 1 ? best.id : null;
 }
 
+function getDeathSummary(players: GameEngineState['players'], includeFallback = false): string {
+  const fallen = players.filter((player) => !player.alive);
+  if (fallen.length === 0) return '';
+  return fallen
+    .map((player) => (
+      player.deathReason
+        ?? (includeFallback ? `${player.name}'s exact death source was not recorded.` : '')
+    ))
+    .filter(Boolean)
+    .join(' ');
+}
+
+function appendDeathSummary(message: string, state: GameEngineState): string {
+  const deathSummary = getDeathSummary(state.players);
+  return deathSummary ? `${message} ${deathSummary}` : message;
+}
+
+function getSoloDefeatMessage(state: GameEngineState): string {
+  const deathSummary = getDeathSummary(state.players, true);
+  return deathSummary
+    ? `${deathSummary} Try again.`
+    : 'The exact death source was not recorded. Try again.';
+}
+
 function spawnUnlockedCampaignBoss(state: GameEngineState): GameEngineState {
   if (!state.campaign?.bossUnlocked || state.boss) return state;
   const boss = createBossForConfig({ ...state.config, map: state.map });
@@ -100,7 +124,7 @@ function checkRoundEnd(state: GameEngineState): GameEngineState {
     if (alive.length > 0) return state;
     return {
       ...state,
-      resultMessage: 'The boss overwhelmed your squad. Try again.',
+      resultMessage: getSoloDefeatMessage(state),
       phase: 'game_over',
       roundProcessed: true,
       paused: true,
@@ -113,10 +137,10 @@ function checkRoundEnd(state: GameEngineState): GameEngineState {
   let resultMessage = '';
   if (alive.length === 1) {
     roundWinners.push(alive[0].id);
-    resultMessage = `${alive[0].name} wins the round!`;
+    resultMessage = appendDeathSummary(`${alive[0].name} wins the round.`, state);
   } else {
     roundWinners.push('draw');
-    resultMessage = 'No players left, draw!';
+    resultMessage = appendDeathSummary('No players left. Draw.', state);
   }
 
   const isLastRound = state.round >= state.totalRounds;
@@ -129,7 +153,7 @@ function checkRoundEnd(state: GameEngineState): GameEngineState {
     return {
       ...state,
       roundWinners,
-      resultMessage: gameOverMessage,
+      resultMessage: appendDeathSummary(gameOverMessage, state),
       phase: 'game_over',
       roundProcessed: true,
       paused: true,

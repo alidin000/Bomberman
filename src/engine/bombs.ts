@@ -362,6 +362,40 @@ function getTeleportDestination(
   return candidates.find((point) => state.map[point.y]?.[point.x] === 'Empty') ?? { x, y };
 }
 
+function getBombDeathLabel(kind: BombState['kind']): string {
+  const labels: Record<BombState['kind'], string> = {
+    standard: 'bomb',
+    claySpider: 'Clay Spider',
+    shadowClone: 'Shadow Clone',
+    chidoriMine: 'Chidori Mine',
+    sandCoffin: 'Sand Coffin',
+    thunderMark: 'Flying Thunder Mark',
+    crowClone: 'Crow Clone',
+    giantClay: 'C3 Giant Clay',
+    rasenshuriken: 'Rasenshuriken',
+    kirin: 'Kirin',
+    sandTsunami: 'Sand Tsunami',
+    instantTeleport: 'Flying Thunder God',
+    tsukuyomi: 'Tsukuyomi',
+  };
+  return labels[kind];
+}
+
+function formatBombDeathReason(
+  player: PlayerState,
+  owner: PlayerState | undefined,
+  bomb: BombState
+): string {
+  const label = getBombDeathLabel(bomb.kind);
+  if (owner?.id === player.id) {
+    return `${player.name} was caught in their own ${label} blast.`;
+  }
+  if (owner) {
+    return `${player.name} was caught in ${owner.name}'s ${label} blast.`;
+  }
+  return `${player.name} was caught in a ${label} blast.`;
+}
+
 function getBossDamage(kind: BombState['kind']): number {
   const damageByKind: Partial<Record<BombState['kind'], number>> = {
     claySpider: 90,
@@ -474,6 +508,7 @@ export function explodeBombs(state: GameEngineState, bombsToExplode: BombState[]
 
   bombsToExplode.forEach((bomb) => {
     map[bomb.y][bomb.x] = 'Empty';
+    const owner = players.find((player) => player.id === bomb.ownerId);
 
     const positions = dedupePositions(getExplosionPositions(bomb, map));
     positions.forEach(({ x, y }) => {
@@ -517,7 +552,10 @@ export function explodeBombs(state: GameEngineState, bombsToExplode: BombState[]
         if (p.alive && positionOverlapsCell(p, x, y)) {
           const invincible = isPowerUpActive(state, p.id, 'Invincibility');
           if (!invincible) {
-            players[index] = applyCharacterSurvival(p);
+            players[index] = applyCharacterSurvival(
+              p,
+              formatBombDeathReason(p, owner, bomb)
+            );
           }
         }
       });

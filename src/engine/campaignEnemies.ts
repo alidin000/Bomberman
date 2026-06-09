@@ -33,6 +33,16 @@ const SPAWN_OFFSETS: Point[] = [
   { x: -1, y: -1 },
 ];
 
+const ARCHETYPE_DETECTION_RANGE: Record<EnemyArchetype, number> = {
+  rogueGenin: 6,
+  anbu: 7,
+  mistNinja: 6,
+  sandNinja: 6,
+  cloudNinja: 7,
+  whiteZetsu: 4,
+  blackZetsu: 5,
+};
+
 function canSpawnAt(state: Pick<GameEngineState, 'map' | 'monsters'>, x: number, y: number) {
   const cell = state.map[y]?.[x];
   return cell !== undefined
@@ -93,6 +103,9 @@ export function createShinobiEnemy({
     abilityCooldown: clone ? undefined : 1600,
     abilityWarningTicks: 0,
     abilityTarget: null,
+    detectionRange: clone
+      ? 4
+      : ARCHETYPE_DETECTION_RANGE[archetype] + (definition.elite ? 1 : 0),
     spawnPointId,
     clone,
     elite: definition.elite,
@@ -164,11 +177,12 @@ export function tickCampaignRespawns(
 
   let monsters = [...state.monsters];
   const monsterIds = new Set(monsters.map((monster) => monster.id));
+  const respawnPressure = state.campaign.event?.respawnPressure ?? 1;
   const spawnPoints = state.campaign.spawnPoints.map((point) => {
     let nextPoint = {
       ...point,
       activeMonsterIds: point.activeMonsterIds.filter((id) => monsterIds.has(id)),
-      ticksRemaining: Math.max(0, point.ticksRemaining - deltaMs),
+      ticksRemaining: Math.max(0, point.ticksRemaining - deltaMs * respawnPressure),
     };
 
     if (

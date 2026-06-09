@@ -5,6 +5,18 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'build',
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('/three/') || id.includes('@react-three')) {
+            return 'vendor-three';
+          }
+          return 'vendor';
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

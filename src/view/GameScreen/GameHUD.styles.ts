@@ -240,6 +240,42 @@ export const ObjectiveProgress = styled(LinearProgress)({
   },
 });
 
+export const CampaignEventBanner = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'color',
+})<{ color: string }>(({ color }) => ({
+  marginTop: 8,
+  padding: 8,
+  borderRadius: 6,
+  background: `linear-gradient(90deg, ${color}42, rgba(0, 0, 0, 0.28))`,
+  border: `1px solid ${color}99`,
+  boxShadow: `0 0 16px ${color}22`,
+}));
+
+export const IntelGrid = styled(Box)({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+  gap: 6,
+  marginTop: 8,
+});
+
+export const IntelPill = styled(Box)({
+  minHeight: 34,
+  padding: '5px 6px',
+  borderRadius: 5,
+  background: 'rgba(15, 23, 42, 0.56)',
+  border: '1px solid rgba(203, 213, 225, 0.2)',
+  color: '#e5e7eb',
+  fontSize: '0.66rem',
+  fontWeight: 800,
+  lineHeight: 1.15,
+  textAlign: 'center',
+  '& strong': {
+    display: 'block',
+    color: '#fef3c7',
+    fontSize: '0.78rem',
+  },
+});
+
 export const UltimateProgress = styled(LinearProgress)({
   marginTop: 8,
   height: 7,

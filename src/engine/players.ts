@@ -50,7 +50,10 @@ function addPickupMessage(
   ].slice(-6);
 }
 
-export function applyCharacterSurvival(player: PlayerState): PlayerState {
+export function applyCharacterSurvival(
+  player: PlayerState,
+  deathReason?: string
+): PlayerState {
   if (player.characterId === 'gaara' && player.passiveState === 'Automatic Sand Shield') {
     return {
       ...player,
@@ -65,7 +68,7 @@ export function applyCharacterSurvival(player: PlayerState): PlayerState {
       passiveState: 'Illusion Dodge Spent',
     };
   }
-  return { ...player, alive: false };
+  return { ...player, alive: false, deathReason };
 }
 
 function isGhostActive(state: GameEngineState, playerId: string): boolean {
@@ -78,29 +81,56 @@ function addUniquePower(powerUps: Power[], power: Power): Power[] {
   return powerUps.includes(power) ? powerUps : [...powerUps, power];
 }
 
+function distanceToCellCenterSquared(x: number, y: number, cellX: number, cellY: number): number {
+  return (x - cellX) ** 2 + (y - cellY) ** 2;
+}
+
+function overlapsCell(x: number, y: number, cellX: number, cellY: number): boolean {
+  return getOverlappedCells(x, y).some((cell) => (
+    cell.x === cellX && cell.y === cellY
+  ));
+}
+
+function isLeavingOverlappedCell(
+  currentX: number,
+  currentY: number,
+  nextX: number,
+  nextY: number,
+  cellX: number,
+  cellY: number,
+): boolean {
+  if (!overlapsCell(currentX, currentY, cellX, cellY)) return false;
+
+  const currentDistance = distanceToCellCenterSquared(currentX, currentY, cellX, cellY);
+  const nextDistance = distanceToCellCenterSquared(nextX, nextY, cellX, cellY);
+  return nextDistance >= currentDistance;
+}
+
 function isCellValidForPlayer(
   state: GameEngineState,
   playerId: string,
-  x: number,
-  y: number,
+  nextX: number,
+  nextY: number,
+  cellX: number,
+  cellY: number,
   currentX: number,
   currentY: number,
 ): boolean {
   const { map } = state;
-  if (y < 0 || y >= map.length || x < 0 || x >= map[0].length) return false;
+  if (cellY < 0 || cellY >= map.length || cellX < 0 || cellX >= map[0].length) return false;
 
   if (isGhostActive(state, playerId)) {
     return true;
   }
 
-  const cell = map[y][x];
+  const cell = map[cellY][cellX];
   if (isBomb(cell)) {
     return cell.ownerId === playerId
-      && positionsTouch(
-        { x: currentX, y: currentY },
-        { x, y },
-        0.5 + PLAYER_COLLISION_RADIUS,
-      );
+      && overlapsCell(currentX, currentY, cellX, cellY);
+  }
+
+  if (cell === 'Wall' || cell === 'Box' || isObstacle(cell)) {
+    return isLeavingOverlappedCell(currentX, currentY, nextX, nextY, cellX, cellY);
   }
 
   return cell !== 'Wall'
@@ -118,7 +148,7 @@ function isValidMove(
   currentY: number,
 ): boolean {
   return getOverlappedCells(x, y).every((cell) => (
-    isCellValidForPlayer(state, playerId, cell.x, cell.y, currentX, currentY)
+    isCellValidForPlayer(state, playerId, x, y, cell.x, cell.y, currentX, currentY)
   ));
 }
 
@@ -447,7 +477,13 @@ export function tickPowerUps(state: GameEngineState, deltaMs: number): GameEngin
           });
           if (trapped) {
             players = players.map((p) => (
-              p.id === playerId ? { ...p, alive: false } : p
+              p.id === playerId
+                ? {
+                  ...p,
+                  alive: false,
+                  deathReason: `${p.name} was sealed when Ghost faded inside a wall or cover.`,
+                }
+                : p
             ));
           }
         }

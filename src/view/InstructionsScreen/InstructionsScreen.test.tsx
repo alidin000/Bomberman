@@ -25,16 +25,20 @@ describe('InstructionsScreen', () => {
     );
   };
 
-  it('should display the Shinobi Arena manual title', () => {
+  it('should display the Shinobi field manual title', () => {
     setup();
-    const title = screen.getByText('Shinobi Arena Manual');
+    const title = screen.getByText('Shinobi Field Manual');
     expect(title).toBeInTheDocument();
   });
 
-  it('should display the objective section correctly', () => {
+  it('should display the core rules sections', () => {
     setup();
-    const objective = screen.getByText(/defeat the village boss/i);
-    expect(objective).toBeInTheDocument();
+    expect(screen.getByText('Read this before the next run')).toBeInTheDocument();
+    expect(screen.getByText('Bomb Rules')).toBeInTheDocument();
+    expect(screen.getByText('Campaign Rules')).toBeInTheDocument();
+    expect(screen.getByText('Enemy Rules')).toBeInTheDocument();
+    expect(screen.getByText(/After planting a bomb/i)).toBeInTheDocument();
+    expect(screen.getByText(/Normal enemies and Zetsu only chase/i)).toBeInTheDocument();
   });
 
   it('should navigate back to the home page when the back button is clicked', () => {

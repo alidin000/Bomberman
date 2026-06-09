@@ -13,6 +13,7 @@ import {
   CampaignSpawnPointDefinition,
 } from '../content/campaignMissions';
 import { EnemyAbilityKind, EnemyArchetype } from '../content/enemies';
+import { CampaignEventDefinition } from '../content/campaignEvents';
 import { StoryUpgradeId } from '../story/progress';
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
@@ -60,6 +61,7 @@ export interface PlayerState {
   x: number;
   y: number;
   alive: boolean;
+  deathReason?: string;
   maxBombs: number;
   activeBombs: number;
   bombRange: number;
@@ -88,6 +90,7 @@ export interface MonsterState {
   abilityCooldown?: number;
   abilityWarningTicks?: number;
   abilityTarget?: Point | null;
+  detectionRange?: number;
   spawnPointId?: string;
   clone?: boolean;
   elite?: boolean;
@@ -128,6 +131,8 @@ export interface BossHazard {
   warningTicks: number;
   color: string;
   damage: number;
+  sourceName?: string;
+  sourceAbility?: string;
 }
 
 export interface ExplosionCell {
@@ -243,6 +248,7 @@ export interface CampaignRuntimeState {
   spawnPoints: CampaignRespawnPointState[];
   hiddenAreas: CampaignHiddenAreaDefinition[];
   discoveredSecrets: string[];
+  event: CampaignEventDefinition | null;
   structures: CampaignStructureState[];
   miniBossGateLabel: string;
   bossGateLabel: string;
