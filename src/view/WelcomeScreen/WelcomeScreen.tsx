@@ -18,7 +18,7 @@ import {
   QuickPlayPanel,
   QuickPlaySummary,
 } from './WelcomeScreen.styles';
-import StageAtlas from '../../assets/ninja-bomber-stage-atlas.png';
+import StageAtlas from '../../assets/ninja-bomber-stage-atlas.webp';
 import { loadStoryProgress } from '../../story/progress';
 import {
   getQuickPlayPlan,

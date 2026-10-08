@@ -72,8 +72,8 @@ import {
 } from './launchGame';
 import { moveFocusWithArrows } from './menuNavigation';
 import RosterBoard from '../../assets/ninja-bomber-roster-board.png';
-import StageAtlas from '../../assets/ninja-bomber-stage-atlas.png';
-import GreatWarStage from '../../assets/great-shinobi-war-stage.png';
+import StageAtlas from '../../assets/ninja-bomber-stage-atlas.webp';
+import GreatWarStage from '../../assets/great-shinobi-war-stage.webp';
 import {
   CHARACTER_DEFINITIONS,
   CAMPAIGN_VILLAGES,
