@@ -253,6 +253,38 @@ describe('ConfigScreen', () => {
     });
   });
 
+  it('starts a best-of-3 local battle and remembers the round count', async () => {
+    setup();
+    fireEvent.click(screen.getByText('Local Arena'));
+    fireEvent.click(screen.getByLabelText('Hidden Mist Village'));
+    fireEvent.click(screen.getByRole('button', { name: 'best of 3' }));
+    fireEvent.click(screen.getByRole('button', { name: /start battle/i }));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/2/3/hiddenMist');
+      expect(JSON.parse(localStorage.getItem('gameSetup') as string)).toMatchObject({
+        mode: 'local',
+        rounds: '3',
+      });
+    });
+  });
+
+  it('reopens a local battle on its saved round count', async () => {
+    localStorage.setItem('gameSetup', JSON.stringify({
+      mode: 'local',
+      stageId: 'hiddenCloud',
+      selectedCharacters: ['gaara', 'itachi'],
+      rounds: '5',
+    }));
+    setup();
+
+    expect(screen.getByRole('button', { name: 'best of 5' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /start battle/i }));
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/2/5/hiddenCloud');
+    });
+  });
+
   it('goes back one step on Escape instead of leaving the deck', () => {
     setup(1);
     expect(screen.getAllByText('Upgrade Arsenal').length).toBeGreaterThan(0);

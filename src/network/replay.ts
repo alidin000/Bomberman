@@ -10,7 +10,8 @@ import { GameEngineState } from '../engine/types';
 // v4: a ninja in danger may stretch the shared screen and pass other ninjas;
 // blasts and flames burn a smaller body (FLAME_HURT_RADIUS); campaign
 // difficulty and lives; body flicker lands where it warned.
-export const REPLAY_VERSION = 4;
+// v5: multi-round matches end once a ninja has won most of the rounds.
+export const REPLAY_VERSION = 5;
 
 export interface ReplayFrame {
   tick: number;

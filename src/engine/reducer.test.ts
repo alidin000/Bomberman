@@ -1784,13 +1784,15 @@ describe('gameReducer', () => {
       totalRounds: 3,
       selectedCharacters: ['deidara', 'naruto'],
     });
+    // Deidara, Naruto, Deidara: 1-1 after two rounds, so the third decides it.
     for (let round = 1; round <= 3; round += 1) {
+      const loser = round === 2 ? 'player1' : 'player2';
       state = {
         ...state,
         roundStartTicksRemaining: 0,
         monsters: [],
         players: state.players.map((player) => (
-          player.id === 'player2' ? { ...player, alive: false } : player
+          player.id === loser ? { ...player, alive: false } : player
         )),
       };
       state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
@@ -1805,6 +1807,32 @@ describe('gameReducer', () => {
         expect(gameReducer(state, { type: 'DISMISS_DIALOG' })).toBe(state);
       }
     }
+    expect(state.resultMessage).toBe('Deidara wins the match!');
+  });
+
+  it.each([
+    [3, 2],
+    [5, 3],
+  ])('ends a best-of-%i match as soon as one ninja has %i wins', (totalRounds, winsNeeded) => {
+    let state = createInitialState({
+      ...baseConfig,
+      totalRounds,
+      selectedCharacters: ['deidara', 'naruto'],
+    });
+    for (let round = 1; round <= winsNeeded; round += 1) {
+      state = {
+        ...state,
+        roundStartTicksRemaining: 0,
+        monsters: [],
+        players: state.players.map((player) => (
+          player.id === 'player2' ? { ...player, alive: false } : player
+        )),
+      };
+      state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
+      expect(state.phase).toBe(round < winsNeeded ? 'round_end' : 'game_over');
+      if (round < winsNeeded) state = gameReducer(state, { type: 'DISMISS_DIALOG' })!;
+    }
+    expect(state.round).toBe(winsNeeded);
     expect(state.resultMessage).toBe('Deidara wins the match!');
   });
 });

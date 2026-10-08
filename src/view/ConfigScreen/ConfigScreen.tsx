@@ -67,7 +67,9 @@ import {
   DEFAULT_KEY_BINDINGS,
   normalizeKeyBindings,
 } from '../../constants/props';
-import { launchGame, loadStoredKeyBindings, readLastLocalSetup } from './launchGame';
+import {
+  MatchRounds, launchGame, loadStoredKeyBindings, readLastLocalSetup,
+} from './launchGame';
 import { moveFocusWithArrows } from './menuNavigation';
 import RosterBoard from '../../assets/ninja-bomber-roster-board.png';
 import StageAtlas from '../../assets/ninja-bomber-stage-atlas.png';
@@ -158,6 +160,7 @@ export const ConfigScreen = () => {
   const lastLocalSetup = useMemo(() => readLastLocalSetup(), []);
   const [activeStep, setActiveStep] = useState(0);
   const [mode, setMode] = useState<GameMode>(lastLocalSetup ? 'local' : 'solo');
+  const [rounds, setRounds] = useState<MatchRounds>(lastLocalSetup?.rounds ?? '1');
   const [numOfPlayers, setNumOfPlayers] = useState(
     lastLocalSetup ? String(lastLocalSetup.characters.length) : '1'
   );
@@ -289,6 +292,7 @@ export const ConfigScreen = () => {
       players,
       keyBindings: playerKeyBindings,
       storyProgress,
+      rounds,
     }, navigate);
     if (progress) setStoryProgress(progress);
   };
@@ -549,6 +553,22 @@ export const ConfigScreen = () => {
                     >
                       <ToggleButton value="2">2</ToggleButton>
                       <ToggleButton value="3">3</ToggleButton>
+                    </ToggleButtonGroup>
+                  </SetupOption>
+                )}
+                {mode === 'local' && (
+                  <SetupOption>
+                    <Typography variant="h6" component="span">Rounds:</Typography>
+                    <ToggleButtonGroup
+                      size="large"
+                      value={rounds}
+                      exclusive
+                      onChange={(_e, next: MatchRounds | null) => { if (next) setRounds(next); }}
+                      aria-label="rounds per match"
+                    >
+                      <ToggleButton value="1" aria-label="1 round">1</ToggleButton>
+                      <ToggleButton value="3" aria-label="best of 3">Best of 3</ToggleButton>
+                      <ToggleButton value="5" aria-label="best of 5">Best of 5</ToggleButton>
                     </ToggleButtonGroup>
                   </SetupOption>
                 )}

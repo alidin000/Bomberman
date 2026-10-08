@@ -148,7 +148,11 @@ function checkRoundEnd(state: GameEngineState): GameEngineState {
     resultMessage = appendDeathSummary('No players left. Draw.', state);
   }
 
-  const isLastRound = state.round >= state.totalRounds;
+  // A local match is "best of" its round count: it ends as soon as one ninja
+  // has won more than half of the rounds.
+  const winsNeeded = Math.floor(state.totalRounds / 2) + 1;
+  const decided = alive.length === 1 && countWins(roundWinners, alive[0].id) >= winsNeeded;
+  const isLastRound = state.round >= state.totalRounds || decided;
   if (isLastRound) {
     const winnerId = getMatchWinnerId(state, roundWinners);
     const gameOverMessage = winnerId

@@ -77,6 +77,22 @@ describe('WelcomeScreen', () => {
     });
   });
 
+  it('keeps the round count when Quick Play rematches a best-of match', async () => {
+    localStorage.setItem('gameSetup', JSON.stringify({
+      mode: 'local',
+      stageId: 'hiddenMist',
+      selectedCharacters: ['gaara', 'itachi'],
+      rounds: '3',
+    }));
+    setup();
+    expect(screen.getByText(/Gaara vs Itachi · Best of 3/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /quick play/i }));
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/2/3/hiddenMist');
+    });
+  });
+
   it('offers a rematch of the last local battle from Quick Play', async () => {
     localStorage.setItem('gameSetup', JSON.stringify({
       mode: 'local',
