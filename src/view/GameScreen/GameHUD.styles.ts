@@ -28,6 +28,9 @@ export const HudRoot = styled(Box, {
     background: 'linear-gradient(180deg, rgba(33,29,26,0.28), transparent 18%, transparent 82%, rgba(33,29,26,0.18))',
     opacity: 0.7,
   },
+  '@media (max-width: 640px)': {
+    display: 'block',
+  },
 }));
 
 export const PlayerCards = styled(Box)({
@@ -61,7 +64,14 @@ export const HudRight = styled(Box)({
     marginTop: 230,
   },
   '@media (max-width: 640px)': {
-    marginTop: 150,
+    marginTop: 8,
+    width: 'calc(100vw - 24px)',
+    maxWidth: 'calc(100vw - 24px)',
+    alignItems: 'stretch',
+    '& > *': {
+      minWidth: 0,
+      maxWidth: '100%',
+    },
   },
 });
 
