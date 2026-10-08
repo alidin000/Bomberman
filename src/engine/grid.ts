@@ -5,6 +5,10 @@ export const PLAYER_MOVE_STEP = 0.1;
 export const PLAYER_COLLISION_RADIUS = 0.28;
 export const PLAYER_LANE_SNAP_DISTANCE = 0.42;
 export const ENTITY_TOUCH_DISTANCE = PLAYER_COLLISION_RADIUS * 2;
+// Blasts and flames burn a body smaller than the one that collides: a ninja
+// dies only once visibly inside the drawn flame, not when the edge of their
+// body grazes the tile beside it (classic Bomberman uses a tiny hurtbox).
+export const FLAME_HURT_RADIUS = 0.15;
 
 export function roundToMovementStep(value: number): number {
   return Number(value.toFixed(3));

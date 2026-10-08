@@ -49,6 +49,8 @@ export const StyledDialog = styled(Dialog)({
     padding: '0 4px 18px',
     overflowX: 'hidden',
     borderTop: 0,
+    // Focus moves scroll items into view; keep them above the sticky footer.
+    scrollPaddingBottom: 110,
   },
   '& .MuiStepper-root': {
     margin: '0 auto 14px',
@@ -70,7 +72,13 @@ export const StyledDialog = styled(Dialog)({
     color: 'var(--anime-ink)',
   },
   '& .MuiStepIcon-root': {
-    color: 'rgba(33,29,26,0.2)',
+    color: 'rgba(33,29,26,0.62)',
+  },
+  '& .MuiStepLabel-labelContainer .MuiTypography-caption': {
+    display: 'block',
+    color: 'rgba(33,29,26,0.72)',
+    fontSize: '0.66rem',
+    lineHeight: 1.1,
   },
   '& .MuiStepIcon-text': {
     fill: 'var(--anime-paper-light)',
@@ -96,7 +104,23 @@ export const StyledDialog = styled(Dialog)({
     boxShadow: '0 8px 18px rgba(33,29,26,0.16)',
   },
   '& .MuiButton-contained:hover': {
-    background: '#d65343',
+    background: 'var(--anime-vermilion-deep)',
+  },
+  '& .MuiButton-contained.Mui-disabled': {
+    color: 'rgba(33,29,26,0.6)',
+    background: 'rgba(33,29,26,0.12)',
+    boxShadow: 'none',
+  },
+  '& .MuiButton-text': {
+    color: 'var(--anime-ink)',
+    borderColor: 'transparent',
+  },
+  '& .MuiButton-text:hover': {
+    background: 'rgba(33,29,26,0.08)',
+  },
+  '& .MuiButtonBase-root.Mui-focusVisible': {
+    outline: '3px solid var(--anime-ink)',
+    outlineOffset: 2,
   },
   '& .MuiButton-outlined': {
     color: 'var(--anime-ink)',
@@ -122,13 +146,25 @@ export const StyledDialog = styled(Dialog)({
     color: 'var(--anime-paper-light)',
     background: 'var(--anime-teal)',
   },
+  '& .MuiToggleButton-root.Mui-selected:hover': {
+    background: '#2b5c58',
+  },
   '& .MuiToggleButton-root.Mui-disabled': {
-    color: 'rgba(33,29,26,0.42)',
+    color: 'rgba(33,29,26,0.6)',
     background: 'rgba(255,255,255,0.2)',
+  },
+  '& .MuiToggleButton-root.Mui-focusVisible': {
+    zIndex: 1,
   },
   '@media (max-width: 680px)': {
     '& .MuiDialog-paper': {
       padding: '14px 12px 0',
+    },
+    // Keep the footer actions on one row on phones.
+    '& .MuiButton-sizeLarge': {
+      minWidth: 0,
+      padding: '8px 12px',
+      fontSize: '0.86rem',
     },
     '& .MuiDialogTitle-root': {
       minWidth: 0,
@@ -149,12 +185,62 @@ export const CenteredButtonContainer = styled.div`
   bottom: 0;
   z-index: 4;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 12px;
   width: 100%;
   margin-top: 22px;
   padding: 16px 0 18px;
   background: linear-gradient(180deg, transparent, #f5eee1 42%);
+
+  @media (max-width: 680px) {
+    gap: 8px;
+  }
+`;
+
+/** Row of pre-match options; hidden while it has no options. */
+export const SetupOptions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 14px 0 4px;
+
+  &:empty {
+    display: none;
+  }
+`;
+
+export const SetupOption = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.38);
+  border: 1px solid rgba(33, 29, 26, 0.16);
+  border-radius: 8px;
+
+  & .MuiTypography-h6 {
+    font-size: 1rem;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+`;
+
+export const ModeToggleText = styled.span`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  line-height: 1.15;
+
+  & small {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: none;
+    opacity: 0.9;
+  }
 `;
 
 export const Row = styled.div`
@@ -406,6 +492,10 @@ export const MissionBriefingPreview = styled.div`
   border: 0;
   border-radius: 7px;
   background: var(--anime-paper-light);
+
+  @media (max-width: 780px) {
+    min-height: 150px;
+  }
 `;
 
 export const MissionBriefingDetails = styled.div`
@@ -427,7 +517,9 @@ export const MissionObjectiveList = styled.div`
   margin-top: 12px;
 
   @media (max-width: 620px) {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 `;
 
@@ -475,21 +567,22 @@ export const CampaignRouteCard = styled.button<{
   locked: boolean;
   accent: string;
 }>`
+  position: relative;
   min-height: 82px;
   padding: 12px;
   clip-path: ${panelCut};
-  border: 1px solid rgba(33, 29, 26, 0.14);
+  border: ${(props) => (props.active ? '2px solid var(--anime-ink)' : '1px solid rgba(33, 29, 26, 0.14)')};
+  border-style: ${(props) => (props.locked ? 'dashed' : 'solid')};
   border-radius: 8px;
   border-top: 4px solid ${(props) => (props.active ? props.accent : 'transparent')};
   background: ${(props) => {
-    if (props.locked) return '#d2c9b5';
+    if (props.locked) return '#e4dccb';
     if (props.completed) return `color-mix(in srgb, ${props.accent} 18%, var(--anime-paper-light))`;
     return 'var(--anime-paper-light)';
   }};
-  color: var(--anime-ink);
+  color: ${(props) => (props.locked ? 'rgba(33, 29, 26, 0.72)' : 'var(--anime-ink)')};
   text-align: left;
   cursor: ${(props) => (props.locked ? 'not-allowed' : 'pointer')};
-  opacity: ${(props) => (props.locked ? 0.54 : 1)};
   box-shadow: ${(props) => (props.active ? '0 12px 24px rgba(33,29,26,0.14)' : 'none')};
   transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
 
@@ -518,6 +611,11 @@ export const RouteStatusBadge = styled.span<{ accent: string }>`
   font-size: 0.62rem;
   font-weight: 900;
   text-transform: uppercase;
+
+  & svg {
+    margin-right: 3px;
+    font-size: 0.8rem;
+  }
 `;
 
 export const FlowStepStrip = styled.div`
@@ -598,7 +696,8 @@ export const SectionTitle = styled(Typography)`
 
 export const SelectionGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
+  /* 118px lets all seven stages share one row in the 980px deck. */
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 12px;
 
   &.compact {
@@ -614,10 +713,14 @@ export const SelectionGrid = styled.div`
 
 export const SelectionCard = styled.button<{ selected: boolean; accent: string }>`
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
   min-height: 88px;
   padding: 10px;
   clip-path: ${panelCut};
-  border: 2px solid ${(props) => (props.selected ? props.accent : 'transparent')};
+  border: 2px solid ${(props) => (props.selected ? 'var(--anime-ink)' : 'rgba(33, 29, 26, 0.12)')};
   border-radius: 8px;
   background: ${(props) => (
     props.selected
@@ -647,7 +750,14 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
 
   &:disabled {
     cursor: not-allowed;
-    filter: grayscale(0.78) brightness(0.62);
+    background: #e4dccb;
+    border-style: dashed;
+    border-color: rgba(33, 29, 26, 0.32);
+    box-shadow: none;
+  }
+
+  &:disabled .card-art {
+    filter: grayscale(1) opacity(0.55);
   }
 
   &:hover:not(:disabled) {
@@ -767,7 +877,49 @@ export const ColorOrb = styled.span<{ color: string }>`
 `;
 
 export const CardMeta = styled(Typography)`
+  display: block;
+  margin-top: 2px;
   color: rgba(33, 29, 26, 0.72);
+`;
+
+/** Corner tag on the selected card, so selection does not rely on colour. */
+export const SelectedMark = styled.span`
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  padding: 2px 7px;
+  color: var(--anime-paper-light);
+  background: var(--anime-ink);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 900;
+  line-height: 1.3;
+`;
+
+export const LockBadge = styled.span`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 4px;
+  color: var(--anime-ink);
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+
+  & svg {
+    font-size: 0.9rem;
+  }
+
+  & small {
+    width: 100%;
+    color: rgba(33, 29, 26, 0.72);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: none;
+  }
 `;
 
 export const ModeGrid = styled.div`

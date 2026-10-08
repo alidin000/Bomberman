@@ -59,4 +59,11 @@ describe('InstructionsScreen', () => {
     expect(names).toContain('Kurama');
     expect(new Set(names).size).toBe(names.length);
   });
+
+  it('is not capped at the 600px default dialog width on wide screens', () => {
+    setup();
+    const paper = screen.getByRole('dialog');
+
+    expect(window.getComputedStyle(paper).maxWidth).not.toBe('600px');
+  });
 });

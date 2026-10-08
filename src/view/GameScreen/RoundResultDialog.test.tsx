@@ -104,4 +104,84 @@ describe('RoundResultDialog', () => {
     expect(new Set(cells.map((row) => row[0])).size).toBe(2);
     expect(cells.find((row) => row[2] === '1')?.[0]).toMatch(/P2/);
   });
+
+  it('headlines the versus winner by slot, even when both picked the same shinobi', () => {
+    const state = createInitialState({
+      numPlayers: 2,
+      totalRounds: 1,
+      selectedMap: 'map1',
+      selectedCharacters: ['deidara', 'deidara'],
+      map: parseMapRows(defaultMap),
+    });
+    const scored = { ...state, phase: 'game_over' as const, roundWinners: ['player2'] };
+
+    render(
+      <MemoryRouter>
+        <RoundResultDialog
+          open
+          onClose={vi.fn()}
+          onRestart={vi.fn()}
+          resultMessage="Deidara wins the match!"
+          isGameOver
+          state={scored}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('P2 · Deidara wins');
+    // Campaign-only intel (secrets, threats) is not shown for a versus match.
+    expect(screen.queryByText('Secrets')).not.toBeInTheDocument();
+  });
+
+  it('calls a tied versus match a draw', () => {
+    const state = createInitialState({
+      numPlayers: 2,
+      totalRounds: 2,
+      selectedMap: 'map1',
+      map: parseMapRows(defaultMap),
+    });
+    const tied = { ...state, phase: 'game_over' as const, roundWinners: ['player1', 'player2'] };
+
+    render(
+      <MemoryRouter>
+        <RoundResultDialog
+          open
+          onClose={vi.fn()}
+          onRestart={vi.fn()}
+          resultMessage="The match ends in a draw!"
+          isGameOver
+          state={tied}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Draw');
+  });
+
+  it('names the round and its winner between rounds', () => {
+    const state = createInitialState({
+      numPlayers: 3,
+      totalRounds: 3,
+      selectedMap: 'map1',
+      selectedCharacters: ['naruto', 'sasuke', 'gaara'],
+      map: parseMapRows(defaultMap),
+    });
+    const roundOver = { ...state, phase: 'round_end' as const, roundWinners: ['player3'] };
+
+    render(
+      <MemoryRouter>
+        <RoundResultDialog
+          open
+          onClose={vi.fn()}
+          onRestart={vi.fn()}
+          resultMessage="Gaara wins the round."
+          isGameOver={false}
+          state={roundOver}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Round 1: P3 · Gaara wins');
+    expect(screen.getByRole('button', { name: 'Next Trial' })).toBeInTheDocument();
+  });
 });

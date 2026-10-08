@@ -29,7 +29,6 @@ import { isPowerUpActive } from '../../engine/players';
 import { getUpcomingPressureCells } from '../../engine';
 import { EXPLOSION_MS } from '../../engine/constants';
 import { hazardIsActive } from '../../engine/bosses';
-import { getExplosionPositions } from '../../engine/bombs';
 import { cellKey } from '../../engine/fogOfWar';
 import { getStageDefinition } from '../../content';
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
@@ -42,7 +41,28 @@ import {
   MAP_OFFSET_X, MAP_OFFSET_Z, TILE_SIZE, toWorld
 } from './scene/sceneSpace';
 import { StaticTiles } from './scene/StaticTiles';
+import {
+  MAX_FRAMING,
+  MIN_FRAMING,
+  framingScaleFor,
+  groupShift,
+  hudInsets,
+  legacyFramingScale,
+  usesHudSafeFraming,
+} from './scene/cameraFraming';
 import { getVisibleAbilityWarnings } from './scene/abilityWarnings';
+import {
+  FUSE_URGENT_MS,
+  blastPreviewCells,
+  bombDetonationTimes,
+  bombPulseScale,
+  countdownNow,
+  createCountdown,
+  fuseRingRadius,
+} from './scene/bombFuse';
+import { PLAYER_TAG_SPRITES, playerTagKey } from './scene/playerTags';
+import { playerSlotColor } from './playerSlots';
+import { hazardWarningRemainingMs, isEnemyAbilityHazard } from './scene/hazardWarning';
 import { LightPool, PooledPointLight } from './scene/LightPool';
 import { disposeModelSkeletons } from './scene/modelDisposal';
 import { nextFlameAgeMs } from './scene/flameAge';
@@ -67,6 +87,11 @@ const ENTITY_SNAP_EPSILON = 0.0016;
 const ReducedMotionContext = React.createContext(false);
 // Interpolated entity positions published by the engine loop (see motionStore).
 const MotionContext = React.createContext<MotionStore | null>(null);
+// The latest bombs and when each really goes off, written by SceneContent on
+// every tick it renders and read by bombs in useFrame. Bombs sit in the
+// memoised MapTiles, which must not re-render each tick just for their fuse.
+type BombClock = { bombs: GameEngineState['bombs']; detonationMs: Map<string, number> };
+const BombClockContext = React.createContext<React.MutableRefObject<BombClock> | null>(null);
 
 function lerpAngle(from: number, to: number, alpha: number): number {
   const turn = Math.PI * 2;
@@ -676,31 +701,84 @@ function PressureBlockWarning({ x, y, order }: { x: number; y: number; order: nu
   );
 }
 
+// Fuse ring: a dark ring on the floor that closes on the bomb as its fuse
+// burns (radius = time left), turning red and thick for the last stretch.
+// Every bomb shares these; swapping between them never compiles a program.
+const FUSE_RING_GEOMETRY = new THREE.RingGeometry(0.84, 1, 48).rotateX(-Math.PI / 2);
+const FUSE_RING_URGENT_GEOMETRY = new THREE.RingGeometry(0.6, 1, 48).rotateX(-Math.PI / 2);
+const FUSE_RING_MATERIAL = new THREE.MeshBasicMaterial({
+  color: '#1c1917', transparent: true, opacity: 0.72, depthWrite: false,
+});
+const FUSE_RING_URGENT_MATERIAL = new THREE.MeshBasicMaterial({
+  color: '#dc2626', transparent: true, opacity: 0.92, depthWrite: false,
+});
+
+/** Time until the bomb on (x, y) goes off, smoothed between ticks; Infinity if held or gone. */
+function bombRemainingMs(
+  clock: BombClock | undefined,
+  x: number,
+  y: number,
+  countdown: ReturnType<typeof createCountdown>,
+  simTimeMs: number | undefined,
+): number {
+  if (!clock) return Infinity;
+  for (let index = 0; index < clock.bombs.length; index += 1) {
+    const bomb = clock.bombs[index];
+    if (bomb.x === x && bomb.y === y) {
+      const at = clock.detonationMs.get(bomb.id) ?? bomb.ticksRemaining;
+      return simTimeMs === undefined ? at : countdownNow(countdown, at, simTimeMs);
+    }
+  }
+  return Infinity;
+}
+
 function BombMesh({ x, y, kind }: { x: number; y: number; kind: BombKind }) {
   const groupRef = useRef<THREE.Group>(null);
   const coreRef = useRef<THREE.Mesh>(null);
+  const ringRef = useRef<THREE.Mesh>(null);
   const lightRef = useRef<PooledLightHandle>(null);
+  const bombClock = React.useContext(BombClockContext);
+  const motion = React.useContext(MotionContext);
+  const reducedMotion = React.useContext(ReducedMotionContext);
+  const countdownRef = useRef(createCountdown());
   const [wx, , wz] = toWorld(x, y);
-  useFrame(({ clock }) => {
-    const pulse = 1 + Math.sin(clock.elapsedTime * 10) * 0.08;
-    if (coreRef.current) {
-      coreRef.current.scale.setScalar(pulse);
-    }
-    if (groupRef.current) {
-      groupRef.current.rotation.y = clock.elapsedTime * 0.7;
-    }
-    if (lightRef.current) {
-      lightRef.current.intensity = 0.7 + Math.sin(clock.elapsedTime * 12) * 0.35;
-    }
-  });
   const ultimateScale = ['giantClay', 'rasenshuriken', 'kirin', 'sandTsunami', 'instantTeleport', 'tsukuyomi']
     .includes(kind)
     ? 1.35
     : 1;
   const giant = kind === 'giantClay';
+  const baseScale = giant ? 1.72 : ultimateScale;
+  const height = giant ? 0.48 : 0.36;
+  useFrame(({ clock }) => {
+    const remaining = bombRemainingMs(bombClock?.current, x, y, countdownRef.current, motion?.simTimeMs);
+    const urgent = remaining <= FUSE_URGENT_MS;
+    const pulse = 1 + Math.sin(clock.elapsedTime * 10) * 0.08;
+    if (coreRef.current) {
+      coreRef.current.scale.setScalar(pulse);
+    }
+    // About to blow: the whole bomb swells and beats faster.
+    const scale = baseScale * bombPulseScale(remaining, clock.elapsedTime, reducedMotion);
+    if (groupRef.current) {
+      groupRef.current.rotation.y = clock.elapsedTime * 0.7;
+      groupRef.current.scale.setScalar(scale);
+    }
+    if (lightRef.current) {
+      lightRef.current.intensity = 0.7 + Math.sin(clock.elapsedTime * 12) * 0.35;
+    }
+    const ring = ringRef.current;
+    if (ring) {
+      // The ring rides in the bomb's group: undo its scale and lift.
+      ring.visible = Number.isFinite(remaining);
+      ring.scale.setScalar(fuseRingRadius(remaining) / scale);
+      ring.position.y = (0.05 - height) / scale;
+      ring.geometry = urgent ? FUSE_RING_URGENT_GEOMETRY : FUSE_RING_GEOMETRY;
+      ring.material = urgent ? FUSE_RING_URGENT_MATERIAL : FUSE_RING_MATERIAL;
+    }
+  });
   const style = BOMB_STYLE[kind];
   return (
-    <group ref={groupRef} position={[wx, giant ? 0.48 : 0.36, wz]} scale={giant ? 1.72 : ultimateScale}>
+    <group ref={groupRef} position={[wx, height, wz]} scale={baseScale}>
+      <mesh ref={ringRef} geometry={FUSE_RING_GEOMETRY} material={FUSE_RING_MATERIAL} />
       <PooledPointLight ref={lightRef} priority={LIGHT_PRIORITY.bomb} color={style.emissive} distance={2.8} intensity={0.72} />
 
       {(kind === 'claySpider' || kind === 'giantClay') && (
@@ -975,7 +1053,10 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
 
   // Allocate instance colours up front: setColorAt would otherwise create them
   // on the first explosion, which changes the shader variant and compiles a
-  // new program mid-match.
+  // new program mid-match. The layers take their colour from these alone: a
+  // `vertexColors` material also multiplies by the geometry's colour
+  // attribute, and these geometries have none, so WebGL read (0, 0, 0) and
+  // every flame drew black.
   useLayoutEffect(() => {
     [flameRef.current, shockwaveRef.current, ringRef.current, accentRef.current, debrisRef.current].forEach((mesh) => {
       if (!mesh || mesh.instanceColor) return;
@@ -1168,23 +1249,23 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
       <PooledPointLight ref={lightRef} priority={LIGHT_PRIORITY.explosion} distance={5} intensity={1.8} color="#f97316" />
       <instancedMesh ref={shockwaveRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]} frustumCulled={false}>
         <torusGeometry args={[0.34, 0.035, 8, 24]} />
-        <meshBasicMaterial transparent opacity={0.38} vertexColors depthWrite={false} />
+        <meshBasicMaterial transparent opacity={0.38} depthWrite={false} />
       </instancedMesh>
       <instancedMesh ref={flameRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]} frustumCulled={false}>
         <sphereGeometry args={[0.34, 12, 12]} />
-        <meshBasicMaterial transparent opacity={0.82} vertexColors depthWrite={false} />
+        <meshBasicMaterial transparent opacity={0.82} depthWrite={false} />
       </instancedMesh>
       <instancedMesh ref={ringRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]} frustumCulled={false}>
         <ringGeometry args={[0.18, 0.55, 6]} />
-        <meshBasicMaterial transparent opacity={0.48} vertexColors depthWrite={false} />
+        <meshBasicMaterial transparent opacity={0.48} depthWrite={false} />
       </instancedMesh>
       <instancedMesh ref={accentRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]} frustumCulled={false}>
         <coneGeometry args={[0.12, 0.58, 4]} />
-        <meshBasicMaterial transparent opacity={0.78} vertexColors depthWrite={false} />
+        <meshBasicMaterial transparent opacity={0.78} depthWrite={false} />
       </instancedMesh>
       <instancedMesh ref={debrisRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]} frustumCulled={false}>
         <tetrahedronGeometry args={[0.12, 0]} />
-        <meshBasicMaterial transparent opacity={0.72} vertexColors depthWrite={false} />
+        <meshBasicMaterial transparent opacity={0.72} depthWrite={false} />
       </instancedMesh>
     </>
   );
@@ -1606,7 +1687,20 @@ function TransformationOverlay({
   );
 }
 
-function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineState }) {
+// "P1"-style chip in the HUD card's colour, over the fighter's head.
+function PlayerTag({ slot, color }: { slot: number; color: string }) {
+  const key = playerTagKey(slot, color);
+  const sprite = useMemo(() => PLAYER_TAG_SPRITES.get(key), [key]);
+
+  useEffect(() => {
+    PLAYER_TAG_SPRITES.retain(key, sprite);
+    return () => PLAYER_TAG_SPRITES.release(key, sprite);
+  }, [key, sprite]);
+
+  return <sprite position={[0, 0.98, 0]} scale={[0.78, 0.39, 1]} material={sprite.material} renderOrder={10} />;
+}
+
+function PlayerMesh({ player, state, slot }: { player: PlayerState; state: GameEngineState; slot?: number }) {
   const ref = useRef<THREE.Group>(null);
   const motionRef = useRef(0);
   const ghost = isPowerUpActive(state, player.id, 'Ghost');
@@ -1690,6 +1784,7 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
         />
       </mesh>
       <TransformationOverlay player={player} color={visual.aura} />
+      {slot !== undefined && <PlayerTag slot={slot} color={playerSlotColor(slot - 1)} />}
       {characterModel ? (
         <LoadedSceneModel asset={characterModel} ghost={ghost} motionRef={motionRef} warmGhostVariant />
       ) : (
@@ -1911,6 +2006,14 @@ function MonsterAbilityWarning({
   );
 }
 
+// Elites move faster, see 7 cells instead of 5 and strike more often, yet
+// drew exactly like the rest. A gold octagon (a shape, not only a colour)
+// under a slightly larger body marks them.
+const ELITE_BADGE_GEOMETRY = new THREE.RingGeometry(0.54, 0.68, 8, 1).rotateX(-Math.PI / 2);
+const ELITE_BADGE_MATERIAL = new THREE.MeshBasicMaterial({
+  color: '#f59e0b', transparent: true, opacity: 0.9, depthWrite: false,
+});
+
 function MonsterMeshBase({ monster }: { monster: MonsterState }) {
   const ref = useRef<THREE.Group>(null);
   const visual = MONSTER_VISUALS[monster.kind];
@@ -1928,8 +2031,11 @@ function MonsterMeshBase({ monster }: { monster: MonsterState }) {
   });
 
   return (
-    <group ref={ref} scale={visual.scale}>
+    <group ref={ref} scale={visual.scale * (monster.elite ? 1.12 : 1)}>
       <ShadowBlob />
+      {monster.elite && (
+        <mesh position={[0, -0.41, 0]} geometry={ELITE_BADGE_GEOMETRY} material={ELITE_BADGE_MATERIAL} />
+      )}
       <mesh position={[0, -0.05, 0]} castShadow scale={visual.style === 'sand' ? [1.12, 0.86, 1] : [0.95, 1, 0.9]}>
         <MonsterBodyGeometry style={visual.style} />
         <meshStandardMaterial
@@ -2390,6 +2496,18 @@ function BossMesh({ state }: { state: GameEngineState }) {
   );
 }
 
+// Telegraph marks. An enemy's targeted cell is usually the cell a player
+// stands on, so a floor mark alone hides under that player: a red pin hovers
+// above the cell and a square closes on it, meeting the cell edge when the
+// hit lands. Boss strikes reuse the closing square.
+const WARNING_PIN_GEOMETRY = new THREE.ConeGeometry(0.2, 0.46, 4).rotateX(Math.PI);
+const WARNING_CLOSE_GEOMETRY = new THREE.RingGeometry(0.6, 0.68, 4, 1)
+  .rotateZ(Math.PI / 4)
+  .rotateX(-Math.PI / 2);
+const WARNING_MARK_MATERIAL = new THREE.MeshBasicMaterial({
+  color: '#dc2626', transparent: true, opacity: 0.95, depthWrite: false,
+});
+
 function HazardMesh({ hazard }: { hazard: BossHazard }) {
   const ref = useRef<THREE.Group>(null);
   const [wx, , wz] = toWorld(hazard.x, hazard.y);
@@ -2401,6 +2519,14 @@ function HazardMesh({ hazard }: { hazard: BossHazard }) {
   const color = active ? effectColor : '#facc15';
   const opacity = active ? 0.78 : 0.46;
   const reducedMotion = React.useContext(ReducedMotionContext);
+  const motion = React.useContext(MotionContext);
+  // Boss strikes close a square on their cell like enemy abilities do, so
+  // the moment it turns lethal is readable by shape, not only colour.
+  const closeRef = useRef<THREE.Mesh>(null);
+  const countdownRef = useRef(createCountdown());
+  const warningMs = hazardWarningRemainingMs(hazard);
+  const leadRef = useRef(warningMs);
+  const telegraph = !isEnemyAbilityHazard(hazard) && warningMs > 0;
 
   useFrame(({ clock }) => {
     if (ref.current) {
@@ -2409,11 +2535,21 @@ function HazardMesh({ hazard }: { hazard: BossHazard }) {
       if (!reducedMotion && !active) scale = 0.85 + Math.sin(clock.elapsedTime * 8) * 0.08;
       ref.current.rotation.y = reducedMotion ? 0 : clock.elapsedTime * (active ? 2.6 : 1.5);
       ref.current.scale.setScalar(scale);
+      if (closeRef.current) {
+        const remaining = motion ? countdownNow(countdownRef.current, warningMs, motion.simTimeMs) : warningMs;
+        const closing = 1 + 0.9 * Math.min(1, remaining / Math.max(leadRef.current, 1));
+        // It rides in the spinning group: undo the group's turn and scale.
+        closeRef.current.rotation.y = -ref.current.rotation.y;
+        closeRef.current.scale.setScalar(closing / scale);
+      }
     }
   });
 
   return (
     <group ref={ref} position={[wx, 0.06, wz]}>
+      {telegraph && (
+        <mesh ref={closeRef} position={[0, -0.02, 0]} geometry={WARNING_CLOSE_GEOMETRY} material={WARNING_MARK_MATERIAL} />
+      )}
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.18, active ? 0.52 : 0.38, 26]} />
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 1.25 : 0.62} transparent opacity={opacity} />
@@ -3282,6 +3418,10 @@ function CameraRig({
   const lookTargetRef = useRef(new THREE.Vector3());
   const framingRef = useRef<number | null>(null);
   const shakeRef = useRef(0);
+  const insets = useMemo(
+    () => hudInsets(preferences.hudScale, size.width, size.height),
+    [preferences.hudScale, size.width, size.height],
+  );
 
   useFrame(({ clock }, delta) => {
     const fallbackCenter = getMapWorldCenter(
@@ -3331,14 +3471,15 @@ function CameraRig({
     }
 
     const [targetX, , targetZ] = toWorld(targetXCell, targetYCell);
-    const horizontalSpread = count > 1 ? maxX - minX : 0;
-    const verticalSpread = count > 1 ? maxY - minY : 0;
-    const aspectPenalty = size.width > 0 ? Math.max(1, 1.25 / (size.width / size.height)) : 1;
-    const framingScale = THREE.MathUtils.clamp(
-      Math.max(1, (horizontalSpread + 3) / 9, (verticalSpread + 3) / 6) * aspectPenalty,
-      1,
-      1.8,
-    );
+    const halfWidth = count > 1 ? (maxX - minX) / 2 : 0;
+    const halfDepth = count > 1 ? (maxY - minY) / 2 : 0;
+    const aspect = size.width > 0 && size.height > 0 ? size.width / size.height : 16 / 9;
+    const hudSafe = usesHudSafeFraming(size.width, size.height);
+    const framingScale = hudSafe
+      ? THREE.MathUtils.clamp(framingScaleFor(halfWidth, halfDepth, aspect, insets), MIN_FRAMING, MAX_FRAMING)
+      : legacyFramingScale(halfWidth * 2, halfDepth * 2, aspect);
+    // Aim a little up the map when the top players would sit under the HUD.
+    const shiftZ = hudSafe ? groupShift(framingScale, halfWidth, halfDepth, insets) * TILE_SIZE : 0;
     // `impact` holds for a moment and then drops to 0; fade out from it
     // instead of cutting off mid-swing.
     shakeRef.current = preferences.reducedMotion ? 0 : decayShake(shakeRef.current, impact, delta);
@@ -3350,7 +3491,7 @@ function CameraRig({
     // move together. Aiming at the raw target while easing only the position
     // turned every 0.1-cell step into a ~7 px whole-screen jump.
     const lookAt = lookAtRef.current;
-    const lookTarget = lookTargetRef.current.set(targetX, 0, targetZ);
+    const lookTarget = lookTargetRef.current.set(targetX, 0, targetZ + shiftZ);
     if (framingRef.current === null) {
       // Start from wherever the camera is aimed so the opening glide is kept.
       framingRef.current = camera.position.y / 13.2;
@@ -3378,10 +3519,28 @@ function CameraRig({
 }
 
 function TargetCellWarning({ monster }: { monster: MonsterState }) {
+  const pinRef = useRef<THREE.Mesh>(null);
+  const closeRef = useRef<THREE.Mesh>(null);
+  const motion = React.useContext(MotionContext);
+  const reducedMotion = React.useContext(ReducedMotionContext);
+  const countdownRef = useRef(createCountdown());
+  // Each warning mounts fresh, so its first value is the full lead time.
+  const leadRef = useRef(monster.abilityWarningTicks ?? 0);
+  const ticks = monster.abilityWarningTicks ?? 0;
+  useFrame(({ clock }) => {
+    const remaining = motion ? countdownNow(countdownRef.current, ticks, motion.simTimeMs) : ticks;
+    const lead = Math.max(leadRef.current, 1);
+    if (closeRef.current) {
+      closeRef.current.scale.setScalar(1 + 0.9 * Math.min(1, remaining / lead));
+    }
+    if (pinRef.current) {
+      pinRef.current.position.y = 1.95 + (reducedMotion ? 0 : Math.sin(clock.elapsedTime * 7) * 0.07);
+    }
+  });
   const target = monster.abilityTarget;
-  if (!target || (monster.abilityWarningTicks ?? 0) <= 0) return null;
+  if (!target || ticks <= 0) return null;
   const [wx, , wz] = toWorld(target.x, target.y);
-  const urgent = (monster.abilityWarningTicks ?? 0) < 320;
+  const urgent = ticks < 320;
   return (
     <group position={[wx, 0.035, wz]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
@@ -3397,72 +3556,92 @@ function TargetCellWarning({ monster }: { monster: MonsterState }) {
         <ringGeometry args={[0.5, 0.57, 4]} />
         <meshBasicMaterial color={urgent ? '#ffffff' : '#facc15'} transparent opacity={0.9} />
       </mesh>
+      <mesh ref={closeRef} position={[0, 0.02, 0]} geometry={WARNING_CLOSE_GEOMETRY} material={WARNING_MARK_MATERIAL} />
+      <mesh ref={pinRef} position={[0, 1.95, 0]} geometry={WARNING_PIN_GEOMETRY} material={WARNING_MARK_MATERIAL} />
     </group>
   );
 }
 
-// A bomb about to blow shows up to ~20 preview cells at once and removes
-// them when it explodes, so all cells share these instead of building two
-// geometries and two materials per cell on every fuse.
-const BLAST_PREVIEW_FILL_GEOMETRY = new THREE.PlaneGeometry(0.84, 0.84);
-const BLAST_PREVIEW_RING_GEOMETRY = new THREE.RingGeometry(0.43, 0.49, 4);
-const BLAST_PREVIEW_RING_MATERIAL = new THREE.MeshBasicMaterial({
-  color: '#fff7ed', transparent: true, opacity: 0.68, depthWrite: false
+// Blast reach for the whole fuse: a dark outline on every visible cell a bomb
+// will burn, plus a red fill once that cell's blast is under FUSE_URGENT_MS
+// away. Outline vs fill is the cue (shape, not only hue). Two instanced
+// meshes stay mounted all match: two draw calls for any number of cells, and
+// their programs compile with the first frame.
+const BLAST_PREVIEW_CAPACITY = 512;
+const BLAST_PREVIEW_DUMMY = new THREE.Object3D();
+const BLAST_PREVIEW_EDGE_GEOMETRY = new THREE.RingGeometry(0.47, 0.6, 4, 1)
+  .rotateZ(Math.PI / 4)
+  .rotateX(-Math.PI / 2);
+const BLAST_PREVIEW_FILL_GEOMETRY = new THREE.PlaneGeometry(0.84, 0.84).rotateX(-Math.PI / 2);
+const BLAST_PREVIEW_EDGE_MATERIAL = new THREE.MeshBasicMaterial({
+  color: '#1c1917', transparent: true, opacity: 0.42, depthWrite: false,
 });
-const BLAST_PREVIEW_FILL_MATERIALS = new Map<string, THREE.MeshBasicMaterial>();
+const BLAST_PREVIEW_FILL_MATERIAL = new THREE.MeshBasicMaterial({
+  color: '#ef4444', transparent: true, opacity: 0.4, depthWrite: false,
+});
 
-function getBlastPreviewFillMaterial(color: string): THREE.MeshBasicMaterial {
-  let material = BLAST_PREVIEW_FILL_MATERIALS.get(color);
-  if (!material) {
-    material = new THREE.MeshBasicMaterial({
-      color, transparent: true, opacity: 0.16, depthWrite: false
-    });
-    BLAST_PREVIEW_FILL_MATERIALS.set(color, material);
+function writePreviewInstances(
+  mesh: THREE.InstancedMesh | null,
+  cells: { x: number; y: number }[],
+  height: number,
+) {
+  if (!mesh) return;
+  const target = mesh;
+  const count = Math.min(cells.length, BLAST_PREVIEW_CAPACITY);
+  for (let index = 0; index < count; index += 1) {
+    const [wx, , wz] = toWorld(cells[index].x, cells[index].y);
+    BLAST_PREVIEW_DUMMY.position.set(wx, height, wz);
+    BLAST_PREVIEW_DUMMY.updateMatrix();
+    target.setMatrixAt(index, BLAST_PREVIEW_DUMMY.matrix);
   }
-  return material;
+  target.count = count;
+  if (count === 0) return;
+  target.instanceMatrix.addUpdateRange(0, count * 16);
+  target.instanceMatrix.needsUpdate = true;
 }
 
 function BombBlastPreviews({
   state,
   visibleCells,
+  detonationMs,
 }: {
   state: GameEngineState;
   visibleCells: Set<string>;
+  detonationMs: Map<string, number>;
 }) {
-  const cells = useMemo(() => {
-    const unique = new Map<string, { x: number; y: number; kind: BombKind }>();
-    state.bombs
-      .filter((bomb) => bomb.ticksRemaining > 0 && bomb.ticksRemaining <= 800)
-      .forEach((bomb) => {
-        getExplosionPositions(bomb, state.map).forEach((point) => {
-          if (!cellVisibleInSet(visibleCells, point.x, point.y)) return;
-          unique.set(`${point.x},${point.y}`, { ...point, kind: bomb.kind });
-        });
-      });
-    return [...unique.values()];
-  }, [state.bombs, state.map, visibleCells]);
+  const edgeRef = useRef<THREE.InstancedMesh>(null);
+  const fillRef = useRef<THREE.InstancedMesh>(null);
+  const cells = useMemo(
+    () => blastPreviewCells(
+      state.bombs,
+      state.map,
+      detonationMs,
+      (x, y) => cellVisibleInSet(visibleCells, x, y),
+    ),
+    [state.bombs, state.map, detonationMs, visibleCells],
+  );
+  // Bombs tick every 50 ms; only rewrite instances when a cell or tier changes.
+  const signature = cells.map((cell) => `${cell.x},${cell.y},${cell.imminent ? 1 : 0}`).join(';');
+  useLayoutEffect(() => {
+    writePreviewInstances(edgeRef.current, cells, 0.03);
+    writePreviewInstances(fillRef.current, cells.filter((cell) => cell.imminent), 0.026);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
 
   return (
     <>
-      {cells.map((cell) => {
-        const [wx, , wz] = toWorld(cell.x, cell.y);
-        const style = BOMB_STYLE[cell.kind];
-        return (
-          <group key={`blast-preview-${cell.x}-${cell.y}`} position={[wx, 0.026, wz]}>
-            <mesh
-              rotation={[-Math.PI / 2, 0, 0]}
-              geometry={BLAST_PREVIEW_FILL_GEOMETRY}
-              material={getBlastPreviewFillMaterial(style.emissive)}
-            />
-            <mesh
-              rotation={[-Math.PI / 2, 0, Math.PI / 4]}
-              position={[0, 0.01, 0]}
-              geometry={BLAST_PREVIEW_RING_GEOMETRY}
-              material={BLAST_PREVIEW_RING_MATERIAL}
-            />
-          </group>
-        );
-      })}
+      <instancedMesh
+        ref={fillRef}
+        args={[BLAST_PREVIEW_FILL_GEOMETRY, BLAST_PREVIEW_FILL_MATERIAL, BLAST_PREVIEW_CAPACITY]}
+        count={0}
+        frustumCulled={false}
+      />
+      <instancedMesh
+        ref={edgeRef}
+        args={[BLAST_PREVIEW_EDGE_GEOMETRY, BLAST_PREVIEW_EDGE_MATERIAL, BLAST_PREVIEW_CAPACITY]}
+        count={0}
+        frustumCulled={false}
+      />
     </>
   );
 }
@@ -3521,6 +3700,16 @@ function SceneContent({
     && !bossVisible
     && !!bossCellKey
     && sensedEnemyCells.has(bossCellKey);
+  const detonationMs = useMemo(
+    () => bombDetonationTimes(state.bombs, state.map, state.players),
+    [state.bombs, state.map, state.players],
+  );
+  const bombClock = React.useContext(BombClockContext);
+  if (bombClock) {
+    bombClock.current.bombs = state.bombs;
+    bombClock.current.detonationMs = detonationMs;
+  }
+  const multiplayer = state.players.length > 1;
 
   return (
     <LightPool>
@@ -3544,7 +3733,7 @@ function SceneContent({
         powerTheme={state.players[0]?.characterId}
       />
       <ExplosionFieldMemo explosions={visibleExplosions} />
-      <BombBlastPreviews state={state} visibleCells={visibleCellSet} />
+      <BombBlastPreviews state={state} visibleCells={visibleCellSet} detonationMs={detonationMs} />
       <MissionObjectiveMarkers state={state} visibleCells={visibleCellSet} />
       {getUpcomingPressureCells(state).map((cell, order) => (
         <PressureBlockWarning
@@ -3554,8 +3743,8 @@ function SceneContent({
           order={order % 3}
         />
       ))}
-      {state.players.map((p) => (
-        <PlayerMesh key={p.id} player={p} state={state} />
+      {state.players.map((p, index) => (
+        <PlayerMesh key={p.id} player={p} state={state} slot={multiplayer ? index + 1 : undefined} />
       ))}
       {visibleMonsters.map((m) => (
         <MonsterMesh key={m.id} monster={m} />
@@ -3608,8 +3797,12 @@ export function GameScene3D({
   state, preferences, impact = 0, motion = null, advanceFrame,
 }: GameScene3DProps) {
   useAdvanceBeforeRender(advanceFrame);
+  const bombClockRef = useRef<BombClock>({ bombs: [], detonationMs: new Map() });
   // Free cached label canvases nothing shows any more once the arena closes.
-  useEffect(() => () => LABEL_SPRITES.disposeIdle(), []);
+  useEffect(() => () => {
+    LABEL_SPRITES.disposeIdle();
+    PLAYER_TAG_SPRITES.disposeIdle();
+  }, []);
   return (
     <Canvas
       shadows
@@ -3626,7 +3819,9 @@ export function GameScene3D({
     >
       <ReducedMotionContext.Provider value={preferences.reducedMotion}>
         <MotionContext.Provider value={motion}>
-          <SceneContent state={state} preferences={preferences} impact={impact} />
+          <BombClockContext.Provider value={bombClockRef}>
+            <SceneContent state={state} preferences={preferences} impact={impact} />
+          </BombClockContext.Provider>
         </MotionContext.Provider>
       </ReducedMotionContext.Provider>
       {PERF_PROBE_ENABLED && <PerfProbe />}

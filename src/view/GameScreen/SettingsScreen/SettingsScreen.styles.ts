@@ -131,5 +131,8 @@ export const PreferenceSlider = styled.label({
   color: 'rgba(33,29,26,0.78)',
   fontSize: '0.76rem',
   fontWeight: 800,
+  // The value stays visible next to its name, not only while dragging.
+  '& > span': { display: 'flex', justifyContent: 'space-between', gap: 6 },
+  '& > span strong': { color: 'var(--anime-ink)', fontVariantNumeric: 'tabular-nums' },
   '& .MuiSlider-root': { color: 'var(--anime-teal)', padding: '12px 0' },
 });

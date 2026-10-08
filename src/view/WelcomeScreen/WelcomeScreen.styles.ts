@@ -48,7 +48,7 @@ export const WelcomeContainer = styled(Box)({
     boxShadow: '0 10px 28px rgba(18,24,28,0.22)',
   },
   '& .MuiButton-contained:hover': {
-    background: '#d45d48',
+    background: 'var(--anime-vermilion-deep)',
     transform: 'translateY(-2px)',
   },
   '& .MuiButton-outlined': {
@@ -60,6 +60,10 @@ export const WelcomeContainer = styled(Box)({
   '& .MuiButton-outlined:hover': {
     borderColor: '#fff8e7',
     background: 'rgba(255,248,231,0.14)',
+  },
+  '& .MuiButtonBase-root.Mui-focusVisible': {
+    outline: '3px solid #fff8e7',
+    outlineOffset: 3,
   },
   '@media (max-width: 640px)': {
     justifyContent: 'flex-start',
@@ -103,7 +107,13 @@ export const HeroScene = styled(Box, {
     content: "''",
     position: 'absolute',
     inset: 0,
-    background: 'rgba(20, 29, 32, 0.4)',
+    // Darker behind the copy column so small text holds contrast on bright tiles.
+    background: 'linear-gradient(90deg, rgba(14,22,25,0.78) 0%, rgba(14,22,25,0.56) 46%, rgba(20,29,32,0.3) 100%)',
+  },
+  '@media (max-width: 720px)': {
+    '&::after': {
+      background: 'linear-gradient(180deg, rgba(14,22,25,0.3) 0%, rgba(14,22,25,0.66) 45%, rgba(14,22,25,0.86) 100%)',
+    },
   },
 }));
 
@@ -543,7 +553,32 @@ export const ActionButtons = styled(Box)({
   display: 'flex',
   flexWrap: 'wrap',
   gap: 12,
+  marginTop: 14,
+});
+
+export const QuickPlayPanel = styled(Box)({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
   marginTop: 22,
+  '& > .MuiButton-contained': {
+    minWidth: 240,
+    minHeight: 56,
+    fontSize: '1.15rem',
+  },
+  '@media (max-width: 560px)': {
+    alignSelf: 'stretch',
+    '& > .MuiButton-contained': {
+      width: '100%',
+    },
+  },
+});
+
+export const QuickPlaySummary = styled(Box)({
+  marginTop: 8,
+  color: '#fff8e7',
+  fontSize: '0.86rem',
+  fontWeight: 800,
 });
 
 export const PanelText = styled(Typography)({

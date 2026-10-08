@@ -15,6 +15,7 @@ import {
 import { EnemyAbilityKind, EnemyArchetype } from '../content/enemies';
 import { CampaignEventDefinition } from '../content/campaignEvents';
 import { StoryUpgradeId } from '../story/progress';
+import type { DifficultyId } from './difficulty';
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
@@ -98,6 +99,9 @@ export interface MonsterState {
   elite?: boolean;
   // Short-lived summons (water clones) fade when this runs out.
   lifetimeMs?: number;
+  // A mini boss guards its gate: with no player in sight it walks back
+  // within `radius` cells of it instead of wandering the whole map.
+  leash?: { x: number; y: number; radius: number };
 }
 
 export interface BombState {
@@ -267,6 +271,14 @@ export interface CampaignRuntimeState {
   objectives: CampaignObjectiveState[];
   bossUnlocked: boolean;
   message: string;
+  difficulty?: DifficultyId;
+  // Lives left in this mission, the current one included. A fall with more
+  // than one left regroups at the last cleared objective.
+  livesRemaining?: number;
+  livesTotal?: number;
+  // Shown instead of the objective hint until the given tick after a fall.
+  fallNotice?: string;
+  fallNoticeUntilTick?: number;
 }
 
 export type CellVisibility = 'hidden' | 'explored' | 'visible';
@@ -290,6 +302,8 @@ export interface GameConfig {
   // Seeds the match's random draws (power-up drops). Missing means the fixed
   // default seed, so recorded configs always replay the same way.
   seed?: number;
+  // Campaign difficulty; missing means Normal. Versus ignores it.
+  difficulty?: DifficultyId;
 }
 
 export interface GameEngineState {

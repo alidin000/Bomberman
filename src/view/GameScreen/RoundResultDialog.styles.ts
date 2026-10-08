@@ -55,13 +55,15 @@ export const StyledResultDialog = styled(Dialog)({
   },
 });
 
-export const ResultBanner = styled.h2<{ accent: string }>`
+export const ResultBanner = styled.h2<{ accent: string; textColor?: string }>`
   width: fit-content;
   min-width: 240px;
+  max-width: 100%;
+  box-sizing: border-box;
   margin: 0 auto;
   padding: 9px 38px 10px;
   clip-path: ${bannerCut};
-  color: var(--anime-ink);
+  color: ${(props) => props.textColor ?? 'var(--anime-ink)'};
   background: ${(props) => props.accent};
   font-size: 1.12rem;
   font-weight: 900;
@@ -69,16 +71,6 @@ export const ResultBanner = styled.h2<{ accent: string }>`
   text-align: center;
   text-transform: uppercase;
   box-shadow: 4px 4px 0 var(--anime-ink);
-`;
-
-export const ResultEmblem = styled.div<{ accent: string }>`
-  width: 54px;
-  height: 54px;
-  margin: 18px auto 0;
-  clip-path: polygon(50% 0, 96% 24%, 96% 76%, 50% 100%, 4% 76%, 4% 24%);
-  background: ${(props) => props.accent};
-  border: 3px solid var(--anime-ink);
-  box-shadow: 4px 4px 0 var(--anime-mustard);
 `;
 
 export const ResultMessage = styled.p`
@@ -127,6 +119,29 @@ export const ResultBreakdown = styled.div`
   td {
     color: var(--anime-ink);
     font-weight: 700;
+  }
+
+  /* Phones: the death summary is already in the message above. */
+  @media (max-width: 480px) {
+    th:nth-of-type(4), td:nth-of-type(4) {
+      display: none;
+    }
+  }
+`;
+
+// Slot colour down the left edge; the winner's row is bold on mustard.
+export const ResultRow = styled('tr', {
+  shouldForwardProp: (prop) => prop !== 'slotColor' && prop !== 'winner',
+})<{ slotColor: string; winner: boolean }>`
+  background: ${(props) => (props.winner ? 'rgba(212, 163, 63, 0.32)' : 'transparent')};
+
+  td:first-of-type {
+    border-left: 5px solid ${(props) => props.slotColor};
+    font-weight: 900;
+  }
+
+  td {
+    font-weight: ${(props) => (props.winner ? 900 : 700)};
   }
 `;
 

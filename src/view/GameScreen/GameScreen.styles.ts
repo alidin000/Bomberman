@@ -260,39 +260,107 @@ export const ControlsDismissButton = styled(IconButton)({
   },
 });
 
-export const ControlRows = styled.div({
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: 6,
-  '@media (max-width: 520px)': {
-    gridTemplateColumns: '1fr',
-  },
-});
-
-export const ControlRow = styled.div({
-  minHeight: 32,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 8,
-  padding: '6px 8px',
-  borderRadius: 1,
-  background: 'var(--anime-paper)',
-  border: '1px solid rgba(33,29,26,0.3)',
-  fontSize: '0.75rem',
+// Players as rows, actions as columns, so each player reads one line.
+export const ControlTable = styled.table({
+  width: '100%',
+  borderCollapse: 'separate',
+  borderSpacing: '0 4px',
+  fontSize: '0.74rem',
   fontWeight: 800,
-  '& span': {
-    color: 'rgba(33,29,26,0.72)',
+  '& th, & td': {
+    padding: '4px 5px',
+    textAlign: 'center',
+    whiteSpace: 'nowrap',
+  },
+  '& thead th': {
+    padding: '0 5px',
+    color: 'rgba(33,29,26,0.78)',
+    fontSize: '0.6rem',
+    fontWeight: 900,
+    textTransform: 'uppercase',
+  },
+  '& thead th:first-of-type, & tbody th': {
+    textAlign: 'left',
+  },
+  '& abbr': {
+    textDecoration: 'none',
+  },
+  '& tbody th, & tbody td': {
+    background: 'var(--anime-paper)',
+    borderTop: '1px solid rgba(33,29,26,0.3)',
+    borderBottom: '1px solid rgba(33,29,26,0.3)',
+  },
+  '& tbody th': {
+    borderLeft: '1px solid rgba(33,29,26,0.3)',
+    '& span:last-of-type': {
+      display: 'inline-block',
+      maxWidth: 110,
+      overflow: 'hidden',
+      marginLeft: 6,
+      textOverflow: 'ellipsis',
+      verticalAlign: 'middle',
+    },
+  },
+  '& tbody td:last-of-type': {
+    borderRight: '1px solid rgba(33,29,26,0.3)',
   },
   '& kbd': {
-    minWidth: 28,
-    padding: '2px 6px',
+    display: 'inline-block',
+    minWidth: 22,
+    padding: '2px 5px',
     borderRadius: 1,
     color: 'var(--anime-ink)',
     background: 'var(--anime-mustard)',
     border: '1px solid var(--anime-ink)',
     textAlign: 'center',
     fontFamily: 'inherit',
+    fontWeight: 900,
+  },
+  '@media (max-width: 520px)': {
+    fontSize: '0.68rem',
+    '& th, & td': { padding: '3px 2px' },
+    '& tbody th span:last-of-type': { display: 'none' },
+    '& kbd': { minWidth: 18, padding: '1px 3px' },
+  },
+});
+
+export const ControlSlot = styled('span', {
+  shouldForwardProp: (prop) => prop !== 'slotColor' && prop !== 'textColor',
+})<{ slotColor: string; textColor: string }>(({ slotColor, textColor }) => ({
+  display: 'inline-block',
+  flex: '0 0 auto',
+  minWidth: 24,
+  verticalAlign: 'middle',
+  padding: '2px 4px',
+  borderRadius: 1,
+  color: textColor,
+  background: slotColor,
+  border: '1px solid var(--anime-ink)',
+  fontSize: '0.68rem',
+  fontWeight: 900,
+  textAlign: 'center',
+}));
+
+export const PlayerKits = styled.ul({
+  display: 'grid',
+  gap: 5,
+  margin: 0,
+  padding: 0,
+  listStyle: 'none',
+  '& li': {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 8,
+    color: 'rgba(33,29,26,0.82)',
+    fontSize: '0.72rem',
+    fontWeight: 700,
+    lineHeight: 1.35,
+  },
+  '& li > span:last-of-type': {
+    display: 'grid',
+  },
+  '& strong': {
+    color: 'var(--anime-ink)',
     fontWeight: 900,
   },
 });
@@ -317,6 +385,34 @@ export const CountdownOverlay = styled.div({
     background: 'var(--anime-vermilion)',
     border: '3px solid var(--anime-ink)',
     boxShadow: '8px 8px 0 var(--anime-mustard)',
+    fontSize: '4.1rem',
+    fontWeight: 900,
+  },
+});
+
+// A static plate: a CSS pop animation here re-ran style recalc on every
+// frame of the beat in the production A/B (about 30 extra recalcs per round
+// start), so "GO!" just appears for its 700 ms and goes.
+export const GoOverlay = styled.div({
+  position: 'absolute',
+  inset: 0,
+  zIndex: 14,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  pointerEvents: 'none',
+  color: 'var(--anime-ink)',
+  '& strong': {
+    minWidth: 180,
+    minHeight: 134,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 24px',
+    borderRadius: 2,
+    background: 'var(--anime-mustard)',
+    border: '3px solid var(--anime-ink)',
+    boxShadow: '8px 8px 0 var(--anime-teal)',
     fontSize: '4.1rem',
     fontWeight: 900,
   },
@@ -349,6 +445,10 @@ export const FeedbackCaption = styled.div({
   textAlign: 'center',
   textTransform: 'uppercase',
   pointerEvents: 'none',
+  // Short landscape screens put the player cards on the bottom edge.
+  '@media (max-height: 560px) and (min-width: 641px)': {
+    bottom: 104,
+  },
 });
 
 // Screen readers only announce changes to a live region that already exists,

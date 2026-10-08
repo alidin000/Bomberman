@@ -195,17 +195,20 @@ describe('gameReducer', () => {
   });
 
   it('applies campaign event vision modifiers to fog of war', () => {
+    // On Hard the sandstorm cuts sight all the way to the 2-cell floor.
     const calmState = createInitialState({
       ...soloConfig,
       selectedMap: 'hiddenLeaf',
       stageId: 'hiddenLeaf',
       selectedCharacters: ['naruto'],
+      difficulty: 'hard',
     });
     const sandstormState = createInitialState({
       ...soloConfig,
       selectedMap: 'hiddenSand',
       stageId: 'hiddenSand',
       selectedCharacters: ['naruto'],
+      difficulty: 'hard',
     });
 
     expect(calmState.fogOfWar.visible).toContain(cellKey(4, 1));
@@ -228,12 +231,13 @@ describe('gameReducer', () => {
       'hiddenLeaf-center',
       'hiddenLeaf-boss-gate',
     ]);
+    // The first village refills slowly (26 s, x1.25 on Normal) and holds two.
     expect(state.campaign?.spawnPoints[0]).toMatchObject({
       id: 'hiddenLeaf-main-gate',
       x: 6,
       y: 5,
-      respawnMs: 20000,
-      maxActive: 3,
+      respawnMs: 32500,
+      maxActive: 2,
     });
     expect(state.monsters.map((monster) => monster.archetype)).toEqual(
       expect.arrayContaining(['rogueGenin', 'mistNinja'])
@@ -274,8 +278,9 @@ describe('gameReducer', () => {
       ]);
       expect(mission?.spawnPoints).toHaveLength(3);
       expect(mission?.spawnPoints.every((point) => (
-        point.respawnMs === 20000
-        && point.maxActive >= 3
+        point.respawnMs >= 18000
+        && point.respawnMs <= 26000
+        && point.maxActive >= 2
         && point.archetypes.length >= 2
       ))).toBe(true);
       expect(mission?.hiddenAreas).toHaveLength(3);
@@ -442,7 +447,8 @@ describe('gameReducer', () => {
       }),
     ]));
     expect(state.campaign?.spawnPoints[0].activeMonsterIds).toContain('hiddenLeaf-main-gate-1');
-    expect(state.campaign?.spawnPoints[0].ticksRemaining).toBe(20000);
+    expect(state.campaign?.spawnPoints[0].ticksRemaining)
+      .toBe(state.campaign?.spawnPoints[0].respawnMs);
   });
 
   it('applies campaign event pressure to respawn timers', () => {
@@ -779,7 +785,8 @@ describe('gameReducer', () => {
   });
 
   it('fails the Hidden Leaf mission when Hokage Building is destroyed', () => {
-    let state = createInitialState(hiddenLeafCampaignConfig);
+    // Hard has a single life, so the fallen structure ends the mission.
+    let state = createInitialState({ ...hiddenLeafCampaignConfig, difficulty: 'hard' });
     state = {
       ...state,
       players: state.players.map((player) => ({ ...player, x: 3, y: 1 })),

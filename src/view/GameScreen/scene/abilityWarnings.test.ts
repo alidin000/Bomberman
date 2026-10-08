@@ -21,6 +21,8 @@ function hiddenLeafMission(): GameEngineState {
       stageId: 'hiddenLeaf',
       selectedCharacters: ['deidara'],
       map,
+      // Only Hard lets an enemy hidden in the fog start an ambush.
+      difficulty: 'hard',
     }),
     roundStartTicksRemaining: 0,
   };

@@ -1,6 +1,8 @@
 import { vi, type Mock } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import {
+  render, screen, fireEvent, waitFor,
+} from '@testing-library/react';
 import { BrowserRouter, useNavigate, NavigateFunction } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import theme from '../../theme/InstructionsTheme';
@@ -18,8 +20,12 @@ describe('WelcomeScreen', () => {
   let mockNavigate: Mock<NavigateFunction>;
 
   beforeEach(() => {
+    localStorage.clear();
     mockNavigate = vi.fn();
     (useNavigate as Mock).mockReturnValue(mockNavigate);
+    global.fetch = vi.fn().mockResolvedValue({
+      text: () => Promise.resolve('###\n# #\n###'),
+    }) as Mock;
   });
 
   const setup = () => {
@@ -47,5 +53,55 @@ describe('WelcomeScreen', () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: /shinobi manual/i }));
     expect(mockNavigate).toHaveBeenCalledWith('/instructions');
+  });
+
+  it('focuses Quick Play on arrival so one key press starts a match', () => {
+    setup();
+    expect(screen.getByRole('button', { name: /quick play/i })).toHaveFocus();
+  });
+
+  it('starts the current campaign mission from Quick Play on a first visit', async () => {
+    setup();
+    expect(screen.getByText(/Mission 1 · Hidden Leaf Emergency · Deidara/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /quick play/i }));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/1/1/hiddenLeaf');
+      expect(JSON.parse(localStorage.getItem('gameSetup') as string)).toMatchObject({
+        mode: 'solo',
+        stageId: 'hiddenLeaf',
+        selectedCharacters: ['deidara'],
+      });
+      expect(localStorage.getItem('selectedMap')).not.toBeNull();
+    });
+  });
+
+  it('offers a rematch of the last local battle from Quick Play', async () => {
+    localStorage.setItem('gameSetup', JSON.stringify({
+      mode: 'local',
+      stageId: 'hiddenMist',
+      selectedCharacters: ['gaara', 'itachi'],
+      selectedUpgrade: 'extraClay',
+    }));
+    localStorage.setItem('playerKeyBindings', JSON.stringify({
+      1: ['w', 'a', 's', 'd', 'e', '1', '3', '4'],
+      2: ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight', 'o', 'i', 'p', '['],
+      3: ['u', 'h', 'j', 'k', '7', '6', '8', '9'],
+    }));
+    setup();
+    expect(screen.getByText(/Local rematch · Hidden Mist Village · Gaara vs Itachi/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /quick play/i }));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/2/1/hiddenMist');
+      expect(JSON.parse(localStorage.getItem('gameSetup') as string)).toMatchObject({
+        mode: 'local',
+        selectedCharacters: ['gaara', 'itachi'],
+      });
+      // The player's own key bindings carry over unchanged.
+      expect(JSON.parse(localStorage.getItem('playerKeyBindings') as string)[1][4]).toBe('e');
+    });
   });
 });

@@ -308,7 +308,8 @@ describe('re-ignited flames', () => {
     expect(state.explosions.find((flame) => flame.x === 4 && flame.y === 3))
       .toMatchObject({ ticksRemaining: 450 });
 
-    for (let step = 0; step < 13; step += 1) {
+    // 14 steps puts their body well into the flame tile (FLAME_HURT_RADIUS).
+    for (let step = 0; step < 14; step += 1) {
       state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'right' })!;
     }
     state = tickFor(state, 50);

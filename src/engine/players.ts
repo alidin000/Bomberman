@@ -29,6 +29,10 @@ const MUTUALLY_EXCLUSIVE: Partial<Record<Power, Power | null>> = {
 const PICKUP_MESSAGE_MS = 3600;
 const SHARED_SCREEN_MAX_DELTA_X = 12;
 const SHARED_SCREEN_MAX_DELTA_Y = 8;
+// A ninja running from danger may stretch the shared screen to this multiple,
+// so the limit never pins anyone beside a bomb. The camera's widest framing
+// still shows an 18x12 spread well inside the view.
+const SHARED_SCREEN_ESCAPE_SCALE = 1.5;
 
 function addPickupMessage(
   state: GameEngineState,
@@ -178,7 +182,8 @@ export function staysInsideSharedScreen(
   state: GameEngineState,
   mover: PlayerState,
   x: number,
-  y: number
+  y: number,
+  scale = 1
 ): boolean {
   if (state.config.mode === 'solo' || state.config.numPlayers <= 1) return true;
 
@@ -189,12 +194,12 @@ export function staysInsideSharedScreen(
     withinOrClosing(
       Math.abs(player.x - x),
       Math.abs(player.x - mover.x),
-      SHARED_SCREEN_MAX_DELTA_X
+      SHARED_SCREEN_MAX_DELTA_X * scale
     )
     && withinOrClosing(
       Math.abs(player.y - y),
       Math.abs(player.y - mover.y),
-      SHARED_SCREEN_MAX_DELTA_Y
+      SHARED_SCREEN_MAX_DELTA_Y * scale
     )
   ));
 }
@@ -206,10 +211,13 @@ function distanceSquared(
   return (first.x - second.x) ** 2 + (first.y - second.y) ** 2;
 }
 
+// `escaping`: the mover stands in danger. Then the shared screen stretches
+// and other ninjas' bodies stop blocking, so neither can trap them in a blast.
 export function movePlayer(
   state: GameEngineState,
   playerId: string,
   direction: Direction,
+  escaping = false,
 ): GameEngineState {
   const playerIndex = state.players.findIndex((p) => p.id === playerId);
   if (playerIndex === -1) return state;
@@ -226,10 +234,11 @@ export function movePlayer(
   const ny = roundToMovementStep(dx === 0 ? y + dy : moveTowardCellCenter(y));
 
   if (!isValidMove(state, playerId, nx, ny, x, y)) return state;
-  if (!staysInsideSharedScreen(state, player, nx, ny)) return state;
+  const screenScale = escaping ? SHARED_SCREEN_ESCAPE_SCALE : 1;
+  if (!staysInsideSharedScreen(state, player, nx, ny, screenScale)) return state;
   // Players block each other, but two players who end up overlapping (a
   // teleport, a respawn) can always step apart.
-  const blocked = others.some((p) => (
+  const blocked = !escaping && others.some((p) => (
     positionsTouch({ x: nx, y: ny }, p, PLAYER_COLLISION_RADIUS * 2)
     && distanceSquared({ x: nx, y: ny }, p) <= distanceSquared(player, p)
   ));
@@ -263,10 +272,15 @@ export function movePlayer(
 // the first 0.2 cells toward a wall are lane slack, not progress.
 const TURN_PROBE_STEPS = 3;
 
-function canAdvance(state: GameEngineState, playerId: string, direction: Direction): boolean {
+function canAdvance(
+  state: GameEngineState,
+  playerId: string,
+  direction: Direction,
+  escaping: boolean,
+): boolean {
   let probe = state;
   for (let step = 0; step < TURN_PROBE_STEPS; step += 1) {
-    const next = movePlayer(probe, playerId, direction);
+    const next = movePlayer(probe, playerId, direction, escaping);
     if (next === probe) return false;
     probe = next;
   }
@@ -284,13 +298,14 @@ export function movePlayerBuffered(
   playerId: string,
   direction: Direction,
   fallbackDirection?: Direction,
+  escaping = false,
 ): GameEngineState {
   if (fallbackDirection && fallbackDirection !== direction
-    && !canAdvance(state, playerId, direction)) {
-    const fallback = movePlayer(state, playerId, fallbackDirection);
+    && !canAdvance(state, playerId, direction, escaping)) {
+    const fallback = movePlayer(state, playerId, fallbackDirection, escaping);
     if (fallback !== state) return fallback;
   }
-  return movePlayer(state, playerId, direction);
+  return movePlayer(state, playerId, direction, escaping);
 }
 
 function getFacingDelta(direction: Direction): { dx: number; dy: number } {

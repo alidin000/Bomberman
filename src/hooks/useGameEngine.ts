@@ -24,6 +24,7 @@ import {
   applyEngineAction,
   createEngineLoop,
 } from './engineLoop';
+import { useGamepadInput } from './useGamepadInput';
 
 type HeldDirection = {
   direction: Direction;
@@ -246,6 +247,9 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
       window.removeEventListener('blur', handleBlur);
     };
   }, [handleKeyDown, handleKeyUp, clearMovement]);
+
+  // Pads press the same bound keys, so they reuse every handler above.
+  useGamepadInput(keyBindings);
 
   useEffect(() => {
     loop.activeMovement = pruneInactiveMovement(loop.activeMovement, state);

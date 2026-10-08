@@ -7,6 +7,7 @@ import {
   Point,
 } from './types';
 import { getPlayerCell } from './grid';
+import { getMatchDifficulty } from './difficulty';
 
 const DEFAULT_VISION_RADIUS = 3;
 const DEIDARA_EXPLOSION_REVEAL_RADIUS = 3;
@@ -129,6 +130,16 @@ export function getVisionRadius(characterId: CharacterId): number {
   return getCharacterDefinition(characterId).visionRadius ?? DEFAULT_VISION_RADIUS;
 }
 
+// Sight in this match: a stage event (sandstorm, fog) shortens it, but never
+// below the difficulty's floor (2 on Hard), nor above the character's own.
+function getMatchVisionRadius(state: GameEngineState, characterId: CharacterId): number {
+  const base = getVisionRadius(characterId);
+  const modifier = state.campaign?.event?.visionModifier ?? 0;
+  if (modifier >= 0) return Math.max(2, base + modifier);
+  const floor = Math.min(base, getMatchDifficulty(state.config).eventVisionFloor);
+  return Math.max(2, floor, base + modifier);
+}
+
 // Arrays this module produced: sorted, without duplicates. Only these take
 // the incremental path; anything else is recomputed from scratch as before.
 const sortedKeyArrays = new WeakSet<string[]>();
@@ -179,7 +190,6 @@ function mergeExplored(previous: string[], visible: string[]): string[] {
 }
 
 function getVisionSources(state: GameEngineState): number[] {
-  const eventVisionModifier = state.campaign?.event?.visionModifier ?? 0;
   // The map's shape bounds every radius, so it is part of the key.
   const sources: number[] = [state.map.length, state.map[0]?.length ?? 0];
   state.players.forEach((player) => {
@@ -188,7 +198,7 @@ function getVisionSources(state: GameEngineState): number[] {
     sources.push(
       playerCell.x,
       playerCell.y,
-      Math.max(2, getVisionRadius(player.characterId) + eventVisionModifier)
+      getMatchVisionRadius(state, player.characterId)
     );
   });
   state.explosions.forEach((explosion) => {
@@ -244,14 +254,10 @@ function computeFogOfWar(state: GameEngineState): {
 
   const sensedEnemies = new Set<string>();
   const sensedWalls = new Set<string>();
-  const eventVisionModifier = state.campaign?.event?.visionModifier ?? 0;
   state.players.forEach((player) => {
     if (!player.alive) return;
     const playerCell = getPlayerCell(player);
-    const visionRadius = Math.max(
-      2,
-      getVisionRadius(player.characterId) + eventVisionModifier
-    );
+    const visionRadius = getMatchVisionRadius(state, player.characterId);
     if (player.characterId === 'sasuke') {
       addSensedEnemies(
         state,

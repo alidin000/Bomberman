@@ -32,8 +32,11 @@ import { GameScene3D } from './GameScene3D';
 import { GameHUD } from './GameHUD';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useRenderState } from '../../hooks/useRenderState';
-import { GameConfig, loadMapFromStorage } from '../../engine';
-import { DEFAULT_CHARACTER_ID, DEFAULT_STAGE_ID, GameMode } from '../../content';
+import { GameConfig, GameEngineState, loadMapFromStorage } from '../../engine';
+import {
+  DEFAULT_CHARACTER_ID, DEFAULT_STAGE_ID, GameMode, getCharacterDefinition,
+} from '../../content';
+import { CharacterId } from '../../content/types';
 import { completeCampaignStage, recordCampaignDiscoveries } from '../../story/progress';
 import {
   GameSceneContainer,
@@ -49,9 +52,11 @@ import {
   ControlsGuide,
   ControlsGuideHeader,
   ControlsDismissButton,
-  ControlRows,
-  ControlRow,
+  ControlTable,
+  ControlSlot,
+  PlayerKits,
   CountdownOverlay,
+  GoOverlay,
   FeedbackCaption,
   CaptionLiveRegion,
 } from './GameScreen.styles';
@@ -60,6 +65,8 @@ import {
   saveGamePreferences,
 } from './gamePreferences';
 import { useGameFeedback } from './useGameFeedback';
+import { playerSlotColor, playerSlotLabel, playerSlotTextColor } from './playerSlots';
+import { loadCampaignDifficulty } from '../ConfigScreen/campaignDifficulty';
 
 const CONTROLS_GUIDE_SEEN_KEY = 'shinobiControlsGuideSeen';
 
@@ -100,6 +107,73 @@ function formatMovementKeys(bindings: string[]): string {
     bindings[2],
     bindings[3],
   ].map(formatKeyLabel).join(' ');
+}
+
+type ControlsRow = {
+  slot: number;
+  name: string;
+  keys: { move: string; bomb: string; detonate: string; ultimate: string; cover: string };
+};
+
+// One row per player and one column per action: the old list of ten to
+// fifteen "P1 move / P1 bomb ..." pairs had to be read item by item.
+const ControlsTable = ({ rows, label }: { rows: ControlsRow[]; label: string }) => (
+  <ControlTable aria-label={label}>
+    <thead>
+      <tr>
+        <th scope="col">Shinobi</th>
+        <th scope="col">Move</th>
+        <th scope="col">Bomb</th>
+        <th scope="col">
+          <abbr title="Detonate">Det</abbr>
+        </th>
+        <th scope="col">
+          <abbr title="Ultimate">Ult</abbr>
+        </th>
+        <th scope="col">Cover</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows.map((row) => (
+        <tr key={row.slot}>
+          <th scope="row">
+            <ControlSlot
+              slotColor={playerSlotColor(row.slot)}
+              textColor={playerSlotTextColor(row.slot)}
+            >
+              {playerSlotLabel(row.slot)}
+            </ControlSlot>
+            <span>{row.name}</span>
+          </th>
+          <td><kbd>{row.keys.move}</kbd></td>
+          <td><kbd>{row.keys.bomb}</kbd></td>
+          <td><kbd>{row.keys.detonate}</kbd></td>
+          <td><kbd>{row.keys.ultimate}</kbd></td>
+          <td><kbd>{row.keys.cover}</kbd></td>
+        </tr>
+      ))}
+    </tbody>
+  </ControlTable>
+);
+
+// "GO!" stays up for the first 700 ms of play. Counted in engine ticks, so
+// it pauses with the game and needs no timer or extra render: GameScreen
+// already renders on every engine publish.
+const GO_BEAT_TICKS = 14;
+
+function useRoundStartBeat(state: GameEngineState | null): { countdown: string; go: boolean } {
+  const beatRef = useRef<{ armed: boolean; liveTick: number | null }>({ armed: false, liveTick: null });
+  if (!state || state.phase !== 'playing') return { countdown: '', go: false };
+  const beat = beatRef.current;
+  if (state.roundStartTicksRemaining > 0) {
+    beat.armed = true;
+    beat.liveTick = null;
+    return { countdown: String(Math.ceil(state.roundStartTicksRemaining / 1000)), go: false };
+  }
+  if (beat.armed && beat.liveTick === null) beat.liveTick = state.tick;
+  const go = beat.liveTick !== null && state.tick - beat.liveTick < GO_BEAT_TICKS;
+  if (!go) beat.armed = false;
+  return { countdown: '', go };
 }
 
 type GameTopControlsProps = {
@@ -197,6 +271,10 @@ export const GameScreen = () => {
   const [showHud, setShowHud] = useState(true);
   const [preferences, setPreferences] = useState(loadGamePreferences);
   const controlsGuidePausedGame = useRef(false);
+  // Settings (and the controls editor reached from it) give play back only
+  // when they were opened mid-play; opened from the pause menu, closing them
+  // returns there instead of un-pausing under the player.
+  const resumeAfterMenu = useRef(true);
 
   const config = useMemo<GameConfig | null>(() => {
     if (!numOfPlayers || !numOfRounds || !selectedMap) return null;
@@ -212,6 +290,7 @@ export const GameScreen = () => {
       selectedCharacters: setup.selectedCharacters
         ?? Array.from({ length: players }, () => DEFAULT_CHARACTER_ID),
       selectedUpgrade: setup.selectedUpgrade,
+      difficulty: loadCampaignDifficulty(),
     };
   }, [numOfPlayers, numOfRounds, selectedMap]);
 
@@ -286,27 +365,44 @@ export const GameScreen = () => {
     }
     return 'defeat';
   }, [state]);
-  const roundStartTicksRemaining = state?.roundStartTicksRemaining ?? 0;
-  const countdownLabel = roundStartTicksRemaining > 0
-    ? String(Math.ceil(roundStartTicksRemaining / 1000))
-    : '';
+  const roundStart = useRoundStartBeat(state);
   const parsedPlayerCount = Number(numOfPlayers ?? 1);
   const activePlayerCount = Number.isFinite(parsedPlayerCount)
     ? Math.max(1, parsedPlayerCount)
     : 1;
-  const controlRows = useMemo(() => (
-    Array.from({ length: activePlayerCount }, (_, index) => {
+  const characterIdsKey = state?.players.map((player) => player.characterId).join('|') ?? '';
+  const controlRows = useMemo<ControlsRow[]>(() => {
+    const characterIds = characterIdsKey ? characterIdsKey.split('|') as CharacterId[] : [];
+    // The match's own roster when it is loaded; the route's count before that.
+    return Array.from({ length: characterIds.length || activePlayerCount }, (_, index) => {
       const playerNumber = String(index + 1);
       const bindings = keyBindings[playerNumber] ?? DEFAULT_KEY_BINDINGS[playerNumber];
-      return [
-        { label: `P${playerNumber} move`, value: formatMovementKeys(bindings) },
-        { label: `P${playerNumber} bomb`, value: formatKeyLabel(bindings[4]) },
-        { label: `P${playerNumber} det`, value: formatKeyLabel(bindings[5]) },
-        { label: `P${playerNumber} ult`, value: formatKeyLabel(bindings[6]) },
-        { label: `P${playerNumber} cover`, value: formatKeyLabel(bindings[7]) },
-      ];
-    }).flat()
-  ), [activePlayerCount, keyBindings]);
+      const characterId = characterIds[index];
+      return {
+        slot: index,
+        name: characterId ? getCharacterDefinition(characterId).name : `Player ${playerNumber}`,
+        keys: {
+          move: formatMovementKeys(bindings),
+          bomb: formatKeyLabel(bindings[4]),
+          detonate: formatKeyLabel(bindings[5]),
+          ultimate: formatKeyLabel(bindings[6]),
+          cover: formatKeyLabel(bindings[7]),
+        },
+      };
+    });
+  }, [activePlayerCount, characterIdsKey, keyBindings]);
+  // The static kit text the old HUD cards carried, kept for the pause menu.
+  const playerKits = useMemo(() => (
+    (characterIdsKey ? characterIdsKey.split('|') as CharacterId[] : []).map((characterId, index) => {
+      const character = getCharacterDefinition(characterId);
+      return {
+        slot: index,
+        name: character.name,
+        title: character.title,
+        detail: `Bomb: ${character.basicBomb} · Ult: ${character.ultimate} · Vision ${character.visionRadius}`,
+      };
+    })
+  ), [characterIdsKey]);
 
   const handleTogglePause = useCallback(() => {
     if (isPaused) resume();
@@ -314,9 +410,21 @@ export const GameScreen = () => {
   }, [isPaused, pause, resume]);
 
   const handleOpenSettings = useCallback(() => {
+    resumeAfterMenu.current = !isPaused;
     setIsSettingsOpen(true);
     pause();
-  }, [pause]);
+  }, [isPaused, pause]);
+
+  const handleCloseMenus = useCallback(() => {
+    setIsSettingsOpen(false);
+    setIsModifyingControls(false);
+    if (resumeAfterMenu.current) resume();
+  }, [resume]);
+
+  const handleResumeFromSettings = useCallback(() => {
+    setIsSettingsOpen(false);
+    resume();
+  }, [resume]);
 
   const handleDismissControlsGuide = useCallback(() => {
     setShowControlsGuide(false);
@@ -382,15 +490,8 @@ export const GameScreen = () => {
         return;
       }
 
-      if (isModifyingControls) {
-        setIsModifyingControls(false);
-        resume();
-        return;
-      }
-
-      if (isSettingsOpen) {
-        setIsSettingsOpen(false);
-        resume();
+      if (isModifyingControls || isSettingsOpen) {
+        handleCloseMenus();
         return;
       }
 
@@ -401,13 +502,21 @@ export const GameScreen = () => {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [
     dialogOpen,
+    handleCloseMenus,
     handleTogglePause,
     handleDismissControlsGuide,
     isModifyingControls,
     isSettingsOpen,
-    resume,
     showControlsGuide,
   ]);
+
+  // The countdown overlay is visual only; the live region reads "3, 2, 1,
+  // Go!" (nothing else happens while the arena is frozen) and then captions.
+  const countdownVisible = !!roundStart.countdown && !isPaused && !dialogOpen;
+  const goVisible = roundStart.go && !isPaused && !dialogOpen;
+  let liveAnnouncement = feedback.caption;
+  if (countdownVisible) liveAnnouncement = roundStart.countdown;
+  else if (goVisible) liveAnnouncement = 'Go!';
 
   if (!state || !renderState) {
     return (
@@ -439,17 +548,22 @@ export const GameScreen = () => {
         />
       </GameSceneContainer>
       <CaptionLiveRegion role="status" aria-atomic="true">
-        {feedback.caption}
+        {liveAnnouncement}
       </CaptionLiveRegion>
       {feedback.caption && (
         <FeedbackCaption key={feedback.eventId} aria-hidden="true">
           {feedback.caption}
         </FeedbackCaption>
       )}
-      {roundStartTicksRemaining > 0 && !isPaused && !dialogOpen && (
+      {countdownVisible && (
         <CountdownOverlay aria-label="round countdown">
-          <strong>{countdownLabel}</strong>
+          <strong>{roundStart.countdown}</strong>
         </CountdownOverlay>
+      )}
+      {goVisible && (
+        <GoOverlay aria-hidden="true">
+          <strong>GO!</strong>
+        </GoOverlay>
       )}
       {showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
         <ControlsGuide aria-label="controls guide">
@@ -462,14 +576,7 @@ export const GameScreen = () => {
               <CloseIcon fontSize="small" />
             </ControlsDismissButton>
           </ControlsGuideHeader>
-          <ControlRows>
-            {controlRows.map((row) => (
-              <ControlRow key={`${row.label}-${row.value}`}>
-                <span>{row.label}</span>
-                <kbd>{row.value}</kbd>
-              </ControlRow>
-            ))}
-          </ControlRows>
+          <ControlsTable rows={controlRows} label="controls" />
         </ControlsGuide>
       )}
       {isPaused && !showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
@@ -481,7 +588,7 @@ export const GameScreen = () => {
           <PauseMenuCard>
             <PauseMenuTitle id="pause-menu-title">
               <strong>Paused</strong>
-              <span>ESC resumes. Review controls, restart, adjust settings, or leave the match.</span>
+              <span>Esc resumes</span>
             </PauseMenuTitle>
             <PauseMenuActions>
               <PauseMenuButton
@@ -515,14 +622,23 @@ export const GameScreen = () => {
                 Quit Game
               </PauseMenuButton>
             </PauseMenuActions>
-            <ControlRows>
-              {controlRows.map((row) => (
-                <ControlRow key={`paused-${row.label}-${row.value}`}>
-                  <span>{row.label}</span>
-                  <kbd>{row.value}</kbd>
-                </ControlRow>
+            <ControlsTable rows={controlRows} label="controls" />
+            <PlayerKits aria-label="shinobi kits">
+              {playerKits.map((kit) => (
+                <li key={kit.slot}>
+                  <ControlSlot
+                    slotColor={playerSlotColor(kit.slot)}
+                    textColor={playerSlotTextColor(kit.slot)}
+                  >
+                    {playerSlotLabel(kit.slot)}
+                  </ControlSlot>
+                  <span>
+                    <strong>{`${kit.name} · ${kit.title}`}</strong>
+                    {kit.detail}
+                  </span>
+                </li>
               ))}
-            </ControlRows>
+            </PlayerKits>
           </PauseMenuCard>
         </PauseOverlay>
       )}
@@ -537,10 +653,8 @@ export const GameScreen = () => {
       />
       <MemoSettingsScreen
         open={isSettingsOpen}
-        onClose={() => {
-          setIsSettingsOpen(false);
-          resume();
-        }}
+        onClose={handleCloseMenus}
+        onResume={handleResumeFromSettings}
         onRestart={() => {
           restart();
           setIsSettingsOpen(false);
@@ -556,10 +670,7 @@ export const GameScreen = () => {
       />
       <MemoModifyControlsDialog
         isOpen={isModifyingControls}
-        onClose={() => {
-          setIsModifyingControls(false);
-          resume();
-        }}
+        onClose={handleCloseMenus}
         onSave={(nextBindings) => {
           const normalized = normalizeKeyBindings(nextBindings);
           setKeyBindings(normalized);
@@ -568,8 +679,7 @@ export const GameScreen = () => {
           } catch {
             // The new keys still apply to this match when storage is unavailable.
           }
-          setIsModifyingControls(false);
-          resume();
+          handleCloseMenus();
         }}
         keyBindings={keyBindings}
         numOfPlayers={String(numOfPlayers)}

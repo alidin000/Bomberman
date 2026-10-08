@@ -16,13 +16,15 @@ import {
   tickBombs,
   tickExplosions,
 } from './bombs';
-import { checkMonsterCollisions, tickMonsters } from './monsters';
+import { checkMonsterCollisions, createDangerMap, tickMonsters } from './monsters';
+import { getOverlappedCells } from './grid';
 import { tickBossEncounter } from './bosses';
 import { withUpdatedFogOfWar } from './fogOfWar';
 import { advanceCampaignObjectives } from './campaignObjectives';
 import { tickCampaignRespawns } from './campaignEnemies';
 import { deriveMatchSeed } from './random';
 import { tickSuddenDeath } from './suddenDeath';
+import { regroupFallenPlayers } from './campaignLives';
 
 function getWinnerName(state: GameEngineState, winnerId: string): string {
   return state.players.find((player) => player.id === winnerId)?.name ?? winnerId;
@@ -209,7 +211,27 @@ function processTick(state: GameEngineState, deltaMs: number): GameEngineState {
   next = burnInLingeringFlames(next);
   next = tickSuddenDeath(next, deltaMs);
   next = { ...next, players: checkMonsterCollisions(next) };
+  next = regroupFallenPlayers(next);
   return withUpdatedFogOfWar(checkRoundEnd(next));
+}
+
+// An enemy this close (in cells, either axis) is about to catch the ninja.
+const ENEMY_DANGER_DISTANCE = 1.6;
+
+// Standing where the engine's danger map marks (a blast's reach, a flame, a
+// telegraphed attack), or with an enemy closing in.
+function isPlayerInDanger(state: GameEngineState, playerId: string): boolean {
+  const player = state.players.find((item) => item.id === playerId);
+  if (!player?.alive) return false;
+  if (state.monsters.some((monster) => (
+    Math.abs(monster.x - player.x) <= ENEMY_DANGER_DISTANCE
+    && Math.abs(monster.y - player.y) <= ENEMY_DANGER_DISTANCE
+  ))) return true;
+  if (state.bombs.length === 0 && state.explosions.length === 0 && state.hazards.length === 0) {
+    return false;
+  }
+  const danger = createDangerMap(state);
+  return getOverlappedCells(player.x, player.y).some(({ x, y }) => danger.has(`${x},${y}`));
 }
 
 function withFreshMatchSeed(state: GameEngineState): GameEngineState['config'] {
@@ -224,11 +246,26 @@ export function gameReducer(
     case 'INIT':
       return createInitialState(action.config);
 
-    case 'MOVE':
+    case 'MOVE': {
       if (!isRoundLive(state)) return state;
-      return withUpdatedFogOfWar(advanceCampaignState(
-        movePlayerBuffered(state, action.playerId, action.direction, action.fallbackDirection)
-      ));
+      let moved = movePlayerBuffered(
+        state,
+        action.playerId,
+        action.direction,
+        action.fallbackDirection
+      );
+      // Neither the shared screen nor another ninja may pin anyone in danger.
+      if (moved === state && isPlayerInDanger(state, action.playerId)) {
+        moved = movePlayerBuffered(
+          state,
+          action.playerId,
+          action.direction,
+          action.fallbackDirection,
+          true
+        );
+      }
+      return withUpdatedFogOfWar(advanceCampaignState(moved));
+    }
 
     case 'DROP_BOMB':
       if (!isRoundLive(state)) return state;

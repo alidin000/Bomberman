@@ -7,7 +7,10 @@ import { GameEngineState } from '../engine/types';
 // v3: versus monsters never start inside pillars, crates or a spawn's reach;
 // Naruto bomb cap, survival grace, charge pickups, orphaned manual bombs;
 // enemy hazard timing, fading water clones, respawn holds.
-export const REPLAY_VERSION = 3;
+// v4: a ninja in danger may stretch the shared screen and pass other ninjas;
+// blasts and flames burn a smaller body (FLAME_HURT_RADIUS); campaign
+// difficulty and lives; body flicker lands where it warned.
+export const REPLAY_VERSION = 4;
 
 export interface ReplayFrame {
   tick: number;

@@ -19,6 +19,7 @@ import { withUpdatedFogOfWar } from './fogOfWar';
 import { createCampaignRuntimeState } from './campaignObjectives';
 import { initializeCampaignEnemies } from './campaignEnemies';
 import { normalizeSeed } from './random';
+import { getMatchDifficulty } from './difficulty';
 
 const PLAYER_NAMES = ['player1', 'player2', 'player3'];
 const ULTIMATE_COOLDOWN_MS = 12000;
@@ -167,8 +168,11 @@ export function createBossForConfig(config: GameConfig): GameEngineState['boss']
     STAGE_DEFINITIONS.findIndex((item) => item.id === stage.id)
   );
   // Bombs now hit the boss once each (not once per blast cell), so health is
-  // tuned for roughly 7 signature-bomb hits on the first stage and 12 on the last.
-  const maxHealth = 520 + stageIndex * 60;
+  // tuned for roughly 7 signature-bomb hits on the first stage and 12 on the
+  // last, scaled by the campaign difficulty (rounded to 10s).
+  const maxHealth = Math.round(
+    ((520 + stageIndex * 60) * getMatchDifficulty(config).bossHealthScale) / 10
+  ) * 10;
   return {
     id: boss.id,
     name: boss.name,

@@ -10,7 +10,9 @@ import {
   BOMB_FUSE_MS, BOX_DESTROY_MS, EXPLOSION_MS,
 } from './constants';
 import { applyCharacterSurvival, isPowerUpActive, staysInsideSharedScreen } from './players';
-import { getCell, getPlayerCell, positionOverlapsCell } from './grid';
+import {
+  FLAME_HURT_RADIUS, getCell, getPlayerCell, positionOverlapsCell,
+} from './grid';
 import {
   getCampaignDestructionOutcome,
   resolveCampaignDestroyedBox,
@@ -538,7 +540,9 @@ export function explodeBombs(
     positions.forEach(({ x, y }) => {
       const key = getCellKey(x, y);
       const sparedIds = [
-        ...players.filter((p) => p.alive && positionOverlapsCell(p, x, y)).map((p) => p.id),
+        ...players
+          .filter((p) => p.alive && positionOverlapsCell(p, x, y, FLAME_HURT_RADIUS))
+          .map((p) => p.id),
         ...monsters.filter((m) => m.x === x && m.y === y).map((m) => m.id),
       ];
       if (!explosionKeys.has(key)) {
@@ -597,7 +601,7 @@ export function explodeBombs(
       }
 
       players.forEach((p, index) => {
-        if (p.alive && positionOverlapsCell(p, x, y)) {
+        if (p.alive && positionOverlapsCell(p, x, y, FLAME_HURT_RADIUS)) {
           const invincible = isPowerUpActive(state, p.id, 'Invincibility');
           if (!invincible) {
             players[index] = applyCharacterSurvival(
@@ -729,7 +733,7 @@ export function burnInLingeringFlames(state: GameEngineState): GameEngineState {
     if (!player.alive) return player;
     const flame = explosions.find((explosion) => (
       !explosion.sparedIds.includes(player.id)
-      && positionOverlapsCell(player, explosion.x, explosion.y)
+      && positionOverlapsCell(player, explosion.x, explosion.y, FLAME_HURT_RADIUS)
     ));
     if (!flame) return player;
     flame.sparedIds = [...flame.sparedIds, player.id];

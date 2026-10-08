@@ -13,6 +13,8 @@ import { getExplosionPositions } from './bombs';
 import { hazardIsActive } from './bosses';
 import { EnemyAbilityKind } from '../content/enemies';
 import { createShinobiEnemy } from './campaignEnemies';
+import { DifficultySettings, getMatchDifficulty } from './difficulty';
+import { isCellVisible } from './fogOfWar';
 
 const DIRECTIONS: Point[] = [
   { x: 0, y: -1 },
@@ -21,8 +23,8 @@ const DIRECTIONS: Point[] = [
   { x: -1, y: 0 },
 ];
 
-const MONSTER_ABILITY_WARNING_MS = 850;
-const MONSTER_HAZARD_TOTAL_MS = 1650;
+// Lethal window of an enemy hazard once its warning marker ends.
+const MONSTER_HAZARD_ACTIVE_MS = 800;
 const DEFAULT_DETECTION_RANGE = 5;
 const DETECTION_RETRY_MS = 350;
 let monsterHazardIdCounter = 0;
@@ -40,11 +42,13 @@ type MonsterMovementContext = {
   occupiedCells: Set<string>;
   danger: DangerMap;
   fleeField?: number[][] | null;
+  // How far ahead dodging enemies see a bomb coming (difficulty).
+  dodgeHorizonMs: number;
 };
 
-// Smart, fork and elite monsters refuse cells that blow up within this window;
-// the others only refuse cells that are already on fire.
-const SMART_DANGER_HORIZON_MS = 1400;
+// Smart, fork and elite monsters refuse cells that blow up within the
+// difficulty's dodge window (1400 ms on Hard); the others only refuse cells
+// that are already on fire.
 // A detonator bomb can go off at any moment.
 const MANUAL_BOMB_DANGER_MS = 500;
 const TELEGRAPHED_HAZARD_DANGER_MS = 300;
@@ -196,18 +200,20 @@ export function createDangerMap(state: GameEngineState): DangerMap {
 
 function createMonsterMovementContext(
   monsters: MonsterState[],
-  danger: DangerMap = new Map(),
+  danger: DangerMap,
+  dodgeHorizonMs: number,
 ): MonsterMovementContext {
   return {
     distanceFields: new Map(),
     occupiedCells: new Set(monsters.map((monster) => cellKey(monster.x, monster.y))),
     danger,
+    dodgeHorizonMs,
   };
 }
 
-function getDangerHorizon(monster: MonsterState): number {
+function getDangerHorizon(monster: MonsterState, context: MonsterMovementContext): number {
   return monster.elite || monster.kind === 'smart' || monster.kind === 'fork'
-    ? SMART_DANGER_HORIZON_MS
+    ? context.dodgeHorizonMs
     : 0;
 }
 
@@ -222,7 +228,7 @@ function avoidDanger(
   context: MonsterMovementContext,
 ): Point[] {
   if (context.danger.size === 0) return options;
-  const horizon = getDangerHorizon(monster);
+  const horizon = getDangerHorizon(monster, context);
   return options.filter((option) => !isDangerous(context, option, horizon));
 }
 
@@ -235,7 +241,7 @@ function getFleeField(context: MonsterMovementContext, map: GameMap): number[][]
     if (
       isInBounds(x, y, map)
       && cell === 'Empty'
-      && !isDangerous(context, { x, y }, SMART_DANGER_HORIZON_MS)
+      && !isDangerous(context, { x, y }, context.dodgeHorizonMs)
     ) {
       distances[y][x] = 0;
       queue.push({ x, y });
@@ -473,8 +479,8 @@ function fleeDanger(
   context: MonsterMovementContext,
   tick: number,
 ): MonsterState | null {
-  if (getDangerHorizon(monster) === 0) return null;
-  if (!isDangerous(context, monster, SMART_DANGER_HORIZON_MS)) return null;
+  if (getDangerHorizon(monster, context) === 0) return null;
+  if (!isDangerous(context, monster, context.dodgeHorizonMs)) return null;
 
   const walkable = (point: Point) => (
     monster.kind === 'ghost'
@@ -500,6 +506,40 @@ function fleeDanger(
   return { ...monster, x: latest.x, y: latest.y };
 }
 
+function leashMove(
+  monster: MonsterState,
+  map: GameMap,
+  context: MonsterMovementContext,
+  players: PlayerState[],
+  tick: number,
+): MonsterState | null {
+  const { leash } = monster;
+  if (!leash) return null;
+  if (Math.abs(monster.x - leash.x) + Math.abs(monster.y - leash.y) <= leash.radius) return null;
+  if (getDetectedPlayers(monster, players).length > 0) return null;
+  const options = avoidDanger(
+    DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
+      .filter((p) => (monster.kind === 'ghost'
+        ? ghostValidMove(p.x, p.y, map) && !context.occupiedCells.has(cellKey(p.x, p.y))
+        : basicValidMove(p.x, p.y, map, context.occupiedCells))),
+    monster,
+    context
+  );
+  const fieldKey = `leash:${leash.x},${leash.y}`;
+  if (!context.distanceFields.has(fieldKey)) {
+    const anchor = { x: leash.x, y: leash.y, alive: true } as PlayerState;
+    context.distanceFields.set(fieldKey, createDistanceField(map, [anchor]));
+  }
+  const home = chooseDistanceFieldMove(
+    options,
+    context.distanceFields.get(fieldKey) ?? null,
+    monster,
+    tick,
+    61
+  );
+  return home ? { ...monster, x: home.x, y: home.y } : null;
+}
+
 function moveMonsterByKind(
   monster: MonsterState,
   map: GameMap,
@@ -509,6 +549,8 @@ function moveMonsterByKind(
 ): MonsterState {
   const fled = fleeDanger(monster, map, context, tick);
   if (fled) return fled;
+  const homeward = leashMove(monster, map, context, players, tick);
+  if (homeward) return homeward;
   switch (monster.kind) {
     case 'smart':
       return moveSmartMonster(monster, map, context, players, tick);
@@ -540,7 +582,11 @@ function reserveMonsterCell(
   context.occupiedCells.add(cellKey(after.x, after.y));
 }
 
-function abilityCooldownFor(kind: EnemyAbilityKind | undefined, elite = false): number {
+function abilityCooldownFor(
+  kind: EnemyAbilityKind | undefined,
+  elite: boolean | undefined,
+  difficulty: DifficultySettings,
+): number {
   if (!kind) return 0;
   const cooldowns: Record<EnemyAbilityKind, number> = {
     kunaiThrow: 2400,
@@ -550,7 +596,13 @@ function abilityCooldownFor(kind: EnemyAbilityKind | undefined, elite = false): 
     lightningStrike: 3100,
     zetsuMelee: 1500,
   };
-  return Math.max(900, cooldowns[kind] - (elite ? 350 : 0));
+  return Math.round(
+    Math.max(900, cooldowns[kind] - (elite ? 350 : 0)) * difficulty.abilityCooldownScale
+  );
+}
+
+export function getMonsterMoveMs(monster: MonsterState, difficulty: DifficultySettings): number {
+  return Math.round(MONSTER_MOVE_MS[monster.kind] * difficulty.enemyMoveScale);
 }
 
 function hazardKindForAbility(kind: EnemyAbilityKind): HazardKind | null {
@@ -579,6 +631,7 @@ function createMonsterHazard(
   x: number,
   y: number,
   color: string,
+  warningMs: number,
   sourceName?: string,
   sourceAbility?: string,
 ): BossHazard {
@@ -588,10 +641,10 @@ function createMonsterHazard(
     kind,
     x,
     y,
-    ticksRemaining: MONSTER_HAZARD_TOTAL_MS,
-    warningTicks: MONSTER_ABILITY_WARNING_MS,
+    ticksRemaining: warningMs + MONSTER_HAZARD_ACTIVE_MS,
+    warningTicks: warningMs,
     // Lethal from the moment the enemy's own warning marker ends.
-    activeMs: MONSTER_HAZARD_TOTAL_MS - MONSTER_ABILITY_WARNING_MS,
+    activeMs: MONSTER_HAZARD_ACTIVE_MS,
     color,
     damage: 1,
     sourceName,
@@ -692,29 +745,29 @@ function resolveMonsterAbility(
     return { monster, players, spawned };
   }
 
+  const difficulty = getMatchDifficulty(state.config);
   let nextMonster = {
     ...monster,
     abilityWarningTicks: 0,
     abilityTarget: null,
-    abilityCooldown: abilityCooldownFor(abilityKind, monster.elite),
+    abilityCooldown: abilityCooldownFor(abilityKind, monster.elite, difficulty),
   };
   let nextPlayers = players;
   let nextSpawned = spawned;
 
   if (abilityKind === 'bodyFlicker') {
-    const targetPlayer = getNearestPlayer(monster, players);
-    if (targetPlayer) {
-      const point = getAdjacentTargetCell(
-        state,
-        targetPlayer,
-        hashMonster(monster, state.tick, 43),
-        players
-      );
-      // With no free cell beside the target the flicker fizzles: it never
-      // lands on (or in contact with) a player, which would be an unwarned hit.
-      if (canTeleportTo(state, point.x, point.y) && !touchesLivingPlayer(players, point)) {
-        nextMonster = { ...nextMonster, x: point.x, y: point.y };
-      }
+    // The flicker lands on the cell its warning marked, so a player who saw
+    // the marker and moved is not ambushed somewhere else. It fizzles if that
+    // cell is taken or touches a player (that would be an unwarned hit), and
+    // the enemy needs a full step to recover before it can move again: the
+    // landing never turns into an instant contact in the same tick.
+    if (canTeleportTo(state, target.x, target.y) && !touchesLivingPlayer(players, target)) {
+      nextMonster = {
+        ...nextMonster,
+        x: target.x,
+        y: target.y,
+        moveCooldown: getMonsterMoveMs(monster, difficulty),
+      };
     }
   }
 
@@ -739,6 +792,7 @@ function resolveMonsterAbility(
           id: `${monster.id}-clone-${state.tick}`,
           spawnPointId: monster.spawnPointId,
           clone: true,
+          difficulty: getMatchDifficulty(state.config),
         }),
       ];
     }
@@ -765,7 +819,13 @@ function startMonsterAbility(
   const { abilityKind } = monster;
   if (!abilityKind || monster.clone) return { monster, hazards };
 
-  const targetPlayer = getNearestPlayer(monster, state.players);
+  const difficulty = getMatchDifficulty(state.config);
+  // Below Hard, an enemy cannot strike from the fog: it must stand where the
+  // player can see (or sense) it before it starts an ability.
+  const seen = !difficulty.castOnlyWhenVisible
+    || isCellVisible(state.fogOfWar, monster.x, monster.y)
+    || state.fogOfWar.sensedEnemies.includes(`${monster.x},${monster.y}`);
+  const targetPlayer = seen ? getNearestPlayer(monster, state.players) : null;
   if (!targetPlayer) {
     return {
       monster: {
@@ -791,6 +851,7 @@ function startMonsterAbility(
         target.x,
         target.y,
         colorForAbility(abilityKind),
+        difficulty.abilityWarningMs,
         monster.name,
         monster.abilityLabel
       ),
@@ -801,8 +862,8 @@ function startMonsterAbility(
     monster: {
       ...monster,
       abilityTarget: target,
-      abilityWarningTicks: MONSTER_ABILITY_WARNING_MS,
-      abilityCooldown: abilityCooldownFor(abilityKind, monster.elite),
+      abilityWarningTicks: difficulty.abilityWarningMs,
+      abilityCooldown: abilityCooldownFor(abilityKind, monster.elite, difficulty),
     },
     hazards: nextHazards,
   };
@@ -857,7 +918,7 @@ function tickMonsterAbility(
 
   const cooldown = (
     monster.abilityCooldown
-      ?? abilityCooldownFor(monster.abilityKind, monster.elite)
+      ?? abilityCooldownFor(monster.abilityKind, monster.elite, getMatchDifficulty(state.config))
   ) - deltaMs;
   if (cooldown > 0) {
     return {
@@ -894,10 +955,12 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
   // The ability helpers never mutate these, so no defensive copies.
   let { players, hazards } = state;
   let spawned: MonsterState[] = [];
+  const difficulty = getMatchDifficulty(state.config);
   const living = ageSummons(state.monsters, deltaMs);
   const movementContext = createMonsterMovementContext(
     living,
-    createDangerMap(state)
+    createDangerMap(state),
+    difficulty.dodgeHorizonMs,
   );
   // Where everyone stands so far this tick, so teleports and clones never
   // land on a cell another enemy has just moved into.
@@ -940,7 +1003,7 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
     );
     nextMonster = {
       ...moved,
-      moveCooldown: MONSTER_MOVE_MS[nextMonster.kind],
+      moveCooldown: getMonsterMoveMs(nextMonster, difficulty),
     };
     reserveMonsterCell(movementContext, monster, nextMonster);
     placed[index] = nextMonster;

@@ -3,6 +3,7 @@ import { isBomb, isObstacle } from '../model/gameItem';
 import { getBossDefinition } from '../content';
 import { applyCharacterSurvival } from './players';
 import { getPlayerCell, positionOverlapsCell } from './grid';
+import { getMatchDifficulty } from './difficulty';
 
 const BOSS_ATTACK_MS = 3100;
 const BOSS_MOVE_MS = 950;
@@ -326,7 +327,10 @@ export function tickBossEncounter(state: GameEngineState, deltaMs: number): Game
     const spawned = spawnBossHazards(next);
     ability = spawned.ability;
     spawnedHazards = spawned.hazards;
-    attackCooldown = BOSS_ATTACK_MS - Math.min(700, next.boss.phase * 180);
+    attackCooldown = Math.round(
+      (BOSS_ATTACK_MS - Math.min(700, next.boss.phase * 180))
+        * getMatchDifficulty(next.config).bossAttackScale
+    );
   }
 
   const allHazards = spawnedHazards.length > 0

@@ -1,8 +1,17 @@
+/*
+ * The palette is art-directed (ivory paper, charcoal ink) and the game draws
+ * its own scene, so the page opts out of browser auto-dark ("only light").
+ * index.html also carries the matching meta tags for Chrome's Auto Dark Theme
+ * and the Dark Reader extension, which otherwise darken the paper panels.
+ */
 :root {
+  color-scheme: only light;
   --anime-ink: #211d1a;
   --anime-paper: #efe3c4;
   --anime-paper-light: #fff8e7;
   --anime-vermilion: #bd3f32;
+  /* Hover/pressed vermilion: keeps 6.7:1 against --anime-paper-light text. */
+  --anime-vermilion-deep: #9e3328;
   --anime-teal: #356f6b;
   --anime-mustard: #d4a33f;
   --anime-olive: #667158;

@@ -170,6 +170,7 @@ export const InstructionsScreen = () => {
       <StyledDialog
         open
         onClose={handleClose}
+        maxWidth={false}
         aria-labelledby="customized-dialog-title"
       >
         <StyledDialogTitle id="customized-dialog-title">
@@ -463,7 +464,7 @@ export const InstructionsScreen = () => {
         <DialogActions>
           <BackButton type="button" onClick={handleClose}>
             <SportsEsportsIcon fontSize="small" />
-            Back to Arena
+            Back to Title
           </BackButton>
         </DialogActions>
       </StyledDialog>

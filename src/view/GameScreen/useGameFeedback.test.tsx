@@ -102,12 +102,13 @@ describe('useGameFeedback', () => {
     );
 
     rerender({ state: first });
-    expect(result.current.caption).toBe('Power-up collected');
+    // Deidara's take on +1 bomb, credited to the slot that picked it up.
+    expect(result.current.caption).toBe('P1 Clay Pouch');
     const firstEventId = result.current.eventId;
 
     rerender({ state: { ...first, tick: 30, pickupMessages: [message('30-player1-AddBomb-1')] } });
     expect(result.current.eventId).toBeGreaterThan(firstEventId);
-    expect(result.current.caption).toBe('Power-up collected');
+    expect(result.current.caption).toBe('P1 Clay Pouch');
   });
 
   it('announces the blast that ends the round', () => {
@@ -209,5 +210,70 @@ describe('useGameFeedback', () => {
     expect(state.phase).toBe('game_over');
     expect(result.current.caption).toContain('Blast detonates');
     expect(result.current.caption).toContain('Shinobi down');
+  });
+
+  it('says which slot went down', () => {
+    const initial = createInitialState({
+      numPlayers: 2,
+      totalRounds: 1,
+      selectedMap: 'map1',
+      selectedCharacters: ['naruto', 'naruto'],
+      map: parseMapRows(defaultMap),
+    });
+    const { result, rerender } = renderHook(
+      ({ state }) => useGameFeedback(state, blastPreferences),
+      { initialProps: { state: initial } }
+    );
+
+    rerender({
+      state: {
+        ...initial,
+        tick: initial.tick + 1,
+        players: initial.players.map((player, index) => (
+          index === 1 ? { ...player, alive: false } : player
+        )),
+      },
+    });
+
+    expect(result.current.caption).toBe('Shinobi down: P2 Naruto');
+  });
+
+  it('captions the last 30 and 15 seconds and the start of sudden death', () => {
+    const initial = { ...startVersusRound(false), monsters: [] };
+    const at = (roundElapsedMs: number, tick: number) => ({ ...initial, roundElapsedMs, tick });
+    const { result, rerender } = renderHook(
+      ({ state }) => useGameFeedback(state, blastPreferences),
+      { initialProps: { state: at(59950, 1) } }
+    );
+
+    rerender({ state: at(60000, 2) });
+    expect(result.current.caption).toBe('30 seconds left');
+
+    rerender({ state: at(74950, 3) });
+    rerender({ state: at(75000, 4) });
+    expect(result.current.caption).toBe('15 seconds left');
+
+    rerender({ state: at(89950, 5) });
+    rerender({ state: at(90000, 6) });
+    expect(result.current.caption).toBe('Sudden death: walls closing');
+  });
+
+  it('has no clock captions in the campaign', () => {
+    const solo = createInitialState({
+      mode: 'solo',
+      numPlayers: 1,
+      totalRounds: 1,
+      selectedMap: 'hiddenLeaf',
+      stageId: 'hiddenLeaf',
+      selectedCharacters: ['deidara'],
+      map: parseMapRows(defaultMap),
+    });
+    const { result, rerender } = renderHook(
+      ({ state }) => useGameFeedback(state, blastPreferences),
+      { initialProps: { state: { ...solo, roundElapsedMs: 59950 } } }
+    );
+
+    rerender({ state: { ...solo, tick: solo.tick + 1, roundElapsedMs: 90000 } });
+    expect(result.current.caption).toBe('');
   });
 });

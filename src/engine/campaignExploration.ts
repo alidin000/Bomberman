@@ -9,6 +9,7 @@ import {
   GameEngineState,
 } from './types';
 import { createShinobiEnemy } from './campaignEnemies';
+import { getDifficulty } from './difficulty';
 
 function hashNumbers(...values: number[]): number {
   let hash = 2166136261;
@@ -108,6 +109,11 @@ export function getCampaignDestructionOutcome(
       powerUp: seed % 2 === 0 ? 'CharacterFragment' : 'ChakraScroll',
     };
   }
+  // Easier difficulties let some rolled ambushes come up empty.
+  const { ambushChance } = getDifficulty(state.campaign?.difficulty);
+  if ((kind === 'whiteZetsu' || kind === 'eliteZetsu') && (seed % 100) >= ambushChance * 100) {
+    return { kind: 'nothing' };
+  }
   if (kind === 'whiteZetsu') {
     return { kind, enemyArchetype: 'whiteZetsu' };
   }
@@ -176,6 +182,7 @@ export function resolveCampaignDestroyedBox(
       id: outcome.secretId
         ? `${outcome.secretId}-enemy`
         : `zetsu-${state.tick}-${box.x}-${box.y}`,
+      difficulty: getDifficulty(state.campaign.difficulty),
     });
     return {
       ...state,

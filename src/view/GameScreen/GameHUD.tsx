@@ -1,6 +1,5 @@
 /* eslint-disable object-curly-newline, comma-dangle */
 import React from 'react';
-import { Typography } from '@mui/material';
 import {
   CampaignObjectiveState,
   CampaignObjectiveStatus,
@@ -15,26 +14,25 @@ import {
   MissionStrip,
   MissionStatus,
   MissionNode,
+  ClockNode,
   PlayerCards,
   PlayerCardPaper,
   PowerChips,
   PlayerHeader,
   PlayerAvatar,
-  PlayerStatusRibbon,
+  PlayerIdentity,
+  SlotBadge,
   PlayerStats,
   PowerBadge,
-  PickupNotes,
   PickupNote,
-  PickupNoteTitle,
-  StatPill,
-  HudRight,
-  MonsterPaper,
-  MonsterChips,
-  MonsterBadge,
+  StatCell,
+  UltimateCell,
   UltimateProgress,
+  SealedNote,
+  MonsterBadge,
   BossPaper,
-  AbilityPanel,
-  AbilityRow,
+  BossProgress,
+  HudRight,
   ObjectivePaper,
   ObjectiveList,
   ObjectiveItem,
@@ -42,14 +40,16 @@ import {
   ObjectiveStatusBadge,
   ObjectiveProgress,
   CampaignEventBanner,
-  IntelGrid,
-  IntelPill,
+  CampaignMessage,
+  IntelLine,
+  PatrolLine,
 } from './GameHUD.styles';
 import { getCharacterDefinition } from '../../content';
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
 import { loadStoryProgress } from '../../story/progress';
 import RosterBoard from '../../assets/ninja-bomber-roster-board.png';
 import { CharacterId } from '../../content/types';
+import { playerSlotColor, playerSlotLabel, playerSlotTextColor } from './playerSlots';
 
 const CHARACTER_POSITIONS: Record<CharacterId, string> = {
   deidara: '0% 0%',
@@ -109,10 +109,9 @@ function sameModel<T>(prev: T, next: T): boolean {
 }
 
 type PlayerCardModel = {
-  playerNumber: number;
+  slot: number;
   characterId: CharacterId;
   name: string;
-  color: string;
   alive: boolean;
   deathReason?: string;
   bombsLeft: number;
@@ -120,129 +119,120 @@ type PlayerCardModel = {
   bombRange: number;
   ultimateCharge: number;
   activePowers: Power[];
-  pickups: { id: string; power: Power }[];
+  // Only the newest pickup: the note explains what the power just did.
+  pickup: { id: string; power: Power } | null;
 };
 
 function toPlayerCardModel(
   state: GameEngineState,
   player: GameEngineState['players'][0],
-  playerNumber: number,
+  slot: number,
 ): PlayerCardModel {
+  const latestPickup = state.pickupMessages
+    .filter((message) => message.playerId === player.id)
+    .slice(-1)[0];
   return {
-    playerNumber,
+    slot,
     characterId: player.characterId,
     name: player.name,
-    color: player.color,
     alive: player.alive,
     deathReason: player.deathReason,
     // Naruto's clone and ultimate bombs can put more out than the base limit.
     bombsLeft: Math.max(0, player.maxBombs - player.activeBombs),
     maxBombs: player.maxBombs,
     bombRange: player.bombRange,
-    ultimateCharge: player.ultimateCharge,
+    ultimateCharge: Math.round(player.ultimateCharge),
     activePowers: Array.from(new Set(player.powerUps)).filter(
       (p) => isPowerUpActive(state, player.id, p)
         || !['Ghost', 'Invincibility'].includes(p),
     ),
-    pickups: state.pickupMessages
-      .filter((message) => message.playerId === player.id)
-      .slice(-2)
-      .map((message) => ({ id: message.id, power: message.power })),
+    pickup: latestPickup ? { id: latestPickup.id, power: latestPickup.power } : null,
   };
 }
 
+// Compact card: slot badge and portrait for identity, then the three numbers
+// that matter mid-fight (bombs ready, blast reach, ultimate). Static character
+// text (title, bomb and ultimate names, vision) lives in the pause menu.
 const PlayerCard = React.memo(({ model }: { model: PlayerCardModel }) => {
   const character = getCharacterDefinition(model.characterId);
+  const slotLabel = playerSlotLabel(model.slot);
+  const slotColor = playerSlotColor(model.slot);
+  const displayName = character.name || model.name;
+  const ultReady = model.ultimateCharge >= 100;
+  const pickupTheme = model.pickup
+    ? getCharacterPowerTheme(model.characterId, model.pickup.power)
+    : null;
 
   return (
-    <PlayerCardPaper alive={model.alive} color={model.color}>
+    <PlayerCardPaper
+      role="group"
+      aria-label={`${slotLabel} ${displayName}`}
+      alive={model.alive}
+      slotColor={slotColor}
+    >
       <PlayerHeader>
+        <SlotBadge slotColor={slotColor} textColor={playerSlotTextColor(model.slot)} aria-hidden>
+          {slotLabel}
+        </SlotBadge>
         <PlayerAvatar
-          color={model.color}
           image={RosterBoard}
           imagePosition={CHARACTER_POSITIONS[model.characterId]}
           role="img"
           aria-label={`${character.name} portrait`}
         />
-        <div>
-          <Typography variant="subtitle1" fontWeight="bold" color="var(--anime-ink)">
-            {`P${model.playerNumber} · ${character.name || model.name}`}
-          </Typography>
-          <Typography variant="caption" color={model.alive ? 'var(--anime-teal)' : '#8f2f26'}>
-            {model.alive ? character.title : 'Sealed'}
-          </Typography>
-          <PlayerStatusRibbon alive={model.alive} color={model.color}>
-            {model.alive ? 'Ready' : 'Sealed'}
-          </PlayerStatusRibbon>
-          {!model.alive && model.deathReason && (
-            <Typography variant="caption" display="block" color="#8f2f26">
-              {model.deathReason}
-            </Typography>
+        <PlayerIdentity>
+          <strong>{displayName}</strong>
+          {model.alive ? (
+            <PlayerStats>
+              <StatCell>
+                <span>Bombs</span>
+                <strong>{`${model.bombsLeft}/${model.maxBombs}`}</strong>
+              </StatCell>
+              <StatCell>
+                <span>Blast</span>
+                <strong>{model.bombRange}</strong>
+              </StatCell>
+              <UltimateCell ready={ultReady}>
+                <span>{ultReady ? 'Ult ready' : `Ult ${model.ultimateCharge}%`}</span>
+                <UltimateProgress
+                  aria-label={`${character.name} ultimate charge`}
+                  variant="determinate"
+                  value={model.ultimateCharge}
+                />
+              </UltimateCell>
+            </PlayerStats>
+          ) : (
+            <SealedNote>
+              <strong>Sealed</strong>
+              {model.deathReason && <span>{model.deathReason}</span>}
+            </SealedNote>
           )}
-        </div>
+        </PlayerIdentity>
       </PlayerHeader>
-      <PlayerStats>
-        <StatPill>
-          Bombs
-          {' '}
-          {model.bombsLeft}
-          /
-          {model.maxBombs}
-        </StatPill>
-        <StatPill>
-          Blast
-          {' '}
-          {model.bombRange}
-        </StatPill>
-        <StatPill>
-          Vision
-          {' '}
-          {character.visionRadius}
-        </StatPill>
-      </PlayerStats>
-      <PowerChips>
-        {model.activePowers.map((power) => {
-          const theme = getCharacterPowerTheme(model.characterId, power);
-          return (
-            <PowerBadge
-              key={power}
-              color={theme.color}
-              accent={theme.accent}
-              title={`${POWER_LABELS[power]} · ${theme.label}`}
-            >
-              {theme.shortLabel}
-            </PowerBadge>
-          );
-        })}
-      </PowerChips>
-      {model.pickups.length > 0 && (
-        <PickupNotes>
-          {model.pickups.map((message) => {
-            const theme = getCharacterPowerTheme(model.characterId, message.power);
+      {model.alive && model.activePowers.length > 0 && (
+        <PowerChips>
+          {model.activePowers.map((power) => {
+            const theme = getCharacterPowerTheme(model.characterId, power);
             return (
-              <PickupNote key={message.id} color={theme.color}>
-                <PickupNoteTitle>{theme.label}</PickupNoteTitle>
-                {theme.effect}
-              </PickupNote>
+              <PowerBadge
+                key={power}
+                color={theme.color}
+                accent={theme.accent}
+                title={`${POWER_LABELS[power]} · ${theme.label}`}
+              >
+                {theme.shortLabel}
+              </PowerBadge>
             );
           })}
-        </PickupNotes>
+        </PowerChips>
       )}
-      <AbilityPanel color={character.secondaryColor}>
-        <AbilityRow>
-          <strong>Bomb</strong>
-          <span>{character.basicBomb}</span>
-        </AbilityRow>
-        <AbilityRow>
-          <strong>Ult</strong>
-          <span>{character.ultimate}</span>
-        </AbilityRow>
-      </AbilityPanel>
-      <UltimateProgress
-        aria-label={`${character.name} ultimate charge`}
-        variant="determinate"
-        value={model.ultimateCharge}
-      />
+      {model.alive && model.pickup && pickupTheme && (
+        <PickupNote key={model.pickup.id} color={pickupTheme.color}>
+          <strong>{pickupTheme.label}</strong>
+          {' '}
+          {pickupTheme.effect}
+        </PickupNote>
+      )}
     </PlayerCardPaper>
   );
 }, (prev, next) => sameModel(prev.model, next.model));
@@ -277,8 +267,6 @@ function formatClock(ms: number): string {
 type MissionModel = {
   status: string;
   title: string;
-  alivePlayers: number;
-  totalPlayers: number;
   threatCount: number;
   // Only the formatted clock is part of the model, so it changes once a second.
   clock: { label: string; value: string; urgent: boolean } | null;
@@ -298,14 +286,15 @@ function toMissionModel(state: GameEngineState): MissionModel {
   return {
     status: getMissionStatus(state),
     title: getMissionTitle(state),
-    alivePlayers: state.players.filter((player) => player.alive).length,
-    totalPlayers: state.players.length,
     threatCount: state.monsters.length + (state.boss && state.boss.health > 0 ? 1 : 0),
     clock,
     gate: getGateStatus(state),
   };
 }
 
+// Squad (alive/total) is gone: the player cards already show who is sealed.
+// The clock is the largest number; in its last 15 s it inverts to a solid
+// vermilion plate (shape + fill, not a pale tint) so urgency stays readable.
 const MissionSummary = React.memo(({ model }: { model: MissionModel }) => (
   <MissionStrip aria-label="match status">
     <MissionStatus>
@@ -313,30 +302,21 @@ const MissionSummary = React.memo(({ model }: { model: MissionModel }) => (
       <span>{model.title}</span>
     </MissionStatus>
     <MissionNode>
-      <span>Squad</span>
-      <strong>
-        {model.alivePlayers}
-        /
-        {model.totalPlayers}
-      </strong>
-    </MissionNode>
-    <MissionNode>
       <span>Threats</span>
       <strong>{model.threatCount}</strong>
     </MissionNode>
     {model.clock ? (
-      <MissionNode
-        aria-label="round clock"
-        sx={model.clock.urgent ? { '& strong': { color: '#fca5a5' } } : undefined}
-      >
+      // role="timer" is implicitly aria-live="off": screen readers are not
+      // read every second; the milestones are captioned instead.
+      <ClockNode role="timer" aria-label="round clock" urgent={model.clock.urgent}>
         <span>{model.clock.label}</span>
         <strong>{model.clock.value}</strong>
-      </MissionNode>
+      </ClockNode>
     ) : (
-      <MissionNode>
+      <ClockNode urgent={false}>
         <span>Gate</span>
         <strong>{model.gate}</strong>
-      </MissionNode>
+      </ClockNode>
     )}
   </MissionStrip>
 ), (prev, next) => sameModel(prev.model, next.model));
@@ -367,6 +347,7 @@ function formatObjectiveDetail(objective: CampaignObjectiveState): string {
 
 type CampaignModel = {
   title: string;
+  lives: string | null;
   message: string;
   event: { name: string; effectLabel: string; color: string } | null;
   stageReputation: number;
@@ -380,9 +361,19 @@ type CampaignModel = {
     progress: number;
     detail: string;
   }[];
-  bossGateLabel: string;
-  bossUnlocked: boolean;
+  patrols: { name: string; kind: MonsterKind; count: number }[];
 };
+
+function toPatrols(state: GameEngineState): CampaignModel['patrols'] {
+  const counts = state.monsters.reduce<
+    Record<string, { count: number; kind: MonsterKind }>
+  >((acc, monster) => {
+    const current = acc[monster.name] ?? { count: 0, kind: monster.kind };
+    acc[monster.name] = { ...current, count: current.count + 1 };
+    return acc;
+  }, {});
+  return Object.entries(counts).map(([name, data]) => ({ name, ...data }));
+}
 
 function toCampaignModel(
   state: GameEngineState,
@@ -392,6 +383,9 @@ function toCampaignModel(
   const { campaign } = state;
   return {
     title: campaign.title,
+    lives: campaign.livesTotal
+      ? `${campaign.livesRemaining ?? campaign.livesTotal}/${campaign.livesTotal}`
+      : null,
     message: campaign.message,
     event: campaign.event
       ? {
@@ -414,81 +408,78 @@ function toCampaignModel(
       progress: getObjectiveProgress(objective),
       detail: formatObjectiveDetail(objective),
     })),
-    bossGateLabel: campaign.bossGateLabel,
-    bossUnlocked: campaign.bossUnlocked,
+    patrols: toPatrols(state),
   };
 }
 
+// One compact panel for the mission: the active objective gets its progress
+// bar and detail, the rest collapse to one line. The boss gate state is in
+// the match bar, and the patrol roster replaces the separate patrol panel.
 const CampaignSummary = React.memo(({ model }: { model: CampaignModel }) => (
-  <ObjectivePaper elevation={4}>
-    <Typography variant="overline" fontWeight="bold" letterSpacing={0}>
+  <ObjectivePaper aria-label="mission objectives">
+    <h2>
       {model.title}
-    </Typography>
-    <Typography variant="caption" display="block" color="var(--anime-line)">
-      {model.message}
-    </Typography>
+      {model.lives && ` · Lives ${model.lives}`}
+    </h2>
+    <CampaignMessage>{model.message}</CampaignMessage>
     {model.event && (
       <CampaignEventBanner color={model.event.color}>
-        <Typography variant="caption" display="block" fontWeight="bold">
-          {model.event.name}
-        </Typography>
-        <Typography variant="caption" color="var(--anime-line)">
-          {model.event.effectLabel}
-        </Typography>
+        <strong>{model.event.name}</strong>
+        {' '}
+        {model.event.effectLabel}
       </CampaignEventBanner>
     )}
-    <IntelGrid>
-      <IntelPill>
-        <strong>{model.stageReputation}</strong>
-        Reputation
-      </IntelPill>
-      <IntelPill>
-        <strong>
-          {model.secretsFound}
-          /
-          {model.secretsTotal}
-        </strong>
-        Secrets
-      </IntelPill>
-      <IntelPill>
-        <strong>{model.fragmentCount}</strong>
-        Fragments
-      </IntelPill>
-    </IntelGrid>
     <ObjectiveList>
-      {model.objectives.map((objective) => (
-        <ObjectiveItem key={objective.id}>
-          <ObjectiveMeta>
-            <Typography variant="subtitle2" fontWeight="bold">
-              {objective.label}
-            </Typography>
-            <ObjectiveStatusBadge status={objective.status}>
-              {OBJECTIVE_STATUS_LABELS[objective.status]}
-            </ObjectiveStatusBadge>
-          </ObjectiveMeta>
-          <ObjectiveProgress
-            aria-label={`${objective.label} progress`}
-            variant="determinate"
-            value={objective.progress}
-          />
-          <Typography variant="caption" color="var(--anime-line)">
-            {objective.detail}
-          </Typography>
-        </ObjectiveItem>
-      ))}
+      {model.objectives.map((objective) => {
+        const expanded = objective.status === 'active';
+        return (
+          <ObjectiveItem key={objective.id} status={objective.status}>
+            <ObjectiveMeta>
+              <strong>{objective.label}</strong>
+              <ObjectiveStatusBadge status={objective.status}>
+                {OBJECTIVE_STATUS_LABELS[objective.status]}
+              </ObjectiveStatusBadge>
+            </ObjectiveMeta>
+            {expanded && (
+              <>
+                <ObjectiveProgress
+                  aria-label={`${objective.label} progress`}
+                  variant="determinate"
+                  value={objective.progress}
+                />
+                <span>{objective.detail}</span>
+              </>
+            )}
+          </ObjectiveItem>
+        );
+      })}
     </ObjectiveList>
-    <Typography
-      variant="caption"
-      color={model.bossUnlocked ? 'var(--anime-teal)' : 'var(--anime-line)'}
-      display="block"
-      marginTop={1}
-    >
-      {model.bossGateLabel}
-      {' '}
-      ·
-      {' '}
-      {model.bossUnlocked ? 'Open' : 'Sealed'}
-    </Typography>
+    <IntelLine>
+      <span>
+        <strong>{model.stageReputation}</strong>
+        {' '}
+        Reputation
+      </span>
+      <span>
+        <strong>{`${model.secretsFound}/${model.secretsTotal}`}</strong>
+        {' '}
+        Secrets
+      </span>
+      <span>
+        <strong>{model.fragmentCount}</strong>
+        {' '}
+        Fragments
+      </span>
+    </IntelLine>
+    {model.patrols.length > 0 && (
+      <PatrolLine aria-label="enemy patrols">
+        {model.patrols.map((group) => (
+          <MonsterBadge key={group.name} color={MONSTER_BADGE_COLORS[group.kind]}>
+            {`${group.name} ×${group.count}`}
+          </MonsterBadge>
+        ))}
+      </PatrolLine>
+    )}
   </ObjectivePaper>
 ), (prev, next) => sameModel(prev.model, next.model));
 CampaignSummary.displayName = 'CampaignSummary';
@@ -522,91 +513,22 @@ const BossSummary = React.memo(({ model }: { model: BossModel }) => {
   const health = (model.health / model.maxHealth) * 100;
 
   return (
-    <BossPaper elevation={4} color={model.color}>
-      <Typography variant="overline" fontWeight="bold" letterSpacing={0} display="block">
-        {model.name}
-      </Typography>
-      <UltimateProgress
+    <BossPaper aria-label={`${model.name} boss status`} color={model.color}>
+      <div>
+        <strong>{model.name}</strong>
+        <span>{`Phase ${model.phase} · ${model.tails} tail chakra`}</span>
+        <strong>{`${model.health}/${model.maxHealth} HP`}</strong>
+      </div>
+      <BossProgress
         aria-label={`${model.name} health`}
         variant="determinate"
         value={health}
       />
-      <Typography variant="caption" display="block" color="var(--anime-line)">
-        Phase
-        {' '}
-        {model.phase}
-        {' '}
-        ·
-        {' '}
-        {model.tails}
-        {' '}
-        tail chakra
-        {' '}
-        ·
-        {' '}
-        {model.health}
-        /
-        {model.maxHealth}
-        {' '}
-        HP
-      </Typography>
-      <Typography variant="caption" display="block" color="#8f2f26">
-        {model.currentAbility}
-        {' '}
-        ·
-        {' '}
-        {model.hazardCount}
-        {' '}
-        danger zones
-      </Typography>
+      <span>{`${model.currentAbility} · ${model.hazardCount} danger zones`}</span>
     </BossPaper>
   );
 }, (prev, next) => sameModel(prev.model, next.model));
 BossSummary.displayName = 'BossSummary';
-
-type MonsterModel = {
-  roaming: number;
-  groups: { name: string; kind: MonsterKind; count: number }[];
-};
-
-function toMonsterModel(state: GameEngineState): MonsterModel {
-  const counts = state.monsters.reduce<
-    Record<string, { count: number; kind: MonsterKind }>
-  >((acc, monster) => {
-    const current = acc[monster.name] ?? { count: 0, kind: monster.kind };
-    acc[monster.name] = { ...current, count: current.count + 1 };
-    return acc;
-  }, {});
-  return {
-    roaming: state.monsters.length,
-    groups: Object.entries(counts).map(([name, data]) => ({ name, ...data })),
-  };
-}
-
-const MonsterSummary = React.memo(({ model }: { model: MonsterModel }) => (
-  <MonsterPaper elevation={4}>
-    <Typography variant="subtitle2" fontWeight="bold">
-      Enemy Patrols
-      {' '}
-      ·
-      {' '}
-      {model.roaming}
-      {' '}
-      roaming
-    </Typography>
-    <MonsterChips>
-      {model.groups.map((group) => (
-        <MonsterBadge key={group.name} color={MONSTER_BADGE_COLORS[group.kind]}>
-          {group.name}
-          {' '}
-          x
-          {group.count}
-        </MonsterBadge>
-      ))}
-    </MonsterChips>
-  </MonsterPaper>
-), (prev, next) => sameModel(prev.model, next.model));
-MonsterSummary.displayName = 'MonsterSummary';
 
 export function GameHUD({ state, scale }: GameHUDRootProps) {
   const storyProgress = React.useMemo(() => loadStoryProgress(), [
@@ -624,15 +546,16 @@ export function GameHUD({ state, scale }: GameHUDRootProps) {
         {state.players.map((player, index) => (
           <PlayerCard
             key={player.id}
-            model={toPlayerCardModel(state, player, index + 1)}
+            model={toPlayerCardModel(state, player, index)}
           />
         ))}
       </PlayerCards>
-      {bossModel && <BossSummary model={bossModel} />}
-      <HudRight>
-        {campaignModel && <CampaignSummary model={campaignModel} />}
-        <MonsterSummary model={toMonsterModel(state)} />
-      </HudRight>
+      {(bossModel || campaignModel) && (
+        <HudRight>
+          {bossModel && <BossSummary model={bossModel} />}
+          {campaignModel && <CampaignSummary model={campaignModel} />}
+        </HudRight>
+      )}
     </HudRoot>
   );
 }

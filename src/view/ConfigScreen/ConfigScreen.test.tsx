@@ -173,6 +173,8 @@ describe('ConfigScreen', () => {
       storyCompleted: false,
     }));
     setup();
+    // Continue Campaign only shows once the selection differs from the saved run.
+    fireEvent.click(screen.getByLabelText('Hidden Leaf campaign route'));
 
     const [continueButton] = screen.getAllByText('Continue Campaign');
     fireEvent.click(continueButton);
@@ -200,13 +202,81 @@ describe('ConfigScreen', () => {
     setup();
     fireEvent.click(screen.getByText('Local Arena'));
     fireEvent.click(screen.getByLabelText('Akatsuki Hideout'));
-    fireEvent.click(screen.getByText('Solo Boss'));
+    fireEvent.click(screen.getByText('Solo Campaign'));
     fireEvent.click(screen.getByText('Deploy Mission'));
 
     await waitFor(() => {
       expect(localStorage.getItem('gameSetup')).toContain('hiddenLeaf');
       expect(localStorage.getItem('gameSetup')).not.toContain('akatsukiHideout');
     });
+  });
+
+  it('hides Continue Campaign while it would repeat Deploy Mission', () => {
+    setup();
+    expect(screen.getByText('Deploy Mission')).toBeInTheDocument();
+    expect(screen.queryByText('Continue Campaign')).not.toBeInTheDocument();
+  });
+
+  it('starts a local battle from the setup step without the controls step', async () => {
+    setup();
+    fireEvent.click(screen.getByText('Local Arena'));
+    fireEvent.click(screen.getByLabelText('Hidden Mist Village'));
+    fireEvent.click(screen.getByRole('button', { name: /start battle/i }));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/2/1/hiddenMist');
+      expect(JSON.parse(localStorage.getItem('gameSetup') as string)).toMatchObject({
+        mode: 'local',
+        stageId: 'hiddenMist',
+        selectedCharacters: ['deidara', 'naruto'],
+      });
+      expect(localStorage.getItem('playerKeyBindings')).not.toBeNull();
+    });
+  });
+
+  it('reopens on the last local battle setup', async () => {
+    localStorage.setItem('gameSetup', JSON.stringify({
+      mode: 'local',
+      stageId: 'hiddenCloud',
+      selectedCharacters: ['gaara', 'itachi', 'minato'],
+      selectedUpgrade: 'extraClay',
+    }));
+    setup();
+
+    expect(screen.getByLabelText('Hidden Cloud Village')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Itachi player 2')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '3' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /start battle/i }));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/3/1/hiddenCloud');
+    });
+  });
+
+  it('goes back one step on Escape instead of leaving the deck', () => {
+    setup(1);
+    expect(screen.getAllByText('Upgrade Arsenal').length).toBeGreaterThan(0);
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+
+    expect(screen.getByText('Mission Deck')).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('shows each stage mechanic on its own line under the stage name', () => {
+    setup();
+    fireEvent.click(screen.getByText('Local Arena'));
+    const mechanic = screen.getByText('Water cannons fire long telegraphed lines.');
+
+    expect(window.getComputedStyle(mechanic).display).toBe('block');
+  });
+
+  it('says which village unlocks a locked campaign shinobi', () => {
+    setup();
+    const naruto = screen.getByLabelText('Naruto player 1, locked');
+
+    expect(naruto).toBeDisabled();
+    expect(naruto).toHaveTextContent('Clear Hidden Leaf');
   });
 
   it('should save configuration and navigate to game screen on play', async () => {

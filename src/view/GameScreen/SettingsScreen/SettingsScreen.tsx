@@ -21,10 +21,16 @@ import {
 } from './SettingsScreen.styles';
 import { SettingsScreenProps } from '../../../constants/props';
 
-const SettingsScreen: React.FC<SettingsScreenProps> = (
+// `onClose` goes back to wherever settings were opened from (the pause menu
+// or live play); `onResume` always gives play back.
+// eslint-disable-next-line react/require-default-props
+type Props = SettingsScreenProps & { onResume?: () => void };
+
+const SettingsScreen: React.FC<Props> = (
   {
     open,
     onClose,
+    onResume,
     onRestart,
     onModifyControls,
     preferences,
@@ -54,7 +60,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (
           Resume the arena, restart this setup, rebind controls, or return to the dojo.
         </SettingsIntro>
         <ButtonContainer>
-          <SettingsButton variant="contained" startIcon={<PlayArrowIcon />} onClick={onClose}>
+          <SettingsButton variant="contained" startIcon={<PlayArrowIcon />} onClick={onResume ?? onClose}>
             Resume Game
           </SettingsButton>
           <SettingsButton variant="outlined" startIcon={<RestartAltIcon />} onClick={onRestart}>
@@ -123,7 +129,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (
             />
           </PreferenceGrid>
           <PreferenceSlider>
-            <span>Effects volume</span>
+            <span>
+              Effects volume
+              <strong>{`${preferences.effectsVolume}%`}</strong>
+            </span>
             <Slider
               aria-label="effects volume"
               value={preferences.effectsVolume}
@@ -135,7 +144,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (
             />
           </PreferenceSlider>
           <PreferenceSlider>
-            <span>Screen shake</span>
+            <span>
+              Screen shake
+              <strong>{preferences.reducedMotion ? 'Off' : `${preferences.screenShake}%`}</strong>
+            </span>
             <Slider
               aria-label="screen shake"
               value={preferences.screenShake}
@@ -148,7 +160,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = (
             />
           </PreferenceSlider>
           <PreferenceSlider>
-            <span>HUD size</span>
+            <span>
+              HUD size
+              <strong>{`${preferences.hudScale}%`}</strong>
+            </span>
             <Slider
               aria-label="HUD size"
               min={80}

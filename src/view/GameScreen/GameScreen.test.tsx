@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import React from 'react';
 import {
-  fireEvent, render, screen, waitFor,
+  fireEvent, render, screen, waitFor, within,
 } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
@@ -41,6 +41,15 @@ vi.mock('../../hooks/useGameEngine', () => ({
   }),
 }));
 
+// The key shown for one player and action in a controls table.
+function controlKey(table: HTMLElement, slot: string, column: string): string | null {
+  const headers = within(table).getAllByRole('columnheader').map((cell) => cell.textContent);
+  const row = within(table).getAllByRole('row')
+    .find((candidate) => within(candidate).queryByRole('rowheader')?.textContent?.startsWith(slot));
+  if (!row) return null;
+  return within(row).getAllByRole('cell')[headers.indexOf(column) - 1]?.textContent ?? null;
+}
+
 describe('GameScreen', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -70,8 +79,8 @@ describe('GameScreen', () => {
         </ThemeProvider>
       </MemoryRouter>
     );
-    expect(screen.getAllByText(/P\d · Deidara/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Clay Art Shinobi').length).toBeGreaterThan(0);
+    expect(screen.getByRole('group', { name: 'P1 Deidara' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'P2 Deidara' })).toBeInTheDocument();
   });
 
   it('restarts the same setup from the top controls', () => {
@@ -120,7 +129,12 @@ describe('GameScreen', () => {
     expect(screen.getAllByRole('button', { name: /restart/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: /settings/i }).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /quit game/i })).toBeInTheDocument();
-    expect(screen.getByText('P1 move')).toBeInTheDocument();
+    const controls = screen.getByRole('table', { name: 'controls' });
+    expect(controlKey(controls, 'P1', 'Move')).toBe('W A S D');
+    expect(controlKey(controls, 'P2', 'Bomb')).toBe('O');
+    // The static kit text moved off the HUD cards into the pause menu.
+    expect(within(screen.getByRole('list', { name: 'shinobi kits' }))
+      .getAllByText(/Clay Art Shinobi/)).toHaveLength(2);
   });
 
   it('loads saved bindings before rendering the controls guide', () => {
@@ -136,9 +150,9 @@ describe('GameScreen', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('P1 move')).toBeInTheDocument();
-    expect(screen.getByText('T F G H')).toBeInTheDocument();
-    expect(screen.getByText('B')).toBeInTheDocument();
+    const controls = screen.getByRole('table', { name: 'controls' });
+    expect(controlKey(controls, 'P1', 'Move')).toBe('T F G H');
+    expect(controlKey(controls, 'P1', 'Bomb')).toBe('B');
   });
 
   it('pauses first-time play while the controls guide is open', () => {
@@ -260,7 +274,7 @@ describe('GameScreen', () => {
     });
     expect(engineMocks.resume).toHaveBeenCalled();
     fireEvent.click(screen.getByLabelText('show controls'));
-    expect(screen.getByText('P1 bomb').nextSibling).toHaveTextContent('B');
+    expect(controlKey(screen.getByRole('table', { name: 'controls' }), 'P1', 'Bomb')).toBe('B');
   });
 
   it('falls back to default keys when stored bindings hold non-key values', () => {
@@ -276,8 +290,9 @@ describe('GameScreen', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('P1 move').nextSibling).toHaveTextContent('W A S D');
-    expect(screen.getByText('P1 bomb').nextSibling).toHaveTextContent('2');
+    const controls = screen.getByRole('table', { name: 'controls' });
+    expect(controlKey(controls, 'P1', 'Move')).toBe('W A S D');
+    expect(controlKey(controls, 'P1', 'Bomb')).toBe('2');
   });
 
   it('still resumes after the guide when the controls button is pressed twice mid-match', () => {
@@ -305,6 +320,7 @@ describe('GameScreen', () => {
 
   it('announces captions through a live region that exists before the first event', () => {
     localStorage.setItem('shinobiControlsGuideSeen', 'true');
+    currentMockState = { ...mockState, roundStartTicksRemaining: 0 };
     const screenTree = () => (
       <MemoryRouter initialEntries={['/game/2/1/map1']}>
         <ThemeProvider theme={theme}>
@@ -318,6 +334,7 @@ describe('GameScreen', () => {
 
     currentMockState = {
       ...mockState,
+      roundStartTicksRemaining: 0,
       tick: mockState.tick + 1,
       explosions: [{
         x: 2, y: 1, ticksRemaining: 500, kind: 'standard',
@@ -327,5 +344,79 @@ describe('GameScreen', () => {
 
     expect(screen.getByRole('status')).toBe(liveRegion);
     expect(liveRegion).toHaveTextContent('Blast detonates');
+  });
+
+  it('shows GO for the first moments of play after the countdown, and announces both', () => {
+    localStorage.setItem('shinobiControlsGuideSeen', 'true');
+    const screenTree = () => (
+      <MemoryRouter initialEntries={['/game/2/1/map1']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+    currentMockState = { ...mockState, roundStartTicksRemaining: 1000 };
+    const { rerender } = render(screenTree());
+    expect(screen.getByLabelText('round countdown')).toHaveTextContent('1');
+    expect(screen.getByRole('status')).toHaveTextContent('1');
+
+    // The countdown hits zero: the round is live and GO! takes over.
+    const liveTick = mockState.tick;
+    currentMockState = { ...mockState, roundStartTicksRemaining: 0, tick: liveTick };
+    rerender(screenTree());
+    expect(screen.queryByLabelText('round countdown')).not.toBeInTheDocument();
+    expect(screen.getByText('GO!')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Go!');
+
+    currentMockState = { ...currentMockState, tick: liveTick + 13 };
+    rerender(screenTree());
+    expect(screen.getByText('GO!')).toBeInTheDocument();
+
+    // 14 ticks (700 ms) of play later it is gone.
+    currentMockState = { ...currentMockState, tick: liveTick + 14 };
+    rerender(screenTree());
+    expect(screen.queryByText('GO!')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('');
+  });
+
+  it('does not show GO when the screen mounts on a round already in play', () => {
+    localStorage.setItem('shinobiControlsGuideSeen', 'true');
+    currentMockState = { ...mockState, roundStartTicksRemaining: 0 };
+    render(
+      <MemoryRouter initialEntries={['/game/2/1/map1']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByText('GO!')).not.toBeInTheDocument();
+  });
+
+  it('returns to the pause menu when settings were opened from it', async () => {
+    localStorage.setItem('shinobiControlsGuideSeen', 'true');
+    currentMockState = { ...mockState, paused: true };
+    render(
+      <MemoryRouter initialEntries={['/game/2/1/map1']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
+    expect(screen.getByText('Match Command')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Match Command' })).not.toBeInTheDocument();
+    });
+    expect(engineMocks.resume).not.toHaveBeenCalled();
+    expect(screen.getByText('Paused')).toBeInTheDocument();
+
+    // The explicit Resume button in settings still gives play back.
+    fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /resume game/i }));
+    expect(engineMocks.resume).toHaveBeenCalledTimes(1);
   });
 });

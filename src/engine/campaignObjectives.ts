@@ -12,6 +12,8 @@ import {
 } from './types';
 import { positionsTouch } from './grid';
 import { hazardIsActive } from './bosses';
+import { getDifficulty, getMatchDifficulty } from './difficulty';
+import { FALL_NOTICE_TICKS, livesLabel } from './campaignLives';
 
 const RESCUE_TOUCH_DISTANCE = 0.72;
 const MINI_BOSS_TOUCH_DISTANCE = 0.82;
@@ -25,10 +27,14 @@ EnemyArchetype
   hiddenSand: 'sandNinja',
   hiddenMist: 'mistNinja',
   hiddenCloud: 'cloudNinja',
-  hiddenStone: 'sandNinja',
+  // Akatsuchi flickers in close instead of out-thinking the player: the
+  // smart sand chaser made stage 5 a spike above stages 6 and 7.
+  hiddenStone: 'anbu',
   akatsukiHideout: 'blackZetsu',
   greatShinobiWar: 'blackZetsu',
 };
+// The mini boss holds its gate: it never wanders further while unprovoked.
+const MINI_BOSS_LEASH_CELLS = 4;
 const MINI_BOSS_GUARD_OFFSETS: Point[] = [
   { x: -1, y: 0 },
   { x: 0, y: -1 },
@@ -221,11 +227,13 @@ function spawnActiveMiniBossGuards(state: GameEngineState): GameEngineState {
     const cell = findMiniBossGuardCell({ ...state, monsters }, objective);
     if (!cell) return objective;
 
+    const difficulty = getDifficulty(campaign.difficulty);
     const guard = createShinobiEnemy({
       archetype: MINI_BOSS_GUARD_ARCHETYPES[campaign.stageId],
       x: cell.x,
       y: cell.y,
       id: guardId,
+      difficulty,
     });
     monsters = [
       ...monsters,
@@ -233,9 +241,14 @@ function spawnActiveMiniBossGuards(state: GameEngineState): GameEngineState {
         ...guard,
         name: objective.miniBossLabel ?? guard.name,
         elite: true,
-        detectionRange: 8,
-        moveCooldown: Math.min(guard.moveCooldown, 420),
-        abilityCooldown: 700,
+        detectionRange: 8 + difficulty.detectionOffset,
+        moveCooldown: Math.min(guard.moveCooldown, Math.round(420 * difficulty.enemyMoveScale)),
+        abilityCooldown: Math.round(700 * difficulty.abilityCooldownScale),
+        leash: {
+          x: objective.x ?? cell.x,
+          y: objective.y ?? cell.y,
+          radius: MINI_BOSS_LEASH_CELLS,
+        },
       },
     ];
     return { ...objective, miniBossGuardId: guardId, miniBossSpawned: true };
@@ -259,6 +272,7 @@ export function createCampaignRuntimeState(
 
   const mission = getCampaignMission(config.stageId);
   if (!mission) return null;
+  const difficulty = getMatchDifficulty(config);
 
   const objectives: CampaignObjectiveState[] = mission.objectives.map((objective) => {
     const targets = objective.targets?.map((target) => ({
@@ -310,12 +324,17 @@ export function createCampaignRuntimeState(
     missionResult: 'in_progress',
     currentDistrictId: mission.districts[0]?.id ?? 'villageEntrance',
     districts: mission.districts,
-    spawnPoints: mission.spawnPoints.map((spawnPoint) => ({
-      ...spawnPoint,
-      ticksRemaining: spawnPoint.respawnMs,
-      activeMonsterIds: [],
-      spawnCount: 0,
-    })),
+    spawnPoints: mission.spawnPoints.map((spawnPoint) => {
+      const respawnMs = Math.round(spawnPoint.respawnMs * difficulty.respawnScale);
+      return {
+        ...spawnPoint,
+        respawnMs,
+        maxActive: Math.max(1, spawnPoint.maxActive + difficulty.maxActiveOffset),
+        ticksRemaining: respawnMs,
+        activeMonsterIds: [],
+        spawnCount: 0,
+      };
+    }),
     hiddenAreas: mission.hiddenAreas,
     discoveredSecrets: mission.discoveredSecrets,
     event: getCampaignEvent(mission.stageId),
@@ -329,6 +348,9 @@ export function createCampaignRuntimeState(
     objectives,
     bossUnlocked: false,
     message: '',
+    difficulty: difficulty.id,
+    livesRemaining: difficulty.lives,
+    livesTotal: difficulty.lives,
   };
 
   return {
@@ -411,8 +433,9 @@ function updateDefenseObjective(
   );
   const damaged = damageCooldown <= 0
     && objectiveTakesStructureDamage(state, objective);
-  const structureDamage = STRUCTURE_DAMAGE
-    + (state.campaign?.event?.structureDamageBonus ?? 0);
+  const structureDamage = Math.round((STRUCTURE_DAMAGE
+    + (state.campaign?.event?.structureDamageBonus ?? 0))
+    * getDifficulty(state.campaign?.difficulty).structureDamageScale);
   const structureHp = damaged
     ? Math.max(0, (objective.structureHp ?? 0) - structureDamage)
     : objective.structureHp;
@@ -488,6 +511,7 @@ function sameCampaignSummary(
   next: CampaignRuntimeState
 ): boolean {
   return previous.bossUnlocked === next.bossUnlocked
+    && previous.livesRemaining === next.livesRemaining
     && previous.missionResult === next.missionResult
     && previous.bossArena.unlocked === next.bossArena.unlocked
     && previous.currentDistrictId === next.currentDistrictId
@@ -512,6 +536,28 @@ export function advanceCampaignObjectives(
     objective,
     deltaMs
   ));
+  // While lives remain, a fallen structure costs a life and its seal
+  // restarts at full strength instead of failing the whole mission.
+  let { livesRemaining, fallNotice, fallNoticeUntilTick } = state.campaign;
+  const fallen = objectives.find((objective) => (
+    objective.kind === 'defense' && objective.status === 'failed'
+  ));
+  if (fallen && (livesRemaining ?? 1) > 1) {
+    livesRemaining = (livesRemaining ?? 1) - 1;
+    fallNotice = `${fallen.structureLabel ?? fallen.label} fell. The seal restarts: ${livesLabel(livesRemaining)}.`;
+    fallNoticeUntilTick = state.tick + FALL_NOTICE_TICKS;
+    objectives = objectives.map((objective) => (
+      objective === fallen
+        ? {
+          ...objective,
+          status: 'active',
+          structureHp: objective.structureMaxHp,
+          ticksRemaining: objective.durationMs,
+          current: 0,
+        }
+        : objective
+    ));
+  }
   objectives = refreshObjectiveStatuses(objectives);
 
   let workingState: GameEngineState = objectives === state.campaign.objectives
@@ -544,14 +590,19 @@ export function advanceCampaignObjectives(
       ...state.campaign.bossArena,
       unlocked: bossUnlocked,
     },
+    livesRemaining,
+    fallNotice,
+    fallNoticeUntilTick,
   };
+  const noticeActive = !!fallNotice && missionResult === 'in_progress'
+    && state.tick < (fallNoticeUntilTick ?? 0);
 
   const nextCampaign: CampaignRuntimeState = {
     ...campaign,
     currentDistrictId: getCurrentDistrictId(campaign),
     missionStep: getMissionStep(campaign, state.boss),
     structures: getCampaignStructures(objectives),
-    message: getCampaignMessage(campaign, state.boss),
+    message: noticeActive && fallNotice ? fallNotice : getCampaignMessage(campaign, state.boss),
   };
   // Movement steps and most ticks change nothing here: keep the old state.
   if (

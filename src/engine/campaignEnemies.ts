@@ -11,6 +11,7 @@ import {
 } from './types';
 import { MONSTER_MOVE_MS } from './constants';
 import { positionOverlapsCell } from './grid';
+import { DifficultySettings, getDifficulty } from './difficulty';
 
 // "Creates a short-lived clone threat": a water clone fades after this long,
 // so a Mist Ninja keeps at most two around instead of an ever-growing crowd.
@@ -91,6 +92,7 @@ export function createShinobiEnemy({
   id,
   spawnPointId,
   clone = false,
+  difficulty = getDifficulty('hard'),
 }: {
   archetype: EnemyArchetype;
   x: number;
@@ -98,6 +100,7 @@ export function createShinobiEnemy({
   id: string;
   spawnPointId?: string;
   clone?: boolean;
+  difficulty?: DifficultySettings;
 }): MonsterState {
   const definition = getEnemyArchetypeDefinition(archetype);
   const kind = ARCHETYPE_KIND[archetype];
@@ -107,16 +110,20 @@ export function createShinobiEnemy({
     x,
     y,
     kind,
-    moveCooldown: Math.max(260, MONSTER_MOVE_MS[kind] - (definition.elite ? 180 : 0)),
+    moveCooldown: Math.round(
+      Math.max(260, MONSTER_MOVE_MS[kind] - (definition.elite ? 180 : 0))
+        * difficulty.enemyMoveScale
+    ),
     archetype,
     abilityKind: clone ? undefined : definition.ability,
     abilityLabel: clone ? undefined : definition.abilityLabel,
-    abilityCooldown: clone ? undefined : 1600,
+    abilityCooldown: clone ? undefined : Math.round(1600 * difficulty.abilityCooldownScale),
     abilityWarningTicks: 0,
     abilityTarget: null,
-    detectionRange: clone
+    detectionRange: Math.max(2, (clone
       ? 4
-      : ARCHETYPE_DETECTION_RANGE[archetype] + (definition.elite ? 1 : 0),
+      : ARCHETYPE_DETECTION_RANGE[archetype] + (definition.elite ? 1 : 0)
+    ) + difficulty.detectionOffset),
     spawnPointId,
     clone,
     elite: definition.elite,
@@ -126,7 +133,8 @@ export function createShinobiEnemy({
 
 function spawnFromPoint(
   state: SpawnState,
-  point: CampaignRespawnPointState
+  point: CampaignRespawnPointState,
+  difficulty: DifficultySettings,
 ): { monster: MonsterState | null; point: CampaignRespawnPointState } {
   const archetype = point.archetypes[point.spawnCount % point.archetypes.length];
   const cell = findSpawnCell(state, point, point.spawnCount);
@@ -143,6 +151,7 @@ function spawnFromPoint(
     y: cell.y,
     id: `${point.id}-${point.spawnCount}`,
     spawnPointId: point.id,
+    difficulty,
   });
   return {
     monster,
@@ -165,10 +174,11 @@ export function initializeCampaignEnemies(
   if (!campaign) return { campaign, monsters: [] };
 
   let monsters: MonsterState[] = [];
+  const difficulty = getDifficulty(campaign.difficulty);
   const spawnPoints = campaign.spawnPoints.map((point) => {
     let nextPoint = { ...point };
     for (let index = 0; index < point.initialCount; index += 1) {
-      const spawned = spawnFromPoint({ map, monsters }, nextPoint);
+      const spawned = spawnFromPoint({ map, monsters }, nextPoint, difficulty);
       nextPoint = spawned.point;
       if (spawned.monster) monsters = [...monsters, spawned.monster];
     }
@@ -190,6 +200,7 @@ export function tickCampaignRespawns(
   let monsters = [...state.monsters];
   const monsterIds = new Set(monsters.map((monster) => monster.id));
   const respawnPressure = state.campaign.event?.respawnPressure ?? 1;
+  const difficulty = getDifficulty(state.campaign.difficulty);
   const spawnPoints = state.campaign.spawnPoints.map((point) => {
     const activeMonsterIds = point.activeMonsterIds.filter((id) => monsterIds.has(id));
     const full = activeMonsterIds.length >= point.maxActive;
@@ -207,7 +218,7 @@ export function tickCampaignRespawns(
       return nextPoint;
     }
 
-    const spawned = spawnFromPoint({ ...state, monsters }, nextPoint);
+    const spawned = spawnFromPoint({ ...state, monsters }, nextPoint, difficulty);
     nextPoint = spawned.point;
     if (spawned.monster) {
       monsters = [...monsters, spawned.monster];

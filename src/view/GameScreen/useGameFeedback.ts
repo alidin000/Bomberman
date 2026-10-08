@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { GameEngineState } from '../../engine/types';
+import { getRoundTimeRemainingMs, isSuddenDeathMode } from '../../engine/suddenDeath';
+import { getCharacterPowerTheme } from '../../content/characterPowerups';
 import { GamePreferences } from './gamePreferences';
+import { playerSlotLabel } from './playerSlots';
+
+// Clock milestones worth a caption (and a screen-reader announcement, since
+// the clock itself is role="timer" and stays silent).
+const CLOCK_MILESTONES_MS = [30000, 15000];
 
 type FeedbackSnapshot = {
   tick: number;
@@ -12,6 +19,8 @@ type FeedbackSnapshot = {
   alivePlayers: Set<string>;
   pickupIds: Set<string>;
   bossHealth: number | null;
+  // Versus only: time left on the round clock; null in the campaign.
+  clockMs: number | null;
 };
 
 function snapshot(state: GameEngineState): FeedbackSnapshot {
@@ -31,7 +40,15 @@ function snapshot(state: GameEngineState): FeedbackSnapshot {
     ),
     pickupIds: new Set(state.pickupMessages.map((message) => message.id)),
     bossHealth: state.boss?.health ?? null,
+    clockMs: isSuddenDeathMode(state) ? getRoundTimeRemainingMs(state) : null,
   };
+}
+
+// "P2 Sasuke": the slot first, because two players can pick the same shinobi.
+function playerTag(state: GameEngineState, playerId: string): string {
+  const slot = state.players.findIndex((player) => player.id === playerId);
+  if (slot < 0) return 'Shinobi';
+  return `${playerSlotLabel(slot)} ${state.players[slot].name}`;
 }
 
 function playTone(
@@ -111,12 +128,22 @@ export function useGameFeedback(
     const newBombs = [...current.bombCells.keys()]
       .filter((id) => !previous.bombCells.has(id)).length;
     const defeated = [...previous.monsterIds].filter((id) => !current.monsterIds.has(id)).length;
-    const playerDown = [...previous.alivePlayers].some((id) => !current.alivePlayers.has(id));
+    const fallen = [...previous.alivePlayers].filter((id) => !current.alivePlayers.has(id));
+    const playerDown = fallen.length > 0;
     const bossHit = previous.bossHealth !== null
       && current.bossHealth !== null
       && current.bossHealth < previous.bossHealth;
     // By id: a repeat pickup replaces its old message, so the count can stay flat.
-    const pickup = [...current.pickupIds].some((id) => !previous.pickupIds.has(id));
+    const newPickups = state.pickupMessages
+      .filter((message) => !previous.pickupIds.has(message.id));
+    const pickup = newPickups.length > 0;
+    const previousClock = previous.clockMs;
+    const currentClock = current.clockMs;
+    const clockRunning = previousClock !== null && currentClock !== null;
+    const clockMilestone = clockRunning
+      ? CLOCK_MILESTONES_MS.find((mark) => previousClock > mark && currentClock <= mark)
+      : undefined;
+    const suddenDeath = clockRunning && previousClock > 0 && currentClock <= 0;
     const volume = (preferences.effectsVolume / 100) * 0.08;
     const audio = preferences.soundEnabled ? audioRef.current : null;
 
@@ -127,7 +154,7 @@ export function useGameFeedback(
       if (audio) playTone(audio, 115, 0.24, volume * Math.min(1.8, 1 + newExplosions * 0.1), 'sawtooth');
     }
     if (playerDown) {
-      captions.push('Shinobi down');
+      captions.push(`Shinobi down: ${fallen.map((id) => playerTag(state, id)).join(', ')}`);
       setImpact(0.7);
       if (audio && newExplosions === 0) playTone(audio, 180, 0.42, volume, 'triangle');
     }
@@ -141,8 +168,23 @@ export function useGameFeedback(
       if (audio && newExplosions === 0) playTone(audio, 90, 0.2, volume, 'sawtooth');
     }
     if (pickup) {
-      captions.push('Power-up collected');
+      // Name the power: the generic "Power-up collected" never said what changed.
+      captions.push(newPickups.map((message) => {
+        const slot = state.players.findIndex((player) => player.id === message.playerId);
+        const characterId = state.players[slot]?.characterId;
+        const label = characterId
+          ? getCharacterPowerTheme(characterId, message.power).label
+          : 'Power-up';
+        return `${slot >= 0 ? playerSlotLabel(slot) : 'Shinobi'} ${label}`;
+      }).join(', '));
       if (audio && newExplosions === 0) playTone(audio, 720, 0.14, volume * 0.65, 'sine');
+    }
+    if (suddenDeath) {
+      captions.push('Sudden death: walls closing');
+      if (audio && newExplosions === 0) playTone(audio, 150, 0.5, volume, 'square');
+    } else if (clockMilestone !== undefined) {
+      captions.push(`${clockMilestone / 1000} seconds left`);
+      if (audio && newExplosions === 0) playTone(audio, 440, 0.12, volume * 0.6, 'triangle');
     }
     if (newBombs > 0 && audio && captions.length === 0) {
       playTone(audio, 260, 0.08, volume * 0.45, 'triangle');

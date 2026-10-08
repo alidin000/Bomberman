@@ -121,14 +121,15 @@ interface VillageMissionConfig {
   hiddenFragmentLabel: string;
   hiddenBurrowLabel: string;
   spawnArchetypes: [EnemyArchetype[], EnemyArchetype[], EnemyArchetype[]];
+  // Difficulty curve: respawn timer and active caps of the main gate, outer
+  // burrow and boss gate burrow. Early villages refill slower and hold fewer.
+  pressure: { respawnMs: number; maxActive: [number, number, number] };
   objectiveIds?: {
     rescue: CampaignObjectiveId;
     defense: CampaignObjectiveId;
     miniBoss: CampaignObjectiveId;
   };
 }
-
-const RESPAWN_MS = 20000;
 
 const VILLAGE_MISSIONS: VillageMissionConfig[] = [
   {
@@ -149,11 +150,14 @@ const VILLAGE_MISSIONS: VillageMissionConfig[] = [
     hiddenScrollLabel: 'Training Grounds Secret Scroll',
     hiddenFragmentLabel: 'Hokage Archive Fragment',
     hiddenBurrowLabel: 'Forest Zetsu Burrow',
+    // The first village teaches the basics: no smart chasers, and the ANBU
+    // only waits at the boss gate.
     spawnArchetypes: [
-      ['rogueGenin', 'anbu'],
-      ['mistNinja', 'sandNinja', 'whiteZetsu'],
-      ['cloudNinja', 'whiteZetsu', 'blackZetsu'],
+      ['rogueGenin', 'mistNinja'],
+      ['mistNinja', 'rogueGenin', 'whiteZetsu'],
+      ['rogueGenin', 'whiteZetsu', 'anbu'],
     ],
+    pressure: { respawnMs: 26000, maxActive: [2, 2, 3] },
     objectiveIds: {
       rescue: 'rescueLeafVillagers',
       defense: 'protectHokageBuilding',
@@ -179,10 +183,11 @@ const VILLAGE_MISSIONS: VillageMissionConfig[] = [
     hiddenFragmentLabel: 'Kazekage Archive Fragment',
     hiddenBurrowLabel: 'Dune Zetsu Burrow',
     spawnArchetypes: [
-      ['sandNinja', 'rogueGenin'],
-      ['sandNinja', 'whiteZetsu', 'anbu'],
-      ['sandNinja', 'blackZetsu', 'cloudNinja'],
+      ['rogueGenin', 'sandNinja'],
+      ['whiteZetsu', 'rogueGenin', 'sandNinja'],
+      ['rogueGenin', 'sandNinja', 'whiteZetsu'],
     ],
+    pressure: { respawnMs: 25000, maxActive: [2, 2, 2] },
   },
   {
     stageId: 'hiddenMist',
@@ -205,8 +210,9 @@ const VILLAGE_MISSIONS: VillageMissionConfig[] = [
     spawnArchetypes: [
       ['mistNinja', 'rogueGenin'],
       ['mistNinja', 'whiteZetsu', 'anbu'],
-      ['mistNinja', 'blackZetsu', 'sandNinja'],
+      ['mistNinja', 'sandNinja', 'blackZetsu'],
     ],
+    pressure: { respawnMs: 20000, maxActive: [3, 3, 4] },
   },
   {
     stageId: 'hiddenCloud',
@@ -227,10 +233,11 @@ const VILLAGE_MISSIONS: VillageMissionConfig[] = [
     hiddenFragmentLabel: 'Raikage Archive Fragment',
     hiddenBurrowLabel: 'Storm Zetsu Burrow',
     spawnArchetypes: [
-      ['cloudNinja', 'anbu'],
+      ['rogueGenin', 'cloudNinja'],
       ['cloudNinja', 'whiteZetsu', 'rogueGenin'],
-      ['cloudNinja', 'blackZetsu', 'anbu'],
+      ['cloudNinja', 'anbu', 'blackZetsu'],
     ],
+    pressure: { respawnMs: 22000, maxActive: [2, 3, 3] },
   },
   {
     stageId: 'hiddenStone',
@@ -251,10 +258,11 @@ const VILLAGE_MISSIONS: VillageMissionConfig[] = [
     hiddenFragmentLabel: 'Tsuchikage Archive Fragment',
     hiddenBurrowLabel: 'Canyon Zetsu Burrow',
     spawnArchetypes: [
-      ['sandNinja', 'rogueGenin'],
-      ['sandNinja', 'cloudNinja', 'whiteZetsu'],
-      ['anbu', 'blackZetsu', 'sandNinja'],
+      ['rogueGenin', 'sandNinja'],
+      ['whiteZetsu', 'sandNinja', 'cloudNinja'],
+      ['anbu', 'sandNinja', 'whiteZetsu'],
     ],
+    pressure: { respawnMs: 21000, maxActive: [2, 3, 3] },
   },
   {
     stageId: 'akatsukiHideout',
@@ -279,6 +287,7 @@ const VILLAGE_MISSIONS: VillageMissionConfig[] = [
       ['whiteZetsu', 'blackZetsu', 'mistNinja'],
       ['blackZetsu', 'anbu', 'cloudNinja'],
     ],
+    pressure: { respawnMs: 19000, maxActive: [3, 4, 4] },
   },
   {
     stageId: 'greatShinobiWar',
@@ -300,9 +309,10 @@ const VILLAGE_MISSIONS: VillageMissionConfig[] = [
     hiddenBurrowLabel: 'War Zetsu Burrow',
     spawnArchetypes: [
       ['rogueGenin', 'cloudNinja', 'sandNinja'],
-      ['whiteZetsu', 'mistNinja', 'anbu'],
-      ['blackZetsu', 'whiteZetsu', 'cloudNinja'],
+      ['whiteZetsu', 'sandNinja', 'anbu'],
+      ['blackZetsu', 'cloudNinja', 'sandNinja'],
     ],
+    pressure: { respawnMs: 18000, maxActive: [3, 4, 4] },
   },
 ];
 
@@ -363,8 +373,8 @@ function createSpawnPoints(config: VillageMissionConfig): CampaignSpawnPointDefi
       x: 6,
       y: 5,
       archetypes: config.spawnArchetypes[0],
-      respawnMs: RESPAWN_MS,
-      maxActive: 3,
+      respawnMs: config.pressure.respawnMs,
+      maxActive: config.pressure.maxActive[0],
       initialCount: 1,
     },
     {
@@ -373,8 +383,8 @@ function createSpawnPoints(config: VillageMissionConfig): CampaignSpawnPointDefi
       x: 13,
       y: 8,
       archetypes: config.spawnArchetypes[1],
-      respawnMs: RESPAWN_MS,
-      maxActive: 3,
+      respawnMs: config.pressure.respawnMs,
+      maxActive: config.pressure.maxActive[1],
       initialCount: 1,
     },
     {
@@ -383,8 +393,8 @@ function createSpawnPoints(config: VillageMissionConfig): CampaignSpawnPointDefi
       x: 28,
       y: 28,
       archetypes: config.spawnArchetypes[2],
-      respawnMs: RESPAWN_MS,
-      maxActive: 4,
+      respawnMs: config.pressure.respawnMs,
+      maxActive: config.pressure.maxActive[2],
       initialCount: 0,
     },
   ];

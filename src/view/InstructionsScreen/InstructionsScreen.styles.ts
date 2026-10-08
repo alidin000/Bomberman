@@ -40,6 +40,8 @@ export const StyledDialog = styled(Dialog)({
   },
   '& .MuiPaper-root': {
     width: 'min(1180px, 96vw)',
+    maxWidth: 'min(1180px, 96vw)',
+    margin: 8,
     maxHeight: '92vh',
     padding: '18px 18px 0',
     overflow: 'hidden',
@@ -106,10 +108,10 @@ export const BackButton = styled('button')({
   fontWeight: 900,
   textTransform: 'uppercase',
   '&:hover': {
-    background: '#d65343',
+    background: 'var(--anime-vermilion-deep)',
   },
   '&:focus-visible': {
-    outline: '3px solid var(--anime-mustard)',
+    outline: '3px solid var(--anime-ink)',
     outlineOffset: 3,
   },
 });
@@ -353,7 +355,7 @@ export const ManualBadge = styled('strong')({
   marginRight: 8,
   padding: '2px 7px',
   clipPath: chipCut,
-  color: 'var(--anime-vermilion)',
+  color: 'var(--anime-vermilion-deep)',
   background: 'rgba(212,163,63,0.16)',
   border: '1px solid var(--anime-mustard)',
   textTransform: 'uppercase',
@@ -500,7 +502,7 @@ export const CharacterManualCard = styled('div', {
   border: '2px solid var(--anime-ink)',
   borderTop: `6px solid ${color}`,
   '& strong': {
-    color,
+    color: 'var(--anime-ink)',
     textTransform: 'uppercase',
     fontWeight: 900,
     textShadow: 'none',
@@ -511,7 +513,7 @@ export const CharacterManualCard = styled('div', {
     fontWeight: 800,
   },
   '& small': {
-    color: 'rgba(33,29,26,0.58)',
+    color: 'rgba(33,29,26,0.72)',
     fontWeight: 800,
   },
   '& p': {

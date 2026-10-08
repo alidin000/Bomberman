@@ -292,7 +292,7 @@ describe('campaign respawns', () => {
   it('waits a full respawn timer before refilling a cleared spawn point', () => {
     const base = campaignState('hiddenSand');
     const gate = base.campaign!.spawnPoints[0];
-    const garrison = [0, 1, 2].map((index) => createShinobiEnemy({
+    const garrison = Array.from({ length: gate.maxActive }, (_, index) => createShinobiEnemy({
       archetype: 'sandNinja', x: 20 + index, y: 1, id: `${gate.id}-held-${index}`, spawnPointId: gate.id,
     }));
     let state: GameEngineState = {
@@ -320,9 +320,9 @@ describe('campaign respawns', () => {
       monsters: state.monsters.filter((monster) => monster.id !== garrison[0].id),
     };
     advance(50);
-    expect(fromGate()).toHaveLength(2);
+    expect(fromGate()).toHaveLength(gate.maxActive - 1);
 
     advance(gate.respawnMs);
-    expect(fromGate()).toHaveLength(3);
+    expect(fromGate()).toHaveLength(gate.maxActive);
   });
 });
