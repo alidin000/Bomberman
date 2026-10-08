@@ -35,6 +35,30 @@ describe('GameHUD', () => {
     expect(screen.getByText('Fragments')).toBeInTheDocument();
   });
 
+  it('counts down the versus round clock and then announces sudden death', () => {
+    const state = createInitialState({
+      numPlayers: 2,
+      totalRounds: 1,
+      selectedMap: 'map1',
+      selectedCharacters: ['sasuke', 'naruto'],
+      map: parseMapRows(defaultMap),
+    });
+
+    const { rerender } = render(
+      <ThemeProvider theme={theme}>
+        <GameHUD state={{ ...state, roundElapsedMs: 60500 }} scale={100} />
+      </ThemeProvider>
+    );
+    expect(screen.getByLabelText('round clock')).toHaveTextContent('Clock0:30');
+
+    rerender(
+      <ThemeProvider theme={theme}>
+        <GameHUD state={{ ...state, roundElapsedMs: 90000 }} scale={100} />
+      </ThemeProvider>
+    );
+    expect(screen.getByLabelText('round clock')).toHaveTextContent('Sudden deathWalls closing');
+  });
+
   it('shows the concrete death reason on sealed player cards', () => {
     const state = createInitialState({
       numPlayers: 2,

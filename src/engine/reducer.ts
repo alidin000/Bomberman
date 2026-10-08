@@ -9,6 +9,7 @@ import {
   tickPowerUps,
 } from './players';
 import {
+  burnInLingeringFlames,
   detonatePlayerBombs,
   placeBomb,
   placeUltimateBomb,
@@ -20,6 +21,8 @@ import { tickBossEncounter } from './bosses';
 import { withUpdatedFogOfWar } from './fogOfWar';
 import { advanceCampaignObjectives } from './campaignObjectives';
 import { tickCampaignRespawns } from './campaignEnemies';
+import { deriveMatchSeed } from './random';
+import { tickSuddenDeath } from './suddenDeath';
 
 function getWinnerName(state: GameEngineState, winnerId: string): string {
   return state.players.find((player) => player.id === winnerId)?.name ?? winnerId;
@@ -172,18 +175,28 @@ function checkRoundEnd(state: GameEngineState): GameEngineState {
   };
 }
 
+// "Ready... GO": the whole arena is frozen until the countdown ends, so no one
+// can clear crates, set traps or be hit before the round actually starts.
+function isRoundLive(state: GameEngineState | null): state is GameEngineState {
+  return !!state
+    && state.phase === 'playing'
+    && !state.paused
+    && state.roundStartTicksRemaining <= 0;
+}
+
 function processTick(state: GameEngineState, deltaMs: number): GameEngineState {
   if (state.paused || state.phase !== 'playing') return state;
 
-  const roundStartTicksRemaining = Math.max(
-    0,
-    state.roundStartTicksRemaining - deltaMs
-  );
-  const inRoundStartSafety = roundStartTicksRemaining > 0;
+  if (state.roundStartTicksRemaining > 0) {
+    return {
+      ...state,
+      roundStartTicksRemaining: Math.max(0, state.roundStartTicksRemaining - deltaMs),
+    };
+  }
+
   let next = {
     ...state,
     tick: state.tick + 1,
-    roundStartTicksRemaining,
   };
   next = tickPowerUps(next, deltaMs);
   next = tickPickupMessages(next, deltaMs);
@@ -193,10 +206,14 @@ function processTick(state: GameEngineState, deltaMs: number): GameEngineState {
   next = tickCampaignRespawns(next, deltaMs);
   next = tickBossEncounter(next, deltaMs);
   next = tickMonsters(next, deltaMs);
-  if (!inRoundStartSafety) {
-    next = { ...next, players: checkMonsterCollisions(next) };
-  }
+  next = burnInLingeringFlames(next);
+  next = tickSuddenDeath(next, deltaMs);
+  next = { ...next, players: checkMonsterCollisions(next) };
   return withUpdatedFogOfWar(checkRoundEnd(next));
+}
+
+function withFreshMatchSeed(state: GameEngineState): GameEngineState['config'] {
+  return { ...state.config, seed: deriveMatchSeed(state.rngSeed) };
 }
 
 export function gameReducer(
@@ -208,31 +225,31 @@ export function gameReducer(
       return createInitialState(action.config);
 
     case 'MOVE':
-      if (!state || state.phase !== 'playing' || state.paused) return state;
+      if (!isRoundLive(state)) return state;
       return withUpdatedFogOfWar(advanceCampaignState(
         movePlayer(state, action.playerId, action.direction)
       ));
 
     case 'DROP_BOMB':
-      if (!state || state.phase !== 'playing' || state.paused) return state;
+      if (!isRoundLive(state)) return state;
       return withUpdatedFogOfWar(advanceCampaignState(placeBomb(state, action.playerId)));
 
     case 'DETONATE_BOMBS':
-      if (!state || state.phase !== 'playing' || state.paused) return state;
+      if (!isRoundLive(state)) return state;
       return withUpdatedFogOfWar(advanceCampaignState(detonatePlayerBombs(
         state,
         action.playerId
       )));
 
     case 'USE_ULTIMATE':
-      if (!state || state.phase !== 'playing' || state.paused) return state;
+      if (!isRoundLive(state)) return state;
       return withUpdatedFogOfWar(advanceCampaignState(placeUltimateBomb(
         state,
         action.playerId
       )));
 
     case 'PLACE_OBSTACLE':
-      if (!state || state.phase !== 'playing' || state.paused) return state;
+      if (!isRoundLive(state)) return state;
       return withUpdatedFogOfWar(advanceCampaignState(placeObstacle(state, action.playerId)));
 
     case 'TICK':
@@ -249,14 +266,14 @@ export function gameReducer(
       if (!state) return state;
       if (state.phase === 'game_over') {
         return {
-          ...createInitialState(state.config),
+          ...createInitialState(withFreshMatchSeed(state)),
           totalRounds: state.config.totalRounds,
         };
       }
       return resetRoundState({ ...state, round: state.round });
 
     case 'RESTART':
-      return state ? createInitialState(state.config) : state;
+      return state ? createInitialState(withFreshMatchSeed(state)) : state;
 
     default:
       return state;

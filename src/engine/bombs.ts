@@ -1,7 +1,7 @@
 /* eslint-disable no-use-before-define */
 /* eslint-disable prefer-destructuring, comma-dangle, object-curly-newline, prefer-const */
 import {
-  Bomb, GameMap, isBomb, isObstacle, randomPowerUpGenerator,
+  Bomb, GameMap, GenericPower, isBomb, isObstacle,
 } from '../model/gameItem';
 import {
   BombState, DestroyedBox, ExplosionCell, GameEngineState, PlayerState,
@@ -15,8 +15,29 @@ import {
   getCampaignDestructionOutcome,
   resolveCampaignDestroyedBox,
 } from './campaignExploration';
+import { WeightedEntry, nextRandom, pickWeighted } from './random';
 
 let bombIdCounter = 0;
+
+// Versus drops: not every crate hides an item, and the round-swinging powers
+// are rarer than the bomb and fire upgrades the round is built around.
+export const BOX_DROP_CHANCE = 0.45;
+export const BOX_DROP_TABLE: readonly WeightedEntry<GenericPower>[] = [
+  { item: 'AddBomb', weight: 26 },
+  { item: 'BlastRangeUp', weight: 26 },
+  { item: 'RollerSkate', weight: 16 },
+  { item: 'Obstacle', weight: 12 },
+  { item: 'Detonator', weight: 9 },
+  { item: 'Ghost', weight: 6 },
+  { item: 'Invincibility', weight: 5 },
+];
+
+function rollBoxDrop(seed: number): { power: GenericPower | null; seed: number } {
+  const chance = nextRandom(seed);
+  if (chance.value >= BOX_DROP_CHANCE) return { power: null, seed: chance.seed };
+  const pick = nextRandom(chance.seed);
+  return { power: pickWeighted(BOX_DROP_TABLE, pick.value), seed: pick.seed };
+}
 
 const BASIC_BOMBS: Record<PlayerState['characterId'], BombState['kind']> = {
   deidara: 'claySpider',
@@ -472,8 +493,8 @@ export function explodeBombs(
   const chainBombs: BombState[] = [];
   const explosionKeys = new Set(explosions.map((e) => getCellKey(e.x, e.y)));
   const ownerBombCounts = new Map<string, number>();
-  const inRoundStartSafety = state.roundStartTicksRemaining > 0;
   const raycastMap = explosionRaycastMap.map((row) => [...row]);
+  let { rngSeed } = state;
 
   bombsToExplode.forEach((bomb) => {
     ownerBombCounts.set(
@@ -501,6 +522,10 @@ export function explodeBombs(
     const positions = dedupePositions(getExplosionPositions(bomb, raycastMap));
     positions.forEach(({ x, y }) => {
       const key = getCellKey(x, y);
+      const sparedIds = [
+        ...players.filter((p) => p.alive && positionOverlapsCell(p, x, y)).map((p) => p.id),
+        ...monsters.filter((m) => m.x === x && m.y === y).map((m) => m.id),
+      ];
       if (!explosionKeys.has(key)) {
         explosionKeys.add(key);
         explosions.push({
@@ -508,16 +533,35 @@ export function explodeBombs(
           y,
           ticksRemaining: EXPLOSION_MS,
           kind: bomb.kind,
+          ownerId: bomb.ownerId,
+          sparedIds,
         });
+      } else {
+        // A second blast through a burning cell restarts the flame there.
+        const index = explosions.findIndex((e) => e.x === x && e.y === y);
+        if (index >= 0) {
+          const current = explosions[index];
+          explosions[index] = {
+            ...current,
+            ticksRemaining: EXPLOSION_MS,
+            sparedIds: Array.from(new Set([...(current.sparedIds ?? []), ...sparedIds])),
+          };
+        }
       }
 
       const cell = map[y][x];
       if (cell === 'Box') {
+        let pendingPowerUp: GenericPower | null = null;
+        if (!state.campaign) {
+          const drop = rollBoxDrop(rngSeed);
+          pendingPowerUp = drop.power;
+          rngSeed = drop.seed;
+        }
         destroyedBoxes.push({
           x,
           y,
           ticksRemaining: BOX_DESTROY_MS,
-          pendingPowerUp: state.campaign ? null : randomPowerUpGenerator(),
+          pendingPowerUp,
           pendingOutcome: state.campaign
             ? getCampaignDestructionOutcome(state, x, y, bomb.ownerId)
             : null,
@@ -537,7 +581,7 @@ export function explodeBombs(
       }
 
       players.forEach((p, index) => {
-        if (!inRoundStartSafety && p.alive && positionOverlapsCell(p, x, y)) {
+        if (p.alive && positionOverlapsCell(p, x, y)) {
           const invincible = isPowerUpActive(state, p.id, 'Invincibility');
           if (!invincible) {
             players[index] = applyCharacterSurvival(
@@ -576,6 +620,7 @@ export function explodeBombs(
     bombs: remainingBombs,
     explosions,
     destroyedBoxes,
+    rngSeed,
   };
 
   if (chainBombs.length > 0) {
@@ -641,18 +686,56 @@ export function tickExplosions(state: GameEngineState, deltaMs: number): GameEng
   };
 }
 
-export function killPlayersInExplosions(
-  players: PlayerState[],
-  explosions: ExplosionCell[],
-  timedPowerUps: GameEngineState['timedPowerUps'],
-): PlayerState[] {
-  return players.map((player) => {
+// Classic rule: a flame stays lethal for its whole lifetime. Whoever the blast
+// already resolved at ignition is spared, so a survival passive is not undone
+// by the same flame on the next tick.
+export function burnInLingeringFlames(state: GameEngineState): GameEngineState {
+  if (state.explosions.length === 0) return state;
+
+  let changed = false;
+  const explosions = state.explosions.map((explosion) => ({
+    ...explosion,
+    sparedIds: explosion.sparedIds ?? [],
+  }));
+  const ownerName = (ownerId?: string) => (
+    state.players.find((player) => player.id === ownerId)?.name
+  );
+
+  const players = state.players.map((player) => {
     if (!player.alive) return player;
-    const invincible = timedPowerUps[player.id]?.some(
-      (tp) => tp.power === 'Invincibility' && tp.ticksRemaining > 0,
-    ) || player.powerUps.includes('Invincibility');
-    if (invincible) return player;
-    const hit = explosions.some((e) => positionOverlapsCell(player, e.x, e.y));
-    return hit ? applyCharacterSurvival(player) : player;
+    const flame = explosions.find((explosion) => (
+      !explosion.sparedIds.includes(player.id)
+      && positionOverlapsCell(player, explosion.x, explosion.y)
+    ));
+    if (!flame) return player;
+    flame.sparedIds = [...flame.sparedIds, player.id];
+    changed = true;
+    if (isPowerUpActive(state, player.id, 'Invincibility')) return player;
+    const owner = ownerName(flame.ownerId);
+    let reason = `${player.name} walked into a lingering flame.`;
+    if (flame.ownerId === player.id) {
+      reason = `${player.name} walked into their own lingering flame.`;
+    } else if (owner) {
+      reason = `${player.name} walked into ${owner}'s lingering flame.`;
+    }
+    return applyCharacterSurvival(player, reason);
   });
+
+  const monsters = state.monsters.filter((monster) => {
+    const flame = explosions.find((explosion) => (
+      explosion.x === monster.x
+      && explosion.y === monster.y
+      && !explosion.sparedIds.includes(monster.id)
+    ));
+    if (!flame) return true;
+    changed = true;
+    return false;
+  });
+
+  return changed ? {
+    ...state,
+    players,
+    monsters,
+    explosions,
+  } : state;
 }

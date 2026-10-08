@@ -2,13 +2,17 @@ import { gameReducer } from '../engine/reducer';
 import { GameAction } from '../engine/actions';
 import { GameEngineState } from '../engine/types';
 
+// Bumped whenever simulation rules change, since an older recording would
+// replay differently. v2: seeded drops, countdown freeze, lingering flames.
+export const REPLAY_VERSION = 2;
+
 export interface ReplayFrame {
   tick: number;
   action: GameAction;
 }
 
 export interface ReplayRecording {
-  version: 1;
+  version: typeof REPLAY_VERSION;
   initialState: GameEngineState | null;
   frames: ReplayFrame[];
 }
@@ -17,7 +21,7 @@ export function recordReplay(
   initialState: GameEngineState | null,
   frames: ReplayFrame[]
 ): ReplayRecording {
-  return { version: 1, initialState, frames };
+  return { version: REPLAY_VERSION, initialState, frames };
 }
 
 export function replayActions(
@@ -86,7 +90,7 @@ function isReplayFrame(value: unknown): value is ReplayFrame {
 
 function isReplayRecording(value: unknown): value is ReplayRecording {
   return isRecord(value)
-    && value.version === 1
+    && value.version === REPLAY_VERSION
     && (value.initialState === null || isRecord(value.initialState))
     && Array.isArray(value.frames)
     && value.frames.every(isReplayFrame);

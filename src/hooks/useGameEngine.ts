@@ -10,6 +10,7 @@ import {
   Direction,
   PlayerState,
   TICK_MS,
+  createMatchSeed,
 } from '../engine';
 import { KeyBindings } from '../constants/props';
 import {
@@ -68,7 +69,12 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
 
   useEffect(() => {
     if (config) {
-      dispatch({ type: 'INIT', config });
+      // Randomness enters at the boundary: the seed travels in the config, so
+      // the reducer stays pure and a recorded INIT replays the same drops.
+      dispatch({
+        type: 'INIT',
+        config: config.seed === undefined ? { ...config, seed: createMatchSeed() } : config,
+      });
     }
   }, [config]);
 

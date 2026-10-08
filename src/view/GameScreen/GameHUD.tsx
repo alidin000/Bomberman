@@ -9,6 +9,7 @@ import {
 } from '../../engine/types';
 import { Power } from '../../model/gameItem';
 import { isPowerUpActive } from '../../engine/players';
+import { getRoundTimeRemainingMs, isSuddenDeathMode } from '../../engine/suddenDeath';
 import {
   HudRoot,
   MissionStrip,
@@ -229,6 +230,27 @@ function getGateStatus(state: GameEngineState): string {
   return state.campaign.bossUnlocked ? 'Open' : 'Sealed';
 }
 
+const CLOCK_WARNING_MS = 15000;
+
+function formatClock(ms: number): string {
+  const totalSeconds = Math.ceil(ms / 1000);
+  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
+}
+
+function RoundClock({ state }: GameHUDProps) {
+  const remaining = getRoundTimeRemainingMs(state);
+  const urgent = remaining <= CLOCK_WARNING_MS;
+  return (
+    <MissionNode
+      aria-label="round clock"
+      sx={urgent ? { '& strong': { color: '#fca5a5' } } : undefined}
+    >
+      <span>{remaining > 0 ? 'Clock' : 'Sudden death'}</span>
+      <strong>{remaining > 0 ? formatClock(remaining) : 'Walls closing'}</strong>
+    </MissionNode>
+  );
+}
+
 function MissionSummary({ state }: GameHUDProps) {
   const alivePlayers = state.players.filter((player) => player.alive).length;
   const threatCount = state.monsters.length + (state.boss && state.boss.health > 0 ? 1 : 0);
@@ -251,10 +273,14 @@ function MissionSummary({ state }: GameHUDProps) {
         <span>Threats</span>
         <strong>{threatCount}</strong>
       </MissionNode>
-      <MissionNode>
-        <span>Gate</span>
-        <strong>{getGateStatus(state)}</strong>
-      </MissionNode>
+      {isSuddenDeathMode(state) ? (
+        <RoundClock state={state} />
+      ) : (
+        <MissionNode>
+          <span>Gate</span>
+          <strong>{getGateStatus(state)}</strong>
+        </MissionNode>
+      )}
     </MissionStrip>
   );
 }

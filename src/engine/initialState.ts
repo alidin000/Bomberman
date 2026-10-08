@@ -16,6 +16,7 @@ import {
 import { withUpdatedFogOfWar } from './fogOfWar';
 import { createCampaignRuntimeState } from './campaignObjectives';
 import { initializeCampaignEnemies } from './campaignEnemies';
+import { normalizeSeed } from './random';
 
 const PLAYER_NAMES = ['player1', 'player2', 'player3'];
 const ULTIMATE_COOLDOWN_MS = 12000;
@@ -103,7 +104,9 @@ export function createBossForConfig(config: GameConfig): GameEngineState['boss']
     0,
     STAGE_DEFINITIONS.findIndex((item) => item.id === stage.id)
   );
-  const maxHealth = 900 + stageIndex * 175;
+  // Bombs now hit the boss once each (not once per blast cell), so health is
+  // tuned for roughly 7 signature-bomb hits on the first stage and 12 on the last.
+  const maxHealth = 520 + stageIndex * 60;
   return {
     id: boss.id,
     name: boss.name,
@@ -162,6 +165,9 @@ export function createInitialState(config: GameConfig): GameEngineState {
     paused: false,
     tick: 0,
     roundStartTicksRemaining: ROUND_START_COUNTDOWN_MS,
+    rngSeed: normalizeSeed(config.seed),
+    roundElapsedMs: 0,
+    pressureBlocksPlaced: 0,
     config: { ...config, map },
     roundProcessed: false,
   };
@@ -212,6 +218,8 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     roundProcessed: false,
     paused: false,
     roundStartTicksRemaining: ROUND_START_COUNTDOWN_MS,
+    roundElapsedMs: 0,
+    pressureBlocksPlaced: 0,
   };
 
   return withUpdatedFogOfWar(next);

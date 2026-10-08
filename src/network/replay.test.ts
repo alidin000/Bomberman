@@ -1,31 +1,41 @@
-import { exportReplay, importReplay, replayActions } from './replay';
+import {
+  REPLAY_VERSION, ReplayFrame, exportReplay, importReplay, replayActions,
+} from './replay';
+import { GameAction } from '../engine/actions';
 import { parseMapRows } from '../engine/mapLoader';
 import { defaultMap } from '../constants/contants';
 
 describe('replay', () => {
-  it('replays a sequence of actions deterministically', () => {
+  it('replays a seeded match to the identical state', () => {
     const config = {
       numPlayers: 2,
       totalRounds: 1,
       selectedMap: 'map1',
       map: parseMapRows(defaultMap),
+      seed: 424242,
     };
+    const frames: ReplayFrame[] = [
+      { tick: 0, action: { type: 'TICK', deltaMs: 3000 } },
+      { tick: 1, action: { type: 'DROP_BOMB', playerId: 'player1' } },
+      ...Array.from({ length: 80 }, (_, index) => ({
+        tick: index + 2,
+        action: { type: 'TICK', deltaMs: 50 } as GameAction,
+      })),
+    ];
 
-    const state = replayActions(
-      { type: 'INIT', config },
-      [
-        { tick: 1, action: { type: 'MOVE', playerId: 'player1', direction: 'right' } },
-        { tick: 2, action: { type: 'TICK', deltaMs: 50 } },
-      ]
-    );
+    const first = replayActions({ type: 'INIT', config }, frames);
+    const second = replayActions({ type: 'INIT', config }, frames);
 
-    expect(state).not.toBeNull();
-    expect(state!.tick).toBe(1);
+    // Guard against a vacuous pass: the bomb must actually have gone off.
+    expect(first!.tick).toBeGreaterThan(0);
+    expect(first!.bombs).toEqual([]);
+    expect(first!.rngSeed).not.toBe(config.seed);
+    expect(second).toEqual(first);
   });
 
   it('imports valid replay recordings', () => {
     const raw = exportReplay({
-      version: 1,
+      version: REPLAY_VERSION,
       initialState: null,
       frames: [
         { tick: 1, action: { type: 'PAUSE' } },
@@ -37,9 +47,13 @@ describe('replay', () => {
   });
 
   it('rejects malformed replay recordings', () => {
-    expect(() => importReplay('{"version":2,"frames":[]}')).toThrow(/Invalid replay/);
     expect(() => importReplay(JSON.stringify({
       version: 1,
+      initialState: null,
+      frames: [],
+    }))).toThrow(/Invalid replay/);
+    expect(() => importReplay(JSON.stringify({
+      version: REPLAY_VERSION,
       initialState: null,
       frames: [{ tick: 1, action: { type: 'MOVE', playerId: 'player1' } }],
     }))).toThrow(/Invalid replay/);

@@ -9,6 +9,8 @@ import {
 import { MONSTER_MOVE_MS } from './constants';
 import { applyCharacterSurvival, isPowerUpActive } from './players';
 import { getPlayerCell, positionsTouch } from './grid';
+import { getExplosionPositions } from './bombs';
+import { hazardIsActive } from './bosses';
 import { EnemyAbilityKind } from '../content/enemies';
 import { createShinobiEnemy } from './campaignEnemies';
 
@@ -29,10 +31,23 @@ export function resetMonsterHazardIdCounter(): void {
   monsterHazardIdCounter = 0;
 }
 
+// Danger map, as used by Pommerman agents: for every threatened cell, the ms
+// until it turns lethal (0 = burning now). Built once per tick and shared.
+type DangerMap = Map<string, number>;
+
 type MonsterMovementContext = {
   distanceFields: Map<string, number[][] | null>;
   occupiedCells: Set<string>;
+  danger: DangerMap;
+  fleeField?: number[][] | null;
 };
+
+// Smart, fork and elite monsters refuse cells that blow up within this window;
+// the others only refuse cells that are already on fire.
+const SMART_DANGER_HORIZON_MS = 1400;
+// A detonator bomb can go off at any moment.
+const MANUAL_BOMB_DANGER_MS = 500;
+const TELEGRAPHED_HAZARD_DANGER_MS = 300;
 
 function cellKey(x: number, y: number): string {
   return `${x},${y}`;
@@ -121,13 +136,133 @@ function createDistanceField(map: GameMap, players: PlayerState[]): number[][] |
   return queue.length > 0 ? distances : null;
 }
 
+function markDanger(danger: DangerMap, x: number, y: number, ms: number): void {
+  const key = cellKey(x, y);
+  const current = danger.get(key);
+  if (current === undefined || ms < current) danger.set(key, ms);
+}
+
+export function createDangerMap(state: GameEngineState): DangerMap {
+  const danger: DangerMap = new Map();
+  state.explosions.forEach((explosion) => markDanger(danger, explosion.x, explosion.y, 0));
+  state.hazards.forEach((hazard) => {
+    if (hazard.damage <= 0) return;
+    markDanger(
+      danger,
+      hazard.x,
+      hazard.y,
+      hazardIsActive(hazard) ? 0 : TELEGRAPHED_HAZARD_DANGER_MS
+    );
+  });
+  if (state.bombs.length === 0) return danger;
+
+  const fuse = new Map(state.bombs.map((bomb) => [
+    bomb.id,
+    bomb.manualDetonation ? MANUAL_BOMB_DANGER_MS : Math.max(0, bomb.ticksRemaining),
+  ]));
+  const rays = new Map(state.bombs.map((bomb) => [
+    bomb.id,
+    getExplosionPositions(bomb, state.map),
+  ]));
+  const bombsByCell = new Map<string, string[]>();
+  state.bombs.forEach((bomb) => {
+    const key = cellKey(bomb.x, bomb.y);
+    bombsByCell.set(key, [...(bombsByCell.get(key) ?? []), bomb.id]);
+  });
+
+  // Chain reactions: a bomb inside another bomb's blast goes off no later.
+  for (let pass = 0; pass < state.bombs.length; pass += 1) {
+    let updated = false;
+    state.bombs.forEach((source) => {
+      const sourceFuse = fuse.get(source.id) ?? 0;
+      (rays.get(source.id) ?? []).forEach((cell) => {
+        (bombsByCell.get(cellKey(cell.x, cell.y)) ?? []).forEach((targetId) => {
+          if ((fuse.get(targetId) ?? 0) > sourceFuse) {
+            fuse.set(targetId, sourceFuse);
+            updated = true;
+          }
+        });
+      });
+    });
+    if (!updated) break;
+  }
+
+  state.bombs.forEach((bomb) => {
+    const ms = fuse.get(bomb.id) ?? 0;
+    (rays.get(bomb.id) ?? []).forEach((cell) => markDanger(danger, cell.x, cell.y, ms));
+  });
+  return danger;
+}
+
 function createMonsterMovementContext(
   monsters: MonsterState[],
+  danger: DangerMap = new Map(),
 ): MonsterMovementContext {
   return {
     distanceFields: new Map(),
     occupiedCells: new Set(monsters.map((monster) => cellKey(monster.x, monster.y))),
+    danger,
   };
+}
+
+function getDangerHorizon(monster: MonsterState): number {
+  return monster.elite || monster.kind === 'smart' || monster.kind === 'fork'
+    ? SMART_DANGER_HORIZON_MS
+    : 0;
+}
+
+function isDangerous(context: MonsterMovementContext, point: Point, horizonMs: number): boolean {
+  const ms = context.danger.get(cellKey(point.x, point.y));
+  return ms !== undefined && ms <= horizonMs;
+}
+
+function avoidDanger(
+  options: Point[],
+  monster: MonsterState,
+  context: MonsterMovementContext,
+): Point[] {
+  if (context.danger.size === 0) return options;
+  const horizon = getDangerHorizon(monster);
+  return options.filter((option) => !isDangerous(context, option, horizon));
+}
+
+// Flee map: distance from every walkable cell to the nearest safe cell.
+function getFleeField(context: MonsterMovementContext, map: GameMap): number[][] | null {
+  if (context.fleeField !== undefined) return context.fleeField;
+  const distances = map.map((row) => row.map(() => Infinity));
+  const queue: Point[] = [];
+  map.forEach((row, y) => row.forEach((cell, x) => {
+    if (
+      isInBounds(x, y, map)
+      && cell === 'Empty'
+      && !isDangerous(context, { x, y }, SMART_DANGER_HORIZON_MS)
+    ) {
+      distances[y][x] = 0;
+      queue.push({ x, y });
+    }
+  }));
+
+  let head = 0;
+  while (head < queue.length) {
+    const current = queue[head];
+    head += 1;
+    const nextDistance = distances[current.y][current.x] + 1;
+    DIRECTIONS.forEach((direction) => {
+      const x = current.x + direction.x;
+      const y = current.y + direction.y;
+      if (
+        isInBounds(x, y, map)
+        && map[y][x] === 'Empty'
+        && nextDistance < distances[y][x]
+      ) {
+        distances[y][x] = nextDistance;
+        queue.push({ x, y });
+      }
+    });
+  }
+
+  context.fleeField = queue.length > 0 ? distances : null;
+  return context.fleeField;
 }
 
 function getDetectionRange(monster: MonsterState): number {
@@ -199,8 +334,12 @@ function moveBasicMonster(
   context: MonsterMovementContext,
   tick: number,
 ): MonsterState {
-  const options = DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
-    .filter((p) => basicValidMove(p.x, p.y, map, context.occupiedCells));
+  const options = avoidDanger(
+    DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
+      .filter((p) => basicValidMove(p.x, p.y, map, context.occupiedCells)),
+    monster,
+    context
+  );
 
   if (options.length === 0) return monster;
   const chosen = chooseDeterministic(options, monster, tick);
@@ -215,8 +354,12 @@ function moveSmartMonster(
   players: PlayerState[],
   tick: number,
 ): MonsterState {
-  const options = DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
-    .filter((p) => basicValidMove(p.x, p.y, map, context.occupiedCells));
+  const options = avoidDanger(
+    DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
+      .filter((p) => basicValidMove(p.x, p.y, map, context.occupiedCells)),
+    monster,
+    context
+  );
 
   const alivePlayers = players.filter((p) => p.alive);
   if (alivePlayers.length === 0) {
@@ -249,8 +392,14 @@ function moveGhostMonster(
   context: MonsterMovementContext,
   tick: number,
 ): MonsterState {
-  const options = DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
-    .filter((p) => ghostValidMove(p.x, p.y, map) && !context.occupiedCells.has(cellKey(p.x, p.y)));
+  const options = avoidDanger(
+    DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
+      .filter((p) => (
+        ghostValidMove(p.x, p.y, map) && !context.occupiedCells.has(cellKey(p.x, p.y))
+      )),
+    monster,
+    context
+  );
 
   if (options.length === 0) return monster;
   const chosen = chooseDeterministic(options, monster, tick);
@@ -265,8 +414,12 @@ function moveForkMonster(
   players: PlayerState[],
   tick: number,
 ): MonsterState {
-  const options = DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
-    .filter((p) => basicValidMove(p.x, p.y, map, context.occupiedCells));
+  const options = avoidDanger(
+    DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
+      .filter((p) => basicValidMove(p.x, p.y, map, context.occupiedCells)),
+    monster,
+    context
+  );
 
   if (options.length === 0) return monster;
 
@@ -314,6 +467,39 @@ function moveForkMonster(
   return { ...monster, x: bestDir.x, y: bestDir.y };
 }
 
+function fleeDanger(
+  monster: MonsterState,
+  map: GameMap,
+  context: MonsterMovementContext,
+  tick: number,
+): MonsterState | null {
+  if (getDangerHorizon(monster) === 0) return null;
+  if (!isDangerous(context, monster, SMART_DANGER_HORIZON_MS)) return null;
+
+  const walkable = (point: Point) => (
+    monster.kind === 'ghost'
+      ? ghostValidMove(point.x, point.y, map)
+        && !context.occupiedCells.has(cellKey(point.x, point.y))
+      : basicValidMove(point.x, point.y, map, context.occupiedCells)
+  );
+  const options = DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
+    .filter(walkable)
+    .filter((option) => !isDangerous(context, option, 0));
+  if (options.length === 0) return monster;
+
+  const fleeMove = chooseDistanceFieldMove(options, getFleeField(context, map), monster, tick, 47);
+  if (fleeMove) return { ...monster, x: fleeMove.x, y: fleeMove.y };
+
+  // No safe cell reachable: buy time by stepping where the blast lands last.
+  const latest = options.reduce((best, option) => (
+    (context.danger.get(cellKey(option.x, option.y)) ?? Infinity)
+      > (context.danger.get(cellKey(best.x, best.y)) ?? Infinity)
+      ? option
+      : best
+  ));
+  return { ...monster, x: latest.x, y: latest.y };
+}
+
 function moveMonsterByKind(
   monster: MonsterState,
   map: GameMap,
@@ -321,6 +507,8 @@ function moveMonsterByKind(
   players: PlayerState[],
   tick: number,
 ): MonsterState {
+  const fled = fleeDanger(monster, map, context, tick);
+  if (fled) return fled;
   switch (monster.kind) {
     case 'smart':
       return moveSmartMonster(monster, map, context, players, tick);
@@ -676,7 +864,8 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
   let hazards = [...state.hazards];
   let spawned: MonsterState[] = [];
   const movementContext = createMonsterMovementContext(
-    state.monsters
+    state.monsters,
+    createDangerMap(state)
   );
 
   const monsters = state.monsters.map((monster) => {

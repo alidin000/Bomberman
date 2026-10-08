@@ -61,7 +61,7 @@ const QUICK_RULES = [
   {
     step: '01',
     title: 'Pick A Mode',
-    body: 'Campaign is a solo village mission with objectives and a boss. Local arena is a couch match where the last living shinobi wins the round.',
+    body: 'Campaign is a solo village mission with objectives and a boss. Local arena is a couch match where the last living shinobi wins the round; after 1:30, sudden death closes the arena.',
     Icon: AutoStoriesIcon,
   },
   {
@@ -86,10 +86,13 @@ const QUICK_RULES = [
 
 const BOMB_RULES = [
   'Bomb blasts hit the bomb cell and extend in four straight lines until blocked by walls or range.',
-  'Boxes break after explosions and can reveal power-ups, secrets, or Zetsu ambushes in campaign.',
+  'Every round opens with a 3-2-1 freeze: nothing moves and no one can act until GO.',
+  'Flames stay lethal for half a second after the blast. Walking into fire is as deadly as standing in it.',
+  'Boxes break after explosions. In local arena a bit under half hide a power-up; in campaign they can reveal power-ups, secrets, or Zetsu ambushes.',
   'Bombs can chain-trigger other bombs, so one blast can start a larger delayed pattern.',
   'After planting a bomb, its owner may move out of that cell, but cannot move back into or through it without Ghost.',
   'Ghost is the intentional exception: it lets you phase through bombs, walls, boxes, and cover until the timer ends.',
+  'Sudden death (local arena): when the round clock hits zero, walls drop in a spiral from the edge inward and crush anything beneath them.',
 ];
 
 const CAMPAIGN_RULES = [
@@ -103,6 +106,7 @@ const CAMPAIGN_RULES = [
 const COMBAT_RULES = [
   'Normal enemies and Zetsu only chase or attack after detecting a nearby player.',
   'Zetsu have shorter awareness than shinobi patrols, while mini-boss guards detect a wider local area.',
+  'Smart and elite enemies read bomb timers and step out of blast lines. Basic enemies only refuse to walk into open fire.',
   'Tailed-beast bosses are the exception: once their arena starts, they pressure the whole arena.',
   'Death messages name the cause, such as a specific bomb, enemy, boss attack, or failed phase escape.',
 ];

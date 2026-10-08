@@ -1,5 +1,5 @@
 import { gameReducer } from './reducer';
-import { createBossForConfig, createInitialState } from './initialState';
+import { createBossForConfig, createInitialState as createMatchState } from './initialState';
 import { GameConfig, GameEngineState, MonsterState } from './types';
 import { applyPowerUp } from './players';
 import { cellKey } from './fogOfWar';
@@ -13,6 +13,11 @@ import { tickBossEncounter } from './bosses';
 import { resolveZetsuOutcomeKind } from './campaignExploration';
 import { STAGE_DEFINITIONS } from '../content/stages';
 import { CAMPAIGN_MISSIONS, getCampaignMission } from '../content/campaignMissions';
+
+// Most tests exercise a live round; the "Ready... GO" freeze has its own tests.
+function createInitialState(config: GameConfig): GameEngineState {
+  return { ...createMatchState(config), roundStartTicksRemaining: 0 };
+}
 
 const baseConfig: GameConfig = {
   numPlayers: 2,
@@ -1555,35 +1560,34 @@ describe('gameReducer', () => {
     expect(state.tick).toBe(1);
   });
 
-  it('protects players from contact damage during the round countdown', () => {
-    let state = createInitialState(baseConfig);
+  it('freezes the arena and ignores player actions until the countdown ends', () => {
+    let state = createMatchState(baseConfig);
+    const spawn = { x: state.players[0].x, y: state.players[0].y };
     state = {
       ...state,
       monsters: [{
         id: 'spawn-camper',
         name: 'Spawn Camper',
-        x: state.players[0].x,
-        y: state.players[0].y,
+        x: spawn.x,
+        y: spawn.y,
         kind: 'basic',
         moveCooldown: 1000,
       }],
     };
 
-    state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
+    state = gameReducer(state, { type: 'MOVE', playerId: 'player1', direction: 'right' })!;
+    state = gameReducer(state, { type: 'DROP_BOMB', playerId: 'player1' })!;
+    state = gameReducer(state, { type: 'USE_ULTIMATE', playerId: 'player1' })!;
+    state = gameReducer(state, { type: 'TICK', deltaMs: 2900 })!;
 
+    expect(state.roundStartTicksRemaining).toBe(100);
+    expect({ x: state.players[0].x, y: state.players[0].y }).toEqual(spawn);
+    expect(state.bombs).toEqual([]);
+    expect(state.monsters[0]).toMatchObject({ x: spawn.x, y: spawn.y, moveCooldown: 1000 });
     expect(state.players[0].alive).toBe(true);
-    expect(state.roundStartTicksRemaining).toBe(2950);
 
-    state = {
-      ...state,
-      roundStartTicksRemaining: 0,
-      monsters: [{
-        ...state.monsters[0],
-        x: state.players[0].x,
-        y: state.players[0].y,
-        moveCooldown: 1000,
-      }],
-    };
+    state = gameReducer(state, { type: 'TICK', deltaMs: 100 })!;
+    expect(state.roundStartTicksRemaining).toBe(0);
     state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
 
     expect(state.players[0].alive).toBe(false);

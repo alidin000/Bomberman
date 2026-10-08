@@ -140,6 +140,10 @@ export interface ExplosionCell {
   y: number;
   ticksRemaining: number;
   kind?: BombKind;
+  ownerId?: string;
+  // Players and monsters the blast already resolved when it ignited. Anyone
+  // else who walks into the lingering flame is caught by it.
+  sparedIds?: string[];
 }
 
 export type CampaignDestructionOutcomeKind =
@@ -276,6 +280,9 @@ export interface GameConfig {
   stageId?: StageId;
   selectedCharacters?: CharacterId[];
   selectedUpgrade?: StoryUpgradeId;
+  // Seeds the match's random draws (power-up drops). Missing means the fixed
+  // default seed, so recorded configs always replay the same way.
+  seed?: number;
 }
 
 export interface GameEngineState {
@@ -299,6 +306,10 @@ export interface GameEngineState {
   paused: boolean;
   tick: number;
   roundStartTicksRemaining: number;
+  rngSeed: number;
+  // Live round time, used by versus sudden death.
+  roundElapsedMs: number;
+  pressureBlocksPlaced: number;
   config: GameConfig;
   roundProcessed: boolean;
 }

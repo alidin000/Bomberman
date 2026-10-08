@@ -26,6 +26,7 @@ import {
   GameMap, isBomb, isObstacle, isPower, Power,
 } from '../../model/gameItem';
 import { isPowerUpActive } from '../../engine/players';
+import { getUpcomingPressureCells } from '../../engine';
 import { EXPLOSION_MS } from '../../engine/constants';
 import { hazardIsActive } from '../../engine/bosses';
 import { getExplosionPositions } from '../../engine/bombs';
@@ -37,10 +38,12 @@ import {
 } from '../../content/types';
 import StageAtlas from '../../assets/ninja-bomber-stage-atlas.png';
 import { GamePreferences } from './gamePreferences';
+import { PERF_PROBE_ENABLED, PerfProbe } from './scene/PerfProbe';
+import {
+  MAP_OFFSET_X, MAP_OFFSET_Z, TILE_SIZE, toWorld
+} from './scene/sceneSpace';
+import { StaticTiles } from './scene/StaticTiles';
 
-const TILE_SIZE = 1;
-const MAP_OFFSET_X = -7;
-const MAP_OFFSET_Z = -4.5;
 const ENTITY_LERP_SPEED = 7.2;
 const ENTITY_SNAP_EPSILON = 0.0016;
 const ReducedMotionContext = React.createContext(false);
@@ -51,10 +54,6 @@ type TextureCrop = {
   width: number;
   height: number;
 };
-
-function toWorld(x: number, y: number): [number, number, number] {
-  return [(x + MAP_OFFSET_X) * TILE_SIZE, 0, (y + MAP_OFFSET_Z) * TILE_SIZE];
-}
 
 function getMapDimensions(map: GameMap): { width: number; height: number } {
   return {
@@ -543,42 +542,6 @@ function Floor({
   );
 }
 
-function GroundTile({
-  x,
-  y,
-  palette,
-  visibility = 'visible',
-}: {
-  x: number;
-  y: number;
-  palette: StageDefinition['palette'];
-  visibility?: CellVisibility;
-}) {
-  const [wx, , wz] = toWorld(x, y);
-  const hidden = visibility === 'hidden';
-  const explored = visibility === 'explored';
-  let tileColor = (x + y) % 2 ? palette.groundA : palette.groundB;
-  let tileOpacity = 0.48;
-  if (hidden) {
-    tileColor = '#020617';
-    tileOpacity = 0.96;
-  } else if (explored) {
-    tileColor = '#111827';
-    tileOpacity = 0.68;
-  }
-  return (
-    <mesh position={[wx, 0, wz]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[0.96, 0.96]} />
-      <meshStandardMaterial
-        color={tileColor}
-        roughness={0.92}
-        transparent
-        opacity={tileOpacity}
-      />
-    </mesh>
-  );
-}
-
 function useSmoothWorldPosition(
   ref: React.MutableRefObject<THREE.Group | null>,
   x: number,
@@ -632,70 +595,16 @@ function useSmoothWorldPosition(
   });
 }
 
-function WallBlock({
-  x,
-  y,
-  palette,
-  visibility = 'visible',
-}: {
-  x: number;
-  y: number;
-  palette: StageDefinition['palette'];
-  visibility?: CellVisibility;
-}) {
-  const [wx, , wz] = toWorld(x, y);
-  const explored = visibility === 'explored';
-  return (
-    <mesh position={[wx, 0.5, wz]} castShadow receiveShadow>
-      <boxGeometry args={[0.92, 1, 0.92]} />
-      <meshStandardMaterial
-        color={explored ? '#1f2937' : palette.wall}
-        emissive={explored ? '#020617' : palette.wall}
-        emissiveIntensity={explored ? 0.02 : 0.08}
-        metalness={0.08}
-        roughness={0.72}
-      />
-    </mesh>
-  );
-}
-
-function CrateBlock({
-  x,
-  y,
-  palette,
-  destroyed,
-  visibility = 'visible',
-}: {
-  x: number;
-  y: number;
-  palette: StageDefinition['palette'];
-  destroyed?: boolean;
-  visibility?: CellVisibility;
-}) {
-  const [wx, , wz] = toWorld(x, y);
-  const explored = visibility === 'explored';
-  let color = palette.crate;
-  let emissive = palette.crate;
-  if (destroyed) {
-    color = '#5d4037';
-    emissive = '#2f1c16';
-  }
-  if (explored) {
-    color = '#2a211c';
-    emissive = '#020617';
-  }
-  return (
-    <mesh position={[wx, 0.4, wz]} castShadow>
-      <boxGeometry args={[0.85, 0.8, 0.85]} />
-      <meshStandardMaterial
-        color={color}
-        emissive={emissive}
-        emissiveIntensity={explored ? 0.02 : 0.04}
-        roughness={0.76}
-      />
-    </mesh>
-  );
-}
+// Sensed-wall markers and shadow blobs never change their look, so every
+// instance shares one geometry and one material.
+const SENSED_WALL_RING_GEOMETRY = new THREE.RingGeometry(0.28, 0.5, 32);
+const SENSED_WALL_RING_MATERIAL = new THREE.MeshStandardMaterial({
+  color: '#f59e0b', emissive: '#f59e0b', emissiveIntensity: 0.54, transparent: true, opacity: 0.36
+});
+const SENSED_WALL_BOX_GEOMETRY = new THREE.BoxGeometry(0.62, 0.34, 0.62);
+const SENSED_WALL_BOX_MATERIAL = new THREE.MeshStandardMaterial({
+  color: '#d6a45d', emissive: '#f59e0b', emissiveIntensity: 0.22, transparent: true, opacity: 0.28, wireframe: true
+});
 
 function SensedWallMarker({
   x,
@@ -714,14 +623,51 @@ function SensedWallMarker({
 
   return (
     <group ref={ref} position={[wx, 0.17, wz]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.12, 0]}>
-        <ringGeometry args={[0.28, 0.5, 32]} />
-        <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={0.54} transparent opacity={0.36} />
-      </mesh>
-      <mesh position={[0, 0.08, 0]}>
-        <boxGeometry args={[0.62, 0.34, 0.62]} />
-        <meshStandardMaterial color="#d6a45d" emissive="#f59e0b" emissiveIntensity={0.22} transparent opacity={0.28} wireframe />
-      </mesh>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.12, 0]}
+        geometry={SENSED_WALL_RING_GEOMETRY}
+        material={SENSED_WALL_RING_MATERIAL}
+      />
+      <mesh position={[0, 0.08, 0]} geometry={SENSED_WALL_BOX_GEOMETRY} material={SENSED_WALL_BOX_MATERIAL} />
+    </group>
+  );
+}
+
+// Sudden-death telegraph: the next pressure blocks hover over the cells they
+// are about to crush, lowest first, so players can read the closing spiral.
+const PRESSURE_RING_GEOMETRY = new THREE.RingGeometry(0.34, 0.5, 4, 1);
+const PRESSURE_RING_MATERIAL = new THREE.MeshBasicMaterial({
+  color: '#ef4444', transparent: true, opacity: 0.8, side: THREE.DoubleSide
+});
+const PRESSURE_BLOCK_GEOMETRY = new THREE.BoxGeometry(0.92, 1, 0.92);
+const PRESSURE_BLOCK_MATERIAL = new THREE.MeshStandardMaterial({
+  color: '#7f1d1d', emissive: '#ef4444', emissiveIntensity: 0.4, transparent: true, opacity: 0.5
+});
+
+function PressureBlockWarning({ x, y, order }: { x: number; y: number; order: number }) {
+  const ringRef = useRef<THREE.Mesh>(null);
+  const [wx, , wz] = toWorld(x, y);
+
+  useFrame(({ clock }) => {
+    if (!ringRef.current) return;
+    ringRef.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 12 - order) * 0.1);
+  });
+
+  return (
+    <group position={[wx, 0, wz]}>
+      <mesh
+        ref={ringRef}
+        rotation={[-Math.PI / 2, 0, Math.PI / 4]}
+        position={[0, 0.04, 0]}
+        geometry={PRESSURE_RING_GEOMETRY}
+        material={PRESSURE_RING_MATERIAL}
+      />
+      <mesh
+        position={[0, 1.6 + order * 0.7, 0]}
+        geometry={PRESSURE_BLOCK_GEOMETRY}
+        material={PRESSURE_BLOCK_MATERIAL}
+      />
     </group>
   );
 }
@@ -1213,12 +1159,17 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
   );
 }
 
+const SHADOW_BLOB_GEOMETRY = new THREE.CircleGeometry(0.32, 24);
+const SHADOW_BLOB_MATERIAL = new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.26 });
+
 function ShadowBlob() {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.43, 0]}>
-      <circleGeometry args={[0.32, 24]} />
-      <meshBasicMaterial color="#000" transparent opacity={0.26} />
-    </mesh>
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, -0.43, 0]}
+      geometry={SHADOW_BLOB_GEOMETRY}
+      material={SHADOW_BLOB_MATERIAL}
+    />
   );
 }
 
@@ -3182,71 +3133,43 @@ function MapTilesBase({
     [hazards, visibleCellSet],
   );
 
+  // Walls, crates and ground are instanced in StaticTiles; only animated
+  // per-cell objects stay as their own React elements.
+  const cellObjects: React.ReactElement[] = [];
+  map.forEach((row, y) => row.forEach((cell, x) => {
+    const visibility = getVisibilityFromSets(visibleCellSet, exploredCellSet, x, y);
+    if (visibility === 'hidden') {
+      if (
+        sensedWallSet.has(cellKey(x, y))
+        && (cell === 'Wall' || cell === 'Box' || isObstacle(cell))
+      ) {
+        cellObjects.push(<SensedWallMarker key={`sensed-wall-${x}-${y}`} x={x} y={y} />);
+      }
+      return;
+    }
+    if (visibility !== 'visible') return;
+    if (isPower(cell)) {
+      cellObjects.push(
+        <PowerUpMesh key={`power-${x}-${y}`} x={x} y={y} power={cell} characterId={powerTheme} />
+      );
+    } else if (isBomb(cell)) {
+      const bomb = bombByCell.get(`${x},${y}`);
+      cellObjects.push(
+        <BombMesh key={`bomb-${x}-${y}`} x={x} y={y} kind={bomb?.kind ?? 'standard'} />
+      );
+    }
+  }));
+
   return (
     <>
-      {map.map((row, y) => row.map((cell, x) => {
-        const visibility = getVisibilityFromSets(visibleCellSet, exploredCellSet, x, y);
-        const visible = visibility === 'visible';
-        const sensedWall = visibility === 'hidden'
-          && sensedWallSet.has(cellKey(x, y))
-          && (cell === 'Wall' || cell === 'Box' || isObstacle(cell));
-        const tile = (
-          <GroundTile key={`tile-${x}-${y}`} x={x} y={y} palette={palette} visibility={visibility} />
-        );
-        if (visibility === 'hidden') {
-          if (!sensedWall) return tile;
-          return (
-            <React.Fragment key={`cell-${x}-${y}`}>
-              {tile}
-              <SensedWallMarker x={x} y={y} />
-            </React.Fragment>
-          );
-        }
-
-        if (cell === 'Wall') {
-          return (
-            <React.Fragment key={`cell-${x}-${y}`}>
-              {tile}
-              <WallBlock x={x} y={y} palette={palette} visibility={visibility} />
-            </React.Fragment>
-          );
-        }
-        if (cell === 'Box') {
-          const destroyed = destroyedSet.has(`${x},${y}`);
-          return (
-            <React.Fragment key={`cell-${x}-${y}`}>
-              {tile}
-              <CrateBlock x={x} y={y} palette={palette} destroyed={destroyed} visibility={visibility} />
-            </React.Fragment>
-          );
-        }
-        if (visible && isPower(cell)) {
-          return (
-            <React.Fragment key={`cell-${x}-${y}`}>
-              {tile}
-              <PowerUpMesh x={x} y={y} power={cell} characterId={powerTheme} />
-            </React.Fragment>
-          );
-        }
-        if (visible && isBomb(cell)) {
-          const bomb = bombByCell.get(`${x},${y}`);
-          return (
-            <React.Fragment key={`cell-${x}-${y}`}>
-              {tile}
-              <BombMesh x={x} y={y} kind={bomb?.kind ?? 'standard'} />
-            </React.Fragment>
-          );
-        }
-        if (isObstacle(cell)) {
-          return (
-            <React.Fragment key={`cell-${x}-${y}`}>
-              {tile}
-              <CrateBlock x={x} y={y} palette={palette} visibility={visibility} />
-            </React.Fragment>
-          );
-        }
-        return tile;
-      }))}
+      <StaticTiles
+        map={map}
+        palette={palette}
+        visibleCells={visibleCellSet}
+        exploredCells={exploredCellSet}
+        destroyedCells={destroyedSet}
+      />
+      {cellObjects}
       <ExplosionField explosions={visibleExplosions} />
       {visibleHazards.map((hazard) => (
         <HazardMesh key={hazard.id} hazard={hazard} />
@@ -3490,6 +3413,14 @@ function SceneContent({
       />
       <BombBlastPreviews state={state} visibleCells={visibleCellSet} />
       <MissionObjectiveMarkers state={state} visibleCells={visibleCellSet} />
+      {getUpcomingPressureCells(state, 3).map((cell, order) => (
+        <PressureBlockWarning
+          key={`pressure-${cell.x}-${cell.y}`}
+          x={cell.x}
+          y={cell.y}
+          order={order}
+        />
+      ))}
       {state.players.map((p) => (
         <PlayerMesh key={p.id} player={p} state={state} />
       ))}
@@ -3547,6 +3478,7 @@ export function GameScene3D({ state, preferences, impact = 0 }: GameScene3DProps
       <ReducedMotionContext.Provider value={preferences.reducedMotion}>
         <SceneContent state={state} preferences={preferences} impact={impact} />
       </ReducedMotionContext.Provider>
+      {PERF_PROBE_ENABLED && <PerfProbe />}
     </Canvas>
   );
 }

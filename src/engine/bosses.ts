@@ -254,10 +254,9 @@ export function hazardIsActive(hazard: BossHazard): boolean {
 function damagePlayersInHazards(
   players: PlayerState[],
   hazards: BossHazard[],
-  timedPowerUps: GameEngineState['timedPowerUps'],
-  roundStartTicksRemaining: number
+  timedPowerUps: GameEngineState['timedPowerUps']
 ): PlayerState[] {
-  if (roundStartTicksRemaining > 0) return players;
+  if (hazards.length === 0) return players;
 
   return players.map((player) => {
     if (!player.alive) return player;
@@ -306,8 +305,7 @@ export function tickBossEncounter(state: GameEngineState, deltaMs: number): Game
     players: damagePlayersInHazards(
       next.players,
       hazards,
-      next.timedPowerUps,
-      next.roundStartTicksRemaining
+      next.timedPowerUps
     ),
   };
   if (next.config.mode !== 'solo' || !next.boss || next.boss.health <= 0) {
