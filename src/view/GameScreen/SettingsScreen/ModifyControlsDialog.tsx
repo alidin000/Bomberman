@@ -8,17 +8,19 @@ import {
 } from '@mui/material';
 import {
   KeyConfigInput,
-  KeyGroup,
+  KeyHint,
+  MovementKeysGrid,
+  MovementKeyCell,
   PlayerControlsRow,
   ControlsLabel,
   StyledDialog,
-  KeyRow,
   ActionKeysGrid,
   ActionKeyCell,
   ActionKeyName,
 } from '../../ConfigScreen/ConfigScreen.styles';
 import {
   ACTION_BINDING_LABELS,
+  MOVEMENT_BINDING_LABELS,
   KeyBindings,
   arrowKeySymbols,
   normalizeKeyBindings,
@@ -35,6 +37,8 @@ type ModifyControlsDialogProps = {
 function getDisplayKey(key: string): string {
   return arrowKeySymbols[key] || key.toUpperCase();
 }
+
+const MOVEMENT_KEY_AREAS = ['up', 'left', 'down', 'right'] as const;
 
 function getActivePlayers(numOfPlayers: string): string[] {
   const count = Number.parseInt(numOfPlayers, 10) || 1;
@@ -79,9 +83,10 @@ const ModifyControlsDialog = ({
     keyIndex: number,
     event: React.KeyboardEvent<HTMLInputElement>
   ): void => {
-    event.preventDefault();
+    if (event.key === 'Tab' || event.key === 'Escape' || event.ctrlKey || event.metaKey || event.altKey) return;
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
     if (key === 'Backspace' || key === 'Delete' || (key.length > 1 && !key.includes('Arrow'))) return;
+    event.preventDefault();
 
     setDraftBindings((current) => {
       const next = normalizeKeyBindings(current);
@@ -99,36 +104,32 @@ const ModifyControlsDialog = ({
     >
       <DialogTitle id="modify-controls-title">Modify Controls</DialogTitle>
       <DialogContent dividers>
+        <KeyHint>
+          Click a key tile, then press the new key to rebind it. Every key must be unique.
+        </KeyHint>
         {activePlayers.map((player) => (
           <PlayerControlsRow key={`player-${player}-controls`} numOfPlayers={numOfPlayers}>
             <ControlsLabel>{`Player ${player} Controls:`}</ControlsLabel>
-            <KeyGroup>
-              <KeyConfigInput
-                aria-label={`player ${player} up key`}
-                value={getDisplayKey(draftBindings[player][0])}
-                onKeyDown={(event) => handleKeyDown(player, 0, event)}
-                readOnly
-                style={{ borderColor: keyErrors.has(`player${player}-0`) ? 'red' : 'black' }}
-              />
-              <KeyRow>
-                {draftBindings[player].slice(1, 4).map((key, index) => {
-                  const keyIndex = index + 1;
-                  return (
-                    <KeyConfigInput
-                      key={`player-${player}-move-${keyIndex}`}
-                      aria-label={`player ${player} move key ${keyIndex}`}
-                      value={getDisplayKey(key)}
-                      onKeyDown={(event) => handleKeyDown(player, keyIndex, event)}
-                      readOnly
-                      style={{ borderColor: keyErrors.has(`player${player}-${keyIndex}`) ? 'red' : 'black' }}
-                    />
-                  );
-                })}
-              </KeyRow>
-            </KeyGroup>
+            <MovementKeysGrid>
+              {MOVEMENT_BINDING_LABELS.map((label, keyIndex) => (
+                <MovementKeyCell
+                  key={`player-${player}-move-${label}`}
+                  area={MOVEMENT_KEY_AREAS[keyIndex]}
+                >
+                  <ActionKeyName>{label}</ActionKeyName>
+                  <KeyConfigInput
+                    aria-label={`player ${player} ${label.toLowerCase()} key`}
+                    value={getDisplayKey(draftBindings[player][keyIndex])}
+                    onKeyDown={(event) => handleKeyDown(player, keyIndex, event)}
+                    readOnly
+                    data-error={keyErrors.has(`player${player}-${keyIndex}`)}
+                  />
+                </MovementKeyCell>
+              ))}
+            </MovementKeysGrid>
             <ActionKeysGrid>
               {ACTION_BINDING_LABELS.map((label, index) => {
-                const keyIndex = index + 4;
+                const keyIndex = index + MOVEMENT_BINDING_LABELS.length;
                 const key = draftBindings[player][keyIndex];
                 return (
                   <ActionKeyCell key={`player-${player}-action-${keyIndex}`}>
@@ -138,7 +139,7 @@ const ModifyControlsDialog = ({
                       value={getDisplayKey(key)}
                       onKeyDown={(event) => handleKeyDown(player, keyIndex, event)}
                       readOnly
-                      style={{ borderColor: keyErrors.has(`player${player}-${keyIndex}`) ? 'red' : 'black' }}
+                      data-error={keyErrors.has(`player${player}-${keyIndex}`)}
                     />
                   </ActionKeyCell>
                 );

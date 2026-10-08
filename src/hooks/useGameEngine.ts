@@ -44,6 +44,19 @@ function getMoveRepeatMs(player: PlayerState): number {
     : MOVE_REPEAT_MS;
 }
 
+function pruneInactiveMovement(
+  activeMovement: Record<string, ActiveMovement>,
+  state: GameEngineState | null
+): Record<string, ActiveMovement> {
+  if (!state || state.paused || state.phase !== 'playing') return {};
+  const alivePlayerIds = new Set(
+    state.players.filter((player) => player.alive).map((player) => player.id)
+  );
+  return Object.fromEntries(
+    Object.entries(activeMovement).filter(([playerId]) => alivePlayerIds.has(playerId))
+  );
+}
+
 export function useGameEngine(config: GameConfig | null, keyBindings: KeyBindings) {
   const [state, dispatch] = useReducer(gameReducer, null);
   const stateRef = useRef(state);
@@ -68,6 +81,7 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     if (!current || current.paused || current.phase !== 'playing') return;
 
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    let handledDirectionalInput = false;
 
     for (let i = 0; i < current.players.length; i += 1) {
       const bindings = getPlayerBindings(keyBindings, i);
@@ -89,9 +103,9 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
               direction,
               key,
             };
-            return;
           }
-          return;
+          handledDirectionalInput = true;
+          continue;
         }
         if (!event.repeat) {
           humanControllerRef.current.getActions(player, input).forEach(dispatch);
@@ -99,11 +113,16 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
         return;
       }
     }
+
+    if (handledDirectionalInput) event.preventDefault();
   }, [keyBindings]);
 
   const handleKeyUp = useCallback((event: KeyboardEvent) => {
     const current = stateRef.current;
-    if (!current) return;
+    if (!current || current.paused || current.phase !== 'playing') {
+      activeMovementRef.current = {};
+      return;
+    }
 
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
 
@@ -126,11 +145,23 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    const handleBlur = () => {
+      activeMovementRef.current = {};
+    };
+    window.addEventListener('blur', handleBlur);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
     };
   }, [handleKeyDown, handleKeyUp]);
+
+  useEffect(() => {
+    activeMovementRef.current = pruneInactiveMovement(
+      activeMovementRef.current,
+      state as GameEngineState | null
+    );
+  }, [state]);
 
   useEffect(() => {
     let lastTime = performance.now();
@@ -151,7 +182,7 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
           tickSteps += 1;
         }
         if (tickSteps === MAX_TICK_STEPS_PER_FRAME) {
-          accumulatorRef.current = 0;
+          accumulatorRef.current = Math.min(accumulatorRef.current, TICK_MS);
         }
 
         Object.entries(activeMovementRef.current).forEach(([playerId, active]) => {

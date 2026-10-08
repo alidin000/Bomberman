@@ -298,6 +298,7 @@ export interface GameEngineState {
   resultMessage: string;
   paused: boolean;
   tick: number;
+  roundStartTicksRemaining: number;
   config: GameConfig;
   roundProcessed: boolean;
 }

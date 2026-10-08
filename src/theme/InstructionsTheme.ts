@@ -2,31 +2,31 @@ import { createTheme } from '@mui/material/styles';
 
 const theme = createTheme({
   palette: {
-    mode: 'dark',
+    mode: 'light',
     primary: {
-      main: '#ff8a00',
-      light: '#ffb347',
-      dark: '#c45f00',
+      main: '#bd3f32',
+      light: '#d86a56',
+      dark: '#832b24',
     },
     secondary: {
-      main: '#7c3aed',
-      light: '#a78bfa',
-      dark: '#4c1d95',
+      main: '#356f6b',
+      light: '#789a91',
+      dark: '#244d4a',
     },
     background: {
-      default: '#120b0a',
-      paper: 'rgba(32, 19, 16, 0.94)',
+      default: '#272b35',
+      paper: '#efe3c4',
     },
     text: {
-      primary: '#f5f6fa',
-      secondary: '#b2bec3',
+      primary: '#211d1a',
+      secondary: '#5e574d',
     },
   },
   typography: {
-    fontFamily: '"Inter", "Segoe UI", system-ui, sans-serif',
+    fontFamily: '"Trebuchet MS", "Arial Narrow", Arial, sans-serif',
     h4: {
       fontWeight: 700,
-      letterSpacing: '-0.02em',
+      letterSpacing: 0,
     },
     h6: {
       fontWeight: 600,
@@ -37,17 +37,18 @@ const theme = createTheme({
     },
   },
   shape: {
-    borderRadius: 12,
+    borderRadius: 3,
   },
   components: {
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 10,
+          borderRadius: 2,
           padding: '10px 24px',
+          border: '2px solid #211d1a',
         },
         contained: {
-          boxShadow: '0 4px 18px rgba(255, 138, 0, 0.45)',
+          boxShadow: '3px 3px 0 #211d1a',
         },
       },
     },
@@ -61,8 +62,9 @@ const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          backgroundImage: 'linear-gradient(145deg, #1e1e3f 0%, #2d2d5a 100%)',
-          border: '1px solid rgba(255, 138, 0, 0.28)',
+          backgroundImage: 'none',
+          backgroundColor: '#efe3c4',
+          border: '2px solid #211d1a',
         },
       },
     },

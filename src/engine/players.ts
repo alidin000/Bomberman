@@ -133,10 +133,7 @@ function isCellValidForPlayer(
     return isLeavingOverlappedCell(currentX, currentY, nextX, nextY, cellX, cellY);
   }
 
-  return cell !== 'Wall'
-    && cell !== 'Box'
-    && !isObstacle(cell)
-    && (cell === 'Empty' || isPower(cell));
+  return cell === 'Empty' || isPower(cell);
 }
 
 function isValidMove(
@@ -473,7 +470,9 @@ export function tickPowerUps(state: GameEngineState, deltaMs: number): GameEngin
         if (player) {
           const trapped = getOverlappedCells(player.x, player.y).some((point) => {
             const cell = getCell(state.map, point);
-            return Boolean(cell && cell !== 'Empty' && !isPower(cell));
+            if (!cell || cell === 'Empty' || isPower(cell)) return false;
+            if (isBomb(cell)) return cell.ownerId !== playerId;
+            return true;
           });
           if (trapped) {
             players = players.map((p) => (

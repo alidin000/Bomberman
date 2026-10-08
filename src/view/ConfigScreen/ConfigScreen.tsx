@@ -6,6 +6,7 @@ import {
   Typography,
   Stepper,
   Step,
+  StepButton,
   StepLabel,
   ToggleButton,
   ToggleButtonGroup,
@@ -23,8 +24,11 @@ import {
   KeyConfigInput,
   PlayerControlsRow,
   ControlsLabel,
-  KeyGroup,
-  KeyRow,
+  MovementKeysGrid,
+  MovementKeyCell,
+  KeyHint,
+  SummaryStrip,
+  SummaryItem,
   ActionKeysGrid,
   ActionKeyCell,
   ActionKeyName,
@@ -59,6 +63,7 @@ import {
 import { WelcomeContainer } from '../WelcomeScreen/WelcomeScreen.styles';
 import {
   ACTION_BINDING_LABELS,
+  MOVEMENT_BINDING_LABELS,
   KeyBindings,
   arrowKeySymbols,
   DEFAULT_KEY_BINDINGS,
@@ -148,6 +153,12 @@ function loadStoredKeyBindings(): KeyBindings {
   }
 }
 
+function formatKeyLabel(key: string): string {
+  return arrowKeySymbols[key] || key.toUpperCase();
+}
+
+const MOVEMENT_KEY_AREAS = ['up', 'left', 'down', 'right'] as const;
+
 function getMissionObjectiveSummary(objective: CampaignObjectiveDefinition): string {
   if (objective.kind === 'rescue') {
     return `${objective.targetCount ?? objective.targets?.length ?? 0} mission targets`;
@@ -208,7 +219,21 @@ export const ConfigScreen = () => {
     setMode(nextMode);
     if (nextMode === 'solo') {
       setNumOfPlayers('1');
-      setSelectedCharacters((current) => [current[0] ?? DEFAULT_CHARACTER_ID]);
+      setSelectedStage((current) => (
+        storyProgress.unlockedStages.includes(current)
+          ? current
+          : storyProgress.lastStage
+      ));
+      setSelectedCharacters((current) => {
+        const currentCharacter = current[0] ?? DEFAULT_CHARACTER_ID;
+        const lastCharacter = storyProgress.lastCharacter ?? DEFAULT_CHARACTER_ID;
+        const fallbackCharacter = storyProgress.unlockedCharacters.includes(lastCharacter)
+          ? lastCharacter
+          : storyProgress.unlockedCharacters[0] ?? DEFAULT_CHARACTER_ID;
+        return [storyProgress.unlockedCharacters.includes(currentCharacter)
+          ? currentCharacter
+          : fallbackCharacter];
+      });
     } else {
       setNumOfPlayers('2');
       setSelectedCharacters((current) => [
@@ -243,12 +268,14 @@ export const ConfigScreen = () => {
   };
 
   const handleCancel = () => {
-    setNumOfPlayers('2');
     navigate('/');
   };
 
   const handleBack = () => {
     setActiveStep((prevActiveStep) => prevActiveStep - 1);
+  };
+
+  const handleResetBindings = () => {
     setPlayerKeyBindings(normalizeKeyBindings(DEFAULT_KEY_BINDINGS));
     setKeyErrors({});
   };
@@ -266,9 +293,19 @@ export const ConfigScreen = () => {
     upgrade?: StoryUpgradeId;
     players?: string;
   } = {}) => {
-    const stageDefinition = getStageDefinition(stageId);
+    const safeStageId = nextMode === 'solo' && !storyProgress.unlockedStages.includes(stageId)
+      ? storyProgress.lastStage
+      : stageId;
+    const safeCharacters = nextMode === 'solo'
+      ? characters.map((characterId) => (
+        storyProgress.unlockedCharacters.includes(characterId)
+          ? characterId
+          : storyProgress.lastCharacter ?? DEFAULT_CHARACTER_ID
+      ))
+      : characters;
+    const stageDefinition = getStageDefinition(safeStageId);
     const mapData = await fetchMapFromFile(stageDefinition.mapId);
-    const characterId = characters[0] ?? DEFAULT_CHARACTER_ID;
+    const characterId = safeCharacters[0] ?? DEFAULT_CHARACTER_ID;
     if (nextMode === 'solo') {
       const progress = selectStoryLoadout(
         characterId,
@@ -282,7 +319,7 @@ export const ConfigScreen = () => {
     localStorage.setItem('gameSetup', JSON.stringify({
       mode: nextMode,
       stageId: stageDefinition.id,
-      selectedCharacters: characters,
+      selectedCharacters: safeCharacters,
       selectedUpgrade: upgrade,
     }));
     navigate(`/game/${players}/${SINGLE_MATCH_ROUNDS}/${stageDefinition.mapId}`);
@@ -327,9 +364,10 @@ export const ConfigScreen = () => {
     keyIndex: number,
     event: React.KeyboardEvent<HTMLInputElement>
   ): void => {
-    event.preventDefault();
+    if (event.key === 'Tab' || event.key === 'Escape' || event.ctrlKey || event.metaKey || event.altKey) return;
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
     if (key === 'Backspace' || key === 'Delete' || (key.length > 1 && !key.includes('Arrow'))) return;
+    event.preventDefault();
 
     setPlayerKeyBindings((prevBindings) => ({
       ...prevBindings,
@@ -360,49 +398,72 @@ export const ConfigScreen = () => {
     validateInputs();
   }, [activePlayerCount, playerKeyBindings]);
 
+  const conflictKeyLabels = useMemo(() => {
+    const counts = new Map<string, number>();
+    Object.values(playerKeyBindings)
+      .slice(0, activePlayerCount)
+      .forEach((keys) => {
+        keys.forEach((key) => counts.set(key, (counts.get(key) ?? 0) + 1));
+      });
+    return Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([key]) => formatKeyLabel(key));
+  }, [activePlayerCount, playerKeyBindings]);
+
+  const battleSummary = useMemo(() => {
+    const modeTitle = GAME_MODES.find((item) => item.id === mode)?.title ?? mode;
+    const squad = selectedCharacters
+      .slice(0, activePlayerCount)
+      .map((characterId, index) => {
+        const character = CHARACTER_DEFINITIONS.find((item) => item.id === characterId);
+        return {
+          label: `P${index + 1}`,
+          name: character?.name ?? characterId,
+          accent: character?.secondaryColor ?? '#fbbf24',
+        };
+      });
+    const upgrade = mode === 'solo'
+      ? STORY_UPGRADES.find((item) => item.id === selectedUpgrade) ?? null
+      : null;
+    return { modeTitle, squad, upgrade };
+  }, [activePlayerCount, mode, selectedCharacters, selectedUpgrade]);
+
   const renderKeyConfig = (player: number) => (
     <React.Fragment key={`player-config-${player}`}>
       <PlayerControlsRow numOfPlayers={numOfPlayers}>
         <ControlsLabel>
-          Player
-          {player}
-          {' '}
-          Controls:
+          {`Player ${player} Loadout Keys`}
         </ControlsLabel>
-        <KeyGroup>
-          <KeyConfigInput
-            key={`player-${player}-key-0`}
-            value={arrowKeySymbols[playerKeyBindings[player][0]]
-            || playerKeyBindings[player][0].toUpperCase()}
-            onKeyDown={(e) => handleKeyDown(player, 0, e)}
-            readOnly
-            style={{ borderColor: keyErrors[`player${player}-0`] ? 'red' : 'black' }}
-          />
-          <KeyRow>
-            {playerKeyBindings[player].slice(1, 4).map((key, index) => (
+        <MovementKeysGrid>
+          {MOVEMENT_BINDING_LABELS.map((label, keyIndex) => (
+            <MovementKeyCell
+              key={`player-${player}-key-${keyIndex}`}
+              area={MOVEMENT_KEY_AREAS[keyIndex]}
+            >
+              <ActionKeyName>{label}</ActionKeyName>
               <KeyConfigInput
-                key={`player-${player}-key-${index + 1}`}
-                value={arrowKeySymbols[key] || key.toUpperCase()}
-                onKeyDown={(e) => handleKeyDown(player, index + 1, e)}
+                aria-label={`player ${player} ${label.toLowerCase()} key`}
+                value={formatKeyLabel(playerKeyBindings[player][keyIndex])}
+                onKeyDown={(e) => handleKeyDown(player, keyIndex, e)}
                 readOnly
-                style={{ borderColor: keyErrors[`player${player}-${index + 1}`] ? 'red' : 'black' }}
+                data-error={Boolean(keyErrors[`player${player}-${keyIndex}`])}
               />
-            ))}
-          </KeyRow>
-        </KeyGroup>
+            </MovementKeyCell>
+          ))}
+        </MovementKeysGrid>
         <ActionKeysGrid>
           {ACTION_BINDING_LABELS.map((label, index) => {
-            const keyIndex = index + 4;
+            const keyIndex = index + MOVEMENT_BINDING_LABELS.length;
             const key = playerKeyBindings[player][keyIndex];
             return (
               <ActionKeyCell key={`player-${player}-key-${keyIndex}`}>
                 <ActionKeyName>{label}</ActionKeyName>
                 <KeyConfigInput
                   aria-label={`player ${player} ${label.toLowerCase()} key`}
-                  value={arrowKeySymbols[key] || key.toUpperCase()}
+                  value={formatKeyLabel(key)}
                   onKeyDown={(e) => handleKeyDown(player, keyIndex, e)}
                   readOnly
-                  style={{ borderColor: keyErrors[`player${player}-${keyIndex}`] ? 'red' : 'black' }}
+                  data-error={Boolean(keyErrors[`player${player}-${keyIndex}`])}
                 />
               </ActionKeyCell>
             );
@@ -425,16 +486,22 @@ export const ConfigScreen = () => {
     <WelcomeContainer>
       <StyledDialog open aria-labelledby="config-dialog-title">
         <DialogTitle id="config-dialog-title">
-          {activeStep === 0 && 'Start Game'}
-          {activeStep === 1 && mode === 'solo' && 'Upgrade Screen'}
+          {activeStep === 0 && 'Mission Deck'}
+          {activeStep === 1 && mode === 'solo' && 'Upgrade Arsenal'}
           {((activeStep === 1 && mode === 'local') || activeStep === 2)
-            && 'Keyboard Configuration'}
+            && 'Key Bindings'}
         </DialogTitle>
         <DialogContent>
-          <Stepper activeStep={activeStep}>
-            {steps.map((label) => (
-              <Step key={label}>
-                <StepLabel>{label}</StepLabel>
+          <Stepper activeStep={activeStep} nonLinear>
+            {steps.map((label, index) => (
+              <Step key={label} completed={index < activeStep}>
+                {index < activeStep ? (
+                  <StepButton onClick={() => setActiveStep(index)}>
+                    {label}
+                  </StepButton>
+                ) : (
+                  <StepLabel>{label}</StepLabel>
+                )}
               </Step>
             ))}
           </Stepper>
@@ -480,7 +547,7 @@ export const ConfigScreen = () => {
                     </MissionObjectiveList>
                     <MissionActionRow>
                       <Button variant="contained" size="small" onClick={handleStartSelectedMission}>
-                        Start Mission
+                        Deploy Mission
                       </Button>
                       <Button variant="contained" size="small" onClick={handleContinueCampaign}>
                         Continue Campaign
@@ -499,6 +566,7 @@ export const ConfigScreen = () => {
                     selected={mode === item.id}
                     accent={item.id === 'solo' ? '#f59e0b' : '#60a5fa'}
                     disabled={item.disabled}
+                    aria-pressed={mode === item.id}
                     onClick={() => !item.disabled && handleModeSelect(item.id)}
                   >
                     <Typography variant="subtitle1" fontWeight="bold">{item.title}</Typography>
@@ -558,7 +626,7 @@ export const ConfigScreen = () => {
                         <CampaignRouteCard
                           key={village.stageId}
                           type="button"
-                          active={active}
+                          active={selectedStage === village.stageId}
                           completed={completed}
                           locked={locked}
                           accent={accent}
@@ -567,6 +635,7 @@ export const ConfigScreen = () => {
                             if (!locked) setSelectedStage(village.stageId);
                           }}
                           aria-label={`${village.villageName} campaign route`}
+                          aria-pressed={selectedStage === village.stageId}
                         >
                           <RouteStatusBadge accent={accent}>
                             {village.order}
@@ -609,6 +678,7 @@ export const ConfigScreen = () => {
                         accent={item.palette.accent}
                         onClick={() => setSelectedStage(item.id)}
                         aria-label={item.name}
+                        aria-pressed={selectedStage === item.id}
                       >
                         <StagePreview>
                           <StagePreviewImage
@@ -660,6 +730,7 @@ export const ConfigScreen = () => {
                           && !storyProgress.unlockedCharacters.includes(character.id)}
                         onClick={() => handleCharacterSelect(playerIndex, character.id)}
                         aria-label={`${character.name} player ${playerIndex + 1}`}
+                        aria-pressed={selectedCharacters[playerIndex] === character.id}
                       >
                         <CharacterPortrait>
                           <CharacterPortraitImage
@@ -722,15 +793,15 @@ export const ConfigScreen = () => {
 
               <CenteredButtonContainer>
                 <Button variant="contained" size="large" onClick={handleCancel}>Cancel</Button>
-                <Button variant="contained" size="large" style={{ marginLeft: '10px' }} onClick={handleStoryNext}>Next</Button>
+                <Button variant="contained" size="large" onClick={handleStoryNext}>Next</Button>
               </CenteredButtonContainer>
             </StepContent>
           )}
           {activeStep === 1 && mode === 'solo' && (
             <StepContent>
-              <SectionTitle variant="subtitle2">Upgrade Screen</SectionTitle>
+              <SectionTitle variant="subtitle2">Upgrade Arsenal</SectionTitle>
               <Typography variant="body2" color="text.secondary">
-                Choose one story upgrade before entering the stage.
+                Pick one story upgrade for this mission run.
               </Typography>
               <SelectionGrid>
                 {STORY_UPGRADES.map((upgrade) => {
@@ -744,6 +815,7 @@ export const ConfigScreen = () => {
                       disabled={!unlocked}
                       onClick={() => unlocked && setSelectedUpgrade(upgrade.id)}
                       aria-label={upgrade.name}
+                      aria-pressed={selectedUpgrade === upgrade.id}
                     >
                       <Typography variant="subtitle2" fontWeight="bold">
                         {upgrade.name}
@@ -763,21 +835,51 @@ export const ConfigScreen = () => {
           )}
           {((activeStep === 1 && mode === 'local') || activeStep === 2) && (
             <StepContent>
-              <Typography variant="body2" color="text.secondary">
-                Assign movement plus four action keys: bomb, detonate, ultimate, and cover.
-              </Typography>
+              <SummaryStrip aria-label="battle plan summary">
+                <SummaryItem accent="#fbbf24">
+                  <span>Mode</span>
+                  <strong>{battleSummary.modeTitle}</strong>
+                </SummaryItem>
+                <SummaryItem accent={selectedStageDefinition.palette.accent}>
+                  <span>Stage</span>
+                  <strong>{selectedStageDefinition.name}</strong>
+                </SummaryItem>
+                {battleSummary.squad.map((member) => (
+                  <SummaryItem key={member.label} accent={member.accent}>
+                    <span>{member.label}</span>
+                    <strong>{member.name}</strong>
+                  </SummaryItem>
+                ))}
+                {battleSummary.upgrade && (
+                  <SummaryItem accent="#2dd4bf">
+                    <span>Upgrade</span>
+                    <strong>{battleSummary.upgrade.name}</strong>
+                  </SummaryItem>
+                )}
+              </SummaryStrip>
+              <KeyHint>
+                Click a key tile, then press the new key to rebind it. Every key must be unique.
+              </KeyHint>
               <div>
                 {Array.from({ length: activePlayerCount }, (_, i) => renderKeyConfig(i + 1))}
               </div>
               {Object.keys(keyErrors).length > 0 && (
-                <Typography variant="body2" color="error" sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                  <Info sx={{ mr: 1, fontSize: 'inherit' }} />
-                  Please correct the highlighted key conflicts before proceeding.
-                </Typography>
+                <>
+                  <Typography variant="body2" color="error" sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+                    <Info sx={{ mr: 1, fontSize: 'inherit' }} />
+                    Please correct the highlighted key conflicts before proceeding.
+                  </Typography>
+                  {conflictKeyLabels.length > 0 && (
+                    <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                      {`Duplicated keys: ${conflictKeyLabels.join(' · ')}`}
+                    </Typography>
+                  )}
+                </>
               )}
               <CenteredButtonContainer>
                 <Button variant="contained" size="large" onClick={handleBack}>Back</Button>
-                <Button variant="contained" size="large" onClick={handlePlay} disabled={Object.keys(keyErrors).length > 0} style={{ marginLeft: '10px' }}>
+                <Button variant="outlined" size="large" onClick={handleResetBindings}>Reset Keys</Button>
+                <Button variant="contained" size="large" onClick={handlePlay} disabled={Object.keys(keyErrors).length > 0}>
                   Play
                 </Button>
               </CenteredButtonContainer>

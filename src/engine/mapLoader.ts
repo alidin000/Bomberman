@@ -1,6 +1,6 @@
 import { defaultMap } from '../constants/contants';
 import {
-  GameMap, gameItem, randomPowerUpGenerator,
+  GameMap, gameItem, genericPowerUpOptions,
 } from '../model/gameItem';
 
 function normalizeMapData(mapData: string[][]): string[][] {
@@ -19,8 +19,27 @@ function normalizeMapData(mapData: string[][]): string[][] {
   });
 }
 
+function hashString(input: string): number {
+  let hash = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = (hash * 31 + input.charCodeAt(index)) % 2147483647;
+  }
+  return hash;
+}
+
+function getMapSeed(mapData: string[][]): number {
+  return hashString(mapData.map((row) => row.join('')).join('\n'));
+}
+
+function deterministicPowerUp(seed: number, x: number, y: number): gameItem {
+  const hash = hashString(`${seed}:${x}:${y}`);
+  return genericPowerUpOptions[hash % genericPowerUpOptions.length];
+}
+
 export function parseMapRows(mapData: string[][]): GameMap {
-  return normalizeMapData(mapData).map((row) => row.map((cell: string): gameItem => {
+  const normalized = normalizeMapData(mapData);
+  const seed = getMapSeed(normalized);
+  return normalized.map((row, y) => row.map((cell: string, x): gameItem => {
     switch (cell) {
       case ' ':
         return 'Empty';
@@ -29,7 +48,7 @@ export function parseMapRows(mapData: string[][]): GameMap {
       case 'B':
         return 'Box';
       case 'P':
-        return randomPowerUpGenerator();
+        return deterministicPowerUp(seed, x, y);
       default:
         throw new Error(`Invalid map data: unexpected character '${cell}'`);
     }

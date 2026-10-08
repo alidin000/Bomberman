@@ -1,14 +1,49 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+:root {
+  --anime-ink: #211d1a;
+  --anime-paper: #efe3c4;
+  --anime-paper-light: #fff8e7;
+  --anime-vermilion: #bd3f32;
+  --anime-teal: #356f6b;
+  --anime-mustard: #d4a33f;
+  --anime-olive: #667158;
+  --anime-sky: #789aa3;
+  --anime-night: #272b35;
+  --anime-line: rgba(33, 29, 26, 0.78);
+  --anime-shadow: 4px 4px 0 rgba(33, 29, 26, 0.8);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
 
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--anime-ink);
+  background: var(--anime-night);
+  font-family: "Trebuchet MS", "Arial Narrow", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #0f0c29;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+code,
+kbd {
+  font-family: "Courier New", Courier, monospace;
+}
+
+::selection {
+  color: var(--anime-paper-light);
+  background: var(--anime-vermilion);
 }

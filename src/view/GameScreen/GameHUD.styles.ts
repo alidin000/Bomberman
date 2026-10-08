@@ -1,22 +1,34 @@
 import styled from '@emotion/styled';
 import { Box, LinearProgress, Paper } from '@mui/material';
 
-const PANEL_SURFACE = 'linear-gradient(180deg, rgba(25, 20, 15, 0.97), rgba(7, 8, 12, 0.95))';
-const PANEL_EDGE = 'rgba(244, 180, 74, 0.42)';
-const PANEL_SHADOW = '0 18px 42px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 235, 184, 0.14)';
+const PANEL_SURFACE = 'rgba(255, 248, 231, 0.94)';
+const PANEL_EDGE = 'var(--anime-ink)';
+const PANEL_SHADOW = '4px 4px 0 rgba(33, 29, 26, 0.88)';
 
-export const HudRoot = styled(Box)({
+export const HudRoot = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'hudScale',
+})<{ hudScale: number }>(({ hudScale }) => ({
   position: 'absolute',
   top: 0,
   left: 0,
   right: 0,
+  bottom: 0,
   zIndex: 10,
   padding: 12,
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'flex-start',
   pointerEvents: 'none',
-});
+  zoom: hudScale / 100,
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    inset: 0,
+    pointerEvents: 'none',
+    background: 'linear-gradient(180deg, rgba(33,29,26,0.28), transparent 18%, transparent 82%, rgba(33,29,26,0.18))',
+    opacity: 0.7,
+  },
+}));
 
 export const PlayerCards = styled(Box)({
   display: 'flex',
@@ -24,6 +36,16 @@ export const PlayerCards = styled(Box)({
   flexWrap: 'wrap',
   pointerEvents: 'auto',
   maxWidth: 'min(760px, calc(100vw - 360px))',
+  position: 'relative',
+  zIndex: 2,
+  marginTop: 64,
+  '@media (max-width: 1260px)': {
+    marginTop: 230,
+  },
+  '@media (max-width: 640px)': {
+    marginTop: 150,
+    maxWidth: 'calc(100vw - 24px)',
+  },
 });
 
 export const HudRight = styled(Box)({
@@ -32,6 +54,89 @@ export const HudRight = styled(Box)({
   alignItems: 'flex-end',
   gap: 8,
   pointerEvents: 'auto',
+  position: 'relative',
+  zIndex: 2,
+  marginTop: 62,
+  '@media (max-width: 1260px)': {
+    marginTop: 230,
+  },
+  '@media (max-width: 640px)': {
+    marginTop: 150,
+  },
+});
+
+export const MissionStrip = styled(Box)({
+  position: 'absolute',
+  top: 12,
+  left: '50%',
+  transform: 'translateX(-50%)',
+  zIndex: 3,
+  width: 'min(520px, calc(100vw - 680px))',
+  minWidth: 360,
+  minHeight: 58,
+  display: 'grid',
+  gridTemplateColumns: '1.35fr repeat(3, minmax(0, 0.75fr))',
+  gap: 1,
+  padding: 4,
+  border: '2px solid var(--anime-ink)',
+  background: 'var(--anime-mustard)',
+  boxShadow: '4px 4px 0 var(--anime-ink)',
+  pointerEvents: 'none',
+  '@media (max-width: 1260px)': {
+    top: 86,
+    width: 'min(540px, calc(100vw - 34px))',
+  },
+  '@media (max-width: 640px)': {
+    display: 'none',
+  },
+});
+
+export const MissionStatus = styled(Box)({
+  minWidth: 0,
+  display: 'grid',
+  alignContent: 'center',
+  gap: 2,
+  padding: '8px 14px 8px 18px',
+  background: 'var(--anime-ink)',
+  '& strong': {
+    color: 'var(--anime-mustard)',
+    fontSize: '0.72rem',
+    fontWeight: 900,
+    textTransform: 'uppercase',
+  },
+  '& span': {
+    overflow: 'hidden',
+    color: 'var(--anime-paper-light)',
+    fontSize: '0.88rem',
+    fontWeight: 900,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
+
+export const MissionNode = styled(Box)({
+  minWidth: 0,
+  display: 'grid',
+  placeItems: 'center',
+  gap: 1,
+  padding: '7px 8px',
+  background: 'var(--anime-paper-light)',
+  textAlign: 'center',
+  '& span': {
+    color: 'rgba(33,29,26,0.82)',
+    fontSize: '0.62rem',
+    fontWeight: 900,
+    textTransform: 'uppercase',
+  },
+  '& strong': {
+    maxWidth: '100%',
+    overflow: 'hidden',
+    color: 'var(--anime-ink)',
+    fontSize: '0.84rem',
+    fontWeight: 900,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
 });
 
 type PlayerCardProps = {
@@ -42,20 +147,39 @@ type PlayerCardProps = {
 export const PlayerCardPaper = styled(Paper, {
   shouldForwardProp: (prop) => prop !== 'alive' && prop !== 'color',
 })<PlayerCardProps>(({ alive, color }) => ({
-  padding: 10,
-  minWidth: 210,
-  maxWidth: 232,
-  background: alive
-    ? `linear-gradient(90deg, ${color}30, transparent 62%), ${PANEL_SURFACE}`
-    : 'linear-gradient(180deg, rgba(19, 18, 18, 0.86), rgba(7, 8, 12, 0.82))',
-  color: '#f8fafc',
-  border: `1px solid ${alive ? color : PANEL_EDGE}`,
-  borderRadius: 6,
-  boxShadow: alive
-    ? `0 16px 34px ${color}38, inset 0 1px 0 rgba(255, 235, 184, 0.18)`
-    : '0 10px 24px rgba(0,0,0,0.28)',
-  backdropFilter: 'blur(6px)',
+  position: 'relative',
+  isolation: 'isolate',
+  padding: '10px 10px 9px 13px',
+  minWidth: 220,
+  maxWidth: 246,
+  background: alive ? PANEL_SURFACE : 'rgba(210, 201, 181, 0.92)',
+  color: 'var(--anime-ink)',
+  border: `2px solid ${PANEL_EDGE}`,
+  borderTop: `7px solid ${alive ? color : 'var(--anime-ink)'}`,
+  borderRadius: 2,
+  boxShadow: PANEL_SHADOW,
   opacity: alive ? 1 : 0.6,
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 5,
+    background: alive ? color : 'var(--anime-olive)',
+    boxShadow: 'none',
+    zIndex: -1,
+  },
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    inset: 0,
+    background: 'radial-gradient(rgba(33,29,26,0.12) 0.6px, transparent 0.6px)',
+    backgroundSize: '5px 5px',
+    opacity: alive ? 0.25 : 0.12,
+    pointerEvents: 'none',
+    zIndex: -1,
+  },
 }));
 
 export const PlayerHeader = styled(Box)({
@@ -64,13 +188,39 @@ export const PlayerHeader = styled(Box)({
   gap: 7,
 });
 
-export const PlayerAvatar = styled(Box)<{ color: string }>(({ color }) => ({
-  width: 42,
-  height: 42,
-  borderRadius: '50%',
-  background: `radial-gradient(circle at 35% 25%, #fff7d6, #f6c453 28%, ${color} 58%, #111827 100%)`,
-  border: '2px solid rgba(255, 235, 184, 0.95)',
-  boxShadow: `0 0 12px ${color}, 0 0 0 4px rgba(0, 0, 0, 0.28)`,
+export const PlayerAvatar = styled(Box, {
+  shouldForwardProp: (prop) => !['color', 'image', 'imagePosition'].includes(String(prop)),
+})<{ color: string; image: string; imagePosition: string }>(({
+  color,
+  image,
+  imagePosition,
+}) => ({
+  width: 46,
+  height: 46,
+  flex: '0 0 auto',
+  borderRadius: 2,
+  backgroundImage: `url(${image})`,
+  backgroundSize: '600% 280%',
+  backgroundPosition: imagePosition,
+  backgroundRepeat: 'no-repeat',
+  border: '2px solid var(--anime-ink)',
+  boxShadow: `3px 3px 0 ${color}`,
+}));
+
+export const PlayerStatusRibbon = styled(Box)<{ alive: boolean; color: string }>(({
+  alive,
+  color,
+}) => ({
+  width: 'fit-content',
+  marginTop: 3,
+  padding: '2px 7px',
+  borderRadius: 1,
+  color: alive ? 'var(--anime-ink)' : 'var(--anime-paper-light)',
+  background: alive ? color : 'var(--anime-vermilion)',
+  border: '1px solid var(--anime-ink)',
+  fontSize: '0.62rem',
+  fontWeight: 900,
+  textTransform: 'uppercase',
 }));
 
 export const PlayerStats = styled(Box)({
@@ -81,13 +231,17 @@ export const PlayerStats = styled(Box)({
 });
 
 export const StatPill = styled(Box)({
-  padding: '5px 8px',
-  borderRadius: 5,
-  color: '#f8fafc',
-  background: 'linear-gradient(180deg, rgba(255, 230, 176, 0.16), rgba(0, 0, 0, 0.26))',
-  border: '1px solid rgba(255, 230, 176, 0.22)',
-  fontSize: '0.78rem',
-  fontWeight: 700,
+  minHeight: 32,
+  display: 'grid',
+  placeItems: 'center',
+  padding: '5px 7px',
+  borderRadius: 1,
+  color: 'var(--anime-ink)',
+  background: 'var(--anime-paper)',
+  border: '1px solid rgba(33,29,26,0.4)',
+  fontSize: '0.74rem',
+  fontWeight: 900,
+  textAlign: 'center',
 });
 
 export const PowerChips = styled(Box)({
@@ -103,14 +257,13 @@ export const PowerBadge = styled(Box, {
   minHeight: 24,
   maxWidth: '100%',
   padding: '4px 7px',
-  borderRadius: 7,
+  borderRadius: 2,
   display: 'inline-flex',
   alignItems: 'center',
   gap: 5,
-  color: '#f8fafc',
-  background: `linear-gradient(135deg, ${color}7a, rgba(15, 23, 42, 0.9))`,
-  border: `1px solid ${accent}aa`,
-  boxShadow: `0 0 14px ${color}33, inset 0 1px 0 rgba(255,255,255,0.16)`,
+  color: 'var(--anime-ink)',
+  background: `color-mix(in srgb, ${color} 20%, var(--anime-paper-light))`,
+  border: `1px solid ${accent}`,
   fontSize: '0.68rem',
   fontWeight: 800,
   lineHeight: 1.1,
@@ -121,7 +274,7 @@ export const PowerBadge = styled(Box, {
     flex: '0 0 auto',
     borderRadius: '50%',
     background: accent,
-    boxShadow: `0 0 8px ${accent}`,
+    border: '1px solid var(--anime-ink)',
   },
 }));
 
@@ -135,11 +288,10 @@ export const PickupNote = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'color',
 })<{ color: string }>(({ color }) => ({
   padding: '6px 7px',
-  borderRadius: 6,
-  color: '#f8fafc',
-  background: `linear-gradient(90deg, ${color}46, rgba(10, 11, 15, 0.88))`,
-  border: `1px solid ${color}99`,
-  boxShadow: `0 0 16px ${color}22`,
+  borderRadius: 2,
+  color: 'var(--anime-ink)',
+  background: `color-mix(in srgb, ${color} 16%, var(--anime-paper-light))`,
+  border: `1px solid ${color}`,
   fontSize: '0.68rem',
   lineHeight: 1.18,
 }));
@@ -148,16 +300,18 @@ export const PickupNoteTitle = styled('strong')({
   display: 'block',
   marginBottom: 2,
   textTransform: 'uppercase',
-  letterSpacing: '0.04em',
+  letterSpacing: 0,
 });
 
 export const AbilityPanel = styled(Box)<{ color: string }>(({ color }) => ({
   marginTop: 8,
   padding: 8,
-  borderRadius: 5,
-  background: `linear-gradient(135deg, ${color}30, rgba(20, 13, 7, 0.72))`,
-  border: `1px solid ${color}99`,
-  boxShadow: 'inset 0 1px 0 rgba(255, 235, 184, 0.1)',
+  borderRadius: 2,
+  background: `color-mix(in srgb, ${color} 14%, var(--anime-paper-light))`,
+  border: `1px solid ${color}`,
+  '@media (max-width: 1400px)': {
+    display: 'none',
+  },
 }));
 
 export const AbilityRow = styled(Box)({
@@ -165,23 +319,33 @@ export const AbilityRow = styled(Box)({
   gridTemplateColumns: '48px 1fr',
   gap: 6,
   alignItems: 'center',
-  color: '#f8fafc',
+  color: 'var(--anime-ink)',
   fontSize: '0.76rem',
   '& strong': {
     textTransform: 'uppercase',
-    letterSpacing: '0.04em',
+    letterSpacing: 0,
   },
 });
 
 export const ObjectivePaper = styled(Paper)({
+  position: 'relative',
+  overflow: 'hidden',
   padding: 11,
-  width: 278,
-  color: '#f8fafc',
-  background: `linear-gradient(90deg, rgba(34, 197, 94, 0.2), transparent 68%), ${PANEL_SURFACE}`,
-  border: '1px solid rgba(134, 239, 172, 0.44)',
-  borderRadius: 6,
+  width: 286,
+  color: 'var(--anime-ink)',
+  background: PANEL_SURFACE,
+  border: '2px solid var(--anime-ink)',
+  borderRadius: 2,
   boxShadow: PANEL_SHADOW,
-  backdropFilter: 'blur(6px)',
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    background: 'var(--anime-olive)',
+  },
 });
 
 export const ObjectiveList = styled(Box)({
@@ -194,9 +358,9 @@ export const ObjectiveItem = styled(Box)({
   display: 'grid',
   gap: 5,
   padding: 8,
-  borderRadius: 6,
-  background: 'linear-gradient(180deg, rgba(255, 230, 176, 0.12), rgba(0, 0, 0, 0.22))',
-  border: '1px solid rgba(255, 230, 176, 0.18)',
+  borderRadius: 1,
+  background: 'var(--anime-paper)',
+  border: '1px solid rgba(33,29,26,0.3)',
 });
 
 export const ObjectiveMeta = styled(Box)({
@@ -210,19 +374,18 @@ export const ObjectiveStatusBadge = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'status',
 })<{ status: string }>(({ status }) => {
   const colors: Record<string, string> = {
-    active: '#22c55e',
-    complete: '#facc15',
-    failed: '#ef4444',
-    locked: '#94a3b8',
+    active: '#667158',
+    complete: '#d4a33f',
+    failed: '#bd3f32',
+    locked: '#789aa3',
   };
   const color = colors[status] ?? colors.locked;
   return {
     minWidth: 64,
     padding: '3px 6px',
-    borderRadius: 5,
-    color: '#0f172a',
+    borderRadius: 1,
+    color: 'var(--anime-ink)',
     background: color,
-    boxShadow: `0 0 12px ${color}38`,
     fontSize: '0.62rem',
     fontWeight: 900,
     lineHeight: 1.1,
@@ -232,11 +395,12 @@ export const ObjectiveStatusBadge = styled(Box, {
 });
 
 export const ObjectiveProgress = styled(LinearProgress)({
-  height: 6,
-  borderRadius: 3,
-  backgroundColor: 'rgba(255, 230, 176, 0.16)',
+  height: 7,
+  borderRadius: 0,
+  clipPath: 'polygon(0 0, calc(100% - 7px) 0, 100% 100%, 0 100%)',
+  backgroundColor: 'rgba(33, 29, 26, 0.2)',
   '& .MuiLinearProgress-bar': {
-    background: 'linear-gradient(90deg, #22c55e, #facc15)',
+    background: 'var(--anime-teal)',
   },
 });
 
@@ -245,10 +409,9 @@ export const CampaignEventBanner = styled(Box, {
 })<{ color: string }>(({ color }) => ({
   marginTop: 8,
   padding: 8,
-  borderRadius: 6,
-  background: `linear-gradient(90deg, ${color}42, rgba(0, 0, 0, 0.28))`,
-  border: `1px solid ${color}99`,
-  boxShadow: `0 0 16px ${color}22`,
+  borderRadius: 2,
+  background: `color-mix(in srgb, ${color} 16%, var(--anime-paper-light))`,
+  border: `1px solid ${color}`,
 }));
 
 export const IntelGrid = styled(Box)({
@@ -261,64 +424,76 @@ export const IntelGrid = styled(Box)({
 export const IntelPill = styled(Box)({
   minHeight: 34,
   padding: '5px 6px',
-  borderRadius: 5,
-  background: 'rgba(15, 23, 42, 0.56)',
-  border: '1px solid rgba(203, 213, 225, 0.2)',
-  color: '#e5e7eb',
+  borderRadius: 1,
+  background: 'var(--anime-paper)',
+  border: '1px solid rgba(33,29,26,0.3)',
+  color: 'var(--anime-ink)',
   fontSize: '0.66rem',
   fontWeight: 800,
   lineHeight: 1.15,
   textAlign: 'center',
   '& strong': {
     display: 'block',
-    color: '#fef3c7',
+    color: '#8f2f26',
     fontSize: '0.78rem',
   },
 });
 
 export const UltimateProgress = styled(LinearProgress)({
   marginTop: 8,
-  height: 7,
-  borderRadius: 4,
-  backgroundColor: 'rgba(255, 230, 176, 0.14)',
+  height: 8,
+  borderRadius: 0,
+  clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%)',
+  backgroundColor: 'rgba(33, 29, 26, 0.2)',
   '& .MuiLinearProgress-bar': {
-    background: 'linear-gradient(90deg, #f97316, #facc15)',
+    background: 'var(--anime-vermilion)',
   },
 });
 
 export const MonsterPaper = styled(Paper)({
+  position: 'relative',
   padding: 11,
-  minWidth: 238,
-  background: `linear-gradient(90deg, rgba(249, 115, 22, 0.22), transparent 65%), ${PANEL_SURFACE}`,
-  color: '#f8fafc',
-  border: `1px solid ${PANEL_EDGE}`,
-  borderRadius: 6,
+  minWidth: 248,
+  background: PANEL_SURFACE,
+  color: 'var(--anime-ink)',
+  border: `2px solid ${PANEL_EDGE}`,
+  borderRadius: 2,
   boxShadow: PANEL_SHADOW,
-  backdropFilter: 'blur(6px)',
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 3,
+    background: 'var(--anime-vermilion)',
+  },
 });
 
 export const BossPaper = styled(Paper, {
   shouldForwardProp: (prop) => prop !== 'color',
 })<{ color: string }>(({ color }) => ({
   position: 'absolute',
-  top: 12,
+  top: 78,
   left: '50%',
   transform: 'translateX(-50%)',
   width: 'min(520px, calc(100vw - 610px))',
   minWidth: 340,
   padding: '10px 13px',
-  background: `linear-gradient(90deg, ${color}38, transparent 66%), ${PANEL_SURFACE}`,
-  color: '#f8fafc',
-  border: `1px solid ${color}cc`,
-  borderRadius: 6,
-  boxShadow: `0 16px 40px ${color}32, inset 0 1px 0 rgba(255, 235, 184, 0.14)`,
-  backdropFilter: 'blur(6px)',
+  background: PANEL_SURFACE,
+  color: 'var(--anime-ink)',
+  border: '2px solid var(--anime-ink)',
+  borderTop: `7px solid ${color}`,
+  borderRadius: 2,
+  boxShadow: PANEL_SHADOW,
   textAlign: 'center',
-  '@media (max-width: 1100px)': {
-    position: 'static',
-    transform: 'none',
-    width: '100%',
-    minWidth: 250,
+  '@media (max-width: 1260px)': {
+    top: 150,
+    width: 'min(520px, calc(100vw - 34px))',
+    minWidth: 0,
+  },
+  '@media (max-width: 640px)': {
+    top: 72,
   },
 }));
 
@@ -333,11 +508,10 @@ export const MonsterBadge = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'color',
 })<{ color: string }>(({ color }) => ({
   padding: '5px 7px',
-  borderRadius: 5,
-  color: '#fff',
-  background: `linear-gradient(135deg, ${color}66, rgba(15, 12, 8, 0.9))`,
-  border: `1px solid ${color}99`,
-  boxShadow: `0 0 12px ${color}22`,
+  borderRadius: 1,
+  color: 'var(--anime-ink)',
+  background: `color-mix(in srgb, ${color} 18%, var(--anime-paper-light))`,
+  border: `1px solid ${color}`,
   fontSize: '0.72rem',
   fontWeight: 800,
   lineHeight: 1.1,

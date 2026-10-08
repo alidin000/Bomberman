@@ -1,23 +1,31 @@
 /* eslint-disable max-len */
 import React, {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
+import CloseIcon from '@mui/icons-material/Close';
+import ExitToAppIcon from '@mui/icons-material/ExitToApp';
+import KeyboardIcon from '@mui/icons-material/Keyboard';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { Tooltip } from '@mui/material';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { StyledBackground } from '../WelcomeScreen/WelcomeScreen.styles';
 import {
   KeyBindings,
   DEFAULT_KEY_BINDINGS,
+  arrowKeySymbols,
   normalizeKeyBindings,
 } from '../../constants/props';
 import { RoundResultDialog } from './RoundResultDialog';
+import { ResultTone } from './RoundResultDialog.styles';
 import SettingsScreen from './SettingsScreen/SettingsScreen';
 import ModifyControlsDialog from './SettingsScreen/ModifyControlsDialog';
 import { GameScene3D } from './GameScene3D';
@@ -33,21 +41,79 @@ import {
   GameBackground,
   ControlButton,
   PauseOverlay,
-  GameHint,
+  PauseMenuCard,
+  PauseMenuTitle,
+  PauseMenuActions,
+  PauseMenuButton,
+  ControlsGuide,
+  ControlsGuideHeader,
+  ControlsDismissButton,
+  ControlRows,
+  ControlRow,
+  CountdownOverlay,
+  FeedbackCaption,
 } from './GameScreen.styles';
+import {
+  loadGamePreferences,
+  saveGamePreferences,
+} from './gamePreferences';
+import { useGameFeedback } from './useGameFeedback';
+
+const CONTROLS_GUIDE_SEEN_KEY = 'shinobiControlsGuideSeen';
+
+function loadStoredKeyBindings(): KeyBindings {
+  try {
+    const stored = localStorage.getItem('playerKeyBindings');
+    return normalizeKeyBindings(stored ? JSON.parse(stored) : DEFAULT_KEY_BINDINGS);
+  } catch {
+    return normalizeKeyBindings(DEFAULT_KEY_BINDINGS);
+  }
+}
+
+function hasSeenControlsGuide(): boolean {
+  try {
+    return localStorage.getItem(CONTROLS_GUIDE_SEEN_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function loadStoredGameSetup(): Partial<GameConfig> {
+  try {
+    const storedSetup = localStorage.getItem('gameSetup');
+    return storedSetup ? JSON.parse(storedSetup) : {};
+  } catch {
+    return {};
+  }
+}
+
+function formatKeyLabel(key: string): string {
+  return arrowKeySymbols[key] ?? key.toUpperCase();
+}
+
+function formatMovementKeys(bindings: string[]): string {
+  return [
+    bindings[0],
+    bindings[1],
+    bindings[2],
+    bindings[3],
+  ].map(formatKeyLabel).join(' ');
+}
 
 export const GameScreen = () => {
   const { numOfPlayers, numOfRounds, selectedMap } = useParams();
-  const [keyBindings, setKeyBindings] = useState<KeyBindings>(
-    () => normalizeKeyBindings(DEFAULT_KEY_BINDINGS)
-  );
+  const navigate = useNavigate();
+  const [keyBindings, setKeyBindings] = useState<KeyBindings>(loadStoredKeyBindings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isModifyingControls, setIsModifyingControls] = useState(false);
+  const [showControlsGuide, setShowControlsGuide] = useState(() => !hasSeenControlsGuide());
+  const [showHud, setShowHud] = useState(true);
+  const [preferences, setPreferences] = useState(loadGamePreferences);
+  const controlsGuidePausedGame = useRef(false);
 
   const config = useMemo<GameConfig | null>(() => {
     if (!numOfPlayers || !numOfRounds || !selectedMap) return null;
-    const storedSetup = localStorage.getItem('gameSetup');
-    const setup = storedSetup ? JSON.parse(storedSetup) : {};
+    const setup = loadStoredGameSetup();
     const players = parseInt(numOfPlayers, 10);
     return {
       mode: (setup.mode as GameMode | undefined) ?? 'local',
@@ -69,6 +135,12 @@ export const GameScreen = () => {
     restart,
     dismissDialog,
   } = useGameEngine(config, keyBindings);
+  const feedback = useGameFeedback(state, preferences);
+
+  const handlePreferencesChange = useCallback((nextPreferences: typeof preferences) => {
+    setPreferences(nextPreferences);
+    saveGamePreferences(nextPreferences);
+  }, []);
 
   const bossHealth = state?.boss?.health;
   const bossId = state?.boss?.id;
@@ -79,13 +151,6 @@ export const GameScreen = () => {
   const campaignSecretsKey = state?.campaign?.discoveredSecrets.join('|') ?? '';
   const leadCharacterId = state?.players[0]?.characterId;
   const rewardedStages = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    const stored = localStorage.getItem('playerKeyBindings');
-    if (stored) {
-      setKeyBindings(normalizeKeyBindings(JSON.parse(stored)));
-    }
-  }, []);
 
   useEffect(() => {
     if (
@@ -121,15 +186,132 @@ export const GameScreen = () => {
 
   const isPaused = state?.paused ?? false;
   const dialogOpen = state?.phase === 'round_end' || state?.phase === 'game_over';
+  const resultTone = useMemo<ResultTone>(() => {
+    if (!state || state.phase !== 'game_over' || state.config.mode !== 'solo') {
+      return 'neutral';
+    }
+    const bossSealed = state.boss ? state.boss.health <= 0 : false;
+    if (bossSealed || state.campaign?.missionResult === 'success') {
+      return 'victory';
+    }
+    return 'defeat';
+  }, [state]);
+  const roundStartTicksRemaining = state?.roundStartTicksRemaining ?? 0;
+  const countdownLabel = roundStartTicksRemaining > 0
+    ? String(Math.ceil(roundStartTicksRemaining / 1000))
+    : '';
+  const parsedPlayerCount = Number(numOfPlayers ?? 1);
+  const activePlayerCount = Number.isFinite(parsedPlayerCount)
+    ? Math.max(1, parsedPlayerCount)
+    : 1;
+  const controlRows = useMemo(() => (
+    Array.from({ length: activePlayerCount }, (_, index) => {
+      const playerNumber = String(index + 1);
+      const bindings = keyBindings[playerNumber] ?? DEFAULT_KEY_BINDINGS[playerNumber];
+      return [
+        { label: `P${playerNumber} move`, value: formatMovementKeys(bindings) },
+        { label: `P${playerNumber} bomb`, value: formatKeyLabel(bindings[4]) },
+        { label: `P${playerNumber} det`, value: formatKeyLabel(bindings[5]) },
+        { label: `P${playerNumber} ult`, value: formatKeyLabel(bindings[6]) },
+        { label: `P${playerNumber} cover`, value: formatKeyLabel(bindings[7]) },
+      ];
+    }).flat()
+  ), [activePlayerCount, keyBindings]);
 
-  const handleTogglePause = () => {
+  const handleTogglePause = useCallback(() => {
     if (isPaused) resume();
     else pause();
-  };
+  }, [isPaused, pause, resume]);
+
+  const handleOpenSettings = useCallback(() => {
+    setIsSettingsOpen(true);
+    pause();
+  }, [pause]);
+
+  const handleDismissControlsGuide = useCallback(() => {
+    setShowControlsGuide(false);
+    try {
+      localStorage.setItem(CONTROLS_GUIDE_SEEN_KEY, 'true');
+    } catch {
+      // The guide can still close if storage is unavailable.
+    }
+    if (controlsGuidePausedGame.current) {
+      controlsGuidePausedGame.current = false;
+      resume();
+    }
+  }, [resume]);
+
+  const handleShowControlsGuide = useCallback(() => {
+    controlsGuidePausedGame.current = !isPaused;
+    setShowControlsGuide(true);
+    if (!isPaused) pause();
+  }, [isPaused, pause]);
+
+  useEffect(() => {
+    if (
+      showControlsGuide
+      && !isPaused
+      && !dialogOpen
+      && !isSettingsOpen
+      && !isModifyingControls
+    ) {
+      controlsGuidePausedGame.current = true;
+      pause();
+    }
+  }, [
+    dialogOpen,
+    isModifyingControls,
+    isPaused,
+    isSettingsOpen,
+    pause,
+    showControlsGuide,
+  ]);
+
+  const handleQuitGame = useCallback(() => {
+    navigate('/');
+  }, [navigate]);
 
   const handleCloseDialog = () => {
     dismissDialog();
   };
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (dialogOpen) return;
+      event.preventDefault();
+
+      if (showControlsGuide) {
+        handleDismissControlsGuide();
+        return;
+      }
+
+      if (isModifyingControls) {
+        setIsModifyingControls(false);
+        resume();
+        return;
+      }
+
+      if (isSettingsOpen) {
+        setIsSettingsOpen(false);
+        resume();
+        return;
+      }
+
+      handleTogglePause();
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [
+    dialogOpen,
+    handleTogglePause,
+    handleDismissControlsGuide,
+    isModifyingControls,
+    isSettingsOpen,
+    resume,
+    showControlsGuide,
+  ]);
 
   if (!state) {
     return (
@@ -141,12 +323,12 @@ export const GameScreen = () => {
 
   return (
     <GameBackground>
-      <GameHUD state={state} />
+      {showHud && <GameHUD state={state} scale={preferences.hudScale} />}
       <TopControls>
         <Tooltip title={isPaused ? 'Resume' : 'Pause'}>
           <ControlButton
             aria-label={isPaused ? 'resume game' : 'pause game'}
-            onClick={handleTogglePause}
+            onClick={showControlsGuide ? handleDismissControlsGuide : handleTogglePause}
           >
             {isPaused ? <PlayArrowIcon /> : <PauseIcon />}
           </ControlButton>
@@ -159,30 +341,128 @@ export const GameScreen = () => {
         <Tooltip title="Settings">
           <ControlButton
             aria-label="open settings"
-            onClick={() => {
-              setIsSettingsOpen(true);
-              pause();
-            }}
+            onClick={handleOpenSettings}
           >
             <SettingsIcon />
           </ControlButton>
         </Tooltip>
+        <Tooltip title="Controls">
+          <ControlButton
+            aria-label="show controls"
+            onClick={handleShowControlsGuide}
+          >
+            <KeyboardIcon />
+          </ControlButton>
+        </Tooltip>
+        <Tooltip title={showHud ? 'Hide HUD' : 'Show HUD'}>
+          <ControlButton
+            aria-label={showHud ? 'hide HUD' : 'show HUD'}
+            onClick={() => setShowHud((visible) => !visible)}
+          >
+            {showHud ? <VisibilityOffIcon /> : <VisibilityIcon />}
+          </ControlButton>
+        </Tooltip>
       </TopControls>
       <GameSceneContainer>
-        <GameScene3D state={state} />
+        <GameScene3D
+          state={state}
+          preferences={preferences}
+          impact={feedback.impact}
+        />
       </GameSceneContainer>
-      {isPaused && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
-        <PauseOverlay>Paused</PauseOverlay>
+      {feedback.caption && (
+        <FeedbackCaption key={feedback.eventId} aria-live="polite" aria-atomic="true">
+          {feedback.caption}
+        </FeedbackCaption>
       )}
-      <GameHint>
-        Move, bait boss abilities, then punish with bombs, detonation tags, cover, or ultimates.
-      </GameHint>
+      {roundStartTicksRemaining > 0 && !isPaused && !dialogOpen && (
+        <CountdownOverlay aria-label="round countdown">
+          <strong>{countdownLabel}</strong>
+        </CountdownOverlay>
+      )}
+      {showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
+        <ControlsGuide aria-label="controls guide">
+          <ControlsGuideHeader>
+            <strong>Controls</strong>
+            <ControlsDismissButton
+              aria-label="hide controls guide"
+              onClick={handleDismissControlsGuide}
+            >
+              <CloseIcon fontSize="small" />
+            </ControlsDismissButton>
+          </ControlsGuideHeader>
+          <ControlRows>
+            {controlRows.map((row) => (
+              <ControlRow key={`${row.label}-${row.value}`}>
+                <span>{row.label}</span>
+                <kbd>{row.value}</kbd>
+              </ControlRow>
+            ))}
+          </ControlRows>
+        </ControlsGuide>
+      )}
+      {isPaused && !showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
+        <PauseOverlay
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pause-menu-title"
+        >
+          <PauseMenuCard>
+            <PauseMenuTitle id="pause-menu-title">
+              <strong>Paused</strong>
+              <span>ESC resumes. Review controls, restart, adjust settings, or leave the match.</span>
+            </PauseMenuTitle>
+            <PauseMenuActions>
+              <PauseMenuButton
+                autoFocus
+                variant="contained"
+                startIcon={<PlayArrowIcon />}
+                onClick={resume}
+              >
+                Resume
+              </PauseMenuButton>
+              <PauseMenuButton
+                variant="outlined"
+                startIcon={<RestartAltIcon />}
+                onClick={restart}
+              >
+                Restart
+              </PauseMenuButton>
+              <PauseMenuButton
+                variant="outlined"
+                startIcon={<SettingsIcon />}
+                onClick={handleOpenSettings}
+              >
+                Settings
+              </PauseMenuButton>
+              <PauseMenuButton
+                variant="outlined"
+                color="warning"
+                startIcon={<ExitToAppIcon />}
+                onClick={handleQuitGame}
+              >
+                Quit Game
+              </PauseMenuButton>
+            </PauseMenuActions>
+            <ControlRows>
+              {controlRows.map((row) => (
+                <ControlRow key={`paused-${row.label}-${row.value}`}>
+                  <span>{row.label}</span>
+                  <kbd>{row.value}</kbd>
+                </ControlRow>
+              ))}
+            </ControlRows>
+          </PauseMenuCard>
+        </PauseOverlay>
+      )}
       <RoundResultDialog
         open={dialogOpen}
         onClose={handleCloseDialog}
         onRestart={restart}
         resultMessage={state.resultMessage}
         isGameOver={state.phase === 'game_over'}
+        tone={resultTone}
+        state={state}
       />
       <SettingsScreen
         open={isSettingsOpen}
@@ -196,9 +476,12 @@ export const GameScreen = () => {
           resume();
         }}
         onModifyControls={() => {
+          setIsSettingsOpen(false);
           setIsModifyingControls(true);
           pause();
         }}
+        preferences={preferences}
+        onPreferencesChange={handlePreferencesChange}
       />
       <ModifyControlsDialog
         isOpen={isModifyingControls}

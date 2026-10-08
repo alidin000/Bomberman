@@ -6,10 +6,14 @@ import { getPlayerCell, positionOverlapsCell } from './grid';
 
 const BOSS_ATTACK_MS = 3100;
 const BOSS_MOVE_MS = 950;
-const HAZARD_WARNING_MS = 1500;
 const HAZARD_TOTAL_MS = 2400;
+const HAZARD_WARNING_MS = Math.round(HAZARD_TOTAL_MS * 0.7);
 
 let hazardIdCounter = 0;
+
+export function resetBossHazardIdCounter(): void {
+  hazardIdCounter = 0;
+}
 
 function createHazard(
   kind: BossHazard['kind'],
@@ -242,15 +246,19 @@ function spawnBossHazards(state: GameEngineState): {
   };
 }
 
-function hazardIsActive(hazard: BossHazard): boolean {
-  return hazard.ticksRemaining <= hazard.warningTicks * 0.45;
+export function hazardIsActive(hazard: BossHazard): boolean {
+  const activeWindowMs = Math.max(300, Math.round(hazard.warningTicks * (3 / 7)));
+  return hazard.ticksRemaining <= activeWindowMs;
 }
 
 function damagePlayersInHazards(
   players: PlayerState[],
   hazards: BossHazard[],
-  timedPowerUps: GameEngineState['timedPowerUps']
+  timedPowerUps: GameEngineState['timedPowerUps'],
+  roundStartTicksRemaining: number
 ): PlayerState[] {
+  if (roundStartTicksRemaining > 0) return players;
+
   return players.map((player) => {
     if (!player.alive) return player;
     const invincible = timedPowerUps[player.id]?.some(
@@ -289,21 +297,25 @@ function rechargeUltimates(state: GameEngineState, deltaMs: number): GameEngineS
 
 export function tickBossEncounter(state: GameEngineState, deltaMs: number): GameEngineState {
   let next = rechargeUltimates(state, deltaMs);
+  const hazards = next.hazards
+    .map((hazard) => ({ ...hazard, ticksRemaining: hazard.ticksRemaining - deltaMs }))
+    .filter((hazard) => hazard.ticksRemaining > 0);
+  next = {
+    ...next,
+    hazards,
+    players: damagePlayersInHazards(
+      next.players,
+      hazards,
+      next.timedPowerUps,
+      next.roundStartTicksRemaining
+    ),
+  };
   if (next.config.mode !== 'solo' || !next.boss || next.boss.health <= 0) {
-    return {
-      ...next,
-      hazards: next.hazards
-        .map((hazard) => ({ ...hazard, ticksRemaining: hazard.ticksRemaining - deltaMs }))
-        .filter((hazard) => hazard.ticksRemaining > 0),
-    };
+    return next;
   }
 
   next = moveBoss(next, deltaMs);
   if (!next.boss) return next;
-
-  const hazards = next.hazards
-    .map((hazard) => ({ ...hazard, ticksRemaining: hazard.ticksRemaining - deltaMs }))
-    .filter((hazard) => hazard.ticksRemaining > 0);
 
   let attackCooldown = next.boss.attackCooldown - deltaMs;
   let ability = next.boss.currentAbility;
@@ -324,6 +336,6 @@ export function tickBossEncounter(state: GameEngineState, deltaMs: number): Game
       currentAbility: ability,
     },
     hazards: allHazards,
-    players: damagePlayersInHazards(next.players, allHazards, next.timedPowerUps),
+    players: next.players,
   };
 }

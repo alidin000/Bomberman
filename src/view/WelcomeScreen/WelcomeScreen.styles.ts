@@ -1,93 +1,213 @@
 import styled from '@emotion/styled';
 import { Box, Paper, Typography } from '@mui/material';
 
+const angularPanel = 'none';
+const bannerCut = 'polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)';
+const chipCut = 'none';
+
 export const WelcomeContainer = styled(Box)({
-  minHeight: '100vh',
-  background: 'linear-gradient(135deg, #17120e 0%, #2a2118 42%, #12151a 100%)',
+  position: 'relative',
+  minHeight: '100dvh',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
-  padding: '24px',
+  overflow: 'hidden',
+  padding: '28px',
+  color: '#211d1a',
+  backgroundColor: '#d8c99f',
+  backgroundImage: 'radial-gradient(rgba(33,29,26,0.12) 0.8px, transparent 0.8px)',
+  backgroundSize: '6px 6px',
+  '&::before': {
+    content: "''",
+    position: 'absolute',
+    inset: 0,
+    pointerEvents: 'none',
+    opacity: 1,
+    background: 'linear-gradient(105deg, transparent 0 62%, rgba(189,63,50,0.1) 62% 62.8%, transparent 62.8%)',
+  },
+  '&::after': {
+    content: "''",
+    position: 'absolute',
+    inset: '14px',
+    pointerEvents: 'none',
+    border: '2px solid rgba(33,29,26,0.72)',
+    clipPath: angularPanel,
+  },
+  '& .MuiButton-root': {
+    minHeight: 46,
+    borderRadius: 2,
+    clipPath: chipCut,
+    fontWeight: 900,
+    textTransform: 'uppercase',
+    letterSpacing: 0,
+  },
+  '& .MuiButton-contained': {
+    color: '#fff8e7',
+    background: '#bd3f32',
+    border: '2px solid #211d1a',
+    boxShadow: '4px 4px 0 #211d1a',
+  },
+  '& .MuiButton-contained:hover': {
+    background: '#d45d48',
+    transform: 'translate(-1px, -1px)',
+  },
+  '& .MuiButton-outlined': {
+    color: '#211d1a',
+    borderColor: '#211d1a',
+    background: '#efe3c4',
+    boxShadow: '3px 3px 0 #211d1a',
+  },
+  '& .MuiButton-outlined:hover': {
+    borderColor: '#211d1a',
+    background: '#fff8e7',
+  },
+  '@media (max-width: 640px)': {
+    justifyContent: 'flex-start',
+    padding: '18px 12px',
+  },
 });
 
 export const HeroSection = styled(Box)({
-  width: 'min(1320px, 94vw)',
+  position: 'relative',
+  zIndex: 1,
+  width: 'min(1380px, 96vw)',
   display: 'grid',
-  gridTemplateColumns: 'minmax(280px, 0.55fr) minmax(560px, 1.45fr)',
-  gap: 22,
+  gridTemplateColumns: 'minmax(280px, 0.48fr) minmax(560px, 1.52fr)',
+  gap: 18,
   alignItems: 'center',
-  marginBottom: 24,
-  '@media (max-width: 900px)': {
+  marginBottom: 18,
+  '@media (max-width: 980px)': {
     gridTemplateColumns: '1fr',
   },
 });
 
 export const HeroCopy = styled(Box)({
-  color: '#f8fafc',
-  padding: '18px 0',
+  position: 'relative',
+  minHeight: 420,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+  padding: '22px 24px 22px 28px',
+  color: '#211d1a',
+  isolation: 'isolate',
+  '&::before': {
+    content: "''",
+    position: 'absolute',
+    inset: 0,
+    zIndex: -1,
+    clipPath: angularPanel,
+    background: '#efe3c4',
+    border: '2px solid #211d1a',
+    boxShadow: '6px 6px 0 #356f6b',
+  },
+  '&::after': {
+    content: "''",
+    position: 'absolute',
+    left: 0,
+    top: 26,
+    bottom: 26,
+    width: 6,
+    background: '#bd3f32',
+    boxShadow: 'none',
+  },
+  '& h1': {
+    margin: 0,
+    maxWidth: 540,
+    color: '#211d1a',
+    fontSize: '4.8rem',
+    lineHeight: 0.88,
+    letterSpacing: 0,
+    textTransform: 'uppercase',
+    textShadow: '3px 3px 0 rgba(189,63,50,0.22)',
+    overflowWrap: 'anywhere',
+  },
+  '@media (max-width: 1200px) and (min-width: 981px)': {
+    '& h1': {
+      fontSize: '3.2rem',
+      lineHeight: 0.94,
+    },
+  },
+  '@media (max-width: 980px)': {
+    minHeight: 'auto',
+  },
+  '@media (max-width: 560px)': {
+    padding: '18px 16px 18px 20px',
+    '& h1': {
+      fontSize: '2.35rem',
+      lineHeight: 0.94,
+    },
+  },
 });
 
 export const HeroBadge = styled(Box)({
+  width: 'fit-content',
   display: 'inline-flex',
   alignItems: 'center',
   gap: 8,
-  padding: '7px 12px',
-  marginBottom: 16,
-  borderRadius: 6,
-  color: '#ffe6b0',
-  background: 'linear-gradient(90deg, rgba(15, 15, 18, 0.98), rgba(57, 35, 16, 0.92))',
-  border: '1px solid rgba(245, 158, 11, 0.5)',
+  marginBottom: 18,
+  padding: '8px 16px 8px 18px',
+  clipPath: bannerCut,
+  color: '#fff8e7',
+  background: '#356f6b',
+  border: '2px solid #211d1a',
   fontSize: '0.78rem',
-  fontWeight: 800,
-  letterSpacing: '0.08em',
+  fontWeight: 900,
+  letterSpacing: 0,
   textTransform: 'uppercase',
-  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.14)',
+  boxShadow: '3px 3px 0 #211d1a',
 });
 
 export const HeroSubtitle = styled(Typography)({
   maxWidth: 520,
-  color: 'rgba(248, 250, 252, 0.78)',
+  marginTop: 16,
+  color: '#514a42',
+  fontWeight: 800,
+  lineHeight: 1.36,
 });
 
 export const BoardFrame = styled(Box)({
   position: 'relative',
   padding: 8,
-  borderRadius: 8,
-  background: 'linear-gradient(145deg, rgba(16, 17, 20, 0.98), rgba(40, 33, 25, 0.98))',
-  border: '1px solid rgba(255,255,255,0.18)',
-  boxShadow: '0 26px 80px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.1)',
+  clipPath: angularPanel,
+  background: '#356f6b',
+  border: '2px solid #211d1a',
+  boxShadow: '6px 6px 0 #211d1a',
 });
 
 export const BoardTitleStrip = styled(Box)({
   position: 'absolute',
-  top: -16,
+  top: -1,
   left: '50%',
-  transform: 'translateX(-50%) rotate(-1deg)',
+  transform: 'translateX(-50%)',
   zIndex: 2,
-  width: 'min(420px, 68%)',
-  padding: '7px 18px',
-  color: '#fff7ed',
-  background: 'linear-gradient(90deg, transparent 0%, #15110d 12%, #17120f 88%, transparent 100%)',
+  width: 'min(440px, 72%)',
+  padding: '8px 20px',
+  clipPath: bannerCut,
+  color: '#fff8e7',
+  background: '#bd3f32',
   textAlign: 'center',
   textTransform: 'uppercase',
   fontWeight: 900,
-  letterSpacing: '0.08em',
-  textShadow: '0 2px 0 #000',
+  letterSpacing: 0,
+  boxShadow: '3px 3px 0 #211d1a',
 });
 
 export const BoardSurface = styled(Box)({
   display: 'grid',
-  gridTemplateColumns: '1.25fr 0.78fr',
+  gridTemplateColumns: '1.26fr 0.74fr',
   gap: 10,
-  padding: 12,
-  maxHeight: 620,
+  maxHeight: 650,
   overflowY: 'auto',
-  borderRadius: 6,
-  border: '1px solid rgba(0,0,0,0.72)',
-  background: 'linear-gradient(180deg, rgba(37,32,26,0.96), rgba(13,14,16,0.98))',
-  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)',
-  '@media (max-width: 900px)': {
+  padding: '34px 12px 12px',
+  clipPath: angularPanel,
+  border: '2px solid #211d1a',
+  backgroundColor: '#fff8e7',
+  backgroundImage: 'radial-gradient(rgba(33,29,26,0.09) 0.7px, transparent 0.7px)',
+  backgroundSize: '7px 7px',
+  boxShadow: 'none',
+  scrollbarColor: '#bd3f32 #efe3c4',
+  '@media (max-width: 980px)': {
     gridTemplateColumns: '1fr',
     maxHeight: 'none',
   },
@@ -96,32 +216,41 @@ export const BoardSurface = styled(Box)({
 export const BoardSection = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'wide',
 })<{ wide?: boolean }>(({ wide }) => ({
+  position: 'relative',
   gridColumn: wide ? '1 / -1' : 'auto',
   padding: 9,
-  borderRadius: 6,
-  background: 'linear-gradient(180deg, rgba(255,255,255,0.07), rgba(0,0,0,0.24))',
-  border: '1px solid rgba(255,255,255,0.11)',
+  clipPath: angularPanel,
+  background: '#efe3c4',
+  border: '1px solid rgba(33,29,26,0.55)',
+  '&::before': {
+    content: "''",
+    position: 'absolute',
+    inset: '0 auto auto 0',
+    width: 42,
+    height: 4,
+    background: '#356f6b',
+  },
 }));
 
 export const BoardSectionTitle = styled(Box)({
   width: 'fit-content',
   margin: '0 auto 9px',
-  padding: '4px 24px 5px',
-  color: '#fff7ed',
-  background: 'linear-gradient(90deg, transparent, #111 15%, #17120f 85%, transparent)',
+  padding: '5px 26px 6px',
+  clipPath: bannerCut,
+  color: '#fff8e7',
+  background: '#356f6b',
   textAlign: 'center',
   textTransform: 'uppercase',
-  fontSize: '0.78rem',
+  fontSize: '0.76rem',
   fontWeight: 900,
-  letterSpacing: '0.08em',
-  textShadow: '0 2px 0 #000',
+  letterSpacing: 0,
 });
 
 export const CharacterGrid = styled(Box)({
   display: 'grid',
   gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
   gap: 8,
-  '@media (max-width: 1100px)': {
+  '@media (max-width: 1180px)': {
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
   },
   '@media (max-width: 520px)': {
@@ -132,25 +261,29 @@ export const CharacterGrid = styled(Box)({
 export const CharacterCard = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'accent',
 })<{ accent: string }>(({ accent }) => ({
-  minHeight: 202,
+  minHeight: 208,
   padding: 7,
-  borderRadius: 6,
-  border: `1px solid ${accent}99`,
-  background: `linear-gradient(180deg, ${accent}24, rgba(4,5,7,0.94))`,
-  boxShadow: '0 10px 22px rgba(0,0,0,0.34)',
+  border: '2px solid var(--anime-ink)',
+  background: `color-mix(in srgb, ${accent} 12%, var(--anime-paper-light))`,
+  boxShadow: '3px 3px 0 var(--anime-ink)',
+  transition: 'transform 0.16s ease, filter 0.16s ease',
+  '&:hover': {
+    transform: 'translateY(-3px)',
+    boxShadow: '5px 5px 0 var(--anime-ink)',
+  },
 }));
 
 export const CharacterArt = styled(Box, {
-  shouldForwardProp: (prop) => prop !== 'image' && prop !== 'position',
-})<{ image: string; position: string }>(({ image, position }) => ({
-  height: 92,
+  shouldForwardProp: (prop) => prop !== 'image' && prop !== 'imagePosition',
+})<{ image: string; imagePosition: string }>(({ image, imagePosition }) => ({
+  height: 96,
   marginBottom: 7,
-  borderRadius: 5,
+  borderBottom: '2px solid var(--anime-ink)',
   backgroundImage: `url(${image})`,
   backgroundSize: '600% 280%',
-  backgroundPosition: position,
+  backgroundPosition: imagePosition,
   backgroundRepeat: 'no-repeat',
-  border: '1px solid rgba(255,255,255,0.12)',
+  filter: 'saturate(0.78) contrast(1.08)',
 }));
 
 export const CharacterName = styled(Box, {
@@ -161,7 +294,8 @@ export const CharacterName = styled(Box, {
   textTransform: 'uppercase',
   fontWeight: 900,
   lineHeight: 1.05,
-  textShadow: '0 2px 0 #000',
+  letterSpacing: 0,
+  textShadow: 'none',
 }));
 
 export const AbilityStack = styled(Box)({
@@ -173,11 +307,11 @@ export const AbilityStack = styled(Box)({
 export const AbilityTag = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'color',
 })<{ color: string }>(({ color }) => ({
-  padding: '5px 6px',
-  borderRadius: 5,
-  color: '#f8fafc',
-  background: `linear-gradient(90deg, ${color}30, rgba(0,0,0,0.28))`,
-  border: '1px solid rgba(255,255,255,0.09)',
+  padding: '5px 7px',
+  clipPath: chipCut,
+  color: 'var(--anime-ink)',
+  background: `color-mix(in srgb, ${color} 15%, var(--anime-paper-light))`,
+  borderLeft: `4px solid ${color}`,
   fontSize: '0.67rem',
   fontWeight: 800,
   lineHeight: 1.12,
@@ -185,7 +319,7 @@ export const AbilityTag = styled(Box, {
 
 export const CharacterNote = styled(Box)({
   marginTop: 7,
-  color: 'rgba(248,250,252,0.68)',
+  color: 'rgba(33,29,26,0.7)',
   fontSize: '0.65rem',
   fontWeight: 700,
   lineHeight: 1.22,
@@ -204,17 +338,17 @@ export const BossCard = styled(Box, {
   gridTemplateColumns: '34px 1fr',
   gap: 8,
   alignItems: 'center',
-  minHeight: 58,
+  minHeight: 60,
   padding: 7,
-  borderRadius: 6,
-  color: '#f8fafc',
-  background: `linear-gradient(90deg, ${color}38, rgba(0,0,0,0.34))`,
-  border: `1px solid ${color}88`,
+  color: 'var(--anime-ink)',
+  background: `color-mix(in srgb, ${color} 13%, var(--anime-paper-light))`,
+  border: '2px solid var(--anime-ink)',
   '& strong': {
     display: 'block',
-    color: '#fff7ed',
+    color: 'var(--anime-ink)',
     textTransform: 'uppercase',
     fontSize: '0.76rem',
+    letterSpacing: 0,
   },
 }));
 
@@ -225,15 +359,15 @@ export const BossEmblem = styled(Box, {
   height: 34,
   display: 'grid',
   placeItems: 'center',
-  borderRadius: '50%',
-  color: '#111827',
-  background: `radial-gradient(circle at 35% 25%, #fff7, ${color} 58%, #050507 100%)`,
-  border: '1px solid rgba(255,255,255,0.24)',
+  clipPath: 'polygon(50% 0, 96% 24%, 96% 76%, 50% 100%, 4% 76%, 4% 24%)',
+  color: 'var(--anime-paper-light)',
+  background: color,
+  border: '2px solid var(--anime-ink)',
   fontWeight: 900,
 }));
 
 export const BossMeta = styled(Box)({
-  color: 'rgba(248,250,252,0.68)',
+  color: 'rgba(33,29,26,0.68)',
   fontSize: '0.66rem',
   fontWeight: 700,
   lineHeight: 1.15,
@@ -243,7 +377,7 @@ export const StageGrid = styled(Box)({
   display: 'grid',
   gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
   gap: 8,
-  '@media (max-width: 1100px)': {
+  '@media (max-width: 1180px)': {
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
   },
   '@media (max-width: 520px)': {
@@ -255,29 +389,32 @@ export const StageCard = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'color',
 })<{ color: string }>(({ color }) => ({
   overflow: 'hidden',
-  borderRadius: 6,
-  border: `1px solid ${color}99`,
-  background: 'rgba(0,0,0,0.34)',
+  border: '2px solid var(--anime-ink)',
+  background: 'var(--anime-paper-light)',
+  boxShadow: `inset 0 -5px 0 ${color}`,
 }));
 
 export const StageArt = styled(Box, {
-  shouldForwardProp: (prop) => prop !== 'image' && prop !== 'position',
-})<{ image: string; position: string }>(({ image, position }) => ({
-  height: 66,
+  shouldForwardProp: (prop) => prop !== 'image' && prop !== 'imagePosition',
+})<{ image: string; imagePosition: string }>(({ image, imagePosition }) => ({
+  height: 70,
   backgroundImage: `url(${image})`,
   backgroundSize: '300% 200%',
-  backgroundPosition: position,
+  backgroundPosition: imagePosition,
   backgroundRepeat: 'no-repeat',
+  filter: 'saturate(0.72) contrast(1.08)',
+  borderBottom: '2px solid var(--anime-ink)',
 }));
 
 export const StageLabel = styled(Box)({
   padding: '6px 4px',
-  color: '#f8fafc',
+  color: 'var(--anime-ink)',
   textAlign: 'center',
   textTransform: 'uppercase',
   fontSize: '0.68rem',
   fontWeight: 900,
   lineHeight: 1.1,
+  letterSpacing: 0,
 });
 
 export const PowerGrid = styled(Box)({
@@ -293,10 +430,10 @@ export const PowerTile = styled(Box, {
   display: 'flex',
   alignItems: 'center',
   padding: '8px 10px',
-  borderRadius: 6,
-  color: '#f8fafc',
-  background: `linear-gradient(90deg, ${color}33, rgba(0,0,0,0.32))`,
-  border: `1px solid ${color}88`,
+  color: 'var(--anime-ink)',
+  background: `color-mix(in srgb, ${color} 12%, var(--anime-paper-light))`,
+  border: '2px solid var(--anime-ink)',
+  borderLeft: `7px solid ${color}`,
   fontSize: '0.76rem',
   fontWeight: 900,
   lineHeight: 1.1,
@@ -315,12 +452,11 @@ export const MonsterTile = styled(Box, {
   gridTemplateColumns: '38px 1fr',
   gap: 8,
   alignItems: 'center',
-  minHeight: 54,
+  minHeight: 56,
   padding: 7,
-  borderRadius: 6,
-  color: '#f8fafc',
-  background: `linear-gradient(90deg, ${color}34, rgba(0,0,0,0.32))`,
-  border: `1px solid ${color}88`,
+  color: 'var(--anime-ink)',
+  background: `color-mix(in srgb, ${color} 12%, var(--anime-paper-light))`,
+  border: '2px solid var(--anime-ink)',
   fontSize: '0.72rem',
   fontWeight: 900,
   lineHeight: 1.1,
@@ -332,28 +468,30 @@ export const MonsterIcon = styled(Box, {
   position: 'relative',
   width: 36,
   height: 34,
-  borderRadius: beast === 'flame' ? '50% 50% 46% 46%' : '44% 44% 50% 50%',
-  background: `radial-gradient(circle at 35% 25%, #fff7, ${color} 52%, #050507 100%)`,
-  boxShadow: `0 0 18px ${color}66`,
+  clipPath: beast === 'flame'
+    ? 'polygon(50% 0, 84% 26%, 100% 72%, 68% 100%, 30% 100%, 0 72%, 16% 28%)'
+    : 'polygon(50% 0, 92% 24%, 92% 76%, 50% 100%, 8% 76%, 8% 24%)',
+  background: color,
+  border: '2px solid var(--anime-ink)',
   '&::before': {
     content: "''",
     position: 'absolute',
-    left: beast === 'horn' ? -5 : 7,
-    top: beast === 'horn' ? -6 : -3,
-    width: beast === 'horn' ? 13 : 8,
-    height: beast === 'horn' ? 16 : 18,
-    borderRadius: beast === 'horn' ? '50% 50% 0 0' : '50%',
+    left: beast === 'horn' ? -3 : 8,
+    top: beast === 'horn' ? -2 : -3,
+    width: beast === 'horn' ? 14 : 8,
+    height: beast === 'horn' ? 14 : 18,
+    clipPath: 'polygon(50% 0, 100% 100%, 0 100%)',
     background: beast === 'sand' ? '#d6a45d' : '#f8fafc',
     transform: beast === 'horn' ? 'rotate(-24deg)' : 'rotate(18deg)',
   },
   '&::after': {
     content: "''",
     position: 'absolute',
-    right: beast === 'horn' ? -5 : 5,
-    top: beast === 'horn' ? -6 : 5,
-    width: beast === 'horn' ? 13 : 18,
-    height: beast === 'horn' ? 16 : 7,
-    borderRadius: '50%',
+    right: beast === 'horn' ? -3 : 5,
+    top: beast === 'horn' ? -2 : 8,
+    width: beast === 'horn' ? 14 : 18,
+    height: beast === 'horn' ? 14 : 7,
+    clipPath: beast === 'horn' ? 'polygon(50% 0, 100% 100%, 0 100%)' : 'polygon(0 0, 100% 0, 72% 100%, 18% 100%)',
     background: beast === 'flame' ? '#bfdbfe' : color,
     transform: beast === 'horn' ? 'rotate(24deg)' : 'rotate(-25deg)',
   },
@@ -364,25 +502,28 @@ export const ShowcaseArt = styled.img({
   maxHeight: 560,
   objectFit: 'cover',
   objectPosition: 'center',
-  borderRadius: 6,
-  border: '1px solid rgba(0,0,0,0.72)',
-  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)',
+  borderRadius: 2,
+  border: '3px solid var(--anime-ink)',
+  boxShadow: '6px 6px 0 var(--anime-teal)',
+  filter: 'saturate(0.75) contrast(1.06)',
   display: 'block',
 });
 
 export const ActionPanel = styled(Box)({
+  position: 'relative',
+  zIndex: 1,
   display: 'flex',
   justifyContent: 'center',
-  width: 'min(1320px, 94vw)',
+  width: 'min(1380px, 96vw)',
 });
 
 export const ActionCard = styled(Paper)({
   width: '100%',
-  padding: 18,
-  borderRadius: 8,
-  background: 'linear-gradient(145deg, rgba(18,18,20,0.96), rgba(43,31,22,0.95))',
-  border: '1px solid rgba(245, 158, 11, 0.32)',
-  boxShadow: '0 18px 52px rgba(0,0,0,0.42)',
+  padding: 14,
+  borderRadius: 2,
+  background: 'var(--anime-paper-light)',
+  border: '2px solid var(--anime-ink)',
+  boxShadow: '6px 6px 0 var(--anime-vermilion)',
 });
 
 export const ActionButtons = styled(Box)({
@@ -393,7 +534,7 @@ export const ActionButtons = styled(Box)({
 });
 
 export const PanelText = styled(Typography)({
-  color: 'rgba(248, 250, 252, 0.68)',
+  color: 'rgba(33,29,26,0.72)',
   marginBottom: 12,
 });
 
@@ -409,23 +550,25 @@ export const FeatureGrid = styled(Box)({
 export const FeatureCard = styled(Box)({
   padding: 14,
   minHeight: 76,
-  borderRadius: 6,
-  background: 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(0,0,0,0.26))',
-  border: '1px solid rgba(255, 255, 255, 0.12)',
-  color: '#f8fafc',
+  borderRadius: 2,
+  background: 'var(--anime-paper)',
+  border: '2px solid var(--anime-ink)',
+  color: 'var(--anime-ink)',
   fontSize: '0.88rem',
   '& strong': {
     display: 'block',
     marginBottom: 4,
-    color: '#ffd166',
+    color: 'var(--anime-vermilion)',
     textTransform: 'uppercase',
-    letterSpacing: '0.04em',
+    letterSpacing: 0,
   },
 });
 
 /** Shared export used by the game screen background wrapper. */
 export const StyledBackground = styled(Box)({
-  minHeight: '100vh',
-  background: 'linear-gradient(180deg, #14110f 0%, #261a14 48%, #11151b 100%)',
+  minHeight: '100dvh',
   position: 'relative',
+  backgroundColor: 'var(--anime-paper)',
+  backgroundImage: 'radial-gradient(rgba(33,29,26,0.12) 0.7px, transparent 0.7px)',
+  backgroundSize: '5px 5px',
 });

@@ -1,10 +1,13 @@
 import { Player } from '../model/player';
+import { GamePreferences } from '../view/GameScreen/gamePreferences';
 
 export interface SettingsScreenProps {
   open: boolean;
   onClose: () => void;
   onRestart: () => void;
   onModifyControls?: () => void;
+  preferences: GamePreferences;
+  onPreferencesChange: (preferences: GamePreferences) => void;
 }
 
 export type PlayerStatusProps = {
@@ -16,8 +19,9 @@ export interface KeyBindings {
   [playerNumber: string]: string[];
 }
 
+export const MOVEMENT_BINDING_LABELS = ['Up', 'Left', 'Down', 'Right'] as const;
 export const ACTION_BINDING_LABELS = ['Bomb', 'Detonate', 'Ultimate', 'Cover'] as const;
-export const KEY_BINDING_COUNT = 4 + ACTION_BINDING_LABELS.length;
+export const KEY_BINDING_COUNT = MOVEMENT_BINDING_LABELS.length + ACTION_BINDING_LABELS.length;
 
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   1: ['w', 'a', 's', 'd', '2', '1', '3', '4'],
@@ -39,7 +43,8 @@ export const arrowKeySymbols: { [key: string]: string } = {
   ArrowUp: '↑',
   ArrowDown: '↓',
   ArrowLeft: '←',
-  ArrowRight: '→'
+  ArrowRight: '→',
+  ' ': 'Space'
 };
 
 export interface Point {

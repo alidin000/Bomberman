@@ -4,7 +4,7 @@ import {
   Bomb, GameMap, isBomb, isObstacle, randomPowerUpGenerator,
 } from '../model/gameItem';
 import {
-  BombState, DestroyedBox, ExplosionCell, GameEngineState, MonsterState, PlayerState,
+  BombState, DestroyedBox, ExplosionCell, GameEngineState, PlayerState,
 } from './types';
 import {
   BOMB_FUSE_MS, BOX_DESTROY_MS, EXPLOSION_MS,
@@ -146,7 +146,7 @@ function getBasicBombPlacements(
   return bombs;
 }
 
-function getExplosionPositions(bomb: BombState, map: GameMap): { x: number; y: number }[] {
+export function getExplosionPositions(bomb: BombState, map: GameMap): { x: number; y: number }[] {
   const positions: { x: number; y: number }[] = [{ x: bomb.x, y: bomb.y }];
   const { x, y, range } = bomb;
   const h = map.length;
@@ -435,25 +435,6 @@ function applyBossBombEffect(
   };
 }
 
-function applyMonsterBombEffect(monster: MonsterState, bomb: BombState): MonsterState | null {
-  if (bomb.kind === 'sandCoffin') {
-    return { ...monster, moveCooldown: monster.moveCooldown + 1800 };
-  }
-  if (bomb.kind === 'sandTsunami') {
-    return { ...monster, moveCooldown: monster.moveCooldown + 2600 };
-  }
-  if (bomb.kind === 'crowClone') {
-    return { ...monster, moveCooldown: monster.moveCooldown + 1500 };
-  }
-  if (bomb.kind === 'tsukuyomi') {
-    return { ...monster, moveCooldown: monster.moveCooldown + 3000 };
-  }
-  if (bomb.kind === 'thunderMark') {
-    return { ...monster, moveCooldown: monster.moveCooldown + 900 };
-  }
-  return null;
-}
-
 export function detonatePlayerBombs(state: GameEngineState, playerId: string): GameEngineState {
   const playerBombs = state.bombs.filter(
     (bomb) => bomb.ownerId === playerId && bomb.manualDetonation
@@ -469,7 +450,11 @@ export function detonatePlayerBombs(state: GameEngineState, playerId: string): G
   return { ...next, players };
 }
 
-export function explodeBombs(state: GameEngineState, bombsToExplode: BombState[]): GameEngineState {
+export function explodeBombs(
+  state: GameEngineState,
+  bombsToExplode: BombState[],
+  explosionRaycastMap: GameMap = state.map,
+): GameEngineState {
   if (bombsToExplode.length === 0) return state;
 
   let map = state.map.map((row) => [...row]);
@@ -487,6 +472,8 @@ export function explodeBombs(state: GameEngineState, bombsToExplode: BombState[]
   const chainBombs: BombState[] = [];
   const explosionKeys = new Set(explosions.map((e) => getCellKey(e.x, e.y)));
   const ownerBombCounts = new Map<string, number>();
+  const inRoundStartSafety = state.roundStartTicksRemaining > 0;
+  const raycastMap = explosionRaycastMap.map((row) => [...row]);
 
   bombsToExplode.forEach((bomb) => {
     ownerBombCounts.set(
@@ -509,8 +496,9 @@ export function explodeBombs(state: GameEngineState, bombsToExplode: BombState[]
   bombsToExplode.forEach((bomb) => {
     map[bomb.y][bomb.x] = 'Empty';
     const owner = players.find((player) => player.id === bomb.ownerId);
+    let bossWasHit = false;
 
-    const positions = dedupePositions(getExplosionPositions(bomb, map));
+    const positions = dedupePositions(getExplosionPositions(bomb, raycastMap));
     positions.forEach(({ x, y }) => {
       const key = getCellKey(x, y);
       if (!explosionKeys.has(key)) {
@@ -549,7 +537,7 @@ export function explodeBombs(state: GameEngineState, bombsToExplode: BombState[]
       }
 
       players.forEach((p, index) => {
-        if (p.alive && positionOverlapsCell(p, x, y)) {
+        if (!inRoundStartSafety && p.alive && positionOverlapsCell(p, x, y)) {
           const invincible = isPowerUpActive(state, p.id, 'Invincibility');
           if (!invincible) {
             players[index] = applyCharacterSurvival(
@@ -563,18 +551,16 @@ export function explodeBombs(state: GameEngineState, bombsToExplode: BombState[]
       for (let index = monsters.length - 1; index >= 0; index -= 1) {
         const monster = monsters[index];
         if (monster.x === x && monster.y === y) {
-          const updatedMonster = applyMonsterBombEffect(monster, bomb);
-          if (updatedMonster) {
-            monsters[index] = updatedMonster;
-          } else {
-            monsters.splice(index, 1);
-          }
+          monsters.splice(index, 1);
         }
       }
       if (boss && Math.abs(boss.x - x) + Math.abs(boss.y - y) <= 1) {
-        boss = applyBossBombEffect(boss, bomb);
+        bossWasHit = true;
       }
     });
+    if (boss && bossWasHit) {
+      boss = applyBossBombEffect(boss, bomb);
+    }
   });
 
   if (chainedIds.size > 0) {
@@ -593,7 +579,7 @@ export function explodeBombs(state: GameEngineState, bombsToExplode: BombState[]
   };
 
   if (chainBombs.length > 0) {
-    next = explodeBombs(next, chainBombs);
+    next = explodeBombs(next, chainBombs, raycastMap);
   }
   return next;
 }

@@ -15,6 +15,10 @@ const ITACHI_ENEMY_SENSE_BONUS = 3;
 const MINATO_PROXIMITY_SENSE_RADIUS = 6;
 const GAARA_WALL_SENSE_BONUS = 2;
 const DEIDARA_REVEAL_KINDS = new Set(['claySpider', 'giantClay']);
+const fogLookupCache = new WeakMap<
+  FogOfWarState,
+  { visible: Set<string>; explored: Set<string> }
+>();
 
 export function cellKey(x: number, y: number): string {
   return `${x},${y}`;
@@ -194,6 +198,20 @@ function sameCellKeys(prev: string[] = [], next: string[] = []): boolean {
     && prev.every((cell, index) => cell === next[index]);
 }
 
+function getFogLookup(fogOfWar: FogOfWarState): {
+  visible: Set<string>;
+  explored: Set<string>;
+} {
+  const cached = fogLookupCache.get(fogOfWar);
+  if (cached) return cached;
+  const lookup = {
+    visible: new Set(fogOfWar.visible),
+    explored: new Set(fogOfWar.explored),
+  };
+  fogLookupCache.set(fogOfWar, lookup);
+  return lookup;
+}
+
 export function withUpdatedFogOfWar(state: GameEngineState): GameEngineState {
   const nextFogOfWar = calculateFogOfWar(state);
   const currentFogOfWar = state.fogOfWar;
@@ -233,8 +251,9 @@ export function getCellVisibility(
   y: number
 ): CellVisibility {
   const key = cellKey(x, y);
-  if (fogOfWar.visible.includes(key)) return 'visible';
-  if (fogOfWar.explored.includes(key)) return 'explored';
+  const lookup = getFogLookup(fogOfWar);
+  if (lookup.visible.has(key)) return 'visible';
+  if (lookup.explored.has(key)) return 'explored';
   return 'hidden';
 }
 

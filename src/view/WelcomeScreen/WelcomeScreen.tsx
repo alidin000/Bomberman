@@ -133,7 +133,7 @@ export const WelcomeScreen = () => {
                   <CharacterCard key={character.id} accent={character.secondaryColor}>
                     <CharacterArt
                       image={RosterBoard}
-                      position={CHARACTER_POSITIONS[character.id]}
+                      imagePosition={CHARACTER_POSITIONS[character.id]}
                       aria-label={`${character.name} portrait`}
                     />
                     <CharacterName color={character.secondaryColor}>{character.name}</CharacterName>
@@ -181,7 +181,7 @@ export const WelcomeScreen = () => {
                   <StageCard key={stage.id} color={stage.palette.accent}>
                     <StageArt
                       image={StageAtlas}
-                      position={STAGE_PREVIEW_POSITIONS[stage.id]}
+                      imagePosition={STAGE_PREVIEW_POSITIONS[stage.id]}
                     />
                     <StageLabel>{stage.name.replace(' Village', '')}</StageLabel>
                   </StageCard>

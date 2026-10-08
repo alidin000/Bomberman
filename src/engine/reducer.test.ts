@@ -8,6 +8,8 @@ import { parseMapRows } from './mapLoader';
 import { defaultMap } from '../constants/contants';
 import { isObstacle } from '../model/gameItem';
 import { getCampaignPickupPool } from '../content/characterPowerups';
+import { createBomb, explodeBombs } from './bombs';
+import { tickBossEncounter } from './bosses';
 import { resolveZetsuOutcomeKind } from './campaignExploration';
 import { STAGE_DEFINITIONS } from '../content/stages';
 import { CAMPAIGN_MISSIONS, getCampaignMission } from '../content/campaignMissions';
@@ -555,6 +557,50 @@ describe('gameReducer', () => {
     expect(next.monsters[0]).toMatchObject({ x: 1, y: 2 });
   });
 
+  it('keeps monsters from stacking onto the same destination in one tick', () => {
+    let state = createInitialState({
+      ...baseConfig,
+      map: abilityTestMap,
+      selectedMap: 'ability-test',
+    });
+    state = {
+      ...state,
+      players: state.players.map((player, index) => (
+        index === 0
+          ? {
+            ...player, x: 3, y: 3, alive: true,
+          }
+          : {
+            ...player, alive: false,
+          }
+      )),
+      monsters: [
+        shinobiEnemy({
+          id: 'left-smart',
+          name: 'Left Smart',
+          kind: 'smart',
+          x: 2,
+          y: 3,
+          moveCooldown: 0,
+        }),
+        shinobiEnemy({
+          id: 'right-smart',
+          name: 'Right Smart',
+          kind: 'smart',
+          x: 4,
+          y: 3,
+          moveCooldown: 0,
+        }),
+      ],
+    };
+
+    const next = tickMonsters(state, 1000);
+    const occupied = next.monsters.map((monster) => `${monster.x},${monster.y}`);
+
+    expect(new Set(occupied).size).toBe(next.monsters.length);
+    expect(occupied.filter((cell) => cell === '3,3')).toHaveLength(1);
+  });
+
   it('resolves body flicker, water clone, and Zetsu melee abilities', () => {
     let state = createInitialState({
       ...baseConfig,
@@ -940,7 +986,7 @@ describe('gameReducer', () => {
     ]));
   });
 
-  it('uses Gaara sand bombs to trap beasts instead of removing them', () => {
+  it('lets Gaara sand bombs defeat regular enemies', () => {
     let state = createInitialState({
       ...baseConfig,
       selectedCharacters: ['gaara', 'itachi'],
@@ -961,8 +1007,7 @@ describe('gameReducer', () => {
     state = gameReducer(state, { type: 'TICK', deltaMs: 3250 })!;
     state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
 
-    expect(state.monsters).toHaveLength(1);
-    expect(state.monsters[0].moveCooldown).toBeGreaterThan(9000);
+    expect(state.monsters).toHaveLength(0);
   });
 
   it('uses Minato thunder marks with a quick fuse', () => {
@@ -982,7 +1027,7 @@ describe('gameReducer', () => {
       ...baseConfig,
       selectedCharacters: ['sasuke', 'naruto'],
     });
-    state = { ...state, monsters: [] };
+    state = { ...state, monsters: [], roundStartTicksRemaining: 0 };
 
     state = gameReducer(state, { type: 'DROP_BOMB', playerId: 'player1' })!;
     state = gameReducer(state, { type: 'TICK', deltaMs: 1800 })!;
@@ -1016,6 +1061,7 @@ describe('gameReducer', () => {
     });
     state = {
       ...state,
+      roundStartTicksRemaining: 0,
       monsters: [{
         id: 'itachi-contact',
         name: 'Akatsuki Cultist',
@@ -1268,6 +1314,35 @@ describe('gameReducer', () => {
     expect(state.players[0].powerUps).not.toContain('Ghost');
   });
 
+  it('does not punish Ghost expiry when standing on your own bomb', () => {
+    let state = createInitialState(baseConfig);
+    const map = state.map.map((row) => [...row]);
+    map[1][1] = {
+      range: 2,
+      coords: { x: 1, y: 1 },
+      ownerId: 'player1',
+    };
+    state = {
+      ...state,
+      map,
+      players: state.players.map((player) => (
+        player.id === 'player1'
+          ? {
+            ...player, x: 1, y: 1, powerUps: ['Ghost'],
+          }
+          : player
+      )),
+      timedPowerUps: {
+        player1: [{ power: 'Ghost', ticksRemaining: 10, flashTicksRemaining: 0 }],
+      },
+    };
+
+    state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
+
+    expect(state.players[0].alive).toBe(true);
+    expect(state.players[0].powerUps).not.toContain('Ghost');
+  });
+
   it('lets Ghost phase through walls, boxes, and bombs', () => {
     const blockers = [
       { cell: 'Wall' as const },
@@ -1374,6 +1449,90 @@ describe('gameReducer', () => {
     expect(state.monsters).toHaveLength(0);
   });
 
+  it.each([
+    'standard',
+    'claySpider',
+    'shadowClone',
+    'chidoriMine',
+    'sandCoffin',
+    'thunderMark',
+    'crowClone',
+    'giantClay',
+    'rasenshuriken',
+    'kirin',
+    'sandTsunami',
+    'instantTeleport',
+    'tsukuyomi',
+  ] as const)('lets %s blasts defeat regular enemies', (kind) => {
+    const initial = createInitialState(baseConfig);
+    const bomb = createBomb('player1', 1, 1, 2, false, kind, 0);
+    const state = explodeBombs({
+      ...initial,
+      monsters: [{
+        id: `target-${kind}`,
+        name: 'Blast Target',
+        x: 2,
+        y: 1,
+        kind: 'basic',
+        moveCooldown: 1000,
+      }],
+      bombs: [bomb],
+    }, [bomb]);
+
+    expect(state.monsters).toHaveLength(0);
+  });
+
+  it('damages a boss only once when one blast covers several nearby cells', () => {
+    const initial = createInitialState(baseConfig);
+    const bomb = createBomb('player1', 2, 2, 2, false, 'standard', 0);
+    const state = explodeBombs({
+      ...initial,
+      monsters: [],
+      boss: {
+        id: 'shukaku',
+        name: 'Shukaku',
+        x: 2,
+        y: 2,
+        health: 900,
+        maxHealth: 900,
+        phase: 1,
+        attackCooldown: 2000,
+        moveCooldown: 2000,
+        currentAbility: 'Sand Tornado',
+        color: '#f59e0b',
+        tails: 1,
+      },
+      bombs: [bomb],
+    }, [bomb]);
+
+    expect(state.boss?.health).toBe(820);
+  });
+
+  it('applies active monster hazards before the campaign boss appears', () => {
+    const initial = createInitialState(soloConfig);
+    const state = tickBossEncounter({
+      ...initial,
+      boss: null,
+      monsters: [],
+      roundStartTicksRemaining: 0,
+      hazards: [{
+        id: 'monster-hazard-test',
+        kind: 'sandSpikes',
+        x: initial.players[0].x,
+        y: initial.players[0].y,
+        ticksRemaining: 300,
+        warningTicks: 850,
+        color: '#f59e0b',
+        damage: 1,
+        sourceName: 'Sand Ninja',
+        sourceAbility: 'Sand Spike',
+      }],
+    }, 10);
+
+    expect(state.players[0].alive).toBe(false);
+    expect(state.players[0].deathReason).toContain("Sand Ninja's Sand Spike");
+  });
+
   it('does not render explosion cells through indestructible walls', () => {
     let state = createInitialState(baseConfig);
     state = gameReducer(state, { type: 'DROP_BOMB', playerId: 'player1' })!;
@@ -1394,6 +1553,41 @@ describe('gameReducer', () => {
     let state = createInitialState(baseConfig);
     state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
     expect(state.tick).toBe(1);
+  });
+
+  it('protects players from contact damage during the round countdown', () => {
+    let state = createInitialState(baseConfig);
+    state = {
+      ...state,
+      monsters: [{
+        id: 'spawn-camper',
+        name: 'Spawn Camper',
+        x: state.players[0].x,
+        y: state.players[0].y,
+        kind: 'basic',
+        moveCooldown: 1000,
+      }],
+    };
+
+    state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
+
+    expect(state.players[0].alive).toBe(true);
+    expect(state.roundStartTicksRemaining).toBe(2950);
+
+    state = {
+      ...state,
+      roundStartTicksRemaining: 0,
+      monsters: [{
+        ...state.monsters[0],
+        x: state.players[0].x,
+        y: state.players[0].y,
+        moveCooldown: 1000,
+      }],
+    };
+    state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
+
+    expect(state.players[0].alive).toBe(false);
+    expect(state.players[0].deathReason).toBe('Deidara was caught by Spawn Camper.');
   });
 
   it('gates campaign stage bosses behind village objectives', () => {

@@ -175,7 +175,16 @@ function checkRoundEnd(state: GameEngineState): GameEngineState {
 function processTick(state: GameEngineState, deltaMs: number): GameEngineState {
   if (state.paused || state.phase !== 'playing') return state;
 
-  let next = { ...state, tick: state.tick + 1 };
+  const roundStartTicksRemaining = Math.max(
+    0,
+    state.roundStartTicksRemaining - deltaMs
+  );
+  const inRoundStartSafety = roundStartTicksRemaining > 0;
+  let next = {
+    ...state,
+    tick: state.tick + 1,
+    roundStartTicksRemaining,
+  };
   next = tickPowerUps(next, deltaMs);
   next = tickPickupMessages(next, deltaMs);
   next = tickBombs(next, deltaMs);
@@ -184,7 +193,9 @@ function processTick(state: GameEngineState, deltaMs: number): GameEngineState {
   next = tickCampaignRespawns(next, deltaMs);
   next = tickBossEncounter(next, deltaMs);
   next = tickMonsters(next, deltaMs);
-  next = { ...next, players: checkMonsterCollisions(next) };
+  if (!inRoundStartSafety) {
+    next = { ...next, players: checkMonsterCollisions(next) };
+  }
   return withUpdatedFogOfWar(checkRoundEnd(next));
 }
 

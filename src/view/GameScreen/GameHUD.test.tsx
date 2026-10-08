@@ -25,7 +25,7 @@ describe('GameHUD', () => {
 
     render(
       <ThemeProvider theme={theme}>
-        <GameHUD state={state} />
+        <GameHUD state={state} scale={100} />
       </ThemeProvider>
     );
 
@@ -53,7 +53,7 @@ describe('GameHUD', () => {
 
     render(
       <ThemeProvider theme={theme}>
-        <GameHUD state={defeatedState} />
+        <GameHUD state={defeatedState} scale={100} />
       </ThemeProvider>
     );
 

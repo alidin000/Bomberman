@@ -27,6 +27,8 @@ import {
 } from '../../model/gameItem';
 import { isPowerUpActive } from '../../engine/players';
 import { EXPLOSION_MS } from '../../engine/constants';
+import { hazardIsActive } from '../../engine/bosses';
+import { getExplosionPositions } from '../../engine/bombs';
 import { cellKey } from '../../engine/fogOfWar';
 import { getStageDefinition } from '../../content';
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
@@ -34,12 +36,14 @@ import {
   BossId, CharacterId, StageDefinition, StageId
 } from '../../content/types';
 import StageAtlas from '../../assets/ninja-bomber-stage-atlas.png';
+import { GamePreferences } from './gamePreferences';
 
 const TILE_SIZE = 1;
 const MAP_OFFSET_X = -7;
 const MAP_OFFSET_Z = -4.5;
 const ENTITY_LERP_SPEED = 7.2;
 const ENTITY_SNAP_EPSILON = 0.0016;
+const ReducedMotionContext = React.createContext(false);
 
 type TextureCrop = {
   x: number;
@@ -504,6 +508,8 @@ function TextSprite({
     nextTexture.needsUpdate = true;
     return nextTexture;
   }, [color, text]);
+
+  useEffect(() => () => texture.dispose(), [texture]);
 
   return (
     <sprite scale={[width, 0.18, 1]}>
@@ -999,7 +1005,7 @@ function getExplosionStyle(kind?: BombKind): {
   };
 }
 
-const EXPLOSION_INSTANCE_CAPACITY = 160;
+const EXPLOSION_INSTANCE_CAPACITY = 512;
 const EXPLOSION_DUMMY = new THREE.Object3D();
 const EXPLOSION_COLOR = new THREE.Color();
 
@@ -1180,28 +1186,26 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
     }
   });
 
-  if (explosions.length === 0) return null;
-
   return (
     <>
       <pointLight ref={lightRef} distance={5} intensity={1.8} color="#f97316" />
-      <instancedMesh ref={shockwaveRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]}>
+      <instancedMesh ref={shockwaveRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]} frustumCulled={false}>
         <torusGeometry args={[0.34, 0.035, 8, 24]} />
         <meshBasicMaterial transparent opacity={0.38} vertexColors depthWrite={false} />
       </instancedMesh>
-      <instancedMesh ref={flameRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]}>
+      <instancedMesh ref={flameRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]} frustumCulled={false}>
         <sphereGeometry args={[0.34, 12, 12]} />
         <meshBasicMaterial transparent opacity={0.82} vertexColors depthWrite={false} />
       </instancedMesh>
-      <instancedMesh ref={ringRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]}>
+      <instancedMesh ref={ringRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]} frustumCulled={false}>
         <ringGeometry args={[0.18, 0.55, 6]} />
         <meshBasicMaterial transparent opacity={0.48} vertexColors depthWrite={false} />
       </instancedMesh>
-      <instancedMesh ref={accentRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]}>
+      <instancedMesh ref={accentRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]} frustumCulled={false}>
         <coneGeometry args={[0.12, 0.58, 4]} />
         <meshBasicMaterial transparent opacity={0.78} vertexColors depthWrite={false} />
       </instancedMesh>
-      <instancedMesh ref={debrisRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]}>
+      <instancedMesh ref={debrisRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]} frustumCulled={false}>
         <tetrahedronGeometry args={[0.12, 0]} />
         <meshBasicMaterial transparent opacity={0.72} vertexColors depthWrite={false} />
       </instancedMesh>
@@ -1614,11 +1618,17 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
   const invincible = isPowerUpActive(state, player.id, 'Invincibility');
   const visual = CHARACTER_VISUALS[player.characterId];
   const characterModel = useCharacterModel(player.characterId);
+  const reducedMotion = React.useContext(ReducedMotionContext);
   useSmoothWorldPosition(ref, player.x, player.y, 0.55, motionRef);
 
   useFrame(({ clock }) => {
     const group = ref.current;
     if (!group) return;
+    if (reducedMotion) {
+      group.rotation.z = 0;
+      group.visible = true;
+      return;
+    }
 
     const movement = motionRef.current;
     const stride = Math.sin(clock.elapsedTime * 13);
@@ -1866,18 +1876,19 @@ function MonsterAbilityWarning({
   );
 }
 
-function MonsterMesh({ monster }: { monster: MonsterState }) {
+function MonsterMeshBase({ monster }: { monster: MonsterState }) {
   const ref = useRef<THREE.Group>(null);
   const visual = MONSTER_VISUALS[monster.kind];
   const color = visual.body;
   const isGhost = monster.kind === 'ghost';
   const tails = BEAST_TAILS[monster.kind];
+  const reducedMotion = React.useContext(ReducedMotionContext);
   useSmoothWorldPosition(ref, monster.x, monster.y, 0.45);
 
   useFrame(({ clock }) => {
     if (ref.current) {
-      ref.current.position.y += Math.sin(clock.elapsedTime * 5) * 0.002;
-      ref.current.rotation.z = Math.sin(clock.elapsedTime * 4) * 0.05;
+      ref.current.position.y += reducedMotion ? 0 : Math.sin(clock.elapsedTime * 5) * 0.002;
+      ref.current.rotation.z = reducedMotion ? 0 : Math.sin(clock.elapsedTime * 4) * 0.05;
     }
   });
 
@@ -2031,6 +2042,17 @@ function MonsterMesh({ monster }: { monster: MonsterState }) {
     </group>
   );
 }
+
+const MonsterMesh = React.memo(MonsterMeshBase, (previous, next) => (
+  previous.monster.id === next.monster.id
+  && previous.monster.x === next.monster.x
+  && previous.monster.y === next.monster.y
+  && previous.monster.kind === next.monster.kind
+  && previous.monster.elite === next.monster.elite
+  && previous.monster.abilityWarningTicks === next.monster.abilityWarningTicks
+  && previous.monster.abilityTarget?.x === next.monster.abilityTarget?.x
+  && previous.monster.abilityTarget?.y === next.monster.abilityTarget?.y
+));
 
 function SensedEnemyMarker({
   x,
@@ -2335,18 +2357,22 @@ function BossMesh({ state }: { state: GameEngineState }) {
 function HazardMesh({ hazard }: { hazard: BossHazard }) {
   const ref = useRef<THREE.Group>(null);
   const [wx, , wz] = toWorld(hazard.x, hazard.y);
-  const active = hazard.ticksRemaining <= hazard.warningTicks;
+  const active = hazardIsActive(hazard);
   const visual = HAZARD_VISUALS[hazard.kind];
   const beastColored = hazard.kind === 'beastBomb' || hazard.kind === 'chakraShockwave';
   const effectColor = beastColored ? hazard.color : visual.color;
   const effectAccent = beastColored ? '#fff7ed' : visual.accent;
   const color = active ? effectColor : '#facc15';
   const opacity = active ? 0.78 : 0.46;
+  const reducedMotion = React.useContext(ReducedMotionContext);
 
   useFrame(({ clock }) => {
     if (ref.current) {
-      ref.current.rotation.y = clock.elapsedTime * (active ? 2.6 : 1.5);
-      ref.current.scale.setScalar(active ? 1.15 : 0.85 + Math.sin(clock.elapsedTime * 8) * 0.08);
+      let scale = 1;
+      if (!reducedMotion && active) scale = 1.15;
+      if (!reducedMotion && !active) scale = 0.85 + Math.sin(clock.elapsedTime * 8) * 0.08;
+      ref.current.rotation.y = reducedMotion ? 0 : clock.elapsedTime * (active ? 2.6 : 1.5);
+      ref.current.scale.setScalar(scale);
     }
   });
 
@@ -2754,6 +2780,7 @@ function PowerUpMesh({
   characterId?: CharacterId;
 }) {
   const ref = useRef<THREE.Group>(null);
+  const reducedMotion = React.useContext(ReducedMotionContext);
   const [wx, , wz] = toWorld(x, y);
   const theme = getCharacterPowerTheme(characterId, power);
   const baseVisual = POWERUP_VISUALS[power];
@@ -2765,8 +2792,10 @@ function PowerUpMesh({
   };
   useFrame(({ clock }) => {
     if (ref.current) {
-      ref.current.position.y = 0.35 + Math.sin(clock.elapsedTime * 3) * 0.08;
-      ref.current.rotation.y = clock.elapsedTime;
+      ref.current.position.y = reducedMotion
+        ? 0.35
+        : 0.35 + Math.sin(clock.elapsedTime * 3) * 0.08;
+      ref.current.rotation.y = reducedMotion ? 0 : clock.elapsedTime;
     }
   });
   return (
@@ -3237,12 +3266,20 @@ const MapTiles = React.memo(MapTilesBase, (prev, next) => (
   && prev.powerTheme === next.powerTheme
 ));
 
-function CameraRig({ state }: { state: GameEngineState }) {
-  const { camera } = useThree();
+function CameraRig({
+  state,
+  preferences,
+  impact,
+}: {
+  state: GameEngineState;
+  preferences: GamePreferences;
+  impact: number;
+}) {
+  const { camera, size } = useThree();
   const lookAtRef = useRef(new THREE.Vector3());
   const cameraTargetRef = useRef(new THREE.Vector3());
 
-  useFrame(() => {
+  useFrame(({ clock }, delta) => {
     const fallbackCenter = getMapWorldCenter(
       state.map[0]?.length ?? 15,
       state.map.length || 10,
@@ -3250,11 +3287,19 @@ function CameraRig({ state }: { state: GameEngineState }) {
     let targetXCell = 0;
     let targetYCell = 0;
     let count = 0;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
 
     state.players.forEach((player) => {
       if (!player.alive) return;
       targetXCell += player.x;
       targetYCell += player.y;
+      minX = Math.min(minX, player.x);
+      maxX = Math.max(maxX, player.x);
+      minY = Math.min(minY, player.y);
+      maxY = Math.max(maxY, player.y);
       count += 1;
     });
 
@@ -3262,6 +3307,10 @@ function CameraRig({ state }: { state: GameEngineState }) {
       state.players.forEach((player) => {
         targetXCell += player.x;
         targetYCell += player.y;
+        minX = Math.min(minX, player.x);
+        maxX = Math.max(maxX, player.x);
+        minY = Math.min(minY, player.y);
+        maxY = Math.max(maxY, player.y);
         count += 1;
       });
     }
@@ -3275,17 +3324,111 @@ function CameraRig({ state }: { state: GameEngineState }) {
     }
 
     const [targetX, , targetZ] = toWorld(targetXCell, targetYCell);
+    const horizontalSpread = count > 1 ? maxX - minX : 0;
+    const verticalSpread = count > 1 ? maxY - minY : 0;
+    const aspectPenalty = size.width > 0 ? Math.max(1, 1.25 / (size.width / size.height)) : 1;
+    const framingScale = THREE.MathUtils.clamp(
+      Math.max(1, (horizontalSpread + 3) / 9, (verticalSpread + 3) / 6) * aspectPenalty,
+      1,
+      1.8,
+    );
+    const shakeStrength = preferences.reducedMotion
+      ? 0
+      : impact * (preferences.screenShake / 100) * 0.18;
+    const shakeX = Math.sin(clock.elapsedTime * 83) * shakeStrength;
+    const shakeZ = Math.cos(clock.elapsedTime * 71) * shakeStrength;
+    const followAlpha = preferences.reducedMotion
+      ? 1
+      : 1 - Math.exp(-delta * (framingScale > 1.05 ? 9 : 5));
 
     lookAtRef.current.set(targetX, 0, targetZ);
-    cameraTargetRef.current.set(targetX, 13.2, targetZ + 9.6);
-    camera.position.lerp(cameraTargetRef.current, 0.12);
+    cameraTargetRef.current.set(
+      targetX + shakeX,
+      13.2 * framingScale,
+      targetZ + 9.6 * framingScale + shakeZ,
+    );
+    camera.position.lerp(cameraTargetRef.current, followAlpha);
     camera.lookAt(lookAtRef.current);
   });
 
   return null;
 }
 
-function SceneContent({ state }: { state: GameEngineState }) {
+function TargetCellWarning({ monster }: { monster: MonsterState }) {
+  const target = monster.abilityTarget;
+  if (!target || (monster.abilityWarningTicks ?? 0) <= 0) return null;
+  const [wx, , wz] = toWorld(target.x, target.y);
+  const urgent = (monster.abilityWarningTicks ?? 0) < 320;
+  return (
+    <group position={[wx, 0.035, wz]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[0.9, 0.9]} />
+        <meshBasicMaterial
+          color={urgent ? '#ef4444' : '#facc15'}
+          transparent
+          opacity={urgent ? 0.34 : 0.16}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
+        <ringGeometry args={[0.5, 0.57, 4]} />
+        <meshBasicMaterial color={urgent ? '#ffffff' : '#facc15'} transparent opacity={0.9} />
+      </mesh>
+    </group>
+  );
+}
+
+function BombBlastPreviews({
+  state,
+  visibleCells,
+}: {
+  state: GameEngineState;
+  visibleCells: Set<string>;
+}) {
+  const cells = useMemo(() => {
+    const unique = new Map<string, { x: number; y: number; kind: BombKind }>();
+    state.bombs
+      .filter((bomb) => bomb.ticksRemaining > 0 && bomb.ticksRemaining <= 800)
+      .forEach((bomb) => {
+        getExplosionPositions(bomb, state.map).forEach((point) => {
+          if (!cellVisibleInSet(visibleCells, point.x, point.y)) return;
+          unique.set(`${point.x},${point.y}`, { ...point, kind: bomb.kind });
+        });
+      });
+    return [...unique.values()];
+  }, [state.bombs, state.map, visibleCells]);
+
+  return (
+    <>
+      {cells.map((cell) => {
+        const [wx, , wz] = toWorld(cell.x, cell.y);
+        const style = BOMB_STYLE[cell.kind];
+        return (
+          <group key={`blast-preview-${cell.x}-${cell.y}`} position={[wx, 0.026, wz]}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[0.84, 0.84]} />
+              <meshBasicMaterial color={style.emissive} transparent opacity={0.16} depthWrite={false} />
+            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, Math.PI / 4]} position={[0, 0.01, 0]}>
+              <ringGeometry args={[0.43, 0.49, 4]} />
+              <meshBasicMaterial color="#fff7ed" transparent opacity={0.68} depthWrite={false} />
+            </mesh>
+          </group>
+        );
+      })}
+    </>
+  );
+}
+
+function SceneContent({
+  state,
+  preferences,
+  impact,
+}: {
+  state: GameEngineState;
+  preferences: GamePreferences;
+  impact: number;
+}) {
   const stage = useMemo(
     () => getStageDefinition(state.config.stageId),
     [state.config.stageId]
@@ -3323,7 +3466,7 @@ function SceneContent({ state }: { state: GameEngineState }) {
 
   return (
     <>
-      <CameraRig state={state} />
+      <CameraRig state={state} preferences={preferences} impact={impact} />
       <ambientLight intensity={0.72} />
       <hemisphereLight args={['#fef3c7', '#111827', 0.55]} />
       <directionalLight position={[8, 15, 6]} intensity={1.65} castShadow />
@@ -3345,12 +3488,16 @@ function SceneContent({ state }: { state: GameEngineState }) {
         fogOfWar={state.fogOfWar}
         powerTheme={state.players[0]?.characterId}
       />
+      <BombBlastPreviews state={state} visibleCells={visibleCellSet} />
       <MissionObjectiveMarkers state={state} visibleCells={visibleCellSet} />
       {state.players.map((p) => (
         <PlayerMesh key={p.id} player={p} state={state} />
       ))}
       {visibleMonsters.map((m) => (
-        <MonsterMesh key={m.id} monster={m} />
+        <React.Fragment key={m.id}>
+          <MonsterMesh monster={m} />
+          <TargetCellWarning monster={m} />
+        </React.Fragment>
       ))}
       {sensedMonsters.map((m) => (
         <SensedEnemyMarker
@@ -3379,18 +3526,27 @@ function SceneContent({ state }: { state: GameEngineState }) {
 
 type GameScene3DProps = {
   state: GameEngineState;
+  preferences: GamePreferences;
+  impact?: number;
 };
 
-export function GameScene3D({ state }: GameScene3DProps) {
+export function GameScene3D({ state, preferences, impact = 0 }: GameScene3DProps) {
   return (
     <Canvas
       shadows
       dpr={[1, 1.35]}
-      style={{ width: '100%', height: '100%', background: 'linear-gradient(180deg, #161132 0%, #3b3278 52%, #221b44 100%)' }}
+      style={{
+        width: '100%',
+        height: '100%',
+        background: '#272b35',
+        filter: preferences.highContrast ? 'contrast(1.28) saturate(1.14)' : 'none',
+      }}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
       camera={{ position: [0, 13.2, 9.6], fov: 48 }}
     >
-      <SceneContent state={state} />
+      <ReducedMotionContext.Provider value={preferences.reducedMotion}>
+        <SceneContent state={state} preferences={preferences} impact={impact} />
+      </ReducedMotionContext.Provider>
     </Canvas>
   );
 }

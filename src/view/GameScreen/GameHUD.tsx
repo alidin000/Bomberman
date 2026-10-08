@@ -11,11 +11,15 @@ import { Power } from '../../model/gameItem';
 import { isPowerUpActive } from '../../engine/players';
 import {
   HudRoot,
+  MissionStrip,
+  MissionStatus,
+  MissionNode,
   PlayerCards,
   PlayerCardPaper,
   PowerChips,
   PlayerHeader,
   PlayerAvatar,
+  PlayerStatusRibbon,
   PlayerStats,
   PowerBadge,
   PickupNotes,
@@ -43,6 +47,17 @@ import {
 import { getCharacterDefinition } from '../../content';
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
 import { loadStoryProgress } from '../../story/progress';
+import RosterBoard from '../../assets/ninja-bomber-roster-board.png';
+import { CharacterId } from '../../content/types';
+
+const CHARACTER_POSITIONS: Record<CharacterId, string> = {
+  deidara: '0% 0%',
+  naruto: '20% 0%',
+  sasuke: '40% 0%',
+  gaara: '60% 0%',
+  minato: '80% 0%',
+  itachi: '100% 0%',
+};
 
 const POWER_LABELS: Record<Power, string> = {
   AddBomb: 'Bomb capacity',
@@ -80,11 +95,17 @@ type GameHUDProps = {
   state: GameEngineState;
 };
 
+type GameHUDRootProps = GameHUDProps & {
+  scale: number;
+};
+
 function PlayerCard({
   player,
+  playerNumber,
   state,
 }: {
   player: GameEngineState['players'][0];
+  playerNumber: number;
   state: GameEngineState;
 }) {
   const activePowers = Array.from(new Set(player.powerUps)).filter(
@@ -99,14 +120,23 @@ function PlayerCard({
   return (
     <PlayerCardPaper alive={player.alive} color={player.color}>
       <PlayerHeader>
-        <PlayerAvatar color={player.color} />
+        <PlayerAvatar
+          color={player.color}
+          image={RosterBoard}
+          imagePosition={CHARACTER_POSITIONS[player.characterId]}
+          role="img"
+          aria-label={`${character.name} portrait`}
+        />
         <div>
           <Typography variant="subtitle1" fontWeight="bold" color="#f8fafc">
-            {character.name || player.name}
+            {`P${playerNumber} · ${character.name || player.name}`}
           </Typography>
           <Typography variant="caption" color={player.alive ? '#86efac' : '#fca5a5'}>
             {player.alive ? character.title : 'Sealed'}
           </Typography>
+          <PlayerStatusRibbon alive={player.alive} color={player.color}>
+            {player.alive ? 'Ready' : 'Sealed'}
+          </PlayerStatusRibbon>
           {!player.alive && player.deathReason && (
             <Typography variant="caption" display="block" color="#fecaca">
               {player.deathReason}
@@ -116,7 +146,7 @@ function PlayerCard({
       </PlayerHeader>
       <PlayerStats>
         <StatPill>
-          Clay
+          Bombs
           {' '}
           {player.maxBombs - player.activeBombs}
           /
@@ -171,8 +201,61 @@ function PlayerCard({
           <span>{character.ultimate}</span>
         </AbilityRow>
       </AbilityPanel>
-      <UltimateProgress variant="determinate" value={player.ultimateCharge} />
+      <UltimateProgress
+        aria-label={`${character.name} ultimate charge`}
+        variant="determinate"
+        value={player.ultimateCharge}
+      />
     </PlayerCardPaper>
+  );
+}
+
+function getMissionTitle(state: GameEngineState): string {
+  if (state.campaign) return state.campaign.villageName;
+  return `Round ${Math.min(state.round, state.totalRounds)} of ${state.totalRounds}`;
+}
+
+function getMissionStatus(state: GameEngineState): string {
+  if (state.campaign) {
+    if (state.campaign.missionResult === 'success') return 'Secured';
+    if (state.campaign.missionResult === 'failed') return 'Compromised';
+    return state.campaign.missionStep === 'boss' ? 'Boss arena' : 'Village ops';
+  }
+  return state.phase === 'playing' ? 'Local arena' : 'Result';
+}
+
+function getGateStatus(state: GameEngineState): string {
+  if (!state.campaign) return 'Arena';
+  return state.campaign.bossUnlocked ? 'Open' : 'Sealed';
+}
+
+function MissionSummary({ state }: GameHUDProps) {
+  const alivePlayers = state.players.filter((player) => player.alive).length;
+  const threatCount = state.monsters.length + (state.boss && state.boss.health > 0 ? 1 : 0);
+
+  return (
+    <MissionStrip aria-label="match status">
+      <MissionStatus>
+        <strong>{getMissionStatus(state)}</strong>
+        <span>{getMissionTitle(state)}</span>
+      </MissionStatus>
+      <MissionNode>
+        <span>Squad</span>
+        <strong>
+          {alivePlayers}
+          /
+          {state.players.length}
+        </strong>
+      </MissionNode>
+      <MissionNode>
+        <span>Threats</span>
+        <strong>{threatCount}</strong>
+      </MissionNode>
+      <MissionNode>
+        <span>Gate</span>
+        <strong>{getGateStatus(state)}</strong>
+      </MissionNode>
+    </MissionStrip>
   );
 }
 
@@ -215,7 +298,7 @@ function CampaignSummary({ state }: GameHUDProps) {
 
   return (
     <ObjectivePaper elevation={4}>
-      <Typography variant="overline" fontWeight="bold" letterSpacing="0.12em">
+      <Typography variant="overline" fontWeight="bold" letterSpacing={0}>
         {state.campaign.title}
       </Typography>
       <Typography variant="caption" display="block" color="#d1fae5">
@@ -261,6 +344,7 @@ function CampaignSummary({ state }: GameHUDProps) {
               </ObjectiveStatusBadge>
             </ObjectiveMeta>
             <ObjectiveProgress
+              aria-label={`${objective.label} progress`}
               variant="determinate"
               value={getObjectiveProgress(objective)}
             />
@@ -292,10 +376,14 @@ function BossSummary({ state }: GameHUDProps) {
 
   return (
     <BossPaper elevation={4} color={state.boss.color}>
-      <Typography variant="overline" fontWeight="bold" letterSpacing="0.12em" display="block">
+      <Typography variant="overline" fontWeight="bold" letterSpacing={0} display="block">
         {state.boss.name}
       </Typography>
-      <UltimateProgress variant="determinate" value={health} />
+      <UltimateProgress
+        aria-label={`${state.boss.name} health`}
+        variant="determinate"
+        value={health}
+      />
       <Typography variant="caption" display="block" color="#e5e7eb">
         Phase
         {' '}
@@ -362,17 +450,23 @@ function MonsterSummary({ state }: GameHUDProps) {
   );
 }
 
-export function GameHUD({ state }: GameHUDProps) {
+export function GameHUD({ state, scale }: GameHUDRootProps) {
   return (
-    <HudRoot>
+    <HudRoot hudScale={scale}>
+      <MissionSummary state={state} />
       <PlayerCards>
-        {state.players.map((player) => (
-          <PlayerCard key={player.id} player={player} state={state} />
+        {state.players.map((player, index) => (
+          <PlayerCard
+            key={player.id}
+            player={player}
+            playerNumber={index + 1}
+            state={state}
+          />
         ))}
       </PlayerCards>
+      <BossSummary state={state} />
       <HudRight>
         <CampaignSummary state={state} />
-        <BossSummary state={state} />
         <MonsterSummary state={state} />
       </HudRight>
     </HudRoot>

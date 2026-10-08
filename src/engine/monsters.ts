@@ -25,6 +25,10 @@ const DEFAULT_DETECTION_RANGE = 5;
 const DETECTION_RETRY_MS = 350;
 let monsterHazardIdCounter = 0;
 
+export function resetMonsterHazardIdCounter(): void {
+  monsterHazardIdCounter = 0;
+}
+
 type MonsterMovementContext = {
   distanceFields: Map<string, number[][] | null>;
   occupiedCells: Set<string>;
@@ -239,9 +243,14 @@ function moveSmartMonster(
   return monster;
 }
 
-function moveGhostMonster(monster: MonsterState, map: GameMap, tick: number): MonsterState {
+function moveGhostMonster(
+  monster: MonsterState,
+  map: GameMap,
+  context: MonsterMovementContext,
+  tick: number,
+): MonsterState {
   const options = DIRECTIONS.map((d) => ({ x: monster.x + d.x, y: monster.y + d.y }))
-    .filter((p) => ghostValidMove(p.x, p.y, map));
+    .filter((p) => ghostValidMove(p.x, p.y, map) && !context.occupiedCells.has(cellKey(p.x, p.y)));
 
   if (options.length === 0) return monster;
   const chosen = chooseDeterministic(options, monster, tick);
@@ -316,7 +325,7 @@ function moveMonsterByKind(
     case 'smart':
       return moveSmartMonster(monster, map, context, players, tick);
     case 'ghost':
-      return moveGhostMonster(monster, map, tick);
+      return moveGhostMonster(monster, map, context, tick);
     case 'fork':
       return moveForkMonster(monster, map, context, players, tick);
     default:
@@ -332,6 +341,15 @@ function getNearestPlayer(monster: MonsterState, players: PlayerState[]): Player
     const playerDistance = Math.abs(player.x - monster.x) + Math.abs(player.y - monster.y);
     return playerDistance < nearestDistance ? player : nearest;
   }, alivePlayers[0]);
+}
+
+function reserveMonsterCell(
+  context: MonsterMovementContext,
+  before: MonsterState,
+  after: MonsterState,
+): void {
+  context.occupiedCells.delete(cellKey(before.x, before.y));
+  context.occupiedCells.add(cellKey(after.x, after.y));
 }
 
 function abilityCooldownFor(kind: EnemyAbilityKind | undefined, elite = false): number {
@@ -662,6 +680,7 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
   );
 
   const monsters = state.monsters.map((monster) => {
+    movementContext.occupiedCells.delete(cellKey(monster.x, monster.y));
     const abilityTick = tickMonsterAbility(
       { ...state, players, hazards },
       monster,
@@ -677,7 +696,9 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
     let nextMonster = abilityTick.monster;
     const cooldown = nextMonster.moveCooldown - deltaMs;
     if (cooldown > 0 || (nextMonster.abilityWarningTicks ?? 0) > 0) {
-      return { ...nextMonster, moveCooldown: cooldown };
+      const waitingMonster = { ...nextMonster, moveCooldown: cooldown };
+      reserveMonsterCell(movementContext, monster, waitingMonster);
+      return waitingMonster;
     }
 
     const moved = moveMonsterByKind(
@@ -691,6 +712,7 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
       ...moved,
       moveCooldown: MONSTER_MOVE_MS[nextMonster.kind],
     };
+    reserveMonsterCell(movementContext, monster, nextMonster);
     return nextMonster;
   });
 

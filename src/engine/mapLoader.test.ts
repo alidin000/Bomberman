@@ -28,6 +28,21 @@ describe('mapLoader', () => {
     expect(map[0]).toHaveLength(35);
   });
 
+  it('assigns deterministic power-ups for authored power cells', () => {
+    const rows = [
+      'WWWWW',
+      'W P W',
+      'W P W',
+      'WWWWW',
+    ].map((row) => row.split(''));
+
+    const first = parseMapRows(rows);
+    const second = parseMapRows(rows);
+
+    expect(first[1][2]).toBe(second[1][2]);
+    expect(first[2][2]).toBe(second[2][2]);
+  });
+
   it('keeps every authored campaign map at 35x35', () => {
     STAGE_DEFINITIONS.forEach((stage) => {
       const rows = readCampaignMapRows(stage.mapId);

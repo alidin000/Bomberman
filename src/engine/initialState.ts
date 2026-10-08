@@ -4,8 +4,11 @@ import { GameConfig, GameEngineState, PlayerState } from './types';
 import { PLAYER_COLORS, PLAYER_SPAWNS } from './constants';
 import { getMonstersForMap } from './monsterSpawns';
 import { resetBombIdCounter } from './bombs';
+import { resetBossHazardIdCounter } from './bosses';
+import { resetMonsterHazardIdCounter } from './monsters';
 import {
   DEFAULT_CHARACTER_ID,
+  STAGE_DEFINITIONS,
   getBossDefinition,
   getCharacterDefinition,
   getStageDefinition,
@@ -16,6 +19,7 @@ import { initializeCampaignEnemies } from './campaignEnemies';
 
 const PLAYER_NAMES = ['player1', 'player2', 'player3'];
 const ULTIMATE_COOLDOWN_MS = 12000;
+export const ROUND_START_COUNTDOWN_MS = 3000;
 const SPAWN_CLEAR_OFFSETS = [
   { x: 0, y: 0 },
   { x: 1, y: 0 },
@@ -95,13 +99,18 @@ export function createBossForConfig(config: GameConfig): GameEngineState['boss']
   const stage = getStageDefinition(config.stageId);
   const boss = getBossDefinition(stage.bossId);
   const spawn = getBossSpawn(config);
+  const stageIndex = Math.max(
+    0,
+    STAGE_DEFINITIONS.findIndex((item) => item.id === stage.id)
+  );
+  const maxHealth = 900 + stageIndex * 175;
   return {
     id: boss.id,
     name: boss.name,
     x: spawn.x,
     y: spawn.y,
-    health: 900,
-    maxHealth: 900,
+    health: maxHealth,
+    maxHealth,
     phase: 1,
     attackCooldown: 1200,
     moveCooldown: 650,
@@ -113,6 +122,8 @@ export function createBossForConfig(config: GameConfig): GameEngineState['boss']
 
 export function createInitialState(config: GameConfig): GameEngineState {
   resetBombIdCounter();
+  resetBossHazardIdCounter();
+  resetMonsterHazardIdCounter();
   const players = Array.from({ length: config.numPlayers }, (_, i) => createPlayer(i, config));
   const map = createSpawnSafeMap(config.map, players);
   const campaignRuntime = createCampaignRuntimeState(config);
@@ -150,6 +161,7 @@ export function createInitialState(config: GameConfig): GameEngineState {
     resultMessage: '',
     paused: false,
     tick: 0,
+    roundStartTicksRemaining: ROUND_START_COUNTDOWN_MS,
     config: { ...config, map },
     roundProcessed: false,
   };
@@ -159,6 +171,8 @@ export function createInitialState(config: GameConfig): GameEngineState {
 
 export function resetRoundState(state: GameEngineState): GameEngineState {
   resetBombIdCounter();
+  resetBossHazardIdCounter();
+  resetMonsterHazardIdCounter();
   const players = Array.from(
     { length: state.config.numPlayers },
     (_, i) => createPlayer(i, state.config),
@@ -197,6 +211,7 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     resultMessage: '',
     roundProcessed: false,
     paused: false,
+    roundStartTicksRemaining: ROUND_START_COUNTDOWN_MS,
   };
 
   return withUpdatedFogOfWar(next);

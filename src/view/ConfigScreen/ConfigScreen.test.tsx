@@ -62,7 +62,7 @@ describe('ConfigScreen', () => {
 
   it('should initialize with the game configuration step', () => {
     setup();
-    const title = screen.getByText('Start Game');
+    const title = screen.getByText('Mission Deck');
     expect(title).toBeInTheDocument();
   });
 
@@ -71,7 +71,7 @@ describe('ConfigScreen', () => {
     expect(screen.getByText('Hidden Leaf Emergency')).toBeInTheDocument();
     expect(screen.getByText('Rescue Villagers')).toBeInTheDocument();
     expect(screen.getByText('Protect Hokage Building')).toBeInTheDocument();
-    expect(screen.getByText('Start Mission')).toBeInTheDocument();
+    expect(screen.getByText('Deploy Mission')).toBeInTheDocument();
   });
 
   it('should navigate to the home page when the cancel button is clicked', () => {
@@ -85,12 +85,12 @@ describe('ConfigScreen', () => {
     setup();
     const nextButton = screen.getByText('Next');
     fireEvent.click(nextButton);
-    expect(screen.getAllByText('Upgrade Screen').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Upgrade Arsenal').length).toBeGreaterThan(0);
   });
 
   it('should proceed from upgrade screen to keyboard configuration', () => {
     setup(2);
-    expect(screen.getByText('Keyboard Configuration')).toBeInTheDocument();
+    expect(screen.getByText('Key Bindings')).toBeInTheDocument();
   });
 
   it('should handle key configuration without errors', () => {
@@ -99,6 +99,22 @@ describe('ConfigScreen', () => {
     fireEvent.keyDown(playerInput, { key: 'E' });
     const noErrorMessages = screen.queryByText('Please correct the highlighted key conflicts before proceeding.');
     expect(noErrorMessages).not.toBeInTheDocument();
+  });
+
+  it('keeps keyboard navigation available on key inputs', () => {
+    setup(2);
+    const playerInput = screen.getByDisplayValue('W');
+
+    expect(fireEvent.keyDown(playerInput, { key: 'Tab' })).toBe(true);
+  });
+
+  it('shows a readable label when Space is assigned', () => {
+    setup(2);
+    const playerInput = screen.getByDisplayValue('W');
+
+    fireEvent.keyDown(playerInput, { key: ' ' });
+
+    expect(screen.getByDisplayValue('Space')).toBeInTheDocument();
   });
 
   it('should display an error when there is a key conflict', () => {
@@ -171,12 +187,25 @@ describe('ConfigScreen', () => {
   it('should start the selected campaign mission directly from the briefing', async () => {
     setup();
 
-    fireEvent.click(screen.getByText('Start Mission'));
+    fireEvent.click(screen.getByText('Deploy Mission'));
 
     await waitFor(() => {
       expect(localStorage.getItem('selectedMap')).not.toBeNull();
       expect(localStorage.getItem('gameSetup')).toContain('hiddenLeaf');
       expect(mockNavigate).toHaveBeenCalledWith('/game/1/1/hiddenLeaf');
+    });
+  });
+
+  it('does not carry a locked local stage into solo campaign', async () => {
+    setup();
+    fireEvent.click(screen.getByText('Local Arena'));
+    fireEvent.click(screen.getByLabelText('Akatsuki Hideout'));
+    fireEvent.click(screen.getByText('Solo Boss'));
+    fireEvent.click(screen.getByText('Deploy Mission'));
+
+    await waitFor(() => {
+      expect(localStorage.getItem('gameSetup')).toContain('hiddenLeaf');
+      expect(localStorage.getItem('gameSetup')).not.toContain('akatsukiHideout');
     });
   });
 

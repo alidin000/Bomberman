@@ -357,16 +357,17 @@ function objectiveTakesStructureDamage(
   if (typeof objective.x !== 'number' || typeof objective.y !== 'number') {
     return false;
   }
+  const structurePosition = { x: objective.x, y: objective.y };
 
   return state.explosions.some((explosion) => (
     explosion.x === objective.x && explosion.y === objective.y
   ))
     || state.hazards.some((hazard) => (
       hazard.warningTicks <= 0
-      && positionsTouch(hazard, objective, 0.68)
+      && positionsTouch(hazard, structurePosition, 0.68)
     ))
     || state.monsters.some((monster) => (
-      positionsTouch(monster, objective, 0.68)
+      positionsTouch(monster, structurePosition, 0.68)
     ));
 }
 
@@ -428,6 +429,7 @@ function updateMiniBossObjective(
   if (typeof objective.x !== 'number' || typeof objective.y !== 'number') {
     return objective;
   }
+  const gatePosition = { x: objective.x, y: objective.y };
   if (!objective.miniBossSpawned) return objective;
 
   const guardAlive = state.monsters.some((monster) => (
@@ -437,7 +439,7 @@ function updateMiniBossObjective(
 
   const reached = state.players.some((player) => (
     player.alive
-    && positionsTouch(player, objective, MINI_BOSS_TOUCH_DISTANCE)
+    && positionsTouch(player, gatePosition, MINI_BOSS_TOUCH_DISTANCE)
   ));
   return reached
     ? { ...objective, current: 1, status: 'complete' }
@@ -460,7 +462,7 @@ export function advanceCampaignObjectives(
   ));
   objectives = refreshObjectiveStatuses(objectives);
 
-  let workingState = {
+  let workingState: GameEngineState = {
     ...state,
     campaign: {
       ...state.campaign,
