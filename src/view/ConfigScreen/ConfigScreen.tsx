@@ -12,7 +12,6 @@ import {
   ToggleButtonGroup,
   Button,
   Divider,
-  Chip,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import Info from '@mui/icons-material/Info';
@@ -32,27 +31,18 @@ import {
   ActionKeysGrid,
   ActionKeyCell,
   ActionKeyName,
-  ConfigIntro,
   SectionTitle,
   SelectionGrid,
   SelectionCard,
   CardHeader,
-  ColorOrb,
   CardMeta,
-  ModeGrid,
   StagePreview,
   StagePreviewImage,
-  AbilityLine,
   CharacterPortrait,
   CharacterPortraitImage,
-  LoadoutGrid,
-  LoadoutKey,
-  LoadoutRow,
   CampaignRoute,
   CampaignRouteCard,
   RouteStatusBadge,
-  FlowStepStrip,
-  FlowStepPill,
   MissionBriefing,
   MissionBriefingPreview,
   MissionBriefingDetails,
@@ -71,18 +61,16 @@ import {
 } from '../../constants/props';
 import RosterBoard from '../../assets/ninja-bomber-roster-board.png';
 import StageAtlas from '../../assets/ninja-bomber-stage-atlas.png';
+import GreatWarStage from '../../assets/great-shinobi-war-stage.png';
 import {
   CHARACTER_DEFINITIONS,
-  CAMPAIGN_FLOW_STEPS,
   CAMPAIGN_VILLAGES,
-  CampaignObjectiveDefinition,
   CharacterId,
   DEFAULT_CHARACTER_ID,
   GameMode,
   STAGE_DEFINITIONS,
   StageId,
   getBossDefinition,
-  getCampaignVillage,
   getCampaignMission,
   getStageDefinition,
 } from '../../content';
@@ -131,7 +119,7 @@ const STAGE_PREVIEW_POSITIONS: Record<StageId, string> = {
   hiddenCloud: '0% 100%',
   hiddenStone: '50% 100%',
   akatsukiHideout: '100% 100%',
-  greatShinobiWar: '50% 50%',
+  greatShinobiWar: '50% 100%',
 };
 
 const CHARACTER_POSITIONS: Record<CharacterId, string> = {
@@ -159,16 +147,6 @@ function formatKeyLabel(key: string): string {
 
 const MOVEMENT_KEY_AREAS = ['up', 'left', 'down', 'right'] as const;
 
-function getMissionObjectiveSummary(objective: CampaignObjectiveDefinition): string {
-  if (objective.kind === 'rescue') {
-    return `${objective.targetCount ?? objective.targets?.length ?? 0} mission targets`;
-  }
-  if (objective.kind === 'defense') {
-    return `${Math.ceil((objective.durationMs ?? 0) / 1000)}s defense hold`;
-  }
-  return `Defeat ${objective.miniBossLabel ?? objective.label} at the gate`;
-}
-
 export const ConfigScreen = () => {
   const initialStoryProgress = useMemo(() => loadStoryProgress(), []);
   const [activeStep, setActiveStep] = useState(0);
@@ -191,13 +169,6 @@ export const ConfigScreen = () => {
   const [storyProgress, setStoryProgress] = useState(initialStoryProgress);
 
   const activePlayerCount = parseInt(numOfPlayers, 10);
-  const currentCampaignVillage = useMemo(
-    () => getCampaignVillage(storyProgress.lastStage),
-    [storyProgress.lastStage]
-  );
-  const currentFlowLabel = CAMPAIGN_FLOW_STEPS.find(
-    (step) => step.id === storyProgress.currentFlowStep
-  )?.label ?? 'Exploration';
   const selectedStageDefinition = useMemo(
     () => getStageDefinition(selectedStage),
     [selectedStage]
@@ -483,7 +454,17 @@ export const ConfigScreen = () => {
     : ['Setup', 'Controls'];
 
   return (
-    <WelcomeContainer>
+    <WelcomeContainer
+      sx={{
+        backgroundImage: `url(${StageAtlas})`,
+        backgroundSize: '300% auto',
+        backgroundPosition: '0% 0%',
+        backgroundRepeat: 'no-repeat',
+        '@media (max-width: 560px)': {
+          backgroundSize: 'auto 200%',
+        },
+      }}
+    >
       <StyledDialog open aria-labelledby="config-dialog-title">
         <DialogTitle id="config-dialog-title">
           {activeStep === 0 && 'Mission Deck'}
@@ -512,6 +493,7 @@ export const ConfigScreen = () => {
                   <MissionBriefingPreview>
                     <StagePreviewImage
                       image={StageAtlas}
+                      role="img"
                       aria-label={`${selectedStageDefinition.name} mission preview`}
                       backgroundPosition={STAGE_PREVIEW_POSITIONS[selectedStageDefinition.id]}
                     />
@@ -541,7 +523,6 @@ export const ConfigScreen = () => {
                           accent={selectedStageDefinition.palette.accent}
                         >
                           <strong>{objective.label}</strong>
-                          <span>{getMissionObjectiveSummary(objective)}</span>
                         </MissionObjectiveItem>
                       ))}
                     </MissionObjectiveList>
@@ -549,7 +530,7 @@ export const ConfigScreen = () => {
                       <Button variant="contained" size="small" onClick={handleStartSelectedMission}>
                         Deploy Mission
                       </Button>
-                      <Button variant="contained" size="small" onClick={handleContinueCampaign}>
+                      <Button variant="outlined" size="small" onClick={handleContinueCampaign}>
                         Continue Campaign
                       </Button>
                     </MissionActionRow>
@@ -558,56 +539,30 @@ export const ConfigScreen = () => {
               )}
 
               <SectionTitle variant="subtitle2">Mode</SectionTitle>
-              <ModeGrid>
+              <ToggleButtonGroup
+                value={mode}
+                exclusive
+                fullWidth
+                onChange={(_event, nextMode: GameMode | null) => {
+                  if (nextMode) handleModeSelect(nextMode);
+                }}
+                aria-label="game mode"
+              >
                 {GAME_MODES.map((item) => (
-                  <SelectionCard
+                  <ToggleButton
                     key={item.id}
-                    type="button"
-                    selected={mode === item.id}
-                    accent={item.id === 'solo' ? '#f59e0b' : '#60a5fa'}
+                    value={item.id}
                     disabled={item.disabled}
-                    aria-pressed={mode === item.id}
-                    onClick={() => !item.disabled && handleModeSelect(item.id)}
                   >
-                    <Typography variant="subtitle1" fontWeight="bold">{item.title}</Typography>
-                    <CardMeta variant="caption">{item.description}</CardMeta>
-                    {item.disabled && <Chip size="small" label="Future" />}
-                  </SelectionCard>
+                    {item.title}
+                    {item.disabled ? ' · Soon' : ''}
+                  </ToggleButton>
                 ))}
-              </ModeGrid>
+              </ToggleButtonGroup>
 
               {mode === 'solo' && (
                 <>
                   <SectionTitle variant="subtitle2">Campaign Route</SectionTitle>
-                  <ConfigIntro>
-                    <Typography variant="subtitle2" fontWeight="bold">
-                      Continue:
-                      {' '}
-                      {currentCampaignVillage.villageName}
-                    </Typography>
-                    <CardMeta variant="body2">
-                      Saved flow:
-                      {' '}
-                      {currentFlowLabel}
-                      {' '}
-                      · Reward:
-                      {' '}
-                      {currentCampaignVillage.reward}
-                    </CardMeta>
-                    <FlowStepStrip>
-                      {CAMPAIGN_FLOW_STEPS.map((step) => (
-                        <FlowStepPill
-                          key={step.id}
-                          active={storyProgress.currentFlowStep === step.id}
-                        >
-                          {step.label}
-                        </FlowStepPill>
-                      ))}
-                    </FlowStepStrip>
-                    <Button variant="contained" size="small" onClick={handleContinueCampaign}>
-                      Continue Campaign
-                    </Button>
-                  </ConfigIntro>
                   <CampaignRoute>
                     {CAMPAIGN_VILLAGES.map((village) => {
                       const stageDefinition = STAGE_DEFINITIONS.find(
@@ -635,30 +590,19 @@ export const ConfigScreen = () => {
                             if (!locked) setSelectedStage(village.stageId);
                           }}
                           aria-label={`${village.villageName} campaign route`}
+                          aria-describedby={`route-status-${village.stageId}`}
                           aria-pressed={selectedStage === village.stageId}
                         >
-                          <RouteStatusBadge accent={accent}>
+                          <RouteStatusBadge id={`route-status-${village.stageId}`} accent={accent}>
                             {village.order}
                             {' '}
                             ·
                             {' '}
                             {status}
                           </RouteStatusBadge>
-                          <Typography variant="subtitle2" fontWeight="bold" sx={{ mt: 1 }}>
+                          <Typography component="span" variant="subtitle2" fontWeight="bold" sx={{ mt: 1, display: 'block' }}>
                             {village.villageName}
                           </Typography>
-                          <CardMeta variant="caption">
-                            {village.theme}
-                            {' '}
-                            · Mini:
-                            {' '}
-                            {village.miniBoss}
-                            {' '}
-                            · Boss:
-                            {' '}
-                            {village.villageBoss}
-                          </CardMeta>
-                          <AbilityLine color={accent}>{village.reward}</AbilityLine>
                         </CampaignRouteCard>
                       );
                     })}
@@ -678,33 +622,25 @@ export const ConfigScreen = () => {
                         accent={item.palette.accent}
                         onClick={() => setSelectedStage(item.id)}
                         aria-label={item.name}
+                        aria-describedby={`stage-mechanic-${item.id}`}
                         aria-pressed={selectedStage === item.id}
                       >
                         <StagePreview>
                           <StagePreviewImage
-                            image={StageAtlas}
-                            aria-label={`${item.name} arena preview`}
-                            backgroundPosition={STAGE_PREVIEW_POSITIONS[item.id]}
+                            image={item.id === 'greatShinobiWar' ? GreatWarStage : StageAtlas}
+                            aria-hidden="true"
+                            standalone={item.id === 'greatShinobiWar'}
+                            backgroundPosition={item.id === 'greatShinobiWar'
+                              ? 'center'
+                              : STAGE_PREVIEW_POSITIONS[item.id]}
                           />
                         </StagePreview>
                         <CardHeader>
-                          <ColorOrb color={item.palette.accent} />
                           <div>
-                            <Typography variant="subtitle2" fontWeight="bold">{item.name}</Typography>
-                            <CardMeta variant="caption">{item.mechanic}</CardMeta>
+                            <Typography component="span" variant="subtitle2" fontWeight="bold">{item.name}</Typography>
+                            <CardMeta id={`stage-mechanic-${item.id}`} variant="caption">{item.mechanic}</CardMeta>
                           </div>
                         </CardHeader>
-                        {item.bossId && (
-                          <AbilityLine color={item.palette.accent}>
-                            Boss:
-                            {' '}
-                            {getBossDefinition(item.bossId).name}
-                            {' '}
-                            ·
-                            {' '}
-                            {getBossDefinition(item.bossId).attacks.join(' / ')}
-                          </AbilityLine>
-                        )}
                       </SelectionCard>
                     ))}
                   </SelectionGrid>
@@ -719,7 +655,7 @@ export const ConfigScreen = () => {
                     {' '}
                     {playerIndex + 1}
                   </Typography>
-                  <SelectionGrid>
+                  <SelectionGrid className={mode === 'local' ? 'compact' : undefined}>
                     {CHARACTER_DEFINITIONS.map((character) => (
                       <SelectionCard
                         key={`${playerIndex}-${character.id}`}
@@ -729,43 +665,25 @@ export const ConfigScreen = () => {
                         disabled={mode === 'solo'
                           && !storyProgress.unlockedCharacters.includes(character.id)}
                         onClick={() => handleCharacterSelect(playerIndex, character.id)}
-                        aria-label={`${character.name} player ${playerIndex + 1}`}
+                        aria-label={`${character.name} player ${playerIndex + 1}${mode === 'solo' && !storyProgress.unlockedCharacters.includes(character.id) ? ', locked' : ''}`}
                         aria-pressed={selectedCharacters[playerIndex] === character.id}
                       >
-                        <CharacterPortrait>
+                        <CharacterPortrait className={mode === 'local' ? 'compact' : undefined}>
                           <CharacterPortraitImage
                             image={RosterBoard}
-                            aria-label={`${character.name} portrait`}
+                            aria-hidden="true"
                             backgroundPosition={CHARACTER_POSITIONS[character.id]}
                           />
                         </CharacterPortrait>
                         <CardHeader>
-                          <ColorOrb color={character.primaryColor} />
                           <div>
-                            <Typography variant="subtitle2" fontWeight="bold">{character.name}</Typography>
+                            <Typography component="span" variant="subtitle2" fontWeight="bold">{character.name}</Typography>
                             <CardMeta variant="caption">{character.title}</CardMeta>
                           </div>
                         </CardHeader>
-                        <LoadoutGrid>
-                          <LoadoutRow color={character.secondaryColor}>
-                            <LoadoutKey>Bomb</LoadoutKey>
-                            <span>{character.basicBomb}</span>
-                          </LoadoutRow>
-                          <LoadoutRow color={character.secondaryColor}>
-                            <LoadoutKey>Ult</LoadoutKey>
-                            <span>{character.ultimate}</span>
-                          </LoadoutRow>
-                          <LoadoutRow color={character.secondaryColor}>
-                            <LoadoutKey>Role</LoadoutKey>
-                            <span>{character.passive}</span>
-                          </LoadoutRow>
-                        </LoadoutGrid>
-                        <AbilityLine color={character.secondaryColor}>
-                          {character.description}
-                        </AbilityLine>
                         {mode === 'solo'
                           && !storyProgress.unlockedCharacters.includes(character.id)
-                          && <Chip size="small" label="Locked" />}
+                          && <span>Locked</span>}
                       </SelectionCard>
                     ))}
                   </SelectionGrid>
@@ -815,14 +733,14 @@ export const ConfigScreen = () => {
                       disabled={!unlocked}
                       onClick={() => unlocked && setSelectedUpgrade(upgrade.id)}
                       aria-label={upgrade.name}
+                      aria-describedby={`upgrade-meta-${upgrade.id}${unlocked ? '' : ` upgrade-lock-${upgrade.id}`}`}
                       aria-pressed={selectedUpgrade === upgrade.id}
                     >
-                      <Typography variant="subtitle2" fontWeight="bold">
+                      <Typography component="span" variant="subtitle2" fontWeight="bold">
                         {upgrade.name}
                       </Typography>
-                      <CardMeta variant="caption">{upgrade.description}</CardMeta>
-                      <AbilityLine color="#f59e0b">{upgrade.effectLabel}</AbilityLine>
-                      {!unlocked && <Chip size="small" label="Locked" />}
+                      <CardMeta id={`upgrade-meta-${upgrade.id}`} variant="caption">{upgrade.description}</CardMeta>
+                      {!unlocked && <span id={`upgrade-lock-${upgrade.id}`}>Locked</span>}
                     </SelectionCard>
                   );
                 })}
