@@ -8,6 +8,12 @@
 // keep the old rule, which on a 390x844 phone framed two players at spawn
 // off both side edges.
 
+import {
+  SHARED_SCREEN_ESCAPE_SCALE,
+  SHARED_SCREEN_MAX_DELTA_X,
+  SHARED_SCREEN_MAX_DELTA_Y,
+} from '../../../engine/players';
+
 export const CAMERA_HEIGHT = 13.2;
 export const CAMERA_BACK = 9.6;
 export const CAMERA_FOV_DEG = 48;
@@ -39,7 +45,10 @@ export const FAR_FRAMING = 4;
  * Half the widest spread the engine allows: players.ts keeps players within
  * 12x8 cells, stretched 1.5x while one is escaping danger (18x12).
  */
-export const WIDEST_SPREAD = { halfWidth: 9, halfDepth: 6 };
+export const WIDEST_SPREAD = {
+  halfWidth: (SHARED_SCREEN_MAX_DELTA_X * SHARED_SCREEN_ESCAPE_SCALE) / 2,
+  halfDepth: (SHARED_SCREEN_MAX_DELTA_Y * SHARED_SCREEN_ESCAPE_SCALE) / 2,
+};
 
 /**
  * Narrowest box the camera frames, in cells from its centre. With the side

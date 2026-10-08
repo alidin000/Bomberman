@@ -27,12 +27,12 @@ const MUTUALLY_EXCLUSIVE: Partial<Record<Power, Power | null>> = {
 };
 
 const PICKUP_MESSAGE_MS = 3600;
-const SHARED_SCREEN_MAX_DELTA_X = 12;
-const SHARED_SCREEN_MAX_DELTA_Y = 8;
+export const SHARED_SCREEN_MAX_DELTA_X = 12;
+export const SHARED_SCREEN_MAX_DELTA_Y = 8;
 // A ninja running from danger may stretch the shared screen to this multiple,
 // so the limit never pins anyone beside a bomb. The camera's widest framing
 // still shows an 18x12 spread well inside the view.
-const SHARED_SCREEN_ESCAPE_SCALE = 1.5;
+export const SHARED_SCREEN_ESCAPE_SCALE = 1.5;
 
 function addPickupMessage(
   state: GameEngineState,
