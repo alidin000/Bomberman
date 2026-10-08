@@ -44,13 +44,13 @@ export type StaticTileLayerStyle = {
   receiveShadow: boolean;
 };
 
-export const EXPLORED_GROUND_COLOR = '#111827';
-export const HIDDEN_GROUND_COLOR = '#020617';
-export const EXPLORED_WALL_COLOR = '#1f2937';
-export const DESTROYED_CRATE_COLOR = '#5d4037';
-export const EXPLORED_CRATE_COLOR = '#2a211c';
-const FOG_EMISSIVE = '#020617';
-const DESTROYED_CRATE_EMISSIVE = '#2f1c16';
+export const EXPLORED_GROUND_COLOR = '#777e86';
+export const HIDDEN_GROUND_COLOR = '#353942';
+export const EXPLORED_WALL_COLOR = '#5d6570';
+export const DESTROYED_CRATE_COLOR = '#795d59';
+export const EXPLORED_CRATE_COLOR = '#68616a';
+const FOG_EMISSIVE = '#11151c';
+const DESTROYED_CRATE_EMISSIVE = '#4c3030';
 
 export function getStaticTileLayerStyles(
   palette: StagePalette
@@ -59,16 +59,16 @@ export function getStaticTileLayerStyles(
     shape: 'ground' as const, roughness: 0.92, castShadow: false, receiveShadow: true
   };
   const wall = {
-    shape: 'wall' as const, metalness: 0.08, roughness: 0.72, castShadow: true, receiveShadow: true
+    shape: 'wall' as const, metalness: 0, roughness: 1, castShadow: true, receiveShadow: true
   };
   const crate = {
-    shape: 'crate' as const, roughness: 0.76, castShadow: true, receiveShadow: false
+    shape: 'crate' as const, roughness: 1, castShadow: true, receiveShadow: true
   };
   return {
-    groundVisible: { ...ground, opacity: 0.48 },
-    groundExplored: { ...ground, opacity: 0.68 },
-    groundHidden: { ...ground, opacity: 0.96 },
-    wallVisible: { ...wall, emissive: palette.wall, emissiveIntensity: 0.08 },
+    groundVisible: ground,
+    groundExplored: ground,
+    groundHidden: ground,
+    wallVisible: { ...wall, emissive: palette.wall, emissiveIntensity: 0.02 },
     wallExplored: { ...wall, emissive: FOG_EMISSIVE, emissiveIntensity: 0.02 },
     crateVisible: { ...crate, emissive: palette.crate, emissiveIntensity: 0.04 },
     crateDestroyed: { ...crate, emissive: DESTROYED_CRATE_EMISSIVE, emissiveIntensity: 0.04 },

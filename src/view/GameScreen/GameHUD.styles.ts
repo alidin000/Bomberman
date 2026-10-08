@@ -21,13 +21,10 @@ export const HudRoot = styled(Box, {
   pointerEvents: 'none',
   zoom: hudScale / 100,
   '--hud-zoom': String(hudScale / 100),
-  // Phones: the right column wraps below the player cards instead of
-  // running off the right edge. The 150px top offset lives here, not on each
-  // column, so a wrapped column sits right under the cards.
+  // Phones: the panels stack below the top controls instead of running off
+  // the right edge. The top offset lives here, not on each column.
   '@media (max-width: 640px)': {
-    flexWrap: 'wrap',
-    alignContent: 'flex-start',
-    rowGap: 8,
+    display: 'block',
     paddingTop: 162,
   },
   '&::before': {
@@ -73,7 +70,14 @@ export const HudRight = styled(Box)({
     marginTop: 230,
   },
   '@media (max-width: 640px)': {
-    marginTop: 0,
+    marginTop: 8,
+    width: 'calc(100vw - 24px)',
+    maxWidth: 'calc(100vw - 24px)',
+    alignItems: 'stretch',
+    '& > *': {
+      minWidth: 0,
+      maxWidth: '100%',
+    },
   },
 });
 

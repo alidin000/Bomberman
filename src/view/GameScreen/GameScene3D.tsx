@@ -4,7 +4,7 @@ import React, {
   useEffect, useLayoutEffect, useMemo, useRef, useState,
 } from 'react';
 import {
-  Canvas, addEffect, useFrame, useLoader, useThree,
+  Canvas, addEffect, useFrame, useThree,
 } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
@@ -34,9 +34,8 @@ import { cellKey } from '../../engine/fogOfWar';
 import { getStageDefinition } from '../../content';
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
 import {
-  BossId, CharacterId, StageDefinition, StageId
+  BossId, CharacterId, StageDefinition
 } from '../../content/types';
-import StageAtlas from '../../assets/ninja-bomber-stage-atlas.png';
 import { GamePreferences } from './gamePreferences';
 import { PERF_PROBE_ENABLED, PerfProbe } from './scene/PerfProbe';
 import {
@@ -75,12 +74,7 @@ function lerpAngle(from: number, to: number, alpha: number): number {
   return from + diff * alpha;
 }
 
-type TextureCrop = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
+const USE_ARCHIVE_MODELS = false;
 
 function getMapDimensions(map: GameMap): { width: number; height: number } {
   return {
@@ -178,16 +172,16 @@ const MONSTER_VISUALS: Record<MonsterKind, {
   style: 'fox' | 'sand' | 'flame' | 'horn';
 }> = {
   basic: {
-    body: '#334155', accent: '#94a3b8', belly: '#111827', glow: '#f97316', scale: 1.08, style: 'fox'
+    body: '#536b78', accent: '#b6c8c7', belly: '#e0d5bd', glow: '#f29664', scale: 1.08, style: 'fox'
   },
   smart: {
-    body: '#c48a4a', accent: '#7c2d12', belly: '#f5deb3', glow: '#f59e0b', scale: 1.12, style: 'sand'
+    body: '#c18669', accent: '#765966', belly: '#eed6b5', glow: '#df9c6b', scale: 1.12, style: 'sand'
   },
   ghost: {
-    body: '#1d4ed8', accent: '#7dd3fc', belly: '#dbeafe', glow: '#38bdf8', scale: 1.06, style: 'flame'
+    body: '#668c9b', accent: '#a8d9d4', belly: '#d5e7dc', glow: '#8bcac9', scale: 1.06, style: 'flame'
   },
   fork: {
-    body: '#f8fafc', accent: '#a855f7', belly: '#1f2937', glow: '#a855f7', scale: 1.16, style: 'horn'
+    body: '#d4b6c5', accent: '#886a8d', belly: '#685b77', glow: '#c08ea8', scale: 1.16, style: 'horn'
   },
 };
 
@@ -244,30 +238,6 @@ const HAZARD_VISUALS: Record<HazardKind, {
   tentacleSlam: { color: '#6d28d9', accent: '#c084fc', effect: 'tentacle' },
   beastBomb: { color: '#581c87', accent: '#f97316', effect: 'bomb' },
   chakraShockwave: { color: '#fb923c', accent: '#fff7ed', effect: 'shockwave' },
-};
-
-const STAGE_CROPS: Record<StageId, TextureCrop> = {
-  hiddenLeaf: {
-    x: 0, y: 0, width: 1 / 3, height: 0.5
-  },
-  hiddenSand: {
-    x: 1 / 3, y: 0, width: 1 / 3, height: 0.5
-  },
-  hiddenMist: {
-    x: 2 / 3, y: 0, width: 1 / 3, height: 0.5
-  },
-  hiddenCloud: {
-    x: 0, y: 0.5, width: 1 / 3, height: 0.5
-  },
-  hiddenStone: {
-    x: 1 / 3, y: 0.5, width: 1 / 3, height: 0.5
-  },
-  akatsukiHideout: {
-    x: 2 / 3, y: 0.5, width: 1 / 3, height: 0.5
-  },
-  greatShinobiWar: {
-    x: 1 / 3, y: 0.25, width: 1 / 3, height: 0.5
-  },
 };
 
 const BOMB_STYLE: Record<BombKind, { color: string; emissive: string }> = {
@@ -488,21 +458,10 @@ function useSceneModel(cacheKey: string | null, config?: SceneModelConfig) {
 }
 
 function useCharacterModel(characterId: CharacterId) {
-  return useSceneModel(`character:${characterId}`, CHARACTER_MODEL_CONFIGS[characterId]);
-}
-
-function useCroppedTexture(image: string, crop: TextureCrop) {
-  const source = useLoader(THREE.TextureLoader, image);
-  return useMemo(() => {
-    const texture = source.clone();
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.repeat.set(crop.width, crop.height);
-    texture.offset.set(crop.x, 1 - crop.y - crop.height);
-    texture.needsUpdate = true;
-    return texture;
-  }, [crop, source]);
+  return useSceneModel(
+    USE_ARCHIVE_MODELS ? `character:${characterId}` : null,
+    USE_ARCHIVE_MODELS ? CHARACTER_MODEL_CONFIGS[characterId] : undefined,
+  );
 }
 
 function TextSprite({
@@ -527,25 +486,24 @@ function TextSprite({
 
 function Floor({
   palette,
-  stageId,
   width,
   height,
 }: {
   palette: StageDefinition['palette'];
-  stageId: StageId;
   width: number;
   height: number;
 }) {
-  const floorTexture = useCroppedTexture(StageAtlas, STAGE_CROPS[stageId]);
   const [centerX, , centerZ] = getMapWorldCenter(width, height);
-  const gridSize = Math.max(width, height);
   return (
     <>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.05, centerZ]} receiveShadow>
-        <planeGeometry args={[width + 3, height + 3]} />
-        <meshStandardMaterial map={floorTexture} color="#ffffff" roughness={0.92} />
+      <mesh position={[centerX, -0.28, centerZ]} receiveShadow castShadow>
+        <boxGeometry args={[width + 1.1, 0.48, height + 1.1]} />
+        <meshStandardMaterial color={palette.wall} roughness={1} flatShading />
       </mesh>
-      <gridHelper args={[gridSize, gridSize, palette.accent, palette.groundA]} position={[centerX, 0.01, centerZ]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.035, centerZ]} receiveShadow>
+        <planeGeometry args={[width + 1.1, height + 1.1]} />
+        <meshStandardMaterial color={palette.groundB} roughness={1} />
+      </mesh>
     </>
   );
 }
@@ -1653,7 +1611,6 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
   const motionRef = useRef(0);
   const ghost = isPowerUpActive(state, player.id, 'Ghost');
   const invincible = isPowerUpActive(state, player.id, 'Invincibility');
-  const transformed = isTransformationActive(player);
   const visual = CHARACTER_VISUALS[player.characterId];
   const characterModel = useCharacterModel(player.characterId);
   const reducedMotion = React.useContext(ReducedMotionContext);
@@ -1722,14 +1679,6 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
   return (
     <group ref={ref}>
       <ShadowBlob />
-      {/* One light per player: the transformation glow used to be a second
-          light at the same spot, so it now just widens and brightens this one. */}
-      <PooledPointLight
-        priority={LIGHT_PRIORITY.player}
-        color={visual.aura}
-        distance={transformed ? 3.4 : 2.6}
-        intensity={(ghost ? 0.55 : 0.85) + (transformed ? 0.95 : 0)}
-      />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.39, 0]}>
         <torusGeometry args={[0.42, 0.022, 8, 36]} />
         <meshStandardMaterial
@@ -1746,7 +1695,7 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
       ) : (
         <>
           <mesh position={[0, -0.04, 0]} castShadow>
-            <capsuleGeometry args={[0.2, 0.44, 8, 16]} />
+            <capsuleGeometry args={[0.19, 0.26, 6, 10]} />
             <meshStandardMaterial
               color={visual.body}
               emissive={visual.body}
@@ -1754,6 +1703,7 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
               transparent={ghost}
               opacity={ghost ? 0.55 : 1}
               roughness={0.46}
+              flatShading
             />
           </mesh>
           <mesh position={[0, -0.08, 0.16]} castShadow>
@@ -1767,8 +1717,8 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
             />
           </mesh>
           <mesh position={[0, 0.32, 0.02]} castShadow>
-            <sphereGeometry args={[0.19, 18, 18]} />
-            <meshStandardMaterial color="#f2c7a2" roughness={0.48} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+            <sphereGeometry args={[0.225, 10, 8]} />
+            <meshStandardMaterial color="#f2c7a2" roughness={0.9} flatShading transparent={ghost} opacity={ghost ? 0.55 : 1} />
           </mesh>
           <CharacterHair characterId={player.characterId} visual={visual} ghost={ghost} />
           <mesh position={[0, 0.35, 0.2]} castShadow>
@@ -1877,6 +1827,13 @@ function MonsterNameplate({
   );
 }
 
+function MonsterBodyGeometry({ style }: { style: typeof MONSTER_VISUALS[MonsterKind]['style'] }) {
+  if (style === 'flame') return <coneGeometry args={[0.24, 0.76, 7]} />;
+  if (style === 'horn') return <dodecahedronGeometry args={[0.34, 0]} />;
+  if (style === 'sand') return <sphereGeometry args={[0.35, 8, 6]} />;
+  return <capsuleGeometry args={[0.17, 0.46, 5, 8]} />;
+}
+
 function MonsterAttackTell({ monster, visual }: { monster: MonsterState; visual: typeof MONSTER_VISUALS[MonsterKind] }) {
   if (monster.kind === 'basic') {
     return (
@@ -1973,8 +1930,8 @@ function MonsterMeshBase({ monster }: { monster: MonsterState }) {
   return (
     <group ref={ref} scale={visual.scale}>
       <ShadowBlob />
-      <mesh position={[0, -0.05, 0]} castShadow scale={visual.style === 'horn' ? [1.08, 1.05, 0.96] : [0.95, 1, 0.9]}>
-        <capsuleGeometry args={[0.17, 0.46, 7, 14]} />
+      <mesh position={[0, -0.05, 0]} castShadow scale={visual.style === 'sand' ? [1.12, 0.86, 1] : [0.95, 1, 0.9]}>
+        <MonsterBodyGeometry style={visual.style} />
         <meshStandardMaterial
           color={color}
           emissive={visual.glow}
@@ -1982,6 +1939,7 @@ function MonsterMeshBase({ monster }: { monster: MonsterState }) {
           transparent={isGhost}
           opacity={isGhost ? 0.58 : 1}
           roughness={0.46}
+          flatShading
         />
       </mesh>
       <mesh position={[0, -0.08, 0.17]} scale={[0.9, 0.76, 0.22]} castShadow>
@@ -1989,8 +1947,8 @@ function MonsterMeshBase({ monster }: { monster: MonsterState }) {
         <meshStandardMaterial color={visual.belly} emissive={visual.glow} emissiveIntensity={0.08} transparent={isGhost} opacity={isGhost ? 0.42 : 1} />
       </mesh>
       <mesh position={[0, 0.31, 0.04]} scale={visual.style === 'horn' ? [0.82, 0.94, 0.78] : [0.82, 0.78, 0.78]} castShadow>
-        <sphereGeometry args={[0.2, 16, 16]} />
-        <meshStandardMaterial color={color} emissive={visual.glow} emissiveIntensity={isGhost ? 0.9 : 0.28} transparent={isGhost} opacity={isGhost ? 0.55 : 1} roughness={0.42} />
+        <sphereGeometry args={[0.2, 10, 8]} />
+        <meshStandardMaterial color={color} emissive={visual.glow} emissiveIntensity={isGhost ? 0.9 : 0.28} transparent={isGhost} opacity={isGhost ? 0.55 : 1} roughness={0.9} flatShading />
       </mesh>
       {[-0.21, 0.21].map((side) => (
         <mesh
@@ -2342,7 +2300,7 @@ function BossStyleDetails({
 function BossMesh({ state }: { state: GameEngineState }) {
   const { boss } = state;
   const ref = useRef<THREE.Group>(null);
-  const bossModelConfig = boss ? BOSS_MODEL_CONFIGS[boss.id] : undefined;
+  const bossModelConfig = boss && USE_ARCHIVE_MODELS ? BOSS_MODEL_CONFIGS[boss.id] : undefined;
   const bossModel = useSceneModel(
     boss && bossModelConfig ? `boss:${boss.id}` : null,
     bossModelConfig,
@@ -2374,16 +2332,16 @@ function BossMesh({ state }: { state: GameEngineState }) {
       ) : (
         <>
           <mesh castShadow scale={visual.style === 'shell' || visual.style === 'slug' ? [1.22, 0.78, 1.04] : [1, 0.95, 1]}>
-            <sphereGeometry args={[0.38, 20, 20]} />
-            <meshStandardMaterial color={visual.body} emissive={visual.glow} emissiveIntensity={0.32} roughness={0.42} />
+            <dodecahedronGeometry args={[0.42, 1]} />
+            <meshStandardMaterial color={visual.body} emissive={visual.glow} emissiveIntensity={0.18} roughness={0.95} flatShading />
           </mesh>
           <mesh position={[0, -0.02, 0.28]} scale={[0.86, 0.52, 0.28]}>
             <sphereGeometry args={[0.2, 14, 14]} />
             <meshStandardMaterial color={visual.belly} emissive={visual.glow} emissiveIntensity={0.1} roughness={0.5} />
           </mesh>
           <mesh position={[0, 0.48, 0.08]} scale={[0.92, 0.74, 0.8]} castShadow>
-            <sphereGeometry args={[0.22, 18, 18]} />
-            <meshStandardMaterial color={visual.body} emissive={visual.glow} emissiveIntensity={0.38} roughness={0.4} />
+            <dodecahedronGeometry args={[0.25, 1]} />
+            <meshStandardMaterial color={visual.body} emissive={visual.glow} emissiveIntensity={0.22} roughness={0.95} flatShading />
           </mesh>
           {[-0.1, 0.1].map((side) => (
             <React.Fragment key={`${boss.id}-eye-${side}`}>
@@ -3568,16 +3526,11 @@ function SceneContent({
     <LightPool>
       <ShaderWarmup />
       <CameraRig state={state} preferences={preferences} impact={impact} />
-      <ambientLight intensity={0.72} />
-      <hemisphereLight args={['#fef3c7', '#111827', 0.55]} />
-      {/* No unbounded fill point lights: with physical falloff the two that
-          were here (0.95 at y 8, 0.45 at y 5) changed no pixel by more than
-          2/255 on the versus and campaign views, yet every lit fragment paid
-          for both. */}
-      <directionalLight position={[8, 15, 6]} intensity={1.65} castShadow />
+      <ambientLight intensity={0.55} />
+      <hemisphereLight args={['#fff3da', '#526773', 0.85]} />
+      <directionalLight position={[-8, 15, 9]} intensity={1.7} color="#fff0d3" castShadow />
       <Floor
         palette={stage.palette}
-        stageId={stage.id}
         width={mapDimensions.width}
         height={mapDimensions.height}
       />
@@ -3664,10 +3617,11 @@ export function GameScene3D({
       style={{
         width: '100%',
         height: '100%',
-        background: '#272b35',
+        background: '#7899a1',
         filter: preferences.highContrast ? 'contrast(1.28) saturate(1.14)' : 'none',
       }}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
+      flat
       camera={{ position: [0, 13.2, 9.6], fov: 48 }}
     >
       <ReducedMotionContext.Provider value={preferences.reducedMotion}>

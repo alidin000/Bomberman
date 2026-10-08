@@ -14,20 +14,20 @@ export const StyledDialog = styled(Dialog)({
     backgroundColor: 'rgba(33, 29, 26, 0.78)',
   },
   '& .MuiDialog-paper': {
-    width: '1220px',
-    maxWidth: '96vw',
-    minHeight: 'min(760px, calc(100dvh - 64px))',
-    maxHeight: '93dvh',
+    width: '980px',
+    maxWidth: 'calc(100vw - 16px)',
+    minHeight: 'min(760px, calc(100dvh - 16px))',
+    maxHeight: 'calc(100dvh - 16px)',
+    margin: 8,
     padding: '18px 20px 0',
     overflow: 'hidden',
-    borderRadius: 2,
+    borderRadius: 8,
     clipPath: panelCut,
     color: 'var(--anime-ink)',
-    backgroundColor: 'var(--anime-paper-light)',
-    backgroundImage: 'radial-gradient(rgba(33,29,26,0.1) 0.6px, transparent 0.6px)',
-    backgroundSize: '5px 5px',
-    border: '3px solid var(--anime-ink)',
-    boxShadow: '8px 8px 0 var(--anime-teal)',
+    backgroundColor: '#f5eee1',
+    backgroundImage: 'none',
+    border: '1px solid rgba(255,255,255,0.45)',
+    boxShadow: '0 30px 90px rgba(17,31,36,0.3)',
   },
   '& .MuiDialogTitle-root': {
     position: 'relative',
@@ -37,28 +37,30 @@ export const StyledDialog = styled(Dialog)({
     padding: '8px 38px 9px',
     clipPath: bannerCut,
     color: 'var(--anime-paper-light)',
-    background: 'var(--anime-vermilion)',
+    background: 'var(--anime-teal)',
     fontWeight: 900,
     letterSpacing: 0,
     textAlign: 'center',
     textTransform: 'uppercase',
-    boxShadow: '4px 4px 0 var(--anime-ink)',
+    borderRadius: 8,
+    boxShadow: '0 10px 24px rgba(17,31,36,0.16)',
   },
   '& .MuiDialogContent-root': {
     padding: '0 4px 18px',
     overflowX: 'hidden',
-    borderTop: '2px solid var(--anime-ink)',
+    borderTop: 0,
   },
   '& .MuiStepper-root': {
     margin: '0 auto 14px',
     padding: '9px 12px',
     maxWidth: 760,
     clipPath: chipCut,
-    background: 'var(--anime-paper)',
-    border: '2px solid var(--anime-ink)',
+    background: 'rgba(255,255,255,0.42)',
+    border: 0,
+    borderRadius: 8,
   },
   '& .MuiStepLabel-label': {
-    color: 'rgba(33,29,26,0.62)',
+    color: 'rgba(33,29,26,0.8)',
     fontWeight: 900,
     letterSpacing: 0,
     textTransform: 'uppercase',
@@ -81,7 +83,7 @@ export const StyledDialog = styled(Dialog)({
     color: 'rgba(33,29,26,0.66)',
   },
   '& .MuiButton-root': {
-    borderRadius: 2,
+    borderRadius: 8,
     clipPath: chipCut,
     fontWeight: 900,
     letterSpacing: 0,
@@ -90,18 +92,18 @@ export const StyledDialog = styled(Dialog)({
   '& .MuiButton-contained': {
     background: 'var(--anime-vermilion)',
     color: 'var(--anime-paper-light)',
-    border: '2px solid var(--anime-ink)',
-    boxShadow: '3px 3px 0 var(--anime-ink)',
+    border: 0,
+    boxShadow: '0 8px 18px rgba(33,29,26,0.16)',
   },
   '& .MuiButton-contained:hover': {
     background: '#d65343',
   },
   '& .MuiButton-outlined': {
     color: 'var(--anime-ink)',
-    borderColor: 'var(--anime-ink)',
+    borderColor: 'rgba(33,29,26,0.32)',
   },
   '& .MuiButton-outlined:hover': {
-    borderColor: 'var(--anime-ink)',
+    borderColor: 'var(--anime-teal)',
     background: 'rgba(212,163,63,0.2)',
   },
   '& .MuiStepButton-root': {
@@ -111,14 +113,18 @@ export const StyledDialog = styled(Dialog)({
   '& .MuiToggleButton-root': {
     minWidth: 58,
     color: 'var(--anime-ink)',
-    borderColor: 'var(--anime-ink)',
-    background: 'var(--anime-paper-light)',
+    borderColor: 'rgba(33,29,26,0.22)',
+    background: 'rgba(255,255,255,0.42)',
     fontWeight: 900,
     clipPath: chipCut,
   },
   '& .MuiToggleButton-root.Mui-selected': {
     color: 'var(--anime-paper-light)',
     background: 'var(--anime-teal)',
+  },
+  '& .MuiToggleButton-root.Mui-disabled': {
+    color: 'rgba(33,29,26,0.42)',
+    background: 'rgba(255,255,255,0.2)',
   },
   '@media (max-width: 680px)': {
     '& .MuiDialog-paper': {
@@ -148,7 +154,7 @@ export const CenteredButtonContainer = styled.div`
   width: 100%;
   margin-top: 22px;
   padding: 16px 0 18px;
-  background: linear-gradient(180deg, transparent, var(--anime-paper-light) 42%);
+  background: linear-gradient(180deg, transparent, #f5eee1 42%);
 `;
 
 export const Row = styled.div`
@@ -160,8 +166,9 @@ export const Row = styled.div`
   margin: 24px 0;
   padding: 12px 14px;
   clip-path: ${chipCut};
-  background: var(--anime-paper);
-  border: 2px solid var(--anime-ink);
+  background: rgba(255, 255, 255, 0.38);
+  border: 1px solid rgba(33, 29, 26, 0.16);
+  border-radius: 8px;
 `;
 
 export const PlayerControlsRow = styled.div<PlayerControlsRowProps>`
@@ -250,7 +257,7 @@ export const MovementKeyCell = styled.label<{ area: string }>`
 
 export const KeyHint = styled.p`
   margin: 6px 0 14px;
-  color: rgba(33, 29, 26, 0.6);
+  color: rgba(33, 29, 26, 0.8);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -277,7 +284,7 @@ export const SummaryItem = styled.div<{ accent: string }>`
   font-size: 0.74rem;
 
   & span {
-    color: rgba(33, 29, 26, 0.6);
+    color: rgba(33, 29, 26, 0.8);
     font-size: 0.62rem;
     font-weight: 900;
     text-transform: uppercase;
@@ -382,10 +389,10 @@ export const MissionBriefing = styled.div<{ accent: string }>`
   margin: 0 0 18px;
   padding: 14px;
   clip-path: ${panelCut};
-  border: 2px solid var(--anime-ink);
-  border-left: 8px solid ${(props) => props.accent};
-  background: var(--anime-paper);
-  box-shadow: 4px 4px 0 var(--anime-ink);
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, ${(props) => props.accent} 8%, #fffaf0);
+  box-shadow: 0 14px 34px rgba(33, 29, 26, 0.1);
 
   @media (max-width: 780px) {
     grid-template-columns: 1fr;
@@ -396,7 +403,8 @@ export const MissionBriefingPreview = styled.div`
   min-height: 238px;
   overflow: hidden;
   clip-path: ${panelCut};
-  border: 2px solid var(--anime-ink);
+  border: 0;
+  border-radius: 7px;
   background: var(--anime-paper-light);
 `;
 
@@ -424,16 +432,17 @@ export const MissionObjectiveList = styled.div`
 `;
 
 export const MissionObjectiveItem = styled.div<{ accent: string }>`
-  min-height: 64px;
-  padding: 9px 10px;
+  min-height: 36px;
+  padding: 8px 10px;
   clip-path: ${chipCut};
   background: var(--anime-paper-light);
-  border: 1px solid var(--anime-ink);
-  border-left: 5px solid ${(props) => props.accent};
+  border: 0;
+  border-left: 4px solid ${(props) => props.accent};
+  border-radius: 6px;
 
   & strong {
     display: block;
-    margin-bottom: 4px;
+    margin-bottom: 0;
     color: var(--anime-ink);
     font-size: 0.82rem;
   }
@@ -466,11 +475,12 @@ export const CampaignRouteCard = styled.button<{
   locked: boolean;
   accent: string;
 }>`
-  min-height: 116px;
-  padding: 10px;
+  min-height: 82px;
+  padding: 12px;
   clip-path: ${panelCut};
-  border: 2px solid var(--anime-ink);
-  border-top: 7px solid ${(props) => (props.active ? props.accent : 'var(--anime-ink)')};
+  border: 1px solid rgba(33, 29, 26, 0.14);
+  border-radius: 8px;
+  border-top: 4px solid ${(props) => (props.active ? props.accent : 'transparent')};
   background: ${(props) => {
     if (props.locked) return '#d2c9b5';
     if (props.completed) return `color-mix(in srgb, ${props.accent} 18%, var(--anime-paper-light))`;
@@ -480,12 +490,12 @@ export const CampaignRouteCard = styled.button<{
   text-align: left;
   cursor: ${(props) => (props.locked ? 'not-allowed' : 'pointer')};
   opacity: ${(props) => (props.locked ? 0.54 : 1)};
-  box-shadow: ${(props) => (props.active ? '4px 4px 0 var(--anime-ink)' : 'none')};
+  box-shadow: ${(props) => (props.active ? '0 12px 24px rgba(33,29,26,0.14)' : 'none')};
   transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
 
   &:hover:not(:disabled) {
     transform: translateY(-3px);
-    box-shadow: 4px 4px 0 var(--anime-ink);
+    box-shadow: 0 12px 24px rgba(33,29,26,0.14);
   }
 
   &:focus-visible {
@@ -501,8 +511,10 @@ export const RouteStatusBadge = styled.span<{ accent: string }>`
   min-height: 20px;
   padding: 3px 7px;
   clip-path: ${chipCut};
-  color: var(--anime-paper-light);
-  background: ${(props) => props.accent};
+  color: var(--anime-ink);
+  background: color-mix(in srgb, ${(props) => props.accent} 18%, var(--anime-paper-light));
+  border: 1px solid ${(props) => props.accent};
+  border-radius: 999px;
   font-size: 0.62rem;
   font-weight: 900;
   text-transform: uppercase;
@@ -543,22 +555,29 @@ export const ReferenceImage = styled.img`
 `;
 
 export const CharacterPortrait = styled.div`
-  height: 174px;
+  height: 140px;
   margin: -6px -6px 10px;
   overflow: hidden;
   clip-path: ${panelCut};
-  border: 2px solid var(--anime-ink);
+  border: 0;
+  border-radius: 6px;
   background: var(--anime-paper-light);
+
+  &.compact {
+    height: 92px;
+  }
 `;
 
-export const CharacterPortraitImage = styled.div<{
+export const CharacterPortraitImage = styled('div', {
+  shouldForwardProp: (prop) => !['image', 'backgroundPosition'].includes(String(prop)),
+})<{
   image: string;
   backgroundPosition: string;
 }>`
   width: 100%;
   height: 100%;
   background-image: url(${(props) => props.image});
-  background-size: 600% 280%;
+  background-size: 600% auto;
   background-position: ${(props) => props.backgroundPosition};
   background-repeat: no-repeat;
 `;
@@ -568,32 +587,42 @@ export const SectionTitle = styled(Typography)`
   z-index: 0;
   width: fit-content;
   margin: 20px auto 12px;
-  padding: 6px 36px 7px;
-  clip-path: ${bannerCut};
-  color: var(--anime-paper-light);
-  background: var(--anime-teal);
+  padding: 0;
+  color: var(--anime-ink);
+  background: transparent;
   font-weight: 900;
   letter-spacing: 0;
   text-transform: uppercase;
-  text-align: center;
+  text-align: left;
 `;
 
 export const SelectionGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(164px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
+  gap: 12px;
+
+  &.compact {
+    grid-template-columns: repeat(6, minmax(92px, 1fr));
+  }
+
+  @media (max-width: 760px) {
+    &.compact {
+      grid-template-columns: repeat(3, minmax(92px, 1fr));
+    }
+  }
 `;
 
 export const SelectionCard = styled.button<{ selected: boolean; accent: string }>`
   position: relative;
-  min-height: 132px;
+  min-height: 88px;
   padding: 10px;
   clip-path: ${panelCut};
-  border: 2px solid var(--anime-ink);
+  border: 2px solid ${(props) => (props.selected ? props.accent : 'transparent')};
+  border-radius: 8px;
   background: ${(props) => (
     props.selected
       ? `color-mix(in srgb, ${props.accent} 18%, var(--anime-paper-light))`
-      : 'var(--anime-paper-light)'
+      : 'rgba(255,255,255,0.56)'
   )};
   color: var(--anime-ink);
   cursor: pointer;
@@ -601,8 +630,8 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
   transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
   box-shadow: ${(props) => (
     props.selected
-      ? '4px 4px 0 var(--anime-ink)'
-      : 'none'
+      ? '0 12px 26px rgba(33,29,26,0.14)'
+      : '0 5px 16px rgba(33,29,26,0.06)'
   )};
 
   &::before {
@@ -624,7 +653,7 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
   &:hover:not(:disabled) {
     transform: translateY(-3px);
     border-color: ${(props) => props.accent};
-    box-shadow: 4px 4px 0 var(--anime-ink);
+    box-shadow: 0 12px 26px rgba(33,29,26,0.14);
   }
 
   &:focus-visible {
@@ -635,22 +664,26 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
 `;
 
 export const StagePreview = styled.div`
-  height: 128px;
+  height: 110px;
   margin: -6px -6px 10px;
   overflow: hidden;
   clip-path: ${panelCut};
-  border: 2px solid var(--anime-ink);
+  border: 0;
+  border-radius: 6px;
   background: var(--anime-paper-light);
 `;
 
-export const StagePreviewImage = styled.div<{
+export const StagePreviewImage = styled('div', {
+  shouldForwardProp: (prop) => !['image', 'backgroundPosition', 'standalone'].includes(String(prop)),
+})<{
   image: string;
   backgroundPosition: string;
+  standalone?: boolean;
 }>`
   width: 100%;
   height: 100%;
   background-image: url(${(props) => props.image});
-  background-size: 300% 200%;
+  background-size: ${(props) => (props.standalone ? 'cover' : '300% auto')};
   background-position: ${(props) => props.backgroundPosition};
   background-repeat: no-repeat;
   filter: saturate(0.76) contrast(1.08);
