@@ -100,6 +100,87 @@ function formatMovementKeys(bindings: string[]): string {
   ].map(formatKeyLabel).join(' ');
 }
 
+type GameTopControlsProps = {
+  isPaused: boolean;
+  showHud: boolean;
+  onPauseToggle: () => void;
+  onRestart: () => void;
+  onOpenSettings: () => void;
+  onShowControls: () => void;
+  onToggleHud: () => void;
+};
+
+// Memoised so the five tooltips and icon buttons do not re-render on every
+// engine tick. An open MUI Tooltip rebuilds its popper.js instance on each
+// render (its default PopperProps object is new every time), which forces a
+// style recalc and layout per tick while the pointer rests on a button.
+const GameTopControls = React.memo(({
+  isPaused,
+  showHud,
+  onPauseToggle,
+  onRestart,
+  onOpenSettings,
+  onShowControls,
+  onToggleHud,
+}: GameTopControlsProps) => (
+  <TopControls>
+    <Tooltip title={isPaused ? 'Resume' : 'Pause'}>
+      <ControlButton
+        aria-label={isPaused ? 'resume game' : 'pause game'}
+        onClick={onPauseToggle}
+      >
+        {isPaused ? <PlayArrowIcon /> : <PauseIcon />}
+      </ControlButton>
+    </Tooltip>
+    <Tooltip title="Restart same setup">
+      <ControlButton aria-label="restart same setup" onClick={onRestart}>
+        <RestartAltIcon />
+      </ControlButton>
+    </Tooltip>
+    <Tooltip title="Settings">
+      <ControlButton
+        aria-label="open settings"
+        onClick={onOpenSettings}
+      >
+        <SettingsIcon />
+      </ControlButton>
+    </Tooltip>
+    <Tooltip title="Controls">
+      <ControlButton
+        aria-label="show controls"
+        onClick={onShowControls}
+      >
+        <KeyboardIcon />
+      </ControlButton>
+    </Tooltip>
+    <Tooltip title={showHud ? 'Hide HUD' : 'Show HUD'}>
+      <ControlButton
+        aria-label={showHud ? 'hide HUD' : 'show HUD'}
+        onClick={onToggleHud}
+      >
+        {showHud ? <VisibilityOffIcon /> : <VisibilityIcon />}
+      </ControlButton>
+    </Tooltip>
+  </TopControls>
+));
+GameTopControls.displayName = 'GameTopControls';
+
+// Closed dialogs still ran their render (and the result dialog its match
+// breakdown) on every tick. Skip parent re-renders while they stay closed;
+// opening one always re-renders it with fresh props.
+const MemoRoundResultDialog = React.memo(
+  RoundResultDialog,
+  (prev, next) => !prev.open && !next.open
+);
+const MemoSettingsScreen = React.memo(
+  SettingsScreen,
+  (prev, next) => !prev.open && !next.open
+);
+const MemoModifyControlsDialog = React.memo(
+  ModifyControlsDialog,
+  (prev, next) => !prev.isOpen && !next.isOpen
+);
+
 export const GameScreen = () => {
   const { numOfPlayers, numOfRounds, selectedMap } = useParams();
   const navigate = useNavigate();
@@ -130,6 +211,8 @@ export const GameScreen = () => {
 
   const {
     state,
+    motion,
+    advanceFrame,
     pause,
     resume,
     restart,
@@ -267,6 +350,10 @@ export const GameScreen = () => {
     showControlsGuide,
   ]);
 
+  const handleToggleHud = useCallback(() => {
+    setShowHud((visible) => !visible);
+  }, []);
+
   const handleQuitGame = useCallback(() => {
     navigate('/');
   }, [navigate]);
@@ -324,50 +411,22 @@ export const GameScreen = () => {
   return (
     <GameBackground>
       {showHud && <GameHUD state={state} scale={preferences.hudScale} />}
-      <TopControls>
-        <Tooltip title={isPaused ? 'Resume' : 'Pause'}>
-          <ControlButton
-            aria-label={isPaused ? 'resume game' : 'pause game'}
-            onClick={showControlsGuide ? handleDismissControlsGuide : handleTogglePause}
-          >
-            {isPaused ? <PlayArrowIcon /> : <PauseIcon />}
-          </ControlButton>
-        </Tooltip>
-        <Tooltip title="Restart same setup">
-          <ControlButton aria-label="restart same setup" onClick={restart}>
-            <RestartAltIcon />
-          </ControlButton>
-        </Tooltip>
-        <Tooltip title="Settings">
-          <ControlButton
-            aria-label="open settings"
-            onClick={handleOpenSettings}
-          >
-            <SettingsIcon />
-          </ControlButton>
-        </Tooltip>
-        <Tooltip title="Controls">
-          <ControlButton
-            aria-label="show controls"
-            onClick={handleShowControlsGuide}
-          >
-            <KeyboardIcon />
-          </ControlButton>
-        </Tooltip>
-        <Tooltip title={showHud ? 'Hide HUD' : 'Show HUD'}>
-          <ControlButton
-            aria-label={showHud ? 'hide HUD' : 'show HUD'}
-            onClick={() => setShowHud((visible) => !visible)}
-          >
-            {showHud ? <VisibilityOffIcon /> : <VisibilityIcon />}
-          </ControlButton>
-        </Tooltip>
-      </TopControls>
+      <GameTopControls
+        isPaused={isPaused}
+        showHud={showHud}
+        onPauseToggle={showControlsGuide ? handleDismissControlsGuide : handleTogglePause}
+        onRestart={restart}
+        onOpenSettings={handleOpenSettings}
+        onShowControls={handleShowControlsGuide}
+        onToggleHud={handleToggleHud}
+      />
       <GameSceneContainer>
         <GameScene3D
           state={state}
           preferences={preferences}
           impact={feedback.impact}
+          motion={motion}
+          advanceFrame={advanceFrame}
         />
       </GameSceneContainer>
       {feedback.caption && (
@@ -455,7 +514,7 @@ export const GameScreen = () => {
           </PauseMenuCard>
         </PauseOverlay>
       )}
-      <RoundResultDialog
+      <MemoRoundResultDialog
         open={dialogOpen}
         onClose={handleCloseDialog}
         onRestart={restart}
@@ -464,7 +523,7 @@ export const GameScreen = () => {
         tone={resultTone}
         state={state}
       />
-      <SettingsScreen
+      <MemoSettingsScreen
         open={isSettingsOpen}
         onClose={() => {
           setIsSettingsOpen(false);
@@ -483,7 +542,7 @@ export const GameScreen = () => {
         preferences={preferences}
         onPreferencesChange={handlePreferencesChange}
       />
-      <ModifyControlsDialog
+      <MemoModifyControlsDialog
         isOpen={isModifyingControls}
         onClose={() => {
           setIsModifyingControls(false);

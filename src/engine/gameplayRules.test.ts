@@ -7,7 +7,8 @@ import { parseMapRows } from './mapLoader';
 import { createBomb, explodeBombs } from './bombs';
 import { createDangerMap } from './monsters';
 import {
-  PRESSURE_BLOCK_INTERVAL_MS, VERSUS_ROUND_MS, getUpcomingPressureCells,
+  PRESSURE_BLOCK_INTERVAL_MS, PRESSURE_FILL_MS, VERSUS_ROUND_MS, getUpcomingPressureCells,
+  tickSuddenDeath,
 } from './suddenDeath';
 import { genericPowerUpOptions } from '../model/gameItem';
 
@@ -260,6 +261,23 @@ describe('versus sudden death', () => {
     expect(state.map[1][2]).toBe('Wall');
     expect(state.bombs).toEqual([]);
     expect(state.players[0].activeBombs).toBe(0);
+  });
+
+  it('closes a 35x35 stage arena in batches within the fill time', () => {
+    const stageMap = parseMapRows(Array.from({ length: 35 }, (_, y) => (
+      y === 0 || y === 34 ? 'W'.repeat(35) : `W${' '.repeat(33)}W`
+    )).map((row) => row.split('')));
+    const start = liveRound({ ...versusConfig, map: stageMap }, {
+      roundElapsedMs: VERSUS_ROUND_MS - 50,
+    });
+
+    const firstDrop = tickSuddenDeath(start, 50);
+    expect(firstDrop.pressureBlocksPlaced).toBe(8);
+    expect(getUpcomingPressureCells(firstDrop)).toHaveLength(8);
+
+    const closed = tickSuddenDeath(firstDrop, PRESSURE_FILL_MS);
+    expect(closed.pressureBlocksPlaced).toBe(33 * 33);
+    expect(closed.map[17][17]).toBe('Wall');
   });
 
   it('never closes the arena in campaign missions', () => {

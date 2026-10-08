@@ -641,6 +641,7 @@ export function explodeBombs(
 }
 
 export function tickBombs(state: GameEngineState, deltaMs: number): GameEngineState {
+  if (state.bombs.length === 0) return state;
   const ready: BombState[] = [];
   const ticking = state.bombs.map((bomb) => {
     if (bomb.manualDetonation) return bomb;
@@ -660,6 +661,7 @@ export function tickBombs(state: GameEngineState, deltaMs: number): GameEngineSt
 }
 
 export function tickExplosions(state: GameEngineState, deltaMs: number): GameEngineState {
+  if (state.explosions.length === 0 && state.destroyedBoxes.length === 0) return state;
   const explosions = state.explosions
     .map((e) => ({ ...e, ticksRemaining: e.ticksRemaining - deltaMs }))
     .filter((e) => e.ticksRemaining > 0);

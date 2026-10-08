@@ -860,8 +860,8 @@ function tickMonsterAbility(
 }
 
 export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngineState {
-  let players = [...state.players];
-  let hazards = [...state.hazards];
+  // The ability helpers never mutate these, so no defensive copies.
+  let { players, hazards } = state;
   let spawned: MonsterState[] = [];
   const movementContext = createMonsterMovementContext(
     state.monsters,

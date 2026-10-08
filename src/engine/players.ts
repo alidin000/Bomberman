@@ -466,6 +466,7 @@ export function tickPickupMessages(
   state: GameEngineState,
   deltaMs: number,
 ): GameEngineState {
+  if (state.pickupMessages && state.pickupMessages.length === 0) return state;
   const pickupMessages = (state.pickupMessages ?? [])
     .map((message) => ({
       ...message,
@@ -476,6 +477,7 @@ export function tickPickupMessages(
 }
 
 export function tickPowerUps(state: GameEngineState, deltaMs: number): GameEngineState {
+  if (Object.keys(state.timedPowerUps).length === 0) return state;
   let players = [...state.players];
   const timedPowerUps: GameEngineState['timedPowerUps'] = {};
 

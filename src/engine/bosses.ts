@@ -296,9 +296,12 @@ function rechargeUltimates(state: GameEngineState, deltaMs: number): GameEngineS
 
 export function tickBossEncounter(state: GameEngineState, deltaMs: number): GameEngineState {
   let next = rechargeUltimates(state, deltaMs);
-  const hazards = next.hazards
-    .map((hazard) => ({ ...hazard, ticksRemaining: hazard.ticksRemaining - deltaMs }))
-    .filter((hazard) => hazard.ticksRemaining > 0);
+  // An empty list stays the same array, so views memoised on it can skip work.
+  const hazards = next.hazards.length === 0
+    ? next.hazards
+    : next.hazards
+      .map((hazard) => ({ ...hazard, ticksRemaining: hazard.ticksRemaining - deltaMs }))
+      .filter((hazard) => hazard.ticksRemaining > 0);
   next = {
     ...next,
     hazards,
@@ -325,7 +328,7 @@ export function tickBossEncounter(state: GameEngineState, deltaMs: number): Game
     attackCooldown = BOSS_ATTACK_MS - Math.min(700, next.boss.phase * 180);
   }
 
-  const allHazards = [...hazards, ...spawnedHazards];
+  const allHazards = spawnedHazards.length > 0 ? [...hazards, ...spawnedHazards] : hazards;
   return {
     ...next,
     boss: {

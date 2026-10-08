@@ -53,4 +53,32 @@ describe('useGameFeedback', () => {
     expect(result.current.caption).toBe('Blast detonates');
     expect(result.current.eventId).toBeGreaterThan(firstEventId);
   });
+
+  it('announces a repeat pickup of the same power even when the message count stays flat', () => {
+    const initial = createInitialState({
+      numPlayers: 2,
+      totalRounds: 1,
+      selectedMap: 'map1',
+      map: parseMapRows(defaultMap),
+    });
+    const message = (id: string) => ({
+      id, playerId: 'player1', power: 'AddBomb' as const, ticksRemaining: 3600,
+    });
+    const first = { ...initial, tick: 1, pickupMessages: [message('1-player1-AddBomb-0')] };
+    const { result, rerender } = renderHook(
+      ({ state }) => useGameFeedback(state, {
+        ...DEFAULT_GAME_PREFERENCES,
+        soundEnabled: false,
+      }),
+      { initialProps: { state: initial } }
+    );
+
+    rerender({ state: first });
+    expect(result.current.caption).toBe('Power-up collected');
+    const firstEventId = result.current.eventId;
+
+    rerender({ state: { ...first, tick: 30, pickupMessages: [message('30-player1-AddBomb-1')] } });
+    expect(result.current.eventId).toBeGreaterThan(firstEventId);
+    expect(result.current.caption).toBe('Power-up collected');
+  });
 });

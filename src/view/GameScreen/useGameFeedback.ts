@@ -9,7 +9,7 @@ type FeedbackSnapshot = {
   explosionCells: Set<string>;
   monsterIds: Set<string>;
   alivePlayers: Set<string>;
-  pickupCount: number;
+  pickupIds: Set<string>;
   bossHealth: number | null;
 };
 
@@ -25,7 +25,7 @@ function snapshot(state: GameEngineState): FeedbackSnapshot {
     alivePlayers: new Set(
       state.players.filter((player) => player.alive).map((player) => player.id)
     ),
-    pickupCount: state.pickupMessages.length,
+    pickupIds: new Set(state.pickupMessages.map((message) => message.id)),
     bossHealth: state.boss?.health ?? null,
   };
 }
@@ -97,7 +97,8 @@ export function useGameFeedback(
     const bossHit = previous.bossHealth !== null
       && current.bossHealth !== null
       && current.bossHealth < previous.bossHealth;
-    const pickup = current.pickupCount > previous.pickupCount;
+    // By id: a repeat pickup replaces its old message, so the count can stay flat.
+    const pickup = [...current.pickupIds].some((id) => !previous.pickupIds.has(id));
     const volume = (preferences.effectsVolume / 100) * 0.08;
     const audio = preferences.soundEnabled ? audioRef.current : null;
 

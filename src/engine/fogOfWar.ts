@@ -31,10 +31,10 @@ function mapContains(state: GameEngineState, x: number, y: number): boolean {
     && x < (state.map[y]?.length ?? 0);
 }
 
+// Cell keys within `radius` steps of `center`, in the same order as before.
 function addRadius(
   state: GameEngineState,
   visible: Set<string>,
-  explored: Set<string>,
   center: Point,
   radius: number
 ): void {
@@ -42,15 +42,18 @@ function addRadius(
     for (let x = center.x - radius; x <= center.x + radius; x += 1) {
       const distance = Math.abs(x - center.x) + Math.abs(y - center.y);
       if (mapContains(state, x, y) && distance <= radius) {
-        const key = cellKey(x, y);
-        visible.add(key);
-        explored.add(key);
+        visible.add(cellKey(x, y));
       }
     }
   }
 }
 
-function addAllCells(state: GameEngineState): FogOfWarState {
+// Every-cell fog for modes without fog of war. It depends only on the map's
+// shape, so one frozen copy per shape is shared: the reducer then sees the
+// same arrays on every action and skips the comparison work.
+const allCellsFogCache = new Map<string, FogOfWarState>();
+
+function buildAllCells(state: GameEngineState): FogOfWarState {
   const cells: string[] = [];
   state.map.forEach((row, y) => {
     row.forEach((_, x) => cells.push(cellKey(x, y)));
@@ -61,6 +64,20 @@ function addAllCells(state: GameEngineState): FogOfWarState {
     sensedEnemies: [],
     sensedWalls: [],
   };
+}
+
+function addAllCells(state: GameEngineState): FogOfWarState {
+  const height = state.map.length;
+  const width = state.map[0]?.length ?? 0;
+  for (let y = 1; y < height; y += 1) {
+    if (state.map[y].length !== width) return buildAllCells(state);
+  }
+  const key = `${width}x${height}`;
+  const cached = allCellsFogCache.get(key);
+  if (cached) return cached;
+  const fog = buildAllCells(state);
+  allCellsFogCache.set(key, fog);
+  return fog;
 }
 
 function getDistance(a: Point, b: Point): number {
@@ -112,90 +129,176 @@ export function getVisionRadius(characterId: CharacterId): number {
   return getCharacterDefinition(characterId).visionRadius ?? DEFAULT_VISION_RADIUS;
 }
 
-export function calculateFogOfWar(state: GameEngineState): FogOfWarState {
-  if (state.config.mode !== 'solo') {
-    return addAllCells(state);
+// Arrays this module produced: sorted, without duplicates. Only these take
+// the incremental path; anything else is recomputed from scratch as before.
+const sortedKeyArrays = new WeakSet<string[]>();
+const keySetCache = new WeakMap<string[], Set<string>>();
+// The vision sources (cell and radius of every eye) a fog state was computed
+// from. Same sources mean the same visible cells, and explored already holds them.
+const visionSourcesCache = new WeakMap<FogOfWarState, number[]>();
+
+function getKeySet(keys: string[]): Set<string> {
+  let set = keySetCache.get(keys);
+  if (!set) {
+    set = new Set(keys);
+    keySetCache.set(keys, set);
   }
-
-  const visible = new Set<string>();
-  const explored = new Set<string>(state.fogOfWar?.explored ?? []);
-  const sensedEnemies = new Set<string>();
-  const sensedWalls = new Set<string>();
-  const eventVisionModifier = state.campaign?.event?.visionModifier ?? 0;
-
-  state.players
-    .filter((player) => player.alive)
-    .forEach((player) => {
-      const playerCell = getPlayerCell(player);
-      const visionRadius = Math.max(
-        2,
-        getVisionRadius(player.characterId) + eventVisionModifier
-      );
-      addRadius(
-        state,
-        visible,
-        explored,
-        playerCell,
-        visionRadius
-      );
-
-      if (player.characterId === 'sasuke') {
-        addSensedEnemies(
-          state,
-          sensedEnemies,
-          playerCell,
-          visionRadius + SASUKE_ENEMY_SENSE_BONUS
-        );
-      }
-      if (player.characterId === 'itachi') {
-        addSensedEnemies(
-          state,
-          sensedEnemies,
-          playerCell,
-          visionRadius + ITACHI_ENEMY_SENSE_BONUS
-        );
-      }
-      if (player.characterId === 'minato') {
-        addSensedEnemies(
-          state,
-          sensedEnemies,
-          playerCell,
-          MINATO_PROXIMITY_SENSE_RADIUS
-        );
-      }
-      if (player.characterId === 'gaara') {
-        addSensedWalls(
-          state,
-          sensedWalls,
-          playerCell,
-          visionRadius + GAARA_WALL_SENSE_BONUS
-        );
-      }
-    });
-
-  state.explosions
-    .filter((explosion) => explosion.kind && DEIDARA_REVEAL_KINDS.has(explosion.kind))
-    .forEach((explosion) => {
-      addRadius(
-        state,
-        visible,
-        explored,
-        explosion,
-        DEIDARA_EXPLOSION_REVEAL_RADIUS
-      );
-    });
-
-  return {
-    visible: Array.from(visible).sort(),
-    explored: Array.from(explored).sort(),
-    sensedEnemies: Array.from(sensedEnemies).sort(),
-    sensedWalls: Array.from(sensedWalls).sort(),
-  };
+  return set;
 }
 
 function sameCellKeys(prev: string[] = [], next: string[] = []): boolean {
+  if (prev === next) return true;
   return prev.length === next.length
     && prev.every((cell, index) => cell === next[index]);
+}
+
+function sortedKeys(keys: Set<string>, previous?: string[]): string[] {
+  const next = Array.from(keys).sort();
+  if (previous && sameCellKeys(previous, next)) return previous;
+  sortedKeyArrays.add(next);
+  return next;
+}
+
+// explored = previous explored + visible, sorted. Reuses the previous array
+// when nothing new was revealed, and never re-sorts or copies it otherwise.
+function mergeExplored(previous: string[], visible: string[]): string[] {
+  if (!sortedKeyArrays.has(previous)) {
+    const merged = Array.from(new Set([...previous, ...visible])).sort();
+    // Same content means `previous` is already sorted and unique: adopt it,
+    // so the next call takes the fast path instead of re-sorting forever.
+    const result = sameCellKeys(previous, merged) ? previous : merged;
+    sortedKeyArrays.add(result);
+    return result;
+  }
+  const known = getKeySet(previous);
+  const revealed = visible.filter((key) => !known.has(key));
+  if (revealed.length === 0) return previous;
+  const merged = previous.concat(revealed).sort();
+  sortedKeyArrays.add(merged);
+  return merged;
+}
+
+function getVisionSources(state: GameEngineState): number[] {
+  const eventVisionModifier = state.campaign?.event?.visionModifier ?? 0;
+  // The map's shape bounds every radius, so it is part of the key.
+  const sources: number[] = [state.map.length, state.map[0]?.length ?? 0];
+  state.players.forEach((player) => {
+    if (!player.alive) return;
+    const playerCell = getPlayerCell(player);
+    sources.push(
+      playerCell.x,
+      playerCell.y,
+      Math.max(2, getVisionRadius(player.characterId) + eventVisionModifier)
+    );
+  });
+  state.explosions.forEach((explosion) => {
+    if (explosion.kind && DEIDARA_REVEAL_KINDS.has(explosion.kind)) {
+      sources.push(explosion.x, explosion.y, DEIDARA_EXPLOSION_REVEAL_RADIUS);
+    }
+  });
+  return sources;
+}
+
+function sameNumbers(prev: number[], next: number[]): boolean {
+  if (prev.length !== next.length) return false;
+  for (let index = 0; index < prev.length; index += 1) {
+    if (prev[index] !== next[index]) return false;
+  }
+  return true;
+}
+
+function computeFogOfWar(state: GameEngineState): {
+  fog: FogOfWarState;
+  sources: number[] | null;
+} {
+  if (state.config.mode !== 'solo') {
+    return { fog: addAllCells(state), sources: null };
+  }
+
+  const previous: FogOfWarState | undefined = state.fogOfWar;
+  const sources = getVisionSources(state);
+  let visible: string[];
+  let explored: string[];
+  const previousSources = previous ? visionSourcesCache.get(previous) : undefined;
+  if (
+    previous
+    && previousSources
+    && sameNumbers(previousSources, sources)
+    && sortedKeyArrays.has(previous.explored)
+  ) {
+    visible = previous.visible;
+    explored = previous.explored;
+  } else {
+    const visibleKeys = new Set<string>();
+    for (let index = 2; index < sources.length; index += 3) {
+      addRadius(
+        state,
+        visibleKeys,
+        { x: sources[index], y: sources[index + 1] },
+        sources[index + 2]
+      );
+    }
+    visible = sortedKeys(visibleKeys, previous?.visible);
+    explored = mergeExplored(previous?.explored ?? [], visible);
+  }
+
+  const sensedEnemies = new Set<string>();
+  const sensedWalls = new Set<string>();
+  const eventVisionModifier = state.campaign?.event?.visionModifier ?? 0;
+  state.players.forEach((player) => {
+    if (!player.alive) return;
+    const playerCell = getPlayerCell(player);
+    const visionRadius = Math.max(
+      2,
+      getVisionRadius(player.characterId) + eventVisionModifier
+    );
+    if (player.characterId === 'sasuke') {
+      addSensedEnemies(
+        state,
+        sensedEnemies,
+        playerCell,
+        visionRadius + SASUKE_ENEMY_SENSE_BONUS
+      );
+    }
+    if (player.characterId === 'itachi') {
+      addSensedEnemies(
+        state,
+        sensedEnemies,
+        playerCell,
+        visionRadius + ITACHI_ENEMY_SENSE_BONUS
+      );
+    }
+    if (player.characterId === 'minato') {
+      addSensedEnemies(
+        state,
+        sensedEnemies,
+        playerCell,
+        MINATO_PROXIMITY_SENSE_RADIUS
+      );
+    }
+    if (player.characterId === 'gaara') {
+      addSensedWalls(
+        state,
+        sensedWalls,
+        playerCell,
+        visionRadius + GAARA_WALL_SENSE_BONUS
+      );
+    }
+  });
+
+  return {
+    fog: {
+      visible,
+      explored,
+      sensedEnemies: sortedKeys(sensedEnemies, previous?.sensedEnemies),
+      sensedWalls: sortedKeys(sensedWalls, previous?.sensedWalls),
+    },
+    sources,
+  };
+}
+
+export function calculateFogOfWar(state: GameEngineState): FogOfWarState {
+  return { ...computeFogOfWar(state).fog };
 }
 
 function getFogLookup(fogOfWar: FogOfWarState): {
@@ -213,7 +316,7 @@ function getFogLookup(fogOfWar: FogOfWarState): {
 }
 
 export function withUpdatedFogOfWar(state: GameEngineState): GameEngineState {
-  const nextFogOfWar = calculateFogOfWar(state);
+  const { fog: nextFogOfWar, sources } = computeFogOfWar(state);
   const currentFogOfWar = state.fogOfWar;
   const visibleSame = sameCellKeys(currentFogOfWar.visible, nextFogOfWar.visible);
   const exploredSame = sameCellKeys(currentFogOfWar.explored, nextFogOfWar.explored);
@@ -227,22 +330,26 @@ export function withUpdatedFogOfWar(state: GameEngineState): GameEngineState {
   );
 
   if (visibleSame && exploredSame && sensedEnemiesSame && sensedWallsSame) {
+    if (sources && sortedKeyArrays.has(currentFogOfWar.explored)) {
+      visionSourcesCache.set(currentFogOfWar, sources);
+    }
     return state;
   }
 
-  return {
-    ...state,
-    fogOfWar: {
-      visible: visibleSame ? currentFogOfWar.visible : nextFogOfWar.visible,
-      explored: exploredSame ? currentFogOfWar.explored : nextFogOfWar.explored,
-      sensedEnemies: sensedEnemiesSame
-        ? currentFogOfWar.sensedEnemies
-        : nextFogOfWar.sensedEnemies,
-      sensedWalls: sensedWallsSame
-        ? currentFogOfWar.sensedWalls
-        : nextFogOfWar.sensedWalls,
-    },
+  const fogOfWar = {
+    visible: visibleSame ? currentFogOfWar.visible : nextFogOfWar.visible,
+    explored: exploredSame ? currentFogOfWar.explored : nextFogOfWar.explored,
+    sensedEnemies: sensedEnemiesSame
+      ? currentFogOfWar.sensedEnemies
+      : nextFogOfWar.sensedEnemies,
+    sensedWalls: sensedWallsSame
+      ? currentFogOfWar.sensedWalls
+      : nextFogOfWar.sensedWalls,
   };
+  if (sources && sortedKeyArrays.has(fogOfWar.explored)) {
+    visionSourcesCache.set(fogOfWar, sources);
+  }
+  return { ...state, fogOfWar };
 }
 
 export function getCellVisibility(

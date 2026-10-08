@@ -1,10 +1,10 @@
 /* eslint-disable react/no-unknown-property, react/no-array-index-key */
 /* eslint-disable react/require-default-props, comma-dangle, max-len */
 import React, {
-  useEffect, useMemo, useRef, useState,
+  useEffect, useLayoutEffect, useMemo, useRef, useState,
 } from 'react';
 import {
-  Canvas, useFrame, useLoader, useThree,
+  Canvas, addEffect, useFrame, useLoader, useThree,
 } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
@@ -43,10 +43,28 @@ import {
   MAP_OFFSET_X, MAP_OFFSET_Z, TILE_SIZE, toWorld
 } from './scene/sceneSpace';
 import { StaticTiles } from './scene/StaticTiles';
+import { LightPool, PooledPointLight } from './scene/LightPool';
+import { LIGHT_PRIORITY, PooledLightHandle } from './scene/lightPoolSlots';
+import {
+  BOSS_MOTION_ID,
+  MotionStore,
+  monsterMotionId,
+  playerMotionId,
+  samplePosition,
+  trackProgress,
+} from '../../hooks/motionStore';
 
 const ENTITY_LERP_SPEED = 7.2;
 const ENTITY_SNAP_EPSILON = 0.0016;
 const ReducedMotionContext = React.createContext(false);
+// Interpolated entity positions published by the engine loop (see motionStore).
+const MotionContext = React.createContext<MotionStore | null>(null);
+
+function lerpAngle(from: number, to: number, alpha: number): number {
+  const turn = Math.PI * 2;
+  const diff = ((((to - from) % turn) + turn * 1.5) % turn) - Math.PI;
+  return from + diff * alpha;
+}
 
 type TextureCrop = {
   x: number;
@@ -548,14 +566,48 @@ function useSmoothWorldPosition(
   y: number,
   elevation: number,
   motionRef?: React.MutableRefObject<number>,
+  motionId?: string,
 ) {
   const initialized = useRef(false);
   const targetRef = useRef(new THREE.Vector3());
   const directionRef = useRef(new THREE.Vector3());
+  const motion = React.useContext(MotionContext);
 
   useFrame((_, delta) => {
     const group = ref.current;
     if (!group) return;
+
+    if (motion && motionId) {
+      // Draw exactly where the engine's step interpolation says, at simulation
+      // time: continuous, frame-rate independent, at most one step behind.
+      const point = samplePosition(motion, motionId, x, y);
+      const [wx, , wz] = toWorld(point.x, point.y);
+      group.position.set(wx, elevation, wz);
+      initialized.current = true;
+      const track = motion.tracks.get(motionId);
+      const dx = track ? track.toX - track.fromX : 0;
+      const dz = track ? track.toY - track.fromY : 0;
+      const moving = !!track && trackProgress(track, motion.simTimeMs) < 1 && (dx !== 0 || dz !== 0);
+      const blend = motionRef;
+      if (blend) {
+        // Same steady-state blend as the old chase: speed / ENTITY_LERP_SPEED.
+        const speed = moving && track ? Math.hypot(dx, dz) / (track.durationMs / 1000) : 0;
+        blend.current = THREE.MathUtils.lerp(
+          blend.current,
+          Math.min(speed / ENTITY_LERP_SPEED, 1),
+          1 - Math.exp(-delta * 16),
+        );
+      }
+      if (moving) {
+        group.rotation.y = lerpAngle(
+          group.rotation.y,
+          Math.atan2(dx, dz),
+          1 - Math.exp(-delta * ENTITY_LERP_SPEED),
+        );
+      }
+      return;
+    }
+
     const [wx, , wz] = toWorld(x, y);
     const target = targetRef.current.set(wx, elevation, wz);
 
@@ -579,7 +631,7 @@ function useSmoothWorldPosition(
 
     if (horizontalDistanceSq > 0.0001) {
       const targetRotation = Math.atan2(direction.x, direction.z);
-      group.rotation.y = THREE.MathUtils.lerp(
+      group.rotation.y = lerpAngle(
         group.rotation.y,
         targetRotation,
         1 - Math.exp(-delta * ENTITY_LERP_SPEED),
@@ -675,7 +727,7 @@ function PressureBlockWarning({ x, y, order }: { x: number; y: number; order: nu
 function BombMesh({ x, y, kind }: { x: number; y: number; kind: BombKind }) {
   const groupRef = useRef<THREE.Group>(null);
   const coreRef = useRef<THREE.Mesh>(null);
-  const lightRef = useRef<THREE.PointLight>(null);
+  const lightRef = useRef<PooledLightHandle>(null);
   const [wx, , wz] = toWorld(x, y);
   useFrame(({ clock }) => {
     const pulse = 1 + Math.sin(clock.elapsedTime * 10) * 0.08;
@@ -697,7 +749,7 @@ function BombMesh({ x, y, kind }: { x: number; y: number; kind: BombKind }) {
   const style = BOMB_STYLE[kind];
   return (
     <group ref={groupRef} position={[wx, giant ? 0.48 : 0.36, wz]} scale={giant ? 1.72 : ultimateScale}>
-      <pointLight ref={lightRef} color={style.emissive} distance={2.8} intensity={0.72} />
+      <PooledPointLight ref={lightRef} priority={LIGHT_PRIORITY.bomb} color={style.emissive} distance={2.8} intensity={0.72} />
 
       {(kind === 'claySpider' || kind === 'giantClay') && (
         <>
@@ -965,8 +1017,22 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
   const ringRef = useRef<THREE.InstancedMesh>(null);
   const accentRef = useRef<THREE.InstancedMesh>(null);
   const debrisRef = useRef<THREE.InstancedMesh>(null);
-  const lightRef = useRef<THREE.PointLight>(null);
+  const lightRef = useRef<PooledLightHandle>(null);
   const agesRef = useRef(new Map<string, number>());
+
+  // Allocate instance colours up front: setColorAt would otherwise create them
+  // on the first explosion, which changes the shader variant and compiles a
+  // new program mid-match.
+  useLayoutEffect(() => {
+    [flameRef.current, shockwaveRef.current, ringRef.current, accentRef.current, debrisRef.current].forEach((mesh) => {
+      if (!mesh || mesh.instanceColor) return;
+      const instancedMesh = mesh;
+      instancedMesh.instanceColor = new THREE.InstancedBufferAttribute(
+        new Float32Array(EXPLOSION_INSTANCE_CAPACITY * 3),
+        3,
+      );
+    });
+  }, []);
 
   useFrame((_, delta) => {
     const activeKeys = new Set<string>();
@@ -1134,7 +1200,7 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
 
   return (
     <>
-      <pointLight ref={lightRef} distance={5} intensity={1.8} color="#f97316" />
+      <PooledPointLight ref={lightRef} priority={LIGHT_PRIORITY.explosion} distance={5} intensity={1.8} color="#f97316" />
       <instancedMesh ref={shockwaveRef} args={[undefined, undefined, EXPLOSION_INSTANCE_CAPACITY]} frustumCulled={false}>
         <torusGeometry args={[0.34, 0.035, 8, 24]} />
         <meshBasicMaterial transparent opacity={0.38} vertexColors depthWrite={false} />
@@ -1515,6 +1581,12 @@ function LoadedSceneModel({
   return <primitive object={model} />;
 }
 
+function isTransformationActive(player: PlayerState): boolean {
+  return player.ultimateCharge >= 100
+    || player.specialState === 'Kurama Mode'
+    || player.passiveState === 'Sand Armor Reinforced';
+}
+
 function TransformationOverlay({
   player,
   color,
@@ -1523,9 +1595,7 @@ function TransformationOverlay({
   color: string;
 }) {
   const ref = useRef<THREE.Group>(null);
-  const active = player.ultimateCharge >= 100
-    || player.specialState === 'Kurama Mode'
-    || player.passiveState === 'Sand Armor Reinforced';
+  const active = isTransformationActive(player);
 
   useFrame(({ clock }) => {
     if (!ref.current) return;
@@ -1537,7 +1607,6 @@ function TransformationOverlay({
 
   return (
     <group ref={ref}>
-      <pointLight color={color} distance={3.4} intensity={0.95} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.41, 0]}>
         <ringGeometry args={[0.56, 0.72, 42]} />
         <meshBasicMaterial color={color} transparent opacity={0.34} depthWrite={false} />
@@ -1567,10 +1636,26 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
   const motionRef = useRef(0);
   const ghost = isPowerUpActive(state, player.id, 'Ghost');
   const invincible = isPowerUpActive(state, player.id, 'Invincibility');
+  const transformed = isTransformationActive(player);
   const visual = CHARACTER_VISUALS[player.characterId];
   const characterModel = useCharacterModel(player.characterId);
   const reducedMotion = React.useContext(ReducedMotionContext);
-  useSmoothWorldPosition(ref, player.x, player.y, 0.55, motionRef);
+  useSmoothWorldPosition(ref, player.x, player.y, 0.55, motionRef, playerMotionId(player.id));
+
+  // Toggling `transparent` changes the shader's OPAQUE define, which three.js
+  // only picks up after needsUpdate. A light-count change used to force that
+  // recompile by accident; with a fixed light pool it has to be explicit.
+  // Child effects (LoadedSceneModel) run first, so their flags are already set.
+  useEffect(() => {
+    ref.current?.traverse((object) => {
+      const { material } = object as THREE.Mesh;
+      if (!material) return;
+      (Array.isArray(material) ? material : [material]).forEach((entry) => {
+        const target = entry;
+        target.needsUpdate = true;
+      });
+    });
+  }, [ghost]);
 
   useFrame(({ clock }) => {
     const group = ref.current;
@@ -1602,7 +1687,14 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
   return (
     <group ref={ref}>
       <ShadowBlob />
-      <pointLight color={visual.aura} distance={2.6} intensity={ghost ? 0.55 : 0.85} />
+      {/* One light per player: the transformation glow used to be a second
+          light at the same spot, so it now just widens and brightens this one. */}
+      <PooledPointLight
+        priority={LIGHT_PRIORITY.player}
+        color={visual.aura}
+        distance={transformed ? 3.4 : 2.6}
+        intensity={(ghost ? 0.55 : 0.85) + (transformed ? 0.95 : 0)}
+      />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.39, 0]}>
         <torusGeometry args={[0.42, 0.022, 8, 36]} />
         <meshStandardMaterial
@@ -1834,7 +1926,7 @@ function MonsterMeshBase({ monster }: { monster: MonsterState }) {
   const isGhost = monster.kind === 'ghost';
   const tails = BEAST_TAILS[monster.kind];
   const reducedMotion = React.useContext(ReducedMotionContext);
-  useSmoothWorldPosition(ref, monster.x, monster.y, 0.45);
+  useSmoothWorldPosition(ref, monster.x, monster.y, 0.45, undefined, monsterMotionId(monster.id));
 
   useFrame(({ clock }) => {
     if (ref.current) {
@@ -2029,7 +2121,7 @@ function SensedEnemyMarker({
 
   return (
     <group ref={ref} position={[wx, 0.32, wz]} scale={scale}>
-      <pointLight color={color} distance={2.6} intensity={0.5} />
+      <PooledPointLight priority={LIGHT_PRIORITY.marker} color={color} distance={2.6} intensity={0.5} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.28, 0]}>
         <ringGeometry args={[0.24, 0.52, 34]} />
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.9} transparent opacity={0.42} />
@@ -2220,7 +2312,7 @@ function BossMesh({ state }: { state: GameEngineState }) {
     boss && bossModelConfig ? `boss:${boss.id}` : null,
     bossModelConfig,
   );
-  useSmoothWorldPosition(ref, boss?.x ?? 0, boss?.y ?? 0, 0.92);
+  useSmoothWorldPosition(ref, boss?.x ?? 0, boss?.y ?? 0, 0.92, undefined, BOSS_MOTION_ID);
 
   useFrame(({ clock }) => {
     if (ref.current) {
@@ -2236,7 +2328,7 @@ function BossMesh({ state }: { state: GameEngineState }) {
 
   return (
     <group ref={ref} scale={visual.scale * phasePulse}>
-      <pointLight color={visual.glow} distance={5.2} intensity={1.25} />
+      <PooledPointLight priority={LIGHT_PRIORITY.player} color={visual.glow} distance={5.2} intensity={1.25} />
       <ShadowBlob />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.56, 0]}>
         <torusGeometry args={[0.62, 0.025, 8, 42]} />
@@ -2787,7 +2879,7 @@ function MissionRescueMarker({ target }: { target: CampaignRescueTargetState }) 
 
   return (
     <group ref={ref} position={[wx, 0.4, wz]}>
-      <pointLight color={accent} distance={2.2} intensity={rescued ? 0.55 : 1.05} />
+      <PooledPointLight priority={LIGHT_PRIORITY.marker} color={accent} distance={2.2} intensity={rescued ? 0.55 : 1.05} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.38, 0]}>
         <ringGeometry args={[0.18, 0.5, 34]} />
         <meshStandardMaterial
@@ -2859,7 +2951,7 @@ function MissionDefenseMarker({ objective }: { objective: CampaignObjectiveState
 
   return (
     <group ref={ref} position={[wx, 0.34, wz]}>
-      <pointLight color={color} distance={2.8} intensity={active ? 1.1 : 0.45} />
+      <PooledPointLight priority={LIGHT_PRIORITY.marker} color={color} distance={2.8} intensity={active ? 1.1 : 0.45} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.3, 0]}>
         <ringGeometry args={[0.28, active ? 0.66 : 0.52, 34]} />
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.9} transparent opacity={active ? 0.58 : 0.34} />
@@ -2901,7 +2993,7 @@ function MissionMiniBossMarker({ objective }: { objective: CampaignObjectiveStat
 
   return (
     <group ref={ref} position={[wx, 0.46, wz]}>
-      <pointLight color={color} distance={2.4} intensity={active ? 1.1 : 0.45} />
+      <PooledPointLight priority={LIGHT_PRIORITY.marker} color={color} distance={2.4} intensity={active ? 1.1 : 0.45} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.42, 0]}>
         <ringGeometry args={[0.22, active ? 0.58 : 0.44, 34]} />
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1} transparent opacity={active ? 0.68 : 0.38} />
@@ -2964,7 +3056,7 @@ function MissionBossArenaMarker({
 
   return (
     <group ref={ref} position={[wx, 0.24, wz]}>
-      <pointLight color={color} distance={3.2} intensity={active ? 1.2 : 0.42} />
+      <PooledPointLight priority={LIGHT_PRIORITY.marker} color={color} distance={3.2} intensity={active ? 1.2 : 0.42} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.18, 0]}>
         <ringGeometry args={[0.42, active ? 0.82 : 0.66, 48]} />
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.05} transparent opacity={active ? 0.66 : 0.32} />
@@ -3102,9 +3194,12 @@ function MapTilesBase({
   fogOfWar,
   powerTheme,
 }: MapTilesProps) {
+  // Keyed on positions, not the array: a crate's break timer ticks every frame,
+  // and rebuilding all eight instanced tile layers for that is wasted work.
+  const destroyedKey = destroyedBoxes.map((b) => `${b.x},${b.y}`).join('|');
   const destroyedSet = useMemo(
-    () => new Set(destroyedBoxes.map((b) => `${b.x},${b.y}`)),
-    [destroyedBoxes],
+    () => new Set(destroyedKey ? destroyedKey.split('|') : []),
+    [destroyedKey],
   );
   const bombByCell = useMemo(
     () => new Map(bombs.map((bomb) => [`${bomb.x},${bomb.y}`, bomb])),
@@ -3199,8 +3294,10 @@ function CameraRig({
   impact: number;
 }) {
   const { camera, size } = useThree();
+  const motion = React.useContext(MotionContext);
   const lookAtRef = useRef(new THREE.Vector3());
-  const cameraTargetRef = useRef(new THREE.Vector3());
+  const lookTargetRef = useRef(new THREE.Vector3());
+  const framingRef = useRef<number | null>(null);
 
   useFrame(({ clock }, delta) => {
     const fallbackCenter = getMapWorldCenter(
@@ -3215,7 +3312,12 @@ function CameraRig({
     let minY = Infinity;
     let maxY = -Infinity;
 
-    state.players.forEach((player) => {
+    // Frame the drawn (interpolated) players, not their raw 0.1-cell steps.
+    const framed = state.players.map((player) => ({
+      alive: player.alive,
+      ...samplePosition(motion, playerMotionId(player.id), player.x, player.y),
+    }));
+    framed.forEach((player) => {
       if (!player.alive) return;
       targetXCell += player.x;
       targetYCell += player.y;
@@ -3227,7 +3329,7 @@ function CameraRig({
     });
 
     if (count === 0) {
-      state.players.forEach((player) => {
+      framed.forEach((player) => {
         targetXCell += player.x;
         targetYCell += player.y;
         minX = Math.min(minX, player.x);
@@ -3264,14 +3366,25 @@ function CameraRig({
       ? 1
       : 1 - Math.exp(-delta * (framingScale > 1.05 ? 9 : 5));
 
-    lookAtRef.current.set(targetX, 0, targetZ);
-    cameraTargetRef.current.set(
-      targetX + shakeX,
-      13.2 * framingScale,
-      targetZ + 9.6 * framingScale + shakeZ,
+    // Smooth one follow point and hang the camera off it, so position and aim
+    // move together. Aiming at the raw target while easing only the position
+    // turned every 0.1-cell step into a ~7 px whole-screen jump.
+    const lookAt = lookAtRef.current;
+    const lookTarget = lookTargetRef.current.set(targetX, 0, targetZ);
+    if (framingRef.current === null) {
+      // Start from wherever the camera is aimed so the opening glide is kept.
+      framingRef.current = camera.position.y / 13.2;
+      lookAt.set(camera.position.x, 0, camera.position.z - 9.6 * framingRef.current);
+    }
+    lookAt.lerp(lookTarget, followAlpha);
+    framingRef.current = THREE.MathUtils.lerp(framingRef.current, framingScale, followAlpha);
+    const framing = framingRef.current;
+    camera.position.set(
+      lookAt.x + shakeX,
+      13.2 * framing,
+      lookAt.z + 9.6 * framing + shakeZ,
     );
-    camera.position.lerp(cameraTargetRef.current, followAlpha);
-    camera.lookAt(lookAtRef.current);
+    camera.lookAt(lookAt);
   });
 
   return null;
@@ -3388,7 +3501,7 @@ function SceneContent({
     && sensedEnemyCells.has(bossCellKey);
 
   return (
-    <>
+    <LightPool>
       <CameraRig state={state} preferences={preferences} impact={impact} />
       <ambientLight intensity={0.72} />
       <hemisphereLight args={['#fef3c7', '#111827', 0.55]} />
@@ -3413,12 +3526,12 @@ function SceneContent({
       />
       <BombBlastPreviews state={state} visibleCells={visibleCellSet} />
       <MissionObjectiveMarkers state={state} visibleCells={visibleCellSet} />
-      {getUpcomingPressureCells(state, 3).map((cell, order) => (
+      {getUpcomingPressureCells(state).map((cell, order) => (
         <PressureBlockWarning
           key={`pressure-${cell.x}-${cell.y}`}
           x={cell.x}
           y={cell.y}
-          order={order}
+          order={order % 3}
         />
       ))}
       {state.players.map((p) => (
@@ -3451,7 +3564,7 @@ function SceneContent({
           scale={1.25}
         />
       )}
-    </>
+    </LightPool>
   );
 }
 
@@ -3459,9 +3572,22 @@ type GameScene3DProps = {
   state: GameEngineState;
   preferences: GamePreferences;
   impact?: number;
+  /** Interpolated positions from the engine loop; without it entities chase their sim position. */
+  motion?: MotionStore | null;
+  /** Advances the simulation to this frame's timestamp before the scene renders. */
+  advanceFrame?: (timestamp: number) => void;
 };
 
-export function GameScene3D({ state, preferences, impact = 0 }: GameScene3DProps) {
+function useAdvanceBeforeRender(advanceFrame?: (timestamp: number) => void) {
+  const advanceRef = useRef(advanceFrame);
+  advanceRef.current = advanceFrame;
+  useEffect(() => addEffect((timestamp) => advanceRef.current?.(timestamp)), []);
+}
+
+export function GameScene3D({
+  state, preferences, impact = 0, motion = null, advanceFrame,
+}: GameScene3DProps) {
+  useAdvanceBeforeRender(advanceFrame);
   return (
     <Canvas
       shadows
@@ -3476,7 +3602,9 @@ export function GameScene3D({ state, preferences, impact = 0 }: GameScene3DProps
       camera={{ position: [0, 13.2, 9.6], fov: 48 }}
     >
       <ReducedMotionContext.Provider value={preferences.reducedMotion}>
-        <SceneContent state={state} preferences={preferences} impact={impact} />
+        <MotionContext.Provider value={motion}>
+          <SceneContent state={state} preferences={preferences} impact={impact} />
+        </MotionContext.Provider>
       </ReducedMotionContext.Provider>
       {PERF_PROBE_ENABLED && <PerfProbe />}
     </Canvas>

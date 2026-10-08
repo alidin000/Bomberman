@@ -100,47 +100,82 @@ type GameHUDRootProps = GameHUDProps & {
   scale: number;
 };
 
-function PlayerCard({
-  player,
-  playerNumber,
-  state,
-}: {
-  player: GameEngineState['players'][0];
+// The engine publishes a new state every 50 ms tick (and on every move), but
+// the HUD shows values that change a few times per second at most. Each panel
+// below renders from a small plain-data model and is memoised on that model,
+// so a tick that changes nothing visible skips the React + emotion work.
+function sameModel<T>(prev: T, next: T): boolean {
+  return JSON.stringify(prev) === JSON.stringify(next);
+}
+
+type PlayerCardModel = {
   playerNumber: number;
-  state: GameEngineState;
-}) {
-  const activePowers = Array.from(new Set(player.powerUps)).filter(
-    (p) => isPowerUpActive(state, player.id, p)
-      || !['Ghost', 'Invincibility'].includes(p),
-  );
-  const pickupMessages = state.pickupMessages
-    .filter((message) => message.playerId === player.id)
-    .slice(-2);
-  const character = getCharacterDefinition(player.characterId);
+  characterId: CharacterId;
+  name: string;
+  color: string;
+  alive: boolean;
+  deathReason?: string;
+  bombsLeft: number;
+  maxBombs: number;
+  bombRange: number;
+  ultimateCharge: number;
+  activePowers: Power[];
+  pickups: { id: string; power: Power }[];
+};
+
+function toPlayerCardModel(
+  state: GameEngineState,
+  player: GameEngineState['players'][0],
+  playerNumber: number,
+): PlayerCardModel {
+  return {
+    playerNumber,
+    characterId: player.characterId,
+    name: player.name,
+    color: player.color,
+    alive: player.alive,
+    deathReason: player.deathReason,
+    bombsLeft: player.maxBombs - player.activeBombs,
+    maxBombs: player.maxBombs,
+    bombRange: player.bombRange,
+    ultimateCharge: player.ultimateCharge,
+    activePowers: Array.from(new Set(player.powerUps)).filter(
+      (p) => isPowerUpActive(state, player.id, p)
+        || !['Ghost', 'Invincibility'].includes(p),
+    ),
+    pickups: state.pickupMessages
+      .filter((message) => message.playerId === player.id)
+      .slice(-2)
+      .map((message) => ({ id: message.id, power: message.power })),
+  };
+}
+
+const PlayerCard = React.memo(({ model }: { model: PlayerCardModel }) => {
+  const character = getCharacterDefinition(model.characterId);
 
   return (
-    <PlayerCardPaper alive={player.alive} color={player.color}>
+    <PlayerCardPaper alive={model.alive} color={model.color}>
       <PlayerHeader>
         <PlayerAvatar
-          color={player.color}
+          color={model.color}
           image={RosterBoard}
-          imagePosition={CHARACTER_POSITIONS[player.characterId]}
+          imagePosition={CHARACTER_POSITIONS[model.characterId]}
           role="img"
           aria-label={`${character.name} portrait`}
         />
         <div>
           <Typography variant="subtitle1" fontWeight="bold" color="#f8fafc">
-            {`P${playerNumber} · ${character.name || player.name}`}
+            {`P${model.playerNumber} · ${character.name || model.name}`}
           </Typography>
-          <Typography variant="caption" color={player.alive ? '#86efac' : '#fca5a5'}>
-            {player.alive ? character.title : 'Sealed'}
+          <Typography variant="caption" color={model.alive ? '#86efac' : '#fca5a5'}>
+            {model.alive ? character.title : 'Sealed'}
           </Typography>
-          <PlayerStatusRibbon alive={player.alive} color={player.color}>
-            {player.alive ? 'Ready' : 'Sealed'}
+          <PlayerStatusRibbon alive={model.alive} color={model.color}>
+            {model.alive ? 'Ready' : 'Sealed'}
           </PlayerStatusRibbon>
-          {!player.alive && player.deathReason && (
+          {!model.alive && model.deathReason && (
             <Typography variant="caption" display="block" color="#fecaca">
-              {player.deathReason}
+              {model.deathReason}
             </Typography>
           )}
         </div>
@@ -149,14 +184,14 @@ function PlayerCard({
         <StatPill>
           Bombs
           {' '}
-          {player.maxBombs - player.activeBombs}
+          {model.bombsLeft}
           /
-          {player.maxBombs}
+          {model.maxBombs}
         </StatPill>
         <StatPill>
           Blast
           {' '}
-          {player.bombRange}
+          {model.bombRange}
         </StatPill>
         <StatPill>
           Vision
@@ -165,8 +200,8 @@ function PlayerCard({
         </StatPill>
       </PlayerStats>
       <PowerChips>
-        {activePowers.map((power) => {
-          const theme = getCharacterPowerTheme(player.characterId, power);
+        {model.activePowers.map((power) => {
+          const theme = getCharacterPowerTheme(model.characterId, power);
           return (
             <PowerBadge
               key={power}
@@ -179,10 +214,10 @@ function PlayerCard({
           );
         })}
       </PowerChips>
-      {pickupMessages.length > 0 && (
+      {model.pickups.length > 0 && (
         <PickupNotes>
-          {pickupMessages.map((message) => {
-            const theme = getCharacterPowerTheme(player.characterId, message.power);
+          {model.pickups.map((message) => {
+            const theme = getCharacterPowerTheme(model.characterId, message.power);
             return (
               <PickupNote key={message.id} color={theme.color}>
                 <PickupNoteTitle>{theme.label}</PickupNoteTitle>
@@ -205,11 +240,12 @@ function PlayerCard({
       <UltimateProgress
         aria-label={`${character.name} ultimate charge`}
         variant="determinate"
-        value={player.ultimateCharge}
+        value={model.ultimateCharge}
       />
     </PlayerCardPaper>
   );
-}
+}, (prev, next) => sameModel(prev.model, next.model));
+PlayerCard.displayName = 'PlayerCard';
 
 function getMissionTitle(state: GameEngineState): string {
   if (state.campaign) return state.campaign.villageName;
@@ -237,53 +273,73 @@ function formatClock(ms: number): string {
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }
 
-function RoundClock({ state }: GameHUDProps) {
-  const remaining = getRoundTimeRemainingMs(state);
-  const urgent = remaining <= CLOCK_WARNING_MS;
-  return (
-    <MissionNode
-      aria-label="round clock"
-      sx={urgent ? { '& strong': { color: '#fca5a5' } } : undefined}
-    >
-      <span>{remaining > 0 ? 'Clock' : 'Sudden death'}</span>
-      <strong>{remaining > 0 ? formatClock(remaining) : 'Walls closing'}</strong>
+type MissionModel = {
+  status: string;
+  title: string;
+  alivePlayers: number;
+  totalPlayers: number;
+  threatCount: number;
+  // Only the formatted clock is part of the model, so it changes once a second.
+  clock: { label: string; value: string; urgent: boolean } | null;
+  gate: string;
+};
+
+function toMissionModel(state: GameEngineState): MissionModel {
+  let clock: MissionModel['clock'] = null;
+  if (isSuddenDeathMode(state)) {
+    const remaining = getRoundTimeRemainingMs(state);
+    clock = {
+      label: remaining > 0 ? 'Clock' : 'Sudden death',
+      value: remaining > 0 ? formatClock(remaining) : 'Walls closing',
+      urgent: remaining <= CLOCK_WARNING_MS,
+    };
+  }
+  return {
+    status: getMissionStatus(state),
+    title: getMissionTitle(state),
+    alivePlayers: state.players.filter((player) => player.alive).length,
+    totalPlayers: state.players.length,
+    threatCount: state.monsters.length + (state.boss && state.boss.health > 0 ? 1 : 0),
+    clock,
+    gate: getGateStatus(state),
+  };
+}
+
+const MissionSummary = React.memo(({ model }: { model: MissionModel }) => (
+  <MissionStrip aria-label="match status">
+    <MissionStatus>
+      <strong>{model.status}</strong>
+      <span>{model.title}</span>
+    </MissionStatus>
+    <MissionNode>
+      <span>Squad</span>
+      <strong>
+        {model.alivePlayers}
+        /
+        {model.totalPlayers}
+      </strong>
     </MissionNode>
-  );
-}
-
-function MissionSummary({ state }: GameHUDProps) {
-  const alivePlayers = state.players.filter((player) => player.alive).length;
-  const threatCount = state.monsters.length + (state.boss && state.boss.health > 0 ? 1 : 0);
-
-  return (
-    <MissionStrip aria-label="match status">
-      <MissionStatus>
-        <strong>{getMissionStatus(state)}</strong>
-        <span>{getMissionTitle(state)}</span>
-      </MissionStatus>
-      <MissionNode>
-        <span>Squad</span>
-        <strong>
-          {alivePlayers}
-          /
-          {state.players.length}
-        </strong>
+    <MissionNode>
+      <span>Threats</span>
+      <strong>{model.threatCount}</strong>
+    </MissionNode>
+    {model.clock ? (
+      <MissionNode
+        aria-label="round clock"
+        sx={model.clock.urgent ? { '& strong': { color: '#fca5a5' } } : undefined}
+      >
+        <span>{model.clock.label}</span>
+        <strong>{model.clock.value}</strong>
       </MissionNode>
+    ) : (
       <MissionNode>
-        <span>Threats</span>
-        <strong>{threatCount}</strong>
+        <span>Gate</span>
+        <strong>{model.gate}</strong>
       </MissionNode>
-      {isSuddenDeathMode(state) ? (
-        <RoundClock state={state} />
-      ) : (
-        <MissionNode>
-          <span>Gate</span>
-          <strong>{getGateStatus(state)}</strong>
-        </MissionNode>
-      )}
-    </MissionStrip>
-  );
-}
+    )}
+  </MissionStrip>
+), (prev, next) => sameModel(prev.model, next.model));
+MissionSummary.displayName = 'MissionSummary';
 
 function getObjectiveProgress(objective: CampaignObjectiveState): number {
   if (objective.target <= 0) return 0;
@@ -308,141 +364,211 @@ function formatObjectiveDetail(objective: CampaignObjectiveState): string {
   return `${secondsRemaining}s hold · ${structureHp}/${structureMaxHp} HP`;
 }
 
-function CampaignSummary({ state }: GameHUDProps) {
-  const storyProgress = React.useMemo(() => loadStoryProgress(), [
-    state.campaign?.stageId,
-    state.campaign?.discoveredSecrets.length,
-    state.phase,
-  ]);
-  if (!state.campaign) return null;
-  const { event, stageId } = state.campaign;
-  const stageReputation = storyProgress.reputation[stageId] ?? 0;
-  const fragmentCount = Object.values(storyProgress.fragments).reduce(
-    (sum, count) => sum + (count ?? 0),
-    0
-  );
+type CampaignModel = {
+  title: string;
+  message: string;
+  event: { name: string; effectLabel: string; color: string } | null;
+  stageReputation: number;
+  secretsFound: number;
+  secretsTotal: number;
+  fragmentCount: number;
+  objectives: {
+    id: string;
+    label: string;
+    status: CampaignObjectiveStatus;
+    progress: number;
+    detail: string;
+  }[];
+  bossGateLabel: string;
+  bossUnlocked: boolean;
+};
 
-  return (
-    <ObjectivePaper elevation={4}>
-      <Typography variant="overline" fontWeight="bold" letterSpacing={0}>
-        {state.campaign.title}
-      </Typography>
-      <Typography variant="caption" display="block" color="#d1fae5">
-        {state.campaign.message}
-      </Typography>
-      {event && (
-        <CampaignEventBanner color={event.color}>
-          <Typography variant="caption" display="block" fontWeight="bold">
-            {event.name}
-          </Typography>
-          <Typography variant="caption" color="#e5e7eb">
-            {event.effectLabel}
-          </Typography>
-        </CampaignEventBanner>
-      )}
-      <IntelGrid>
-        <IntelPill>
-          <strong>{stageReputation}</strong>
-          Reputation
-        </IntelPill>
-        <IntelPill>
-          <strong>
-            {state.campaign.discoveredSecrets.length}
-            /
-            {state.campaign.hiddenAreas.length}
-          </strong>
-          Secrets
-        </IntelPill>
-        <IntelPill>
-          <strong>{fragmentCount}</strong>
-          Fragments
-        </IntelPill>
-      </IntelGrid>
-      <ObjectiveList>
-        {state.campaign.objectives.map((objective) => (
-          <ObjectiveItem key={objective.id}>
-            <ObjectiveMeta>
-              <Typography variant="subtitle2" fontWeight="bold">
-                {objective.label}
-              </Typography>
-              <ObjectiveStatusBadge status={objective.status}>
-                {OBJECTIVE_STATUS_LABELS[objective.status]}
-              </ObjectiveStatusBadge>
-            </ObjectiveMeta>
-            <ObjectiveProgress
-              aria-label={`${objective.label} progress`}
-              variant="determinate"
-              value={getObjectiveProgress(objective)}
-            />
-            <Typography variant="caption" color="#e5e7eb">
-              {formatObjectiveDetail(objective)}
-            </Typography>
-          </ObjectiveItem>
-        ))}
-      </ObjectiveList>
-      <Typography
-        variant="caption"
-        color={state.campaign.bossUnlocked ? '#86efac' : '#cbd5e1'}
-        display="block"
-        marginTop={1}
-      >
-        {state.campaign.bossGateLabel}
-        {' '}
-        ·
-        {' '}
-        {state.campaign.bossUnlocked ? 'Open' : 'Sealed'}
-      </Typography>
-    </ObjectivePaper>
-  );
+function toCampaignModel(
+  state: GameEngineState,
+  storyProgress: ReturnType<typeof loadStoryProgress>,
+): CampaignModel | null {
+  if (!state.campaign) return null;
+  const { campaign } = state;
+  return {
+    title: campaign.title,
+    message: campaign.message,
+    event: campaign.event
+      ? {
+        name: campaign.event.name,
+        effectLabel: campaign.event.effectLabel,
+        color: campaign.event.color,
+      }
+      : null,
+    stageReputation: storyProgress.reputation[campaign.stageId] ?? 0,
+    secretsFound: campaign.discoveredSecrets.length,
+    secretsTotal: campaign.hiddenAreas.length,
+    fragmentCount: Object.values(storyProgress.fragments).reduce(
+      (sum: number, count) => sum + (count ?? 0),
+      0
+    ),
+    objectives: campaign.objectives.map((objective) => ({
+      id: objective.id,
+      label: objective.label,
+      status: objective.status,
+      progress: getObjectiveProgress(objective),
+      detail: formatObjectiveDetail(objective),
+    })),
+    bossGateLabel: campaign.bossGateLabel,
+    bossUnlocked: campaign.bossUnlocked,
+  };
 }
 
-function BossSummary({ state }: GameHUDProps) {
+const CampaignSummary = React.memo(({ model }: { model: CampaignModel }) => (
+  <ObjectivePaper elevation={4}>
+    <Typography variant="overline" fontWeight="bold" letterSpacing={0}>
+      {model.title}
+    </Typography>
+    <Typography variant="caption" display="block" color="#d1fae5">
+      {model.message}
+    </Typography>
+    {model.event && (
+      <CampaignEventBanner color={model.event.color}>
+        <Typography variant="caption" display="block" fontWeight="bold">
+          {model.event.name}
+        </Typography>
+        <Typography variant="caption" color="#e5e7eb">
+          {model.event.effectLabel}
+        </Typography>
+      </CampaignEventBanner>
+    )}
+    <IntelGrid>
+      <IntelPill>
+        <strong>{model.stageReputation}</strong>
+        Reputation
+      </IntelPill>
+      <IntelPill>
+        <strong>
+          {model.secretsFound}
+          /
+          {model.secretsTotal}
+        </strong>
+        Secrets
+      </IntelPill>
+      <IntelPill>
+        <strong>{model.fragmentCount}</strong>
+        Fragments
+      </IntelPill>
+    </IntelGrid>
+    <ObjectiveList>
+      {model.objectives.map((objective) => (
+        <ObjectiveItem key={objective.id}>
+          <ObjectiveMeta>
+            <Typography variant="subtitle2" fontWeight="bold">
+              {objective.label}
+            </Typography>
+            <ObjectiveStatusBadge status={objective.status}>
+              {OBJECTIVE_STATUS_LABELS[objective.status]}
+            </ObjectiveStatusBadge>
+          </ObjectiveMeta>
+          <ObjectiveProgress
+            aria-label={`${objective.label} progress`}
+            variant="determinate"
+            value={objective.progress}
+          />
+          <Typography variant="caption" color="#e5e7eb">
+            {objective.detail}
+          </Typography>
+        </ObjectiveItem>
+      ))}
+    </ObjectiveList>
+    <Typography
+      variant="caption"
+      color={model.bossUnlocked ? '#86efac' : '#cbd5e1'}
+      display="block"
+      marginTop={1}
+    >
+      {model.bossGateLabel}
+      {' '}
+      ·
+      {' '}
+      {model.bossUnlocked ? 'Open' : 'Sealed'}
+    </Typography>
+  </ObjectivePaper>
+), (prev, next) => sameModel(prev.model, next.model));
+CampaignSummary.displayName = 'CampaignSummary';
+
+type BossModel = {
+  name: string;
+  color: string;
+  health: number;
+  maxHealth: number;
+  phase: number;
+  tails: number;
+  currentAbility: string;
+  hazardCount: number;
+};
+
+function toBossModel(state: GameEngineState): BossModel | null {
   if (!state.boss) return null;
-  const health = (state.boss.health / state.boss.maxHealth) * 100;
+  return {
+    name: state.boss.name,
+    color: state.boss.color,
+    health: state.boss.health,
+    maxHealth: state.boss.maxHealth,
+    phase: state.boss.phase,
+    tails: state.boss.tails,
+    currentAbility: state.boss.currentAbility,
+    hazardCount: state.hazards.length,
+  };
+}
+
+const BossSummary = React.memo(({ model }: { model: BossModel }) => {
+  const health = (model.health / model.maxHealth) * 100;
 
   return (
-    <BossPaper elevation={4} color={state.boss.color}>
+    <BossPaper elevation={4} color={model.color}>
       <Typography variant="overline" fontWeight="bold" letterSpacing={0} display="block">
-        {state.boss.name}
+        {model.name}
       </Typography>
       <UltimateProgress
-        aria-label={`${state.boss.name} health`}
+        aria-label={`${model.name} health`}
         variant="determinate"
         value={health}
       />
       <Typography variant="caption" display="block" color="#e5e7eb">
         Phase
         {' '}
-        {state.boss.phase}
+        {model.phase}
         {' '}
         ·
         {' '}
-        {state.boss.tails}
+        {model.tails}
         {' '}
         tail chakra
         {' '}
         ·
         {' '}
-        {state.boss.health}
+        {model.health}
         /
-        {state.boss.maxHealth}
+        {model.maxHealth}
         {' '}
         HP
       </Typography>
       <Typography variant="caption" display="block" color="warning.light">
-        {state.boss.currentAbility}
+        {model.currentAbility}
         {' '}
         ·
         {' '}
-        {state.hazards.length}
+        {model.hazardCount}
         {' '}
         danger zones
       </Typography>
     </BossPaper>
   );
-}
+}, (prev, next) => sameModel(prev.model, next.model));
+BossSummary.displayName = 'BossSummary';
 
-function MonsterSummary({ state }: GameHUDProps) {
+type MonsterModel = {
+  roaming: number;
+  groups: { name: string; kind: MonsterKind; count: number }[];
+};
+
+function toMonsterModel(state: GameEngineState): MonsterModel {
   const counts = state.monsters.reduce<
     Record<string, { count: number; kind: MonsterKind }>
   >((acc, monster) => {
@@ -450,50 +576,61 @@ function MonsterSummary({ state }: GameHUDProps) {
     acc[monster.name] = { ...current, count: current.count + 1 };
     return acc;
   }, {});
-
-  return (
-    <MonsterPaper elevation={4}>
-      <Typography variant="subtitle2" fontWeight="bold">
-        Enemy Patrols
-        {' '}
-        ·
-        {' '}
-        {state.monsters.length}
-        {' '}
-        roaming
-      </Typography>
-      <MonsterChips>
-        {Object.entries(counts).map(([name, data]) => (
-          <MonsterBadge key={name} color={MONSTER_BADGE_COLORS[data.kind]}>
-            {name}
-            {' '}
-            x
-            {data.count}
-          </MonsterBadge>
-        ))}
-      </MonsterChips>
-    </MonsterPaper>
-  );
+  return {
+    roaming: state.monsters.length,
+    groups: Object.entries(counts).map(([name, data]) => ({ name, ...data })),
+  };
 }
 
+const MonsterSummary = React.memo(({ model }: { model: MonsterModel }) => (
+  <MonsterPaper elevation={4}>
+    <Typography variant="subtitle2" fontWeight="bold">
+      Enemy Patrols
+      {' '}
+      ·
+      {' '}
+      {model.roaming}
+      {' '}
+      roaming
+    </Typography>
+    <MonsterChips>
+      {model.groups.map((group) => (
+        <MonsterBadge key={group.name} color={MONSTER_BADGE_COLORS[group.kind]}>
+          {group.name}
+          {' '}
+          x
+          {group.count}
+        </MonsterBadge>
+      ))}
+    </MonsterChips>
+  </MonsterPaper>
+), (prev, next) => sameModel(prev.model, next.model));
+MonsterSummary.displayName = 'MonsterSummary';
+
 export function GameHUD({ state, scale }: GameHUDRootProps) {
+  const storyProgress = React.useMemo(() => loadStoryProgress(), [
+    state.campaign?.stageId,
+    state.campaign?.discoveredSecrets.length,
+    state.phase,
+  ]);
+  const campaignModel = toCampaignModel(state, storyProgress);
+  const bossModel = toBossModel(state);
+
   return (
     <HudRoot hudScale={scale}>
-      <MissionSummary state={state} />
+      <MissionSummary model={toMissionModel(state)} />
       <PlayerCards>
         {state.players.map((player, index) => (
           <PlayerCard
             key={player.id}
-            player={player}
-            playerNumber={index + 1}
-            state={state}
+            model={toPlayerCardModel(state, player, index + 1)}
           />
         ))}
       </PlayerCards>
-      <BossSummary state={state} />
+      {bossModel && <BossSummary model={bossModel} />}
       <HudRight>
-        <CampaignSummary state={state} />
-        <MonsterSummary state={state} />
+        {campaignModel && <CampaignSummary model={campaignModel} />}
+        <MonsterSummary model={toMonsterModel(state)} />
       </HudRight>
     </HudRoot>
   );

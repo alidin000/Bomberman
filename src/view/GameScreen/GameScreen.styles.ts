@@ -109,19 +109,12 @@ export const LoadingMessage = styled.div({
   fontSize: '1.1rem',
 });
 
+// No full-screen scanline layer here: a `mix-blend-mode` overlay above the
+// WebGL canvas forces the compositor to redraw an extra offscreen pass every
+// frame, and at 0.035 x 0.25 alpha it only changed pixels by 1-2/255.
 export const GameBackground = styled(StyledBackground)({
   overflow: 'hidden',
   background: 'var(--anime-night)',
-  '&::before': {
-    content: '""',
-    position: 'absolute',
-    inset: 0,
-    zIndex: 1,
-    pointerEvents: 'none',
-    background: 'repeating-linear-gradient(0deg, rgba(255,248,231,0.035) 0 1px, transparent 1px 5px)',
-    mixBlendMode: 'screen',
-    opacity: 0.25,
-  },
   '&::after': {
     content: '""',
     position: 'absolute',
@@ -329,11 +322,21 @@ export const FeedbackCaption = styled.div({
   zIndex: 15,
   transform: 'translateX(-50%)',
   minWidth: 180,
-  padding: '8px 16px',
-  clipPath: 'polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%)',
+  padding: '10px 18px',
   color: 'var(--anime-paper-light)',
-  background: 'var(--anime-ink)',
-  border: '2px solid var(--anime-mustard)',
+  // The slanted plate is a skewed pseudo-element rather than a clip-path:
+  // a non-rectangular clip on a layer above the canvas needs a mask render
+  // pass on every frame the caption is visible.
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    inset: 0,
+    zIndex: -1,
+    background: 'var(--anime-ink)',
+    borderTop: '2px solid var(--anime-mustard)',
+    borderBottom: '2px solid var(--anime-mustard)',
+    transform: 'skewX(-16deg)',
+  },
   fontSize: '0.82rem',
   fontWeight: 900,
   textAlign: 'center',

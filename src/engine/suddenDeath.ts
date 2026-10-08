@@ -7,6 +7,9 @@ import { positionOverlapsCell } from './grid';
 // is left (or the arena closes and the round is a draw).
 export const VERSUS_ROUND_MS = 90000;
 export const PRESSURE_BLOCK_INTERVAL_MS = 300;
+// The closing spiral should take about this long on any arena: one block per
+// drop on the small 15x10 arenas, a whole batch per drop on the 35x35 stages.
+export const PRESSURE_FILL_MS = 45000;
 
 const pressureOrderCache = new WeakMap<GameMap, Point[]>();
 
@@ -54,7 +57,15 @@ export function getRoundTimeRemainingMs(state: GameEngineState): number {
   return Math.max(0, VERSUS_ROUND_MS - state.roundElapsedMs);
 }
 
-export function getUpcomingPressureCells(state: GameEngineState, count: number): Point[] {
+export function getPressureBlocksPerDrop(state: GameEngineState): number {
+  const drops = PRESSURE_FILL_MS / PRESSURE_BLOCK_INTERVAL_MS;
+  return Math.max(1, Math.ceil(getPressureOrder(state).length / drops));
+}
+
+export function getUpcomingPressureCells(
+  state: GameEngineState,
+  count = getPressureBlocksPerDrop(state)
+): Point[] {
   if (!isSuddenDeathMode(state) || getRoundTimeRemainingMs(state) > 0) return [];
   return getPressureOrder(state).slice(
     state.pressureBlocksPlaced,
@@ -101,10 +112,8 @@ export function tickSuddenDeath(state: GameEngineState, deltaMs: number): GameEn
   if (roundElapsedMs < VERSUS_ROUND_MS) return next;
 
   const order = getPressureOrder(state);
-  const due = Math.min(
-    order.length,
-    1 + Math.floor((roundElapsedMs - VERSUS_ROUND_MS) / PRESSURE_BLOCK_INTERVAL_MS)
-  );
+  const drops = 1 + Math.floor((roundElapsedMs - VERSUS_ROUND_MS) / PRESSURE_BLOCK_INTERVAL_MS);
+  const due = Math.min(order.length, drops * getPressureBlocksPerDrop(state));
   for (let index = next.pressureBlocksPlaced; index < due; index += 1) {
     next = dropPressureBlock(next, order[index]);
   }
