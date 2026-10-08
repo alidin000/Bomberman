@@ -251,6 +251,40 @@ export function movePlayer(
   return { ...state, map, players };
 }
 
+// A held direction only counts as open if a short look-ahead keeps moving:
+// the first 0.2 cells toward a wall are lane slack, not progress.
+const TURN_PROBE_STEPS = 3;
+
+function canAdvance(state: GameEngineState, playerId: string, direction: Direction): boolean {
+  let probe = state;
+  for (let step = 0; step < TURN_PROBE_STEPS; step += 1) {
+    const next = movePlayer(probe, playerId, direction);
+    if (next === probe) return false;
+    probe = next;
+  }
+  return true;
+}
+
+/**
+ * Buffered turn: move in the newest direction when it is open; when it is
+ * blocked, keep travelling in the fallback (an older held or just-released
+ * direction) so the turn happens at the next opening instead of stalling
+ * against the wall.
+ */
+export function movePlayerBuffered(
+  state: GameEngineState,
+  playerId: string,
+  direction: Direction,
+  fallbackDirection?: Direction,
+): GameEngineState {
+  if (fallbackDirection && fallbackDirection !== direction
+    && !canAdvance(state, playerId, direction)) {
+    const fallback = movePlayer(state, playerId, fallbackDirection);
+    if (fallback !== state) return fallback;
+  }
+  return movePlayer(state, playerId, direction);
+}
+
 function getFacingDelta(direction: Direction): { dx: number; dy: number } {
   switch (direction) {
     case 'up': return { dx: 0, dy: -1 };

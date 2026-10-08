@@ -10,7 +10,7 @@ type RoomSelectionPayload = {
 /** Serializable actions – safe to send over network for future multiplayer */
 export type GameAction =
   | { type: 'INIT'; config: GameConfig }
-  | { type: 'MOVE'; playerId: string; direction: Direction }
+  | { type: 'MOVE'; playerId: string; direction: Direction; fallbackDirection?: Direction }
   | { type: 'DROP_BOMB'; playerId: string }
   | { type: 'DETONATE_BOMBS'; playerId: string }
   | { type: 'USE_ULTIMATE'; playerId: string }

@@ -62,7 +62,8 @@ function isGameAction(value: unknown): value is GameAction {
         && typeof value.config.selectedMap === 'string'
         && Array.isArray(value.config.map);
     case 'MOVE':
-      return hasPlayerId(value) && isDirection(value.direction);
+      return hasPlayerId(value) && isDirection(value.direction)
+        && (value.fallbackDirection === undefined || isDirection(value.fallbackDirection));
     case 'DROP_BOMB':
     case 'DETONATE_BOMBS':
     case 'USE_ULTIMATE':

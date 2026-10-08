@@ -19,6 +19,7 @@ import {
 import {
   ActiveMovement,
   EngineLoop,
+  TURN_BUFFER_MS,
   advanceEngineFrame,
   applyEngineAction,
   createEngineLoop,
@@ -62,6 +63,7 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
   // Every direction key each player is holding, oldest first. Releasing one
   // falls back to the newest key still down instead of stopping the player.
   const heldDirectionsRef = useRef<Record<string, HeldDirection[]>>({});
+  const releasedDirectionRef = useRef<Record<string, { direction: Direction; atMs: number }>>({});
 
   const dispatch = useCallback((action: GameAction) => {
     applyEngineAction(loop, action);
@@ -71,6 +73,30 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
   const clearMovement = useCallback(() => {
     loop.activeMovement = {};
     heldDirectionsRef.current = {};
+    releasedDirectionRef.current = {};
+  }, [loop]);
+
+  // Buffered turn: what to keep moving in while `direction` is blocked. The
+  // newest other key still held, else one released within TURN_BUFFER_MS.
+  const getFallback = useCallback((playerId: string, direction: Direction) => {
+    const held = heldDirectionsRef.current[playerId] ?? [];
+    for (let i = held.length - 1; i >= 0; i -= 1) {
+      if (held[i].direction !== direction) {
+        return { fallbackDirection: held[i].direction, fallbackUntilMs: undefined };
+      }
+    }
+    const released = releasedDirectionRef.current[playerId];
+    if (
+      released
+      && released.direction !== direction
+      && loop.motion.simTimeMs - released.atMs <= TURN_BUFFER_MS
+    ) {
+      return {
+        fallbackDirection: released.direction,
+        fallbackUntilMs: released.atMs + TURN_BUFFER_MS,
+      };
+    }
+    return { fallbackDirection: undefined, fallbackUntilMs: undefined };
   }, [loop]);
 
   useEffect(() => {
@@ -109,11 +135,18 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
           ];
           const active = loop.activeMovement[player.id];
           if (!active || active.direction !== direction || active.key !== key) {
-            dispatch({ type: 'MOVE', playerId: player.id, direction });
+            const fallback = getFallback(player.id, direction);
+            dispatch({
+              type: 'MOVE',
+              playerId: player.id,
+              direction,
+              fallbackDirection: fallback.fallbackDirection,
+            });
             loop.activeMovement[player.id] = {
               accumulatorMs: 0,
               direction,
               key,
+              ...fallback,
             };
           }
           handledDirectionalInput = true;
@@ -127,7 +160,7 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     }
 
     if (handledDirectionalInput) event.preventDefault();
-  }, [keyBindings, dispatch, loop]);
+  }, [keyBindings, dispatch, getFallback, loop]);
 
   const handleKeyUp = useCallback((event: KeyboardEvent) => {
     const current = loop.state;
@@ -148,17 +181,26 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
 
       const held = (heldDirectionsRef.current[player.id] ?? []).filter((item) => item.key !== key);
       heldDirectionsRef.current[player.id] = held;
+      releasedDirectionRef.current[player.id] = { direction, atMs: loop.motion.simTimeMs };
       const active = loop.activeMovement[player.id];
-      if (active?.key !== key) continue;
+      if (!active) continue;
 
-      const fallback = held[held.length - 1];
-      if (fallback) {
-        loop.activeMovement[player.id] = { ...active, ...fallback };
+      if (active.key !== key) {
+        loop.activeMovement[player.id] = { ...active, ...getFallback(player.id, active.direction) };
+        continue;
+      }
+      const next = held[held.length - 1];
+      if (next) {
+        loop.activeMovement[player.id] = {
+          ...active,
+          ...next,
+          ...getFallback(player.id, next.direction),
+        };
       } else {
         delete loop.activeMovement[player.id];
       }
     }
-  }, [keyBindings, clearMovement, loop]);
+  }, [keyBindings, clearMovement, getFallback, loop]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -176,7 +218,10 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
 
   useEffect(() => {
     loop.activeMovement = pruneInactiveMovement(loop.activeMovement, state);
-    if (!state || state.paused || state.phase !== 'playing') heldDirectionsRef.current = {};
+    if (!state || state.paused || state.phase !== 'playing') {
+      heldDirectionsRef.current = {};
+      releasedDirectionRef.current = {};
+    }
   }, [state, loop]);
 
   // Advances the simulation to a frame timestamp. Every rAF callback in one
@@ -190,7 +235,10 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     if (last !== null && now <= last) return;
     lastFrameTimeRef.current = now;
     const before = loop.state;
-    if (!advanceEngineFrame(loop, last === null ? 0 : now - last)) heldDirectionsRef.current = {};
+    if (!advanceEngineFrame(loop, last === null ? 0 : now - last)) {
+      heldDirectionsRef.current = {};
+      releasedDirectionRef.current = {};
+    }
     if (loop.state !== before) setState(loop.state);
   }, [loop]);
 

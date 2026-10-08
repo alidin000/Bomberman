@@ -20,11 +20,18 @@ export const MAX_TICK_STEPS_PER_FRAME = 4;
 export const MOVE_REPEAT_MS = 28;
 export const FAST_MOVE_REPEAT_MS = 18;
 const MAX_MOVE_STEPS_PER_FRAME = 5;
+// After a direction is released, a blocked new direction may keep using it
+// this long, so a turn pressed a moment early still happens at the next opening.
+export const TURN_BUFFER_MS = 120;
 
 export type ActiveMovement = {
   accumulatorMs: number;
   direction: Direction;
   key: string;
+  // Direction to keep moving in while `direction` is blocked (buffered turn).
+  fallbackDirection?: Direction;
+  // Simulation time after which a just-released fallback no longer applies.
+  fallbackUntilMs?: number;
 };
 
 /**
@@ -125,9 +132,15 @@ export function advanceEngineFrame(loop: EngineLoop, frameDeltaMs: number): bool
     const repeatMs = getMoveRepeatMs(player);
     let accumulatorMs = active.accumulatorMs + delta;
     const moveSteps = Math.min(MAX_MOVE_STEPS_PER_FRAME, Math.floor(accumulatorMs / repeatMs));
+    const fallbackDirection = active.fallbackUntilMs === undefined
+      || frameStartMs <= active.fallbackUntilMs
+      ? active.fallbackDirection
+      : undefined;
     for (let step = 1; step <= moveSteps; step += 1) {
       const before = loop.state;
-      const after = gameReducer(before, { type: 'MOVE', playerId, direction: active.direction });
+      const after = gameReducer(before, {
+        type: 'MOVE', playerId, direction: active.direction, fallbackDirection,
+      });
       loop.state = after;
       if (before && after && before !== after) {
         const dueMs = frameStartMs + step * repeatMs - active.accumulatorMs;

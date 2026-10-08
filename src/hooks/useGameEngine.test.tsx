@@ -86,3 +86,63 @@ describe('useGameEngine keyboard input', () => {
     expect(result.current.state!.players[1].x).toBe(xStopped);
   });
 });
+
+const pillarArena = parseMapRows([
+  'WWWWWWWWWWWWWWW',
+  'W             W',
+  'W W W W W W W W',
+  'W             W',
+  'W W W W W W W W',
+  'W             W',
+  'W W W W W W W W',
+  'W             W',
+  'W             W',
+  'WWWWWWWWWWWWWWW',
+].map((row) => row.split('')));
+const pillarConfig: GameConfig = { ...config, map: pillarArena };
+
+describe('useGameEngine buffered turns', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function startPillarMatch() {
+    const hook = renderHook(() => useGameEngine(pillarConfig, DEFAULT_KEY_BINDINGS));
+    wait(3100);
+    return hook;
+  }
+
+  function walkRightUntil(result: { current: ReturnType<typeof useGameEngine> }, x: number) {
+    press('keydown', 'd');
+    for (let frame = 0; frame < 120 && result.current.state!.players[0].x < x; frame += 1) wait(16);
+    return result.current.state!.players[0].x;
+  }
+
+  it('turns at the next opening when the turn is pressed early with the old key still held', () => {
+    const { result } = startPillarMatch();
+    const xAtPress = walkRightUntil(result, 1.6);
+    expect(xAtPress).toBeLessThan(2.1); // nearest lane is the blocked pillar column
+
+    press('keydown', 's');
+    wait(800);
+
+    expect(result.current.state!.players[0].x).toBe(3);
+    expect(result.current.state!.players[0].y).toBeGreaterThan(2);
+  });
+
+  it('still lands a turn pressed just after releasing the old direction', () => {
+    const { result } = startPillarMatch();
+    const xAtPress = walkRightUntil(result, 2.25);
+    expect(xAtPress).toBeLessThan(2.55); // outside the lane-snap window of x=3
+
+    press('keyup', 'd');
+    press('keydown', 's');
+    wait(600);
+
+    expect(result.current.state!.players[0].x).toBe(3);
+    expect(result.current.state!.players[0].y).toBeGreaterThan(2);
+  });
+});

@@ -3,7 +3,7 @@ import { GameAction } from './actions';
 import { GameEngineState } from './types';
 import { createBossForConfig, createInitialState, resetRoundState } from './initialState';
 import {
-  movePlayer,
+  movePlayerBuffered,
   placeObstacle,
   tickPickupMessages,
   tickPowerUps,
@@ -227,7 +227,7 @@ export function gameReducer(
     case 'MOVE':
       if (!isRoundLive(state)) return state;
       return withUpdatedFogOfWar(advanceCampaignState(
-        movePlayer(state, action.playerId, action.direction)
+        movePlayerBuffered(state, action.playerId, action.direction, action.fallbackDirection)
       ));
 
     case 'DROP_BOMB':
