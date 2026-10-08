@@ -43,8 +43,14 @@ import {
   MAP_OFFSET_X, MAP_OFFSET_Z, TILE_SIZE, toWorld
 } from './scene/sceneSpace';
 import { StaticTiles } from './scene/StaticTiles';
+import { getVisibleAbilityWarnings } from './scene/abilityWarnings';
 import { LightPool, PooledPointLight } from './scene/LightPool';
+import { disposeModelSkeletons } from './scene/modelDisposal';
+import { nextFlameAgeMs } from './scene/flameAge';
 import { LIGHT_PRIORITY, PooledLightHandle } from './scene/lightPoolSlots';
+import { LABEL_SPRITES, labelSpriteKey } from './scene/labelSprites';
+import { ShaderWarmup, useTransparencyVariantWarmup } from './scene/ShaderWarmup';
+import { shareSkeletons } from './scene/sharedSkeletons';
 import {
   BOSS_MOTION_ID,
   MotionStore,
@@ -53,6 +59,9 @@ import {
   samplePosition,
   trackProgress,
 } from '../../hooks/motionStore';
+import {
+  FACING_HEADING, advanceStride, cameraFollowRate, decayShake, turnToward,
+} from './scene/motionFeel';
 
 const ENTITY_LERP_SPEED = 7.2;
 const ENTITY_SNAP_EPSILON = 0.0016;
@@ -505,34 +514,15 @@ function TextSprite({
   color: string;
   width?: number;
 }) {
-  const texture = useMemo(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 128;
-    const context = canvas.getContext('2d');
-    if (context) {
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      context.font = '700 42px Arial, sans-serif';
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-      context.shadowColor = 'rgba(0, 0, 0, 0.85)';
-      context.shadowBlur = 10;
-      context.fillStyle = color;
-      context.fillText(text, canvas.width / 2, canvas.height / 2, 460);
-    }
-    const nextTexture = new THREE.CanvasTexture(canvas);
-    nextTexture.colorSpace = THREE.SRGBColorSpace;
-    nextTexture.needsUpdate = true;
-    return nextTexture;
-  }, [color, text]);
+  const key = labelSpriteKey(text, color);
+  const sprite = useMemo(() => LABEL_SPRITES.get(key), [key]);
 
-  useEffect(() => () => texture.dispose(), [texture]);
+  useEffect(() => {
+    LABEL_SPRITES.retain(key, sprite);
+    return () => LABEL_SPRITES.release(key, sprite);
+  }, [key, sprite]);
 
-  return (
-    <sprite scale={[width, 0.18, 1]}>
-      <spriteMaterial map={texture} transparent depthWrite={false} />
-    </sprite>
-  );
+  return <sprite scale={[width, 0.18, 1]} material={sprite.material} />;
 }
 
 function Floor({
@@ -567,6 +557,8 @@ function useSmoothWorldPosition(
   elevation: number,
   motionRef?: React.MutableRefObject<number>,
   motionId?: string,
+  // Yaw to face (players: their engine facing); otherwise the last step's direction.
+  heading?: number,
 ) {
   const initialized = useRef(false);
   const targetRef = useRef(new THREE.Vector3());
@@ -598,12 +590,11 @@ function useSmoothWorldPosition(
           1 - Math.exp(-delta * 16),
         );
       }
-      if (moving) {
-        group.rotation.y = lerpAngle(
-          group.rotation.y,
-          Math.atan2(dx, dz),
-          1 - Math.exp(-delta * ENTITY_LERP_SPEED),
-        );
+      // Keep turning after the step ends: gating on `moving` froze a model
+      // mid-turn whenever a step finished first (a tap, a wall, a monster hop).
+      const faceTo = heading ?? (dx !== 0 || dz !== 0 ? Math.atan2(dx, dz) : undefined);
+      if (faceTo !== undefined) {
+        group.rotation.y = turnToward(group.rotation.y, faceTo, delta);
       }
       return;
     }
@@ -689,8 +680,11 @@ function SensedWallMarker({
 // Sudden-death telegraph: the next pressure blocks hover over the cells they
 // are about to crush, lowest first, so players can read the closing spiral.
 const PRESSURE_RING_GEOMETRY = new THREE.RingGeometry(0.34, 0.5, 4, 1);
+// Front side only: the ring lies flat facing up and the camera is always
+// above it. A transparent DoubleSide material draws in two passes, and its
+// back-face program compiled the moment the first warning appeared.
 const PRESSURE_RING_MATERIAL = new THREE.MeshBasicMaterial({
-  color: '#ef4444', transparent: true, opacity: 0.8, side: THREE.DoubleSide
+  color: '#ef4444', transparent: true, opacity: 0.8
 });
 const PRESSURE_BLOCK_GEOMETRY = new THREE.BoxGeometry(0.92, 1, 0.92);
 const PRESSURE_BLOCK_MATERIAL = new THREE.MeshStandardMaterial({
@@ -1019,6 +1013,7 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
   const debrisRef = useRef<THREE.InstancedMesh>(null);
   const lightRef = useRef<PooledLightHandle>(null);
   const agesRef = useRef(new Map<string, number>());
+  const ticksRef = useRef(new Map<string, number>());
 
   // Allocate instance colours up front: setColorAt would otherwise create them
   // on the first explosion, which changes the shader variant and compiles a
@@ -1046,11 +1041,14 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
       const key = getExplosionKey(explosion);
       activeKeys.add(key);
 
-      const ageMs = Math.min(
-        EXPLOSION_MS,
-        (agesRef.current.get(key) ?? 0) + delta * 1000
+      const ageMs = nextFlameAgeMs(
+        agesRef.current.get(key),
+        ticksRef.current.get(key),
+        explosion.ticksRemaining,
+        delta * 1000
       );
       agesRef.current.set(key, ageMs);
+      ticksRef.current.set(key, explosion.ticksRemaining);
 
       const progress = ageMs / EXPLOSION_MS;
       const [wx, , wz] = toWorld(explosion.x, explosion.y);
@@ -1178,15 +1176,24 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
     }
 
     Array.from(agesRef.current.keys()).forEach((key) => {
-      if (!activeKeys.has(key)) agesRef.current.delete(key);
+      if (activeKeys.has(key)) return;
+      agesRef.current.delete(key);
+      ticksRef.current.delete(key);
     });
 
     [flameRef.current, shockwaveRef.current, ringRef.current, accentRef.current, debrisRef.current].forEach((mesh) => {
       if (!mesh) return;
       const instancedMesh = mesh;
       instancedMesh.count = count;
+      // Upload only the live instances: flagging the whole 512-instance
+      // buffers sent ~190 KB to the GPU every frame, even with no explosions.
+      if (count === 0) return;
+      instancedMesh.instanceMatrix.addUpdateRange(0, count * 16);
       instancedMesh.instanceMatrix.needsUpdate = true;
-      if (instancedMesh.instanceColor) instancedMesh.instanceColor.needsUpdate = true;
+      if (instancedMesh.instanceColor) {
+        instancedMesh.instanceColor.addUpdateRange(0, count * 3);
+        instancedMesh.instanceColor.needsUpdate = true;
+      }
     });
 
     if (lightRef.current) {
@@ -1224,6 +1231,8 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
     </>
   );
 }
+
+const ExplosionFieldMemo = React.memo(ExplosionField);
 
 const SHADOW_BLOB_GEOMETRY = new THREE.CircleGeometry(0.32, 24);
 const SHADOW_BLOB_MATERIAL = new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.26 });
@@ -1489,6 +1498,7 @@ function createFittedSceneModel(asset: SceneModelAsset): THREE.Group {
   const model = new THREE.Group();
   const rotation = asset.config.rotation ?? [0, 0, 0];
   configureModelMeshes(clone, true);
+  shareSkeletons(clone);
   clone.rotation.set(rotation[0], rotation[1], rotation[2]);
   model.add(clone);
   model.updateMatrixWorld(true);
@@ -1512,12 +1522,16 @@ function LoadedSceneModel({
   asset,
   ghost,
   motionRef,
+  warmGhostVariant = false,
 }: {
   asset: SceneModelAsset;
   ghost: boolean;
   motionRef?: React.MutableRefObject<number>;
+  /** Precompile the Ghost (transparent) look of the model's materials. */
+  warmGhostVariant?: boolean;
 }) {
   const model = useMemo(() => createFittedSceneModel(asset), [asset]);
+  useTransparencyVariantWarmup(model, warmGhostVariant);
 
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const actionsRef = useRef<{
@@ -1547,6 +1561,9 @@ function LoadedSceneModel({
       mixer.uncacheRoot(model);
       mixerRef.current = null;
       actionsRef.current = null;
+      // Each mount clones its own skeletons; free their bone textures, which
+      // otherwise piled up every time a GLB ninja died and respawned.
+      disposeModelSkeletons(model);
     };
   }, [asset.animations, model]);
 
@@ -1640,7 +1657,16 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
   const visual = CHARACTER_VISUALS[player.characterId];
   const characterModel = useCharacterModel(player.characterId);
   const reducedMotion = React.useContext(ReducedMotionContext);
-  useSmoothWorldPosition(ref, player.x, player.y, 0.55, motionRef, playerMotionId(player.id));
+  const strideRef = useRef({ phase: 0, x: NaN, z: 0 });
+  useSmoothWorldPosition(
+    ref,
+    player.x,
+    player.y,
+    0.55,
+    motionRef,
+    playerMotionId(player.id),
+    player.facing ? FACING_HEADING[player.facing] : undefined,
+  );
 
   // Toggling `transparent` changes the shader's OPAQUE define, which three.js
   // only picks up after needsUpdate. A light-count change used to force that
@@ -1657,7 +1683,7 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
     });
   }, [ghost]);
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     const group = ref.current;
     if (!group) return;
     if (reducedMotion) {
@@ -1667,12 +1693,21 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
     }
 
     const movement = motionRef.current;
-    const stride = Math.sin(clock.elapsedTime * 13);
+    // Step on distance travelled, not on the clock, so the cadence follows
+    // the character's speed and the bob stops when the feet do.
+    const walk = strideRef.current;
+    const travelled = Number.isNaN(walk.x)
+      ? 0
+      : Math.hypot(group.position.x - walk.x, group.position.z - walk.z) / TILE_SIZE;
+    walk.x = group.position.x;
+    walk.z = group.position.z;
+    walk.phase = advanceStride(walk.phase, travelled);
+    const stride = Math.sin(walk.phase);
     group.position.y += Math.abs(stride) * 0.038 * movement;
     group.rotation.z = THREE.MathUtils.lerp(
       group.rotation.z,
       stride * 0.035 * movement,
-      0.22,
+      1 - Math.exp(-delta * 15),
     );
 
     if (invincible) {
@@ -1707,7 +1742,7 @@ function PlayerMesh({ player, state }: { player: PlayerState; state: GameEngineS
       </mesh>
       <TransformationOverlay player={player} color={visual.aura} />
       {characterModel ? (
-        <LoadedSceneModel asset={characterModel} ghost={ghost} motionRef={motionRef} />
+        <LoadedSceneModel asset={characterModel} ghost={ghost} motionRef={motionRef} warmGhostVariant />
       ) : (
         <>
           <mesh position={[0, -0.04, 0]} castShadow>
@@ -3135,7 +3170,6 @@ type MapTilesProps = {
   map: GameMap;
   bombs: GameEngineState['bombs'];
   destroyedBoxes: GameEngineState['destroyedBoxes'];
-  explosions: GameEngineState['explosions'];
   hazards: GameEngineState['hazards'];
   palette: StageDefinition['palette'];
   fogOfWar: GameEngineState['fogOfWar'];
@@ -3188,7 +3222,6 @@ function MapTilesBase({
   map,
   bombs,
   destroyedBoxes,
-  explosions,
   hazards,
   palette,
   fogOfWar,
@@ -3216,12 +3249,6 @@ function MapTilesBase({
   const exploredCellSet = useMemo(
     () => new Set(fogOfWar.explored ?? []),
     [fogOfWar.explored],
-  );
-  const visibleExplosions = useMemo(
-    () => explosions.filter((explosion) => (
-      cellVisibleInSet(visibleCellSet, explosion.x, explosion.y)
-    )),
-    [explosions, visibleCellSet],
   );
   const visibleHazards = useMemo(
     () => hazards.filter((hazard) => cellVisibleInSet(visibleCellSet, hazard.x, hazard.y)),
@@ -3265,7 +3292,6 @@ function MapTilesBase({
         destroyedCells={destroyedSet}
       />
       {cellObjects}
-      <ExplosionField explosions={visibleExplosions} />
       {visibleHazards.map((hazard) => (
         <HazardMesh key={hazard.id} hazard={hazard} />
       ))}
@@ -3278,7 +3304,6 @@ const MapTiles = React.memo(MapTilesBase, (prev, next) => (
   && prev.palette === next.palette
   && sameBombCells(prev.bombs, next.bombs)
   && sameTimedCells(prev.destroyedBoxes, next.destroyedBoxes)
-  && sameTimedCells(prev.explosions, next.explosions)
   && prev.hazards === next.hazards
   && sameFogCells(prev.fogOfWar, next.fogOfWar)
   && prev.powerTheme === next.powerTheme
@@ -3298,6 +3323,7 @@ function CameraRig({
   const lookAtRef = useRef(new THREE.Vector3());
   const lookTargetRef = useRef(new THREE.Vector3());
   const framingRef = useRef<number | null>(null);
+  const shakeRef = useRef(0);
 
   useFrame(({ clock }, delta) => {
     const fallbackCenter = getMapWorldCenter(
@@ -3319,8 +3345,6 @@ function CameraRig({
     }));
     framed.forEach((player) => {
       if (!player.alive) return;
-      targetXCell += player.x;
-      targetYCell += player.y;
       minX = Math.min(minX, player.x);
       maxX = Math.max(maxX, player.x);
       minY = Math.min(minY, player.y);
@@ -3330,8 +3354,6 @@ function CameraRig({
 
     if (count === 0) {
       framed.forEach((player) => {
-        targetXCell += player.x;
-        targetYCell += player.y;
         minX = Math.min(minX, player.x);
         maxX = Math.max(maxX, player.x);
         minY = Math.min(minY, player.y);
@@ -3341,8 +3363,10 @@ function CameraRig({
     }
 
     if (count > 0) {
-      targetXCell /= count;
-      targetYCell /= count;
+      // Centre the players' bounding box, not their mean: with three players
+      // the mean sits by the pair and pushes the third toward the edge.
+      targetXCell = (minX + maxX) / 2;
+      targetYCell = (minY + maxY) / 2;
     } else {
       targetXCell = fallbackCenter[0] - MAP_OFFSET_X;
       targetYCell = fallbackCenter[2] - MAP_OFFSET_Z;
@@ -3357,14 +3381,12 @@ function CameraRig({
       1,
       1.8,
     );
-    const shakeStrength = preferences.reducedMotion
-      ? 0
-      : impact * (preferences.screenShake / 100) * 0.18;
+    // `impact` holds for a moment and then drops to 0; fade out from it
+    // instead of cutting off mid-swing.
+    shakeRef.current = preferences.reducedMotion ? 0 : decayShake(shakeRef.current, impact, delta);
+    const shakeStrength = shakeRef.current * (preferences.screenShake / 100) * 0.18;
     const shakeX = Math.sin(clock.elapsedTime * 83) * shakeStrength;
     const shakeZ = Math.cos(clock.elapsedTime * 71) * shakeStrength;
-    const followAlpha = preferences.reducedMotion
-      ? 1
-      : 1 - Math.exp(-delta * (framingScale > 1.05 ? 9 : 5));
 
     // Smooth one follow point and hang the camera off it, so position and aim
     // move together. Aiming at the raw target while easing only the position
@@ -3376,6 +3398,11 @@ function CameraRig({
       framingRef.current = camera.position.y / 13.2;
       lookAt.set(camera.position.x, 0, camera.position.z - 9.6 * framingRef.current);
     }
+    // The rate follows the smoothed zoom: switching it on the target framing
+    // changed the camera's speed by 40% in a single frame.
+    const followAlpha = preferences.reducedMotion
+      ? 1
+      : 1 - Math.exp(-delta * cameraFollowRate(framingRef.current));
     lookAt.lerp(lookTarget, followAlpha);
     framingRef.current = THREE.MathUtils.lerp(framingRef.current, framingScale, followAlpha);
     const framing = framingRef.current;
@@ -3384,7 +3411,9 @@ function CameraRig({
       13.2 * framing,
       lookAt.z + 9.6 * framing + shakeZ,
     );
-    camera.lookAt(lookAt);
+    // Shake the aim with the eye so the whole view jolts; shaking only the eye
+    // pivoted around the aim point and left the middle of the screen still.
+    camera.lookAt(lookAt.x + shakeX, 0, lookAt.z + shakeZ);
   });
 
   return null;
@@ -3414,6 +3443,27 @@ function TargetCellWarning({ monster }: { monster: MonsterState }) {
   );
 }
 
+// A bomb about to blow shows up to ~20 preview cells at once and removes
+// them when it explodes, so all cells share these instead of building two
+// geometries and two materials per cell on every fuse.
+const BLAST_PREVIEW_FILL_GEOMETRY = new THREE.PlaneGeometry(0.84, 0.84);
+const BLAST_PREVIEW_RING_GEOMETRY = new THREE.RingGeometry(0.43, 0.49, 4);
+const BLAST_PREVIEW_RING_MATERIAL = new THREE.MeshBasicMaterial({
+  color: '#fff7ed', transparent: true, opacity: 0.68, depthWrite: false
+});
+const BLAST_PREVIEW_FILL_MATERIALS = new Map<string, THREE.MeshBasicMaterial>();
+
+function getBlastPreviewFillMaterial(color: string): THREE.MeshBasicMaterial {
+  let material = BLAST_PREVIEW_FILL_MATERIALS.get(color);
+  if (!material) {
+    material = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.16, depthWrite: false
+    });
+    BLAST_PREVIEW_FILL_MATERIALS.set(color, material);
+  }
+  return material;
+}
+
 function BombBlastPreviews({
   state,
   visibleCells,
@@ -3441,14 +3491,17 @@ function BombBlastPreviews({
         const style = BOMB_STYLE[cell.kind];
         return (
           <group key={`blast-preview-${cell.x}-${cell.y}`} position={[wx, 0.026, wz]}>
-            <mesh rotation={[-Math.PI / 2, 0, 0]}>
-              <planeGeometry args={[0.84, 0.84]} />
-              <meshBasicMaterial color={style.emissive} transparent opacity={0.16} depthWrite={false} />
-            </mesh>
-            <mesh rotation={[-Math.PI / 2, 0, Math.PI / 4]} position={[0, 0.01, 0]}>
-              <ringGeometry args={[0.43, 0.49, 4]} />
-              <meshBasicMaterial color="#fff7ed" transparent opacity={0.68} depthWrite={false} />
-            </mesh>
+            <mesh
+              rotation={[-Math.PI / 2, 0, 0]}
+              geometry={BLAST_PREVIEW_FILL_GEOMETRY}
+              material={getBlastPreviewFillMaterial(style.emissive)}
+            />
+            <mesh
+              rotation={[-Math.PI / 2, 0, Math.PI / 4]}
+              position={[0, 0.01, 0]}
+              geometry={BLAST_PREVIEW_RING_GEOMETRY}
+              material={BLAST_PREVIEW_RING_MATERIAL}
+            />
           </group>
         );
       })}
@@ -3478,8 +3531,19 @@ function SceneContent({
     () => new Set(state.fogOfWar.sensedEnemies ?? []),
     [state.fogOfWar.sensedEnemies],
   );
+  // Drawn outside the memoised MapTiles: flames need every tick's timers.
+  const visibleExplosions = useMemo(
+    () => state.explosions.filter((explosion) => (
+      cellVisibleInSet(visibleCellSet, explosion.x, explosion.y)
+    )),
+    [state.explosions, visibleCellSet],
+  );
   const visibleMonsters = useMemo(
     () => state.monsters.filter((m) => cellVisibleInSet(visibleCellSet, m.x, m.y)),
+    [state.monsters, visibleCellSet],
+  );
+  const warnedMonsters = useMemo(
+    () => getVisibleAbilityWarnings(state.monsters, visibleCellSet),
     [state.monsters, visibleCellSet],
   );
   const sensedMonsters = useMemo(
@@ -3502,12 +3566,15 @@ function SceneContent({
 
   return (
     <LightPool>
+      <ShaderWarmup />
       <CameraRig state={state} preferences={preferences} impact={impact} />
       <ambientLight intensity={0.72} />
       <hemisphereLight args={['#fef3c7', '#111827', 0.55]} />
+      {/* No unbounded fill point lights: with physical falloff the two that
+          were here (0.95 at y 8, 0.45 at y 5) changed no pixel by more than
+          2/255 on the versus and campaign views, yet every lit fragment paid
+          for both. */}
       <directionalLight position={[8, 15, 6]} intensity={1.65} castShadow />
-      <pointLight position={[-5, 8, -3]} intensity={0.95} color={stage.palette.accent} />
-      <pointLight position={[5, 5, 4]} intensity={0.45} color="#f8fafc" />
       <Floor
         palette={stage.palette}
         stageId={stage.id}
@@ -3518,12 +3585,12 @@ function SceneContent({
         map={state.map}
         bombs={state.bombs}
         destroyedBoxes={state.destroyedBoxes}
-        explosions={state.explosions}
         hazards={state.hazards}
         palette={stage.palette}
         fogOfWar={state.fogOfWar}
         powerTheme={state.players[0]?.characterId}
       />
+      <ExplosionFieldMemo explosions={visibleExplosions} />
       <BombBlastPreviews state={state} visibleCells={visibleCellSet} />
       <MissionObjectiveMarkers state={state} visibleCells={visibleCellSet} />
       {getUpcomingPressureCells(state).map((cell, order) => (
@@ -3538,10 +3605,10 @@ function SceneContent({
         <PlayerMesh key={p.id} player={p} state={state} />
       ))}
       {visibleMonsters.map((m) => (
-        <React.Fragment key={m.id}>
-          <MonsterMesh monster={m} />
-          <TargetCellWarning monster={m} />
-        </React.Fragment>
+        <MonsterMesh key={m.id} monster={m} />
+      ))}
+      {warnedMonsters.map((m) => (
+        <TargetCellWarning key={`target-warning-${m.id}`} monster={m} />
       ))}
       {sensedMonsters.map((m) => (
         <SensedEnemyMarker
@@ -3588,6 +3655,8 @@ export function GameScene3D({
   state, preferences, impact = 0, motion = null, advanceFrame,
 }: GameScene3DProps) {
   useAdvanceBeforeRender(advanceFrame);
+  // Free cached label canvases nothing shows any more once the arena closes.
+  useEffect(() => () => LABEL_SPRITES.disposeIdle(), []);
   return (
     <Canvas
       shadows

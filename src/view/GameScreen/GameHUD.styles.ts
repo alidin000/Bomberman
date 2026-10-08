@@ -20,6 +20,16 @@ export const HudRoot = styled(Box, {
   alignItems: 'flex-start',
   pointerEvents: 'none',
   zoom: hudScale / 100,
+  '--hud-zoom': String(hudScale / 100),
+  // Phones: the right column wraps below the player cards instead of
+  // running off the right edge. The 150px top offset lives here, not on each
+  // column, so a wrapped column sits right under the cards.
+  '@media (max-width: 640px)': {
+    flexWrap: 'wrap',
+    alignContent: 'flex-start',
+    rowGap: 8,
+    paddingTop: 162,
+  },
   '&::before': {
     content: '""',
     position: 'absolute',
@@ -43,7 +53,7 @@ export const PlayerCards = styled(Box)({
     marginTop: 230,
   },
   '@media (max-width: 640px)': {
-    marginTop: 150,
+    marginTop: 0,
     maxWidth: 'calc(100vw - 24px)',
   },
 });
@@ -56,12 +66,14 @@ export const HudRight = styled(Box)({
   pointerEvents: 'auto',
   position: 'relative',
   zIndex: 2,
-  marginTop: 62,
+  // The top controls are not zoomed with the HUD: clear their 80px on screen
+  // (12px root padding included) at every HUD size.
+  marginTop: 'calc(80px / var(--hud-zoom, 1) - 12px)',
   '@media (max-width: 1260px)': {
     marginTop: 230,
   },
   '@media (max-width: 640px)': {
-    marginTop: 150,
+    marginTop: 0,
   },
 });
 
@@ -207,7 +219,21 @@ export const PlayerAvatar = styled(Box, {
   boxShadow: `3px 3px 0 ${color}`,
 }));
 
-export const PlayerStatusRibbon = styled(Box)<{ alive: boolean; color: string }>(({
+// Ink reads on light player colours; Sasuke's and Itachi's near-black need paper.
+function readableTextOn(hex: string): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match) return 'var(--anime-ink)';
+  const [r, g, b] = [0, 2, 4].map((offset) => {
+    const channel = parseInt(match[1].slice(offset, offset + 2), 16) / 255;
+    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.2 ? 'var(--anime-ink)' : 'var(--anime-paper-light)';
+}
+
+export const PlayerStatusRibbon = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'alive' && prop !== 'color',
+})<{ alive: boolean; color: string }>(({
   alive,
   color,
 }) => ({
@@ -215,7 +241,7 @@ export const PlayerStatusRibbon = styled(Box)<{ alive: boolean; color: string }>
   marginTop: 3,
   padding: '2px 7px',
   borderRadius: 1,
-  color: alive ? 'var(--anime-ink)' : 'var(--anime-paper-light)',
+  color: alive ? readableTextOn(color) : 'var(--anime-paper-light)',
   background: alive ? color : 'var(--anime-vermilion)',
   border: '1px solid var(--anime-ink)',
   fontSize: '0.62rem',
@@ -384,7 +410,9 @@ export const ObjectiveStatusBadge = styled(Box, {
     minWidth: 64,
     padding: '3px 6px',
     borderRadius: 1,
-    color: 'var(--anime-ink)',
+    color: status === 'active' || status === 'failed'
+      ? 'var(--anime-paper-light)'
+      : 'var(--anime-ink)',
     background: color,
     fontSize: '0.62rem',
     fontWeight: 900,

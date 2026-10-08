@@ -247,7 +247,8 @@ function spawnBossHazards(state: GameEngineState): {
 }
 
 export function hazardIsActive(hazard: BossHazard): boolean {
-  const activeWindowMs = Math.max(300, Math.round(hazard.warningTicks * (3 / 7)));
+  const activeWindowMs = hazard.activeMs
+    ?? Math.max(300, Math.round(hazard.warningTicks * (3 / 7)));
   return hazard.ticksRemaining <= activeWindowMs;
 }
 
@@ -255,25 +256,28 @@ function damagePlayersInHazards(
   players: PlayerState[],
   hazards: BossHazard[],
   timedPowerUps: GameEngineState['timedPowerUps']
-): PlayerState[] {
-  if (hazards.length === 0) return players;
+): { players: PlayerState[]; hazards: BossHazard[] } {
+  if (hazards.length === 0) return { players, hazards };
 
-  return players.map((player) => {
+  const nextPlayers = players.map((player) => {
     if (!player.alive) return player;
     const invincible = timedPowerUps[player.id]?.some(
       (tp) => tp.power === 'Invincibility' && tp.ticksRemaining > 0
     ) || player.powerUps.includes('Invincibility');
     if (invincible) return player;
 
-    const hit = hazards.find((hazard) => (
+    const touching = hazards.filter((hazard) => (
       hazard.damage > 0
       && hazardIsActive(hazard)
       && positionOverlapsCell(player, hazard.x, hazard.y)
     ));
-    return hit
-      ? applyCharacterSurvival(player, formatHazardDeathReason(player, hit))
-      : player;
+    const hit = touching[0];
+    if (!hit) return player;
+    // A spent survival passive's grace (applyCharacterSurvival) covers the
+    // rest of this hazard's active window.
+    return applyCharacterSurvival(player, formatHazardDeathReason(player, hit));
   });
+  return { players: nextPlayers, hazards };
 }
 
 function rechargeUltimates(state: GameEngineState, deltaMs: number): GameEngineState {
@@ -302,14 +306,11 @@ export function tickBossEncounter(state: GameEngineState, deltaMs: number): Game
     : next.hazards
       .map((hazard) => ({ ...hazard, ticksRemaining: hazard.ticksRemaining - deltaMs }))
       .filter((hazard) => hazard.ticksRemaining > 0);
+  const damaged = damagePlayersInHazards(next.players, hazards, next.timedPowerUps);
   next = {
     ...next,
-    hazards,
-    players: damagePlayersInHazards(
-      next.players,
-      hazards,
-      next.timedPowerUps
-    ),
+    hazards: damaged.hazards,
+    players: damaged.players,
   };
   if (next.config.mode !== 'solo' || !next.boss || next.boss.health <= 0) {
     return next;
@@ -328,7 +329,9 @@ export function tickBossEncounter(state: GameEngineState, deltaMs: number): Game
     attackCooldown = BOSS_ATTACK_MS - Math.min(700, next.boss.phase * 180);
   }
 
-  const allHazards = spawnedHazards.length > 0 ? [...hazards, ...spawnedHazards] : hazards;
+  const allHazards = spawnedHazards.length > 0
+    ? [...next.hazards, ...spawnedHazards]
+    : next.hazards;
   return {
     ...next,
     boss: {

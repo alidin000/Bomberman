@@ -263,6 +263,24 @@ describe('versus sudden death', () => {
     expect(state.players[0].activeBombs).toBe(0);
   });
 
+  it('warns of the first pressure batch before the clock runs out', () => {
+    const state = liveRound(versusConfig, {
+      roundElapsedMs: VERSUS_ROUND_MS - PRESSURE_BLOCK_INTERVAL_MS,
+    });
+    const firstDrop = tickSuddenDeath(state, PRESSURE_BLOCK_INTERVAL_MS);
+    const crushed = firstDrop.map.flatMap((row, y) => row
+      .map((cell, x) => ({ cell, x, y }))
+      .filter(({ cell, x }) => cell === 'Wall' && state.map[y][x] !== 'Wall')
+      .map(({ x }) => ({ x, y })));
+
+    expect(crushed).toEqual([{ x: 1, y: 1 }]);
+    expect(getUpcomingPressureCells(state)).toEqual(crushed);
+    expect(getUpcomingPressureCells({
+      ...state,
+      roundElapsedMs: VERSUS_ROUND_MS - PRESSURE_BLOCK_INTERVAL_MS - 50,
+    })).toEqual([]);
+  });
+
   it('closes a 35x35 stage arena in batches within the fill time', () => {
     const stageMap = parseMapRows(Array.from({ length: 35 }, (_, y) => (
       y === 0 || y === 34 ? 'W'.repeat(35) : `W${' '.repeat(33)}W`

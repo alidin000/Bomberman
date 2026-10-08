@@ -32,8 +32,9 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
 export function normalizeKeyBindings(bindings?: Partial<KeyBindings> | null): KeyBindings {
   return Object.keys(DEFAULT_KEY_BINDINGS).reduce<KeyBindings>((acc, playerNumber) => {
     const current = bindings?.[playerNumber] ?? [];
+    // Stored bindings are user data: anything but a key name falls back.
     acc[playerNumber] = DEFAULT_KEY_BINDINGS[playerNumber].map(
-      (fallback, index) => current[index] ?? fallback
+      (fallback, index) => (typeof current[index] === 'string' ? current[index] : fallback)
     );
     return acc;
   }, {});

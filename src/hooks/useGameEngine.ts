@@ -43,6 +43,11 @@ function pruneInactiveMovement(
   state: GameEngineState | null
 ): Record<string, ActiveMovement> {
   if (!state || state.paused || state.phase !== 'playing') return {};
+  // Runs after every published frame: keep the object when nothing is pruned.
+  const isAlive = (playerId: string) => state.players.some(
+    (player) => player.id === playerId && player.alive
+  );
+  if (Object.keys(activeMovement).every(isAlive)) return activeMovement;
   const alivePlayerIds = new Set(
     state.players.filter((player) => player.alive).map((player) => player.id)
   );
@@ -110,11 +115,30 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     }
   }, [config, dispatch]);
 
+  // While no round is live, still track which direction keys are down: a key
+  // held through a pause or into the next round keeps moving once play
+  // resumes, since OS key repeat stops as soon as another key (Escape) is hit.
+  const holdWhileIdle = useCallback((current: GameEngineState, key: string) => {
+    current.players.forEach((player, index) => {
+      const bindings = getPlayerBindings(keyBindings, index);
+      const direction = bindings && getInputDirection(getInputStateForKey(key, bindings));
+      if (!direction) return;
+      heldDirectionsRef.current[player.id] = [
+        ...(heldDirectionsRef.current[player.id] ?? []).filter((held) => held.key !== key),
+        { direction, key },
+      ];
+    });
+  }, [keyBindings]);
+
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     const current = loop.state;
-    if (!current || current.paused || current.phase !== 'playing') return;
+    if (!current) return;
 
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    if (current.paused || current.phase !== 'playing') {
+      holdWhileIdle(current, key);
+      return;
+    }
     let handledDirectionalInput = false;
 
     for (let i = 0; i < current.players.length; i += 1) {
@@ -160,16 +184,23 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     }
 
     if (handledDirectionalInput) event.preventDefault();
-  }, [keyBindings, dispatch, getFallback, loop]);
+  }, [keyBindings, dispatch, getFallback, holdWhileIdle, loop]);
 
   const handleKeyUp = useCallback((event: KeyboardEvent) => {
     const current = loop.state;
-    if (!current || current.paused || current.phase !== 'playing') {
+    if (!current) {
       clearMovement();
       return;
     }
 
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    if (current.paused || current.phase !== 'playing') {
+      Object.keys(heldDirectionsRef.current).forEach((playerId) => {
+        heldDirectionsRef.current[playerId] = heldDirectionsRef.current[playerId]
+          .filter((held) => held.key !== key);
+      });
+      return;
+    }
 
     for (let i = 0; i < current.players.length; i += 1) {
       const bindings = getPlayerBindings(keyBindings, i);
@@ -219,10 +250,21 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
   useEffect(() => {
     loop.activeMovement = pruneInactiveMovement(loop.activeMovement, state);
     if (!state || state.paused || state.phase !== 'playing') {
-      heldDirectionsRef.current = {};
       releasedDirectionRef.current = {};
+      return;
     }
-  }, [state, loop]);
+    // Pick up directions still held through a pause or into a new round.
+    state.players.forEach((player) => {
+      const held = heldDirectionsRef.current[player.id] ?? [];
+      const newest = held[held.length - 1];
+      if (!player.alive || !newest || loop.activeMovement[player.id]) return;
+      loop.activeMovement[player.id] = {
+        accumulatorMs: 0,
+        ...newest,
+        ...getFallback(player.id, newest.direction),
+      };
+    });
+  }, [state, loop, getFallback]);
 
   // Advances the simulation to a frame timestamp. Every rAF callback in one
   // frame gets the same timestamp, so this is idempotent per frame: the 3D
@@ -236,7 +278,6 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     lastFrameTimeRef.current = now;
     const before = loop.state;
     if (!advanceEngineFrame(loop, last === null ? 0 : now - last)) {
-      heldDirectionsRef.current = {};
       releasedDirectionRef.current = {};
     }
     if (loop.state !== before) setState(loop.state);

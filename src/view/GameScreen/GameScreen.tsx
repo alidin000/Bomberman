@@ -31,6 +31,7 @@ import ModifyControlsDialog from './SettingsScreen/ModifyControlsDialog';
 import { GameScene3D } from './GameScene3D';
 import { GameHUD } from './GameHUD';
 import { useGameEngine } from '../../hooks/useGameEngine';
+import { useRenderState } from '../../hooks/useRenderState';
 import { GameConfig, loadMapFromStorage } from '../../engine';
 import { DEFAULT_CHARACTER_ID, DEFAULT_STAGE_ID, GameMode } from '../../content';
 import { completeCampaignStage, recordCampaignDiscoveries } from '../../story/progress';
@@ -52,6 +53,7 @@ import {
   ControlRow,
   CountdownOverlay,
   FeedbackCaption,
+  CaptionLiveRegion,
 } from './GameScreen.styles';
 import {
   loadGamePreferences,
@@ -180,6 +182,10 @@ const MemoModifyControlsDialog = React.memo(
   ModifyControlsDialog,
   (prev, next) => !prev.isOpen && !next.isOpen
 );
+// Fed the render state (see useRenderState), so a held-movement frame skips
+// the whole HUD and 3D scene re-render; the scene draws those steps itself.
+const MemoGameHUD = React.memo(GameHUD);
+const MemoGameScene3D = React.memo(GameScene3D);
 
 export const GameScreen = () => {
   const { numOfPlayers, numOfRounds, selectedMap } = useParams();
@@ -218,7 +224,8 @@ export const GameScreen = () => {
     restart,
     dismissDialog,
   } = useGameEngine(config, keyBindings);
-  const feedback = useGameFeedback(state, preferences);
+  const renderState = useRenderState(state);
+  const feedback = useGameFeedback(renderState, preferences);
 
   const handlePreferencesChange = useCallback((nextPreferences: typeof preferences) => {
     setPreferences(nextPreferences);
@@ -325,10 +332,12 @@ export const GameScreen = () => {
   }, [resume]);
 
   const handleShowControlsGuide = useCallback(() => {
+    // Already open: the guide paused the game itself, so keep its resume flag.
+    if (showControlsGuide) return;
     controlsGuidePausedGame.current = !isPaused;
     setShowControlsGuide(true);
     if (!isPaused) pause();
-  }, [isPaused, pause]);
+  }, [isPaused, pause, showControlsGuide]);
 
   useEffect(() => {
     if (
@@ -400,7 +409,7 @@ export const GameScreen = () => {
     showControlsGuide,
   ]);
 
-  if (!state) {
+  if (!state || !renderState) {
     return (
       <StyledBackground>
         <LoadingMessage>Loading game...</LoadingMessage>
@@ -410,7 +419,7 @@ export const GameScreen = () => {
 
   return (
     <GameBackground>
-      {showHud && <GameHUD state={state} scale={preferences.hudScale} />}
+      {showHud && <MemoGameHUD state={renderState} scale={preferences.hudScale} />}
       <GameTopControls
         isPaused={isPaused}
         showHud={showHud}
@@ -421,16 +430,19 @@ export const GameScreen = () => {
         onToggleHud={handleToggleHud}
       />
       <GameSceneContainer>
-        <GameScene3D
-          state={state}
+        <MemoGameScene3D
+          state={renderState}
           preferences={preferences}
           impact={feedback.impact}
           motion={motion}
           advanceFrame={advanceFrame}
         />
       </GameSceneContainer>
+      <CaptionLiveRegion role="status" aria-atomic="true">
+        {feedback.caption}
+      </CaptionLiveRegion>
       {feedback.caption && (
-        <FeedbackCaption key={feedback.eventId} aria-live="polite" aria-atomic="true">
+        <FeedbackCaption key={feedback.eventId} aria-hidden="true">
           {feedback.caption}
         </FeedbackCaption>
       )}
@@ -551,7 +563,11 @@ export const GameScreen = () => {
         onSave={(nextBindings) => {
           const normalized = normalizeKeyBindings(nextBindings);
           setKeyBindings(normalized);
-          localStorage.setItem('playerKeyBindings', JSON.stringify(normalized));
+          try {
+            localStorage.setItem('playerKeyBindings', JSON.stringify(normalized));
+          } catch {
+            // The new keys still apply to this match when storage is unavailable.
+          }
           setIsModifyingControls(false);
           resume();
         }}

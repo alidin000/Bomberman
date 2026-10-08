@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { fetchMapFromFile, parseMapRows } from './mapLoader';
+import { fetchMapFromFile, loadMapFromStorage, parseMapRows } from './mapLoader';
+import { defaultMap } from '../constants/contants';
 import { STAGE_DEFINITIONS } from '../content/stages';
 
 function readCampaignMapRows(mapId: string): string[][] {
@@ -79,5 +80,22 @@ describe('mapLoader', () => {
     });
 
     expect(signatures.size).toBe(STAGE_DEFINITIONS.length);
+  });
+});
+
+describe('loadMapFromStorage', () => {
+  afterEach(() => localStorage.clear());
+
+  it('falls back to the default arena when the stored map is corrupted', () => {
+    const fallback = parseMapRows(defaultMap);
+    ['{not json', '42', '[]', '[["W", 3]]', '{"rows": []}'].forEach((raw) => {
+      localStorage.setItem('selectedMap', raw);
+      expect(loadMapFromStorage()).toEqual(fallback);
+    });
+  });
+
+  it('loads a stored map that is a grid of cells', () => {
+    localStorage.setItem('selectedMap', JSON.stringify([['W', 'W', 'W'], ['W', ' ', 'W'], ['W', 'W', 'W']]));
+    expect(loadMapFromStorage()[1][1]).toBe('Empty');
   });
 });

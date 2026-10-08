@@ -6,7 +6,7 @@ import {
 } from '../model/gameItem';
 import { Direction, GameEngineState, PlayerState } from './types';
 import {
-  GHOST_POWER_MS, INVINCIBILITY_POWER_MS, POWER_FLASH_MS,
+  GHOST_POWER_MS, INVINCIBILITY_POWER_MS, POWER_FLASH_MS, SURVIVAL_GRACE_MS,
 } from './constants';
 import {
   getCell,
@@ -54,11 +54,17 @@ export function applyCharacterSurvival(
   player: PlayerState,
   deathReason?: string
 ): PlayerState {
-  if (player.characterId === 'gaara' && player.passiveState === 'Automatic Sand Shield') {
+  // A save covers the whole hit: the rest of that blast, its flames, or a
+  // monster still in contact cannot undo it a moment later.
+  if ((player.survivalGraceMs ?? 0) > 0) return player;
+  if (player.characterId === 'gaara'
+    && (player.passiveState === 'Automatic Sand Shield'
+      || player.passiveState === 'Sand Armor Reinforced')) {
     return {
       ...player,
       alive: true,
       passiveState: 'Sand Shield Spent',
+      survivalGraceMs: SURVIVAL_GRACE_MS,
     };
   }
   if (player.characterId === 'itachi' && player.passiveState === 'Illusion Dodge') {
@@ -66,6 +72,7 @@ export function applyCharacterSurvival(
       ...player,
       alive: true,
       passiveState: 'Illusion Dodge Spent',
+      survivalGraceMs: SURVIVAL_GRACE_MS,
     };
   }
   return { ...player, alive: false, deathReason };
@@ -120,7 +127,8 @@ function isCellValidForPlayer(
   if (cellY < 0 || cellY >= map.length || cellX < 0 || cellX >= map[0].length) return false;
 
   if (isGhostActive(state, playerId)) {
-    return true;
+    // Ghost phases through walls, but never past the edge of the arena.
+    return nextX >= 0 && nextY >= 0 && nextX <= map[0].length - 1 && nextY <= map.length - 1;
   }
 
   const cell = map[cellY][cellX];
@@ -166,7 +174,7 @@ function withinOrClosing(next: number, current: number, max: number): boolean {
 
 // A move may never pull players further apart than the shared screen, but a
 // move that closes the gap is always allowed, so nobody gets frozen outside it.
-function staysInsideSharedScreen(
+export function staysInsideSharedScreen(
   state: GameEngineState,
   mover: PlayerState,
   x: number,
@@ -374,6 +382,22 @@ export function placeObstacle(state: GameEngineState, playerId: string): GameEng
   return { ...state, map, players };
 }
 
+// The ultimate recharges from its cooldown, so a charge pickup winds the
+// cooldown forward; a bare charge bonus would be overwritten on the next tick.
+function restoreUltimateCharge(
+  player: PlayerState,
+  amount: number,
+): Pick<PlayerState, 'ultimateCharge' | 'ultimateCooldownRemaining'> {
+  const ultimateCharge = Math.min(100, player.ultimateCharge + amount);
+  return {
+    ultimateCharge,
+    ultimateCooldownRemaining: Math.min(
+      player.ultimateCooldownRemaining,
+      (player.ultimateCooldown * (100 - ultimateCharge)) / 100,
+    ),
+  };
+}
+
 export function applyPowerUp(
   state: GameEngineState,
   playerId: string,
@@ -423,26 +447,26 @@ export function applyPowerUp(
       case 'ClaySpider':
         next.maxBombs += 1;
         next.bombRange += 1;
-        next.ultimateCharge = Math.min(100, next.ultimateCharge + 15);
+        Object.assign(next, restoreUltimateCharge(next, 15));
         break;
       case 'Rasengan':
         next.bombRange += 1;
-        next.ultimateCharge = Math.min(100, next.ultimateCharge + 25);
+        Object.assign(next, restoreUltimateCharge(next, 25));
         break;
       case 'Sharingan':
         next.powerUps = addUniquePower(next.powerUps, 'Detonator');
-        next.ultimateCharge = Math.min(100, next.ultimateCharge + 25);
+        Object.assign(next, restoreUltimateCharge(next, 25));
         break;
       case 'FTGKunai':
         next.powerUps = addUniquePower(next.powerUps, 'RollerSkate');
-        next.ultimateCharge = Math.min(100, next.ultimateCharge + 20);
+        Object.assign(next, restoreUltimateCharge(next, 20));
         break;
       case 'CrowFeather':
         next.powerUps = [
           ...next.powerUps.filter((pw) => pw !== 'Ghost'),
           'Ghost',
         ];
-        next.ultimateCharge = Math.min(100, next.ultimateCharge + 10);
+        Object.assign(next, restoreUltimateCharge(next, 10));
         break;
       case 'SandArmor':
         next.powerUps = [
@@ -453,10 +477,10 @@ export function applyPowerUp(
         break;
       case 'ChakraScroll':
         next.bombRange += 1;
-        next.ultimateCharge = Math.min(100, next.ultimateCharge + 35);
+        Object.assign(next, restoreUltimateCharge(next, 35));
         break;
       case 'CharacterFragment':
-        next.ultimateCharge = 100;
+        Object.assign(next, restoreUltimateCharge(next, 100));
         break;
       default:
         break;
@@ -510,9 +534,21 @@ export function tickPickupMessages(
   return { ...state, pickupMessages };
 }
 
+function tickSurvivalGrace(players: PlayerState[], deltaMs: number): PlayerState[] {
+  if (!players.some((p) => (p.survivalGraceMs ?? 0) > 0)) return players;
+  return players.map((p) => (
+    (p.survivalGraceMs ?? 0) > 0
+      ? { ...p, survivalGraceMs: Math.max(0, (p.survivalGraceMs ?? 0) - deltaMs) }
+      : p
+  ));
+}
+
 export function tickPowerUps(state: GameEngineState, deltaMs: number): GameEngineState {
-  if (Object.keys(state.timedPowerUps).length === 0) return state;
-  let players = [...state.players];
+  const graced = tickSurvivalGrace(state.players, deltaMs);
+  if (Object.keys(state.timedPowerUps).length === 0) {
+    return graced === state.players ? state : { ...state, players: graced };
+  }
+  let players = [...graced];
   const timedPowerUps: GameEngineState['timedPowerUps'] = {};
 
   Object.entries(state.timedPowerUps).forEach(([playerId, powers]) => {
@@ -526,7 +562,7 @@ export function tickPowerUps(state: GameEngineState, deltaMs: number): GameEngin
         remaining.push({ ...tp, ticksRemaining, flashTicksRemaining });
       } else if (tp.power === 'Ghost') {
         const player = players.find((p) => p.id === playerId);
-        if (player) {
+        if (player?.alive) {
           const trapped = getOverlappedCells(player.x, player.y).some((point) => {
             const cell = getCell(state.map, point);
             if (!cell || cell === 'Empty' || isPower(cell)) return false;

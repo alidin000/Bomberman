@@ -1,11 +1,13 @@
 /* eslint-disable comma-dangle */
 import { GameMap } from '../model/gameItem';
-import { GameConfig, GameEngineState, PlayerState } from './types';
+import {
+  GameConfig, GameEngineState, MonsterState, PlayerState,
+} from './types';
 import { PLAYER_COLORS, PLAYER_SPAWNS } from './constants';
 import { getMonstersForMap } from './monsterSpawns';
 import { resetBombIdCounter } from './bombs';
 import { resetBossHazardIdCounter } from './bosses';
-import { resetMonsterHazardIdCounter } from './monsters';
+import { getDetectionRange, resetMonsterHazardIdCounter } from './monsters';
 import {
   DEFAULT_CHARACTER_ID,
   STAGE_DEFINITIONS,
@@ -78,6 +80,66 @@ function createSpawnSafeMap(map: GameMap, players: PlayerState[]): GameMap {
   return next;
 }
 
+// The versus monster tables were laid out for the 15x10 arenas. On the 35x35
+// stage maps some of those cells are pillars or crates, or sit right beside a
+// spawn, so one player is hunted from the first second while the others are
+// not. Such a monster starts on the nearest cell it can stand on that is out
+// of its detection range of every spawn.
+const MONSTER_PLACEMENT_STEPS = [
+  { x: 0, y: -1 },
+  { x: 1, y: 0 },
+  { x: 0, y: 1 },
+  { x: -1, y: 0 },
+];
+
+function canMonsterStartAt(
+  map: GameMap,
+  monster: MonsterState,
+  x: number,
+  y: number,
+  players: PlayerState[],
+  taken: Set<string>
+): boolean {
+  const cell = map[y]?.[x];
+  if (cell === undefined || isBoundaryCell(map, x, y) || taken.has(`${x},${y}`)) return false;
+  // Ghosts drift through crates, like their movement rules allow.
+  const standable = monster.kind === 'ghost' ? cell !== 'Wall' : cell === 'Empty';
+  const detectionRange = getDetectionRange(monster);
+  return standable && players.every((player) => (
+    Math.abs(player.x - x) + Math.abs(player.y - y) > detectionRange
+  ));
+}
+
+function placeVersusMonsters(
+  monsters: MonsterState[],
+  map: GameMap,
+  players: PlayerState[]
+): MonsterState[] {
+  const taken = new Set(monsters.map((monster) => `${monster.x},${monster.y}`));
+  return monsters.map((monster) => {
+    taken.delete(`${monster.x},${monster.y}`);
+    const queue = [{ x: monster.x, y: monster.y }];
+    const seen = new Set([`${monster.x},${monster.y}`]);
+    for (let index = 0; index < queue.length; index += 1) {
+      const { x, y } = queue[index];
+      if (canMonsterStartAt(map, monster, x, y, players, taken)) {
+        taken.add(`${x},${y}`);
+        return x === monster.x && y === monster.y ? monster : { ...monster, x, y };
+      }
+      MONSTER_PLACEMENT_STEPS.forEach((step) => {
+        const next = { x: x + step.x, y: y + step.y };
+        const key = `${next.x},${next.y}`;
+        if (!seen.has(key) && map[next.y]?.[next.x] !== undefined) {
+          seen.add(key);
+          queue.push(next);
+        }
+      });
+    }
+    taken.add(`${monster.x},${monster.y}`);
+    return monster;
+  });
+}
+
 function getBossSpawn(config: GameConfig): { x: number; y: number } {
   const centerX = Math.floor(config.map[0].length / 2);
   const centerY = Math.floor(config.map.length / 2);
@@ -140,7 +202,11 @@ export function createInitialState(config: GameConfig): GameEngineState {
     players,
     monsters: config.mode === 'solo'
       ? campaignMonsters
-      : getMonstersForMap(config.selectedMap, config.numPlayers),
+      : placeVersusMonsters(
+        getMonstersForMap(config.selectedMap, config.numPlayers),
+        map,
+        players
+      ),
     bombs: [],
     explosions: [],
     destroyedBoxes: [],
@@ -196,7 +262,11 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     players,
     monsters: state.config.mode === 'solo'
       ? campaignMonsters
-      : getMonstersForMap(state.config.selectedMap, state.config.numPlayers),
+      : placeVersusMonsters(
+        getMonstersForMap(state.config.selectedMap, state.config.numPlayers),
+        map,
+        players
+      ),
     bombs: [],
     explosions: [],
     destroyedBoxes: [],

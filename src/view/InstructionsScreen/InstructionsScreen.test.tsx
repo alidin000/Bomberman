@@ -1,6 +1,8 @@
 import { vi, type Mock } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import {
+  render, screen, fireEvent, within,
+} from '@testing-library/react';
 import { BrowserRouter, useNavigate, NavigateFunction } from 'react-router-dom';
 import { InstructionsScreen } from './InstructionsScreen';
 
@@ -46,5 +48,15 @@ describe('InstructionsScreen', () => {
     const backButton = screen.getByRole('button');
     fireEvent.click(backButton);
     expect(mockNavigate).toHaveBeenCalledWith('/');
+  });
+
+  it('lists each story boss once even when two stages share it', () => {
+    setup();
+    const bossSection = screen.getByRole('heading', { name: 'Story Bosses' }).closest('section');
+    expect(bossSection).not.toBeNull();
+    const entries = within(bossSection as HTMLElement).getAllByText(/ casts /);
+    const names = entries.map((entry) => entry.textContent?.split(' casts ')[0].replace(/^\d+ tail/, ''));
+    expect(names).toContain('Kurama');
+    expect(new Set(names).size).toBe(names.length);
   });
 });

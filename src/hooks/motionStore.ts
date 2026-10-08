@@ -123,6 +123,20 @@ export function clearMotion(store: MotionStore): void {
   store.tracks.clear();
 }
 
+/**
+ * Pins an entity the simulation just removed to where it is drawn. Its mesh
+ * stays mounted until React commits, at least one more frame; without a track
+ * it would be drawn at its last simulated cell, up to a whole cell ahead.
+ */
+function holdTrack(store: MotionStore, id: string, atMs: number): void {
+  const track = store.tracks.get(id);
+  if (!track) return;
+  const at = sampleTrack(track, atMs);
+  store.tracks.set(id, {
+    ...track, fromX: at.x, fromY: at.y, toX: at.x, toY: at.y, startMs: atMs, durationMs: 0,
+  });
+}
+
 function samePosition(a: MotionPoint, b: MotionPoint): boolean {
   return a.x === b.x && a.y === b.y;
 }
@@ -166,13 +180,16 @@ export function recordTickMotion(
       const id = monsterMotionId(monster.id);
       alive.add(id);
       const previous = previousById.get(monster.id);
-      if (previous && !samePosition(previous, monster)) {
+      if (!previous) {
+        // A new spawn never inherits a held track from an earlier one.
+        store.tracks.delete(id);
+      } else if (!samePosition(previous, monster)) {
         recordMotion(store, id, previous, monster, startMs, ENEMY_GLIDE_MS, 'smooth');
       }
     });
     previousById.forEach((_, monsterId) => {
       const id = monsterMotionId(monsterId);
-      if (!alive.has(id)) store.tracks.delete(id);
+      if (!alive.has(id)) holdTrack(store, id, startMs);
     });
   }
 

@@ -231,4 +231,101 @@ describe('GameScreen', () => {
       })).not.toBeInTheDocument();
     });
   });
+
+  it('applies saved controls and resumes even when browser storage rejects the write', async () => {
+    localStorage.setItem('shinobiControlsGuideSeen', 'true');
+    render(
+      <MemoryRouter initialEntries={['/game/2/1/map1']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByLabelText('open settings'));
+    fireEvent.click(screen.getByRole('button', { name: /modify controls/i }));
+    fireEvent.keyDown(screen.getByLabelText('player 1 bomb key'), { key: 'b' });
+    engineMocks.resume.mockClear();
+
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage is full', 'QuotaExceededError');
+    });
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    } finally {
+      setItem.mockRestore();
+    }
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Modify Controls' })).not.toBeInTheDocument();
+    });
+    expect(engineMocks.resume).toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('show controls'));
+    expect(screen.getByText('P1 bomb').nextSibling).toHaveTextContent('B');
+  });
+
+  it('falls back to default keys when stored bindings hold non-key values', () => {
+    localStorage.setItem('playerKeyBindings', JSON.stringify({
+      1: [5, null, {}, 'd', 2, '1', '3', '4'],
+    }));
+
+    render(
+      <MemoryRouter initialEntries={['/game/2/1/map1']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('P1 move').nextSibling).toHaveTextContent('W A S D');
+    expect(screen.getByText('P1 bomb').nextSibling).toHaveTextContent('2');
+  });
+
+  it('still resumes after the guide when the controls button is pressed twice mid-match', () => {
+    localStorage.setItem('shinobiControlsGuideSeen', 'true');
+    const screenTree = () => (
+      <MemoryRouter initialEntries={['/game/2/1/map1']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+    const { rerender } = render(screenTree());
+
+    fireEvent.click(screen.getByLabelText('show controls'));
+    expect(engineMocks.pause).toHaveBeenCalled();
+    currentMockState = { ...mockState, paused: true };
+    rerender(screenTree());
+    expect(screen.getByLabelText('resume game')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('show controls'));
+    fireEvent.click(screen.getByLabelText('hide controls guide'));
+
+    expect(engineMocks.resume).toHaveBeenCalledTimes(1);
+  });
+
+  it('announces captions through a live region that exists before the first event', () => {
+    localStorage.setItem('shinobiControlsGuideSeen', 'true');
+    const screenTree = () => (
+      <MemoryRouter initialEntries={['/game/2/1/map1']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+    const { rerender } = render(screenTree());
+    const liveRegion = screen.getByRole('status');
+    expect(liveRegion).toHaveTextContent('');
+
+    currentMockState = {
+      ...mockState,
+      tick: mockState.tick + 1,
+      explosions: [{
+        x: 2, y: 1, ticksRemaining: 500, kind: 'standard',
+      }],
+    };
+    rerender(screenTree());
+
+    expect(screen.getByRole('status')).toBe(liveRegion);
+    expect(liveRegion).toHaveTextContent('Blast detonates');
+  });
 });

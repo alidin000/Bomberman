@@ -147,13 +147,20 @@ export const PauseOverlay = styled.div({
   alignItems: 'center',
   justifyContent: 'center',
   padding: 20,
+  // A tall card (three players on a phone) scrolls instead of being cut off
+  // above the viewport; on phones it also starts below the top controls.
+  overflowY: 'auto',
   background: 'rgba(33,29,26,0.72)',
   pointerEvents: 'auto',
   color: 'var(--anime-ink)',
+  '@media (max-width: 640px)': {
+    paddingTop: 88,
+  },
 });
 
 export const PauseMenuCard = styled.div({
   position: 'relative',
+  margin: 'auto',
   width: 'min(620px, 92vw)',
   display: 'grid',
   gap: 14,
@@ -342,6 +349,17 @@ export const FeedbackCaption = styled.div({
   textAlign: 'center',
   textTransform: 'uppercase',
   pointerEvents: 'none',
+});
+
+// Screen readers only announce changes to a live region that already exists,
+// so the caption text is mirrored into one that stays mounted.
+export const CaptionLiveRegion = styled.div({
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
 });
 
 export const GameHint = styled.div({

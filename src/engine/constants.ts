@@ -5,6 +5,8 @@ export const BOX_DESTROY_MS = 500;
 export const GHOST_POWER_MS = 15000;
 export const INVINCIBILITY_POWER_MS = 15000;
 export const POWER_FLASH_MS = 3000;
+// After Gaara's or Itachi's passive save, the same hit cannot land again.
+export const SURVIVAL_GRACE_MS = 1000;
 
 export const MONSTER_MOVE_MS: Record<string, number> = {
   smart: 600,

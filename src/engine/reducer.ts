@@ -160,10 +160,11 @@ function checkRoundEnd(state: GameEngineState): GameEngineState {
       phase: 'game_over',
       roundProcessed: true,
       paused: true,
-      round: state.round + 1,
     };
   }
 
+  // `round` stays on the round that just ended until the result is dismissed,
+  // so the result screen (and the feedback for the deciding blast) belong to it.
   return {
     ...state,
     roundWinners,
@@ -171,7 +172,6 @@ function checkRoundEnd(state: GameEngineState): GameEngineState {
     phase: 'round_end',
     roundProcessed: true,
     paused: true,
-    round: state.round + 1,
   };
 }
 
@@ -270,7 +270,10 @@ export function gameReducer(
           totalRounds: state.config.totalRounds,
         };
       }
-      return resetRoundState({ ...state, round: state.round });
+      // Only a round result can be dismissed: a second click while the dialog
+      // fades out must not restart (or skip) the round that just began.
+      if (state.phase !== 'round_end') return state;
+      return resetRoundState({ ...state, round: state.round + 1 });
 
     case 'RESTART':
       return state ? createInitialState(withFreshMatchSeed(state)) : state;

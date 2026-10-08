@@ -55,12 +55,22 @@ export function parseMapRows(mapData: string[][]): GameMap {
   }));
 }
 
+function readStoredMap(): string[][] | null {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem('selectedMap') ?? 'null');
+    const valid = Array.isArray(parsed)
+      && parsed.length > 0
+      && parsed.every((row) => Array.isArray(row) && row.every((cell) => typeof cell === 'string'));
+    return valid ? parsed as string[][] : null;
+  } catch {
+    return null;
+  }
+}
+
+// A corrupted or hand-edited `selectedMap` falls back to the default arena
+// instead of throwing while the game screen renders.
 export function loadMapFromStorage(): GameMap {
-  const stored = localStorage.getItem('selectedMap');
-  const mapData: string[][] = stored && JSON.parse(stored).length > 0
-    ? JSON.parse(stored)
-    : defaultMap;
-  return parseMapRows(mapData);
+  return parseMapRows(readStoredMap() ?? defaultMap);
 }
 
 export async function fetchMapFromFile(mapName: string): Promise<string[][]> {

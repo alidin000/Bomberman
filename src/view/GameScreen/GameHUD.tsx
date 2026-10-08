@@ -135,7 +135,8 @@ function toPlayerCardModel(
     color: player.color,
     alive: player.alive,
     deathReason: player.deathReason,
-    bombsLeft: player.maxBombs - player.activeBombs,
+    // Naruto's clone and ultimate bombs can put more out than the base limit.
+    bombsLeft: Math.max(0, player.maxBombs - player.activeBombs),
     maxBombs: player.maxBombs,
     bombRange: player.bombRange,
     ultimateCharge: player.ultimateCharge,
@@ -164,17 +165,17 @@ const PlayerCard = React.memo(({ model }: { model: PlayerCardModel }) => {
           aria-label={`${character.name} portrait`}
         />
         <div>
-          <Typography variant="subtitle1" fontWeight="bold" color="#f8fafc">
+          <Typography variant="subtitle1" fontWeight="bold" color="var(--anime-ink)">
             {`P${model.playerNumber} · ${character.name || model.name}`}
           </Typography>
-          <Typography variant="caption" color={model.alive ? '#86efac' : '#fca5a5'}>
+          <Typography variant="caption" color={model.alive ? 'var(--anime-teal)' : '#8f2f26'}>
             {model.alive ? character.title : 'Sealed'}
           </Typography>
           <PlayerStatusRibbon alive={model.alive} color={model.color}>
             {model.alive ? 'Ready' : 'Sealed'}
           </PlayerStatusRibbon>
           {!model.alive && model.deathReason && (
-            <Typography variant="caption" display="block" color="#fecaca">
+            <Typography variant="caption" display="block" color="#8f2f26">
               {model.deathReason}
             </Typography>
           )}
@@ -423,7 +424,7 @@ const CampaignSummary = React.memo(({ model }: { model: CampaignModel }) => (
     <Typography variant="overline" fontWeight="bold" letterSpacing={0}>
       {model.title}
     </Typography>
-    <Typography variant="caption" display="block" color="#d1fae5">
+    <Typography variant="caption" display="block" color="var(--anime-line)">
       {model.message}
     </Typography>
     {model.event && (
@@ -431,7 +432,7 @@ const CampaignSummary = React.memo(({ model }: { model: CampaignModel }) => (
         <Typography variant="caption" display="block" fontWeight="bold">
           {model.event.name}
         </Typography>
-        <Typography variant="caption" color="#e5e7eb">
+        <Typography variant="caption" color="var(--anime-line)">
           {model.event.effectLabel}
         </Typography>
       </CampaignEventBanner>
@@ -470,7 +471,7 @@ const CampaignSummary = React.memo(({ model }: { model: CampaignModel }) => (
             variant="determinate"
             value={objective.progress}
           />
-          <Typography variant="caption" color="#e5e7eb">
+          <Typography variant="caption" color="var(--anime-line)">
             {objective.detail}
           </Typography>
         </ObjectiveItem>
@@ -478,7 +479,7 @@ const CampaignSummary = React.memo(({ model }: { model: CampaignModel }) => (
     </ObjectiveList>
     <Typography
       variant="caption"
-      color={model.bossUnlocked ? '#86efac' : '#cbd5e1'}
+      color={model.bossUnlocked ? 'var(--anime-teal)' : 'var(--anime-line)'}
       display="block"
       marginTop={1}
     >
@@ -530,7 +531,7 @@ const BossSummary = React.memo(({ model }: { model: BossModel }) => {
         variant="determinate"
         value={health}
       />
-      <Typography variant="caption" display="block" color="#e5e7eb">
+      <Typography variant="caption" display="block" color="var(--anime-line)">
         Phase
         {' '}
         {model.phase}
@@ -549,7 +550,7 @@ const BossSummary = React.memo(({ model }: { model: BossModel }) => {
         {' '}
         HP
       </Typography>
-      <Typography variant="caption" display="block" color="warning.light">
+      <Typography variant="caption" display="block" color="#8f2f26">
         {model.currentAbility}
         {' '}
         ·

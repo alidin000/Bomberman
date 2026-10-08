@@ -1,4 +1,5 @@
 import React from 'react';
+import { vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
 import theme from '../../theme/InstructionsTheme';
@@ -59,6 +60,35 @@ describe('GameHUD', () => {
     expect(screen.getByLabelText('round clock')).toHaveTextContent('Sudden deathWalls closing');
   });
 
+  it('never shows a negative bomb count while extra bombs are out', () => {
+    const state = createInitialState({
+      numPlayers: 2,
+      totalRounds: 1,
+      selectedMap: 'map1',
+      selectedCharacters: ['sasuke', 'naruto'],
+      map: parseMapRows(defaultMap),
+    });
+    // Naruto's shadow clone puts one bomb more than his limit on the field.
+    const cloneOut = {
+      ...state,
+      players: state.players.map((player, index) => (
+        index === 1 ? { ...player, activeBombs: player.maxBombs + 1 } : player
+      )),
+    };
+
+    render(
+      <ThemeProvider theme={theme}>
+        <GameHUD state={cloneOut} scale={100} />
+      </ThemeProvider>
+    );
+
+    const bombPills = screen.getAllByText(/^Bombs/);
+    expect(bombPills.map((pill) => pill.textContent)).toEqual([
+      `Bombs ${state.players[0].maxBombs}/${state.players[0].maxBombs}`,
+      `Bombs 0/${state.players[1].maxBombs}`,
+    ]);
+  });
+
   it('shows the concrete death reason on sealed player cards', () => {
     const state = createInitialState({
       numPlayers: 2,
@@ -82,5 +112,29 @@ describe('GameHUD', () => {
     );
 
     expect(screen.getByText(reason)).toBeInTheDocument();
+  });
+
+  it('renders player status ribbons without React DOM attribute warnings', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const state = createInitialState({
+      numPlayers: 2,
+      totalRounds: 1,
+      selectedMap: 'map1',
+      selectedCharacters: ['sasuke', 'naruto'],
+      map: parseMapRows(defaultMap),
+    });
+
+    try {
+      render(
+        <ThemeProvider theme={theme}>
+          <GameHUD state={state} scale={100} />
+        </ThemeProvider>
+      );
+      expect(screen.getAllByText('Ready')).toHaveLength(2);
+      const warnings = errors.mock.calls.map((call) => call.map(String).join(' '));
+      expect(warnings.filter((text) => /non-boolean attribute/.test(text))).toEqual([]);
+    } finally {
+      errors.mockRestore();
+    }
   });
 });

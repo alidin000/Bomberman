@@ -4,8 +4,9 @@ import { GamePreferences } from './gamePreferences';
 
 type FeedbackSnapshot = {
   tick: number;
-  round: number;
-  bombIds: Set<string>;
+  phase: GameEngineState['phase'];
+  // Bomb id -> its cell, so a vanished bomb can be matched to its blast.
+  bombCells: Map<string, string>;
   explosionCells: Set<string>;
   monsterIds: Set<string>;
   alivePlayers: Set<string>;
@@ -16,12 +17,15 @@ type FeedbackSnapshot = {
 function snapshot(state: GameEngineState): FeedbackSnapshot {
   return {
     tick: state.tick,
-    round: state.round,
-    bombIds: new Set(state.bombs.map((bomb) => bomb.id)),
+    phase: state.phase,
+    bombCells: new Map(state.bombs.map((bomb) => [bomb.id, `${bomb.x},${bomb.y}`])),
     explosionCells: new Set(
       state.explosions.map((cell) => `${cell.x},${cell.y},${cell.kind}`)
     ),
-    monsterIds: new Set(state.monsters.map((monster) => monster.id)),
+    // Short-lived summons fade on their own, so their exit is not a defeat.
+    monsterIds: new Set(state.monsters
+      .filter((monster) => monster.lifetimeMs === undefined)
+      .map((monster) => monster.id)),
     alivePlayers: new Set(
       state.players.filter((player) => player.alive).map((player) => player.id)
     ),
@@ -87,11 +91,25 @@ export function useGameFeedback(
     const current = snapshot(state);
     const previous = previousRef.current;
     previousRef.current = current;
-    if (!previous || current.tick < previous.tick || current.round !== previous.round) return;
+    // Skip comparisons across a reset: RESTART rewinds the tick, and the next
+    // round starts by leaving round_end. The round number itself already
+    // advances on the tick that ends a round, which must still be announced.
+    if (
+      !previous
+      || current.tick < previous.tick
+      || (previous.phase !== 'playing' && current.phase === 'playing')
+    ) return;
 
     const newExplosions = [...current.explosionCells]
       .filter((key) => !previous.explosionCells.has(key)).length;
-    const newBombs = [...current.bombIds].filter((id) => !previous.bombIds.has(id)).length;
+    // A blast always covers its bomb's own cell; a bomb crushed by sudden
+    // death leaves no flame there, so it is not counted.
+    const flameCells = new Set(state.explosions.map((cell) => `${cell.x},${cell.y}`));
+    const detonatedBombs = [...previous.bombCells]
+      .filter(([id, cell]) => !current.bombCells.has(id) && flameCells.has(cell)).length;
+    const blasts = Math.max(1, detonatedBombs);
+    const newBombs = [...current.bombCells.keys()]
+      .filter((id) => !previous.bombCells.has(id)).length;
     const defeated = [...previous.monsterIds].filter((id) => !current.monsterIds.has(id)).length;
     const playerDown = [...previous.alivePlayers].some((id) => !current.alivePlayers.has(id));
     const bossHit = previous.bossHealth !== null
@@ -104,7 +122,7 @@ export function useGameFeedback(
 
     const captions: string[] = [];
     if (newExplosions > 0) {
-      captions.push(newExplosions > 1 ? `${newExplosions} blasts detonate` : 'Blast detonates');
+      captions.push(blasts > 1 ? `${blasts} blasts detonate` : 'Blast detonates');
       setImpact(Math.min(1, 0.3 + newExplosions * 0.12));
       if (audio) playTone(audio, 115, 0.24, volume * Math.min(1.8, 1 + newExplosions * 0.1), 'sawtooth');
     }

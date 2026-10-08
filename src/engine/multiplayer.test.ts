@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { gameReducer } from './reducer';
 import { createInitialState } from './initialState';
 import { GameConfig, GameEngineState } from './types';
 import { parseMapRows } from './mapLoader';
+import { STAGE_DEFINITIONS } from '../content/stages';
+import { getDetectionRange } from './monsters';
 
 const openArena = parseMapRows([
   'WWWWWWWWWWWWWWW',
@@ -91,5 +94,44 @@ describe('two players sharing the arena', () => {
 
     expect(move(state, 'player2', 'left', 5).players[1].x).toBeCloseTo(16.5);
     expect(move(state, 'player2', 'right', 5).players[1].x).toBe(17);
+  });
+});
+
+describe('local versus on the 35x35 stage arenas', () => {
+  const cases = STAGE_DEFINITIONS.flatMap((stage) => [2, 3].map((numPlayers) => ({
+    mapId: stage.mapId,
+    numPlayers,
+  })));
+
+  it.each(cases)('starts $mapId monsters on open ground out of reach of $numPlayers spawns', ({
+    mapId,
+    numPlayers,
+  }) => {
+    const map = parseMapRows(readFileSync(`public/maps/${mapId}.txt`, 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .map((row) => row.split('')));
+    const state = createInitialState({
+      ...config,
+      numPlayers,
+      selectedMap: mapId,
+      map,
+      selectedCharacters: undefined,
+    });
+
+    expect(state.monsters.length).toBeGreaterThan(0);
+    state.monsters.forEach((monster) => {
+      const cell = state.map[monster.y][monster.x];
+      // Ghosts may stand inside crates; nothing may start inside a pillar.
+      expect(monster.kind === 'ghost' ? cell !== 'Wall' : cell === 'Empty').toBe(true);
+      state.players.forEach((player) => {
+        // Nobody is hunted before they have moved: enemies only chase or
+        // attack a player they detect.
+        expect(Math.abs(monster.x - player.x) + Math.abs(monster.y - player.y))
+          .toBeGreaterThan(getDetectionRange(monster));
+      });
+    });
+    expect(new Set(state.monsters.map((monster) => `${monster.x},${monster.y}`)).size)
+      .toBe(state.monsters.length);
   });
 });

@@ -159,9 +159,11 @@ export const InstructionsScreen = () => {
   const navigate = useNavigate();
   const handleClose = () => navigate('/');
   const stages = STAGE_DEFINITIONS.filter((stage) => stage.implemented);
+  // Kurama guards both the first and the final stage; list each boss once.
   const bosses = stages
     .map((stage) => (stage.bossId ? getBossDefinition(stage.bossId) : null))
-    .filter((boss): boss is ReturnType<typeof getBossDefinition> => Boolean(boss));
+    .filter((boss): boss is ReturnType<typeof getBossDefinition> => Boolean(boss))
+    .filter((boss, index, list) => list.findIndex((other) => other.id === boss.id) === index);
 
   return (
     <InstructionsBackground>

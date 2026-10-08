@@ -10,6 +10,11 @@ import {
   Point,
 } from './types';
 import { MONSTER_MOVE_MS } from './constants';
+import { positionOverlapsCell } from './grid';
+
+// "Creates a short-lived clone threat": a water clone fades after this long,
+// so a Mist Ninja keeps at most two around instead of an ever-growing crowd.
+export const WATER_CLONE_LIFETIME_MS = 6000;
 
 const ARCHETYPE_KIND: Record<EnemyArchetype, MonsterKind> = {
   rogueGenin: 'basic',
@@ -43,18 +48,24 @@ const ARCHETYPE_DETECTION_RANGE: Record<EnemyArchetype, number> = {
   blackZetsu: 5,
 };
 
-function canSpawnAt(state: Pick<GameEngineState, 'map' | 'monsters'>, x: number, y: number) {
+type SpawnState = Pick<GameEngineState, 'map' | 'monsters'> & Partial<Pick<GameEngineState, 'players'>>;
+
+function canSpawnAt(state: SpawnState, x: number, y: number) {
   const cell = state.map[y]?.[x];
   return cell !== undefined
     && cell !== 'Wall'
     && cell !== 'Box'
     && !isBomb(cell)
     && !isObstacle(cell)
-    && !state.monsters.some((monster) => monster.x === x && monster.y === y);
+    && !state.monsters.some((monster) => monster.x === x && monster.y === y)
+    // Never respawn an enemy onto a player: contact would be an unwarned hit.
+    && !(state.players ?? []).some((player) => (
+      player.alive && positionOverlapsCell(player, x, y)
+    ));
 }
 
 function findSpawnCell(
-  state: Pick<GameEngineState, 'map' | 'monsters'>,
+  state: SpawnState,
   point: Pick<CampaignRespawnPointState, 'x' | 'y'>,
   seed: number
 ): Point | null {
@@ -109,11 +120,12 @@ export function createShinobiEnemy({
     spawnPointId,
     clone,
     elite: definition.elite,
+    lifetimeMs: clone ? WATER_CLONE_LIFETIME_MS : undefined,
   };
 }
 
 function spawnFromPoint(
-  state: Pick<GameEngineState, 'map' | 'monsters'>,
+  state: SpawnState,
   point: CampaignRespawnPointState
 ): { monster: MonsterState | null; point: CampaignRespawnPointState } {
   const archetype = point.archetypes[point.spawnCount % point.archetypes.length];
@@ -179,16 +191,19 @@ export function tickCampaignRespawns(
   const monsterIds = new Set(monsters.map((monster) => monster.id));
   const respawnPressure = state.campaign.event?.respawnPressure ?? 1;
   const spawnPoints = state.campaign.spawnPoints.map((point) => {
+    const activeMonsterIds = point.activeMonsterIds.filter((id) => monsterIds.has(id));
+    const full = activeMonsterIds.length >= point.maxActive;
     let nextPoint = {
       ...point,
-      activeMonsterIds: point.activeMonsterIds.filter((id) => monsterIds.has(id)),
-      ticksRemaining: Math.max(0, point.ticksRemaining - deltaMs * respawnPressure),
+      activeMonsterIds,
+      // A full point holds its timer, so a cleared area waits a whole respawn
+      // period instead of refilling the moment an enemy falls.
+      ticksRemaining: full
+        ? point.respawnMs
+        : Math.max(0, point.ticksRemaining - deltaMs * respawnPressure),
     };
 
-    if (
-      nextPoint.activeMonsterIds.length >= nextPoint.maxActive
-      || nextPoint.ticksRemaining > 0
-    ) {
+    if (full || nextPoint.ticksRemaining > 0) {
       return nextPoint;
     }
 

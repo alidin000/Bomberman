@@ -1770,4 +1770,34 @@ describe('gameReducer', () => {
     expect(state.roundWinners).toEqual(['player1', 'player2']);
     expect(state.resultMessage).toBe('The match ends in a draw!');
   });
+
+  it('keeps the finished round on its result screen and starts each next round once', () => {
+    let state = createInitialState({
+      ...baseConfig,
+      totalRounds: 3,
+      selectedCharacters: ['deidara', 'naruto'],
+    });
+    for (let round = 1; round <= 3; round += 1) {
+      state = {
+        ...state,
+        roundStartTicksRemaining: 0,
+        monsters: [],
+        players: state.players.map((player) => (
+          player.id === 'player2' ? { ...player, alive: false } : player
+        )),
+      };
+      state = gameReducer(state, { type: 'TICK', deltaMs: 50 })!;
+
+      expect(state.phase).toBe(round < 3 ? 'round_end' : 'game_over');
+      expect(state.round).toBe(round);
+      if (round < 3) {
+        state = gameReducer(state, { type: 'DISMISS_DIALOG' })!;
+        expect(state.round).toBe(round + 1);
+        state = gameReducer(state, { type: 'TICK', deltaMs: 1000 })!;
+        // A second click on the fading result dialog must not restart the round.
+        expect(gameReducer(state, { type: 'DISMISS_DIALOG' })).toBe(state);
+      }
+    }
+    expect(state.resultMessage).toBe('Deidara wins the match!');
+  });
 });

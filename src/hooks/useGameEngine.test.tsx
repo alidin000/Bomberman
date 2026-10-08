@@ -85,6 +85,29 @@ describe('useGameEngine keyboard input', () => {
     wait(300);
     expect(result.current.state!.players[1].x).toBe(xStopped);
   });
+
+  it('keeps walking in a direction still held through a pause', () => {
+    const { result } = startMatch();
+    const [p1, p2] = result.current.state!.players;
+
+    press('keydown', 'd');
+    press('keydown', 'ArrowLeft');
+    wait(100);
+    act(() => result.current.pause());
+    // Escape stops the OS key repeat, so no further keydown arrives for 'd'.
+    press('keyup', 'ArrowLeft');
+    wait(200);
+    act(() => result.current.resume());
+    const p1AtResume = result.current.state!.players[0].x;
+    const p2AtResume = result.current.state!.players[1].x;
+    wait(300);
+
+    expect(p1AtResume).toBeGreaterThan(p1.x);
+    expect(result.current.state!.players[0].x).toBeGreaterThan(p1AtResume + 0.5);
+    // The key released during the pause stays released.
+    expect(p2AtResume).toBeLessThan(p2.x);
+    expect(result.current.state!.players[1].x).toBe(p2AtResume);
+  });
 });
 
 const pillarArena = parseMapRows([

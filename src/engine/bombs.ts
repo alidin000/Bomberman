@@ -9,7 +9,7 @@ import {
 import {
   BOMB_FUSE_MS, BOX_DESTROY_MS, EXPLOSION_MS,
 } from './constants';
-import { applyCharacterSurvival, isPowerUpActive } from './players';
+import { applyCharacterSurvival, isPowerUpActive, staysInsideSharedScreen } from './players';
 import { getCell, getPlayerCell, positionOverlapsCell } from './grid';
 import {
   getCampaignDestructionOutcome,
@@ -293,14 +293,14 @@ export function placeBomb(state: GameEngineState, playerId: string): GameEngineS
   const origin = getPlayerCell(player);
   const currentCell = getCell(state.map, origin);
 
-  if (player.activeBombs >= player.maxBombs && player.characterId !== 'naruto') return state;
+  // Naruto's shadow clone is the one bomb he may hold over his limit.
+  const bombLimit = player.maxBombs + (player.characterId === 'naruto' ? 1 : 0);
+  if (player.activeBombs >= bombLimit) return state;
   if (currentCell !== 'Empty') return state;
 
   const kind = BASIC_BOMBS[player.characterId];
   const bombs = getBasicBombPlacements(state, player, kind, hasDetonator);
-  const allowedBombs = player.characterId === 'naruto'
-    ? bombs.slice(0, Math.max(1, player.maxBombs - player.activeBombs + 1))
-    : bombs.slice(0, Math.max(0, player.maxBombs - player.activeBombs));
+  const allowedBombs = bombs.slice(0, bombLimit - player.activeBombs);
   if (allowedBombs.length === 0) return state;
 
   const newMap = state.map.map((row) => [...row]);
@@ -381,13 +381,17 @@ function getTeleportDestination(
     { x, y: y - 3 },
     { x: 1, y: 1 },
   ];
-  // Never land on (or inside the reach of) another ninja, monster or boss.
+  const player = state.players.find((p) => p.id === playerId);
+  // Never land on (or inside the reach of) another ninja, monster or boss,
+  // in a live flame, or off the shared screen.
   const occupied = (point: { x: number; y: number }) => (
     state.players.some((other) => (
       other.id !== playerId && other.alive && positionOverlapsCell(other, point.x, point.y)
     ))
     || state.monsters.some((monster) => monster.x === point.x && monster.y === point.y)
     || (state.boss?.x === point.x && state.boss?.y === point.y)
+    || state.explosions.some((flame) => flame.x === point.x && flame.y === point.y)
+    || (!!player && !staysInsideSharedScreen(state, player, point.x, point.y))
   );
   return candidates.find((point) => (
     state.map[point.y]?.[point.x] === 'Empty' && !occupied(point)
@@ -548,14 +552,15 @@ export function explodeBombs(
           sparedIds,
         });
       } else {
-        // A second blast through a burning cell restarts the flame there.
+        // A second blast through a burning cell restarts the flame there, so
+        // only those this blast resolved are spared by the restarted flame.
         const index = explosions.findIndex((e) => e.x === x && e.y === y);
         if (index >= 0) {
           const current = explosions[index];
           explosions[index] = {
             ...current,
             ticksRemaining: EXPLOSION_MS,
-            sparedIds: Array.from(new Set([...(current.sparedIds ?? []), ...sparedIds])),
+            sparedIds,
           };
         }
       }
@@ -643,8 +648,10 @@ export function explodeBombs(
 export function tickBombs(state: GameEngineState, deltaMs: number): GameEngineState {
   if (state.bombs.length === 0) return state;
   const ready: BombState[] = [];
+  const ownerAlive = (ownerId: string) => state.players.some((p) => p.id === ownerId && p.alive);
   const ticking = state.bombs.map((bomb) => {
-    if (bomb.manualDetonation) return bomb;
+    // A manual bomb waits for its owner; once they fall it burns its normal fuse.
+    if (bomb.manualDetonation && ownerAlive(bomb.ownerId)) return bomb;
     const remaining = bomb.ticksRemaining - deltaMs;
     if (remaining <= 0) {
       ready.push(bomb);
@@ -676,8 +683,12 @@ export function tickExplosions(state: GameEngineState, deltaMs: number): GameEng
     if (remaining > 0) {
       destroyedBoxes.push({ ...box, ticksRemaining: remaining });
     } else if (box.pendingPowerUp) {
-      map = map.map((row) => [...row]);
-      map[box.y][box.x] = box.pendingPowerUp;
+      // A bomb or cover planted on the burning crate keeps the cell, as in
+      // campaign reveals: the drop never overwrites it.
+      if (map[box.y][box.x] === 'Empty') {
+        map = map.map((row) => [...row]);
+        map[box.y][box.x] = box.pendingPowerUp;
+      }
     } else if (box.pendingOutcome) {
       const resolved = resolveCampaignDestroyedBox(
         { ...state, map, monsters, campaign },

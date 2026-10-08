@@ -265,7 +265,7 @@ function getFleeField(context: MonsterMovementContext, map: GameMap): number[][]
   return context.fleeField;
 }
 
-function getDetectionRange(monster: MonsterState): number {
+export function getDetectionRange(monster: MonsterState): number {
   if (typeof monster.detectionRange === 'number') return monster.detectionRange;
   if (monster.elite) return 7;
   if (monster.name.toLowerCase().includes('zetsu')) return 4;
@@ -590,6 +590,8 @@ function createMonsterHazard(
     y,
     ticksRemaining: MONSTER_HAZARD_TOTAL_MS,
     warningTicks: MONSTER_ABILITY_WARNING_MS,
+    // Lethal from the moment the enemy's own warning marker ends.
+    activeMs: MONSTER_HAZARD_TOTAL_MS - MONSTER_ABILITY_WARNING_MS,
     color,
     damage: 1,
     sourceName,
@@ -607,7 +609,16 @@ function canTeleportTo(state: GameEngineState, x: number, y: number): boolean {
     && !state.monsters.some((monster) => monster.x === x && monster.y === y);
 }
 
-function getAdjacentTargetCell(state: GameEngineState, target: PlayerState, seed: number): Point {
+function touchesLivingPlayer(players: PlayerState[], point: Point): boolean {
+  return players.some((player) => player.alive && positionsTouch(player, point));
+}
+
+function getAdjacentTargetCell(
+  state: GameEngineState,
+  target: PlayerState,
+  seed: number,
+  avoidPlayers: PlayerState[] = [],
+): Point {
   const targetCell = getPlayerCell(target);
   const candidates = [
     { x: targetCell.x + 1, y: targetCell.y },
@@ -618,7 +629,9 @@ function getAdjacentTargetCell(state: GameEngineState, target: PlayerState, seed
   return candidates
     .map((point, index) => ({ point, order: (index + seed) % candidates.length }))
     .sort((a, b) => a.order - b.order)
-    .find(({ point }) => canTeleportTo(state, point.x, point.y))?.point ?? targetCell;
+    .find(({ point }) => (
+      canTeleportTo(state, point.x, point.y) && !touchesLivingPlayer(avoidPlayers, point)
+    ))?.point ?? targetCell;
 }
 
 function damagePlayerAtTarget(
@@ -694,9 +707,14 @@ function resolveMonsterAbility(
       const point = getAdjacentTargetCell(
         state,
         targetPlayer,
-        hashMonster(monster, state.tick, 43)
+        hashMonster(monster, state.tick, 43),
+        players
       );
-      nextMonster = { ...nextMonster, x: point.x, y: point.y };
+      // With no free cell beside the target the flicker fizzles: it never
+      // lands on (or in contact with) a player, which would be an unwarned hit.
+      if (canTeleportTo(state, point.x, point.y) && !touchesLivingPlayer(players, point)) {
+        nextMonster = { ...nextMonster, x: point.x, y: point.y };
+      }
     }
   }
 
@@ -706,8 +724,12 @@ function resolveMonsterAbility(
       cloneState,
       monsterAsTarget(monster),
       hashMonster(monster, state.tick, 59),
+      players,
     );
-    if (canTeleportTo(cloneState, clonePoint.x, clonePoint.y)) {
+    if (
+      canTeleportTo(cloneState, clonePoint.x, clonePoint.y)
+      && !touchesLivingPlayer(players, clonePoint)
+    ) {
       nextSpawned = [
         ...nextSpawned,
         createShinobiEnemy({
@@ -859,25 +881,43 @@ function tickMonsterAbility(
   };
 }
 
+function ageSummons(monsters: MonsterState[], deltaMs: number): MonsterState[] {
+  if (!monsters.some((monster) => monster.lifetimeMs !== undefined)) return monsters;
+  return monsters.flatMap((monster) => {
+    if (monster.lifetimeMs === undefined) return [monster];
+    const lifetimeMs = monster.lifetimeMs - deltaMs;
+    return lifetimeMs > 0 ? [{ ...monster, lifetimeMs }] : [];
+  });
+}
+
 export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngineState {
   // The ability helpers never mutate these, so no defensive copies.
   let { players, hazards } = state;
   let spawned: MonsterState[] = [];
+  const living = ageSummons(state.monsters, deltaMs);
   const movementContext = createMonsterMovementContext(
-    state.monsters,
+    living,
     createDangerMap(state)
   );
+  // Where everyone stands so far this tick, so teleports and clones never
+  // land on a cell another enemy has just moved into.
+  const placed = [...living];
 
-  const monsters = state.monsters.map((monster) => {
+  const monsters = living.map((monster, index) => {
     movementContext.occupiedCells.delete(cellKey(monster.x, monster.y));
     const abilityTick = tickMonsterAbility(
-      { ...state, players, hazards },
+      {
+        ...state, players, hazards, monsters: [...living, ...placed, ...spawned],
+      },
       monster,
       deltaMs,
       players,
       hazards,
       spawned
     );
+    abilityTick.spawned.slice(spawned.length).forEach((summon) => {
+      movementContext.occupiedCells.add(cellKey(summon.x, summon.y));
+    });
     players = abilityTick.players;
     hazards = abilityTick.hazards;
     spawned = abilityTick.spawned;
@@ -887,6 +927,7 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
     if (cooldown > 0 || (nextMonster.abilityWarningTicks ?? 0) > 0) {
       const waitingMonster = { ...nextMonster, moveCooldown: cooldown };
       reserveMonsterCell(movementContext, monster, waitingMonster);
+      placed[index] = waitingMonster;
       return waitingMonster;
     }
 
@@ -902,6 +943,7 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
       moveCooldown: MONSTER_MOVE_MS[nextMonster.kind],
     };
     reserveMonsterCell(movementContext, monster, nextMonster);
+    placed[index] = nextMonster;
     return nextMonster;
   });
 

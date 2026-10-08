@@ -48,6 +48,8 @@ export const RoundResultDialog = (
   const completedObjectives = state.campaign?.objectives.filter(
     (objective) => objective.status === 'complete'
   ).length ?? 0;
+  // Same count as the HUD's Threats node: a boss still standing is a threat.
+  const threatsLeft = state.monsters.length + (state.boss && state.boss.health > 0 ? 1 : 0);
   const handleClose = (event: object, reason: string) => {
     if (reason === 'backdropClick' || reason === 'escapeKeyDown') {
       return;
@@ -78,9 +80,10 @@ export const RoundResultDialog = (
             </tr>
           </thead>
           <tbody>
-            {state.players.map((player) => (
+            {state.players.map((player, index) => (
               <tr key={player.id}>
-                <td>{player.name}</td>
+                {/* Players may pick the same shinobi; the slot tells them apart. */}
+                <td>{`P${index + 1} · ${player.name}`}</td>
                 <td>{player.alive ? 'Standing' : 'Sealed'}</td>
                 <td>{state.roundWinners.filter((winner) => winner === player.id).length}</td>
                 <td>{player.deathReason ?? (player.alive ? 'Survived' : 'Unknown')}</td>
@@ -90,7 +93,7 @@ export const RoundResultDialog = (
         </table>
         <ResultIntel>
           <span>
-            <strong>{state.monsters.length}</strong>
+            <strong>{threatsLeft}</strong>
             Threats left
           </span>
           <span>

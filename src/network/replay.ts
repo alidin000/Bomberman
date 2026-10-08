@@ -4,7 +4,10 @@ import { GameEngineState } from '../engine/types';
 
 // Bumped whenever simulation rules change, since an older recording would
 // replay differently. v2: seeded drops, countdown freeze, lingering flames.
-export const REPLAY_VERSION = 2;
+// v3: versus monsters never start inside pillars, crates or a spawn's reach;
+// Naruto bomb cap, survival grace, charge pickups, orphaned manual bombs;
+// enemy hazard timing, fading water clones, respawn holds.
+export const REPLAY_VERSION = 3;
 
 export interface ReplayFrame {
   tick: number;

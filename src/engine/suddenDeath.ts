@@ -66,7 +66,10 @@ export function getUpcomingPressureCells(
   state: GameEngineState,
   count = getPressureBlocksPerDrop(state)
 ): Point[] {
-  if (!isSuddenDeathMode(state) || getRoundTimeRemainingMs(state) > 0) return [];
+  // The first batch is due the moment the clock runs out, so it is warned of
+  // for the same interval as every later batch.
+  if (!isSuddenDeathMode(state)
+    || getRoundTimeRemainingMs(state) > PRESSURE_BLOCK_INTERVAL_MS) return [];
   return getPressureOrder(state).slice(
     state.pressureBlocksPlaced,
     state.pressureBlocksPlaced + count

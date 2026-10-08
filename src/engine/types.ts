@@ -75,6 +75,8 @@ export interface PlayerState {
   facing?: Direction;
   specialState?: string;
   passiveState?: string;
+  // Time left in which a spent survival passive still shields its owner.
+  survivalGraceMs?: number;
 }
 
 export interface MonsterState {
@@ -94,6 +96,8 @@ export interface MonsterState {
   spawnPointId?: string;
   clone?: boolean;
   elite?: boolean;
+  // Short-lived summons (water clones) fade when this runs out.
+  lifetimeMs?: number;
 }
 
 export interface BombState {
@@ -133,6 +137,9 @@ export interface BossHazard {
   damage: number;
   sourceName?: string;
   sourceAbility?: string;
+  // Lethal window at the end of the hazard's life. Missing means the boss
+  // split, where the warning is 70% of the lifetime.
+  activeMs?: number;
 }
 
 export interface ExplosionCell {

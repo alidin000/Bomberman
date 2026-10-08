@@ -11,6 +11,7 @@ import {
   Point,
 } from './types';
 import { positionsTouch } from './grid';
+import { hazardIsActive } from './bosses';
 
 const RESCUE_TOUCH_DISTANCE = 0.72;
 const MINI_BOSS_TOUCH_DISTANCE = 0.82;
@@ -40,6 +41,18 @@ const MINI_BOSS_GUARD_OFFSETS: Point[] = [
   { x: 0, y: 0 },
 ];
 
+// Array.map that hands back the input when no element changed, so a step that
+// changes nothing keeps the campaign's identity and its consumers skip work.
+function mapUnchanged<T>(items: T[], update: (item: T) => T): T[] {
+  let changed = false;
+  const next = items.map((item) => {
+    const result = update(item);
+    if (result !== item) changed = true;
+    return result;
+  });
+  return changed ? next : items;
+}
+
 function objectiveIsComplete(
   objectives: CampaignObjectiveState[],
   objectiveId: string
@@ -61,14 +74,12 @@ function requirementsMet(
 function refreshObjectiveStatuses(
   objectives: CampaignObjectiveState[]
 ): CampaignObjectiveState[] {
-  return objectives.map((objective) => {
+  return mapUnchanged(objectives, (objective) => {
     if (objective.status === 'complete' || objective.status === 'failed') {
       return objective;
     }
-    return {
-      ...objective,
-      status: requirementsMet(objectives, objective) ? 'active' : 'locked',
-    };
+    const status = requirementsMet(objectives, objective) ? 'active' : 'locked';
+    return status === objective.status ? objective : { ...objective, status };
   });
 }
 
@@ -192,8 +203,8 @@ function spawnActiveMiniBossGuards(state: GameEngineState): GameEngineState {
   if (!state.campaign) return state;
 
   const { campaign } = state;
-  let monsters = [...state.monsters];
-  const objectives = campaign.objectives.map((objective) => {
+  let { monsters } = state;
+  const objectives = mapUnchanged(campaign.objectives, (objective) => {
     if (
       objective.kind !== 'miniBoss'
       || objective.status !== 'active'
@@ -229,6 +240,7 @@ function spawnActiveMiniBossGuards(state: GameEngineState): GameEngineState {
     ];
     return { ...objective, miniBossGuardId: guardId, miniBossSpawned: true };
   });
+  if (objectives === campaign.objectives) return state;
 
   return {
     ...state,
@@ -333,7 +345,7 @@ function updateRescueObjective(
 ): CampaignObjectiveState {
   if (objective.kind !== 'rescue' || objective.status !== 'active') return objective;
 
-  const targets = (objective.targets ?? []).map((target) => {
+  const targets = mapUnchanged(objective.targets ?? [], (target) => {
     if (target.rescued) return target;
     const rescued = state.players.some((player) => (
       player.alive
@@ -342,11 +354,19 @@ function updateRescueObjective(
     return rescued ? { ...target, rescued: true } : target;
   });
   const rescuedCount = targets.filter((target) => target.rescued).length;
+  const status = rescuedCount >= objective.target ? 'complete' : objective.status;
+  if (
+    targets === objective.targets
+    && rescuedCount === objective.current
+    && status === objective.status
+  ) {
+    return objective;
+  }
   return {
     ...objective,
     targets,
     current: rescuedCount,
-    status: rescuedCount >= objective.target ? 'complete' : objective.status,
+    status,
   };
 }
 
@@ -363,7 +383,8 @@ function objectiveTakesStructureDamage(
     explosion.x === objective.x && explosion.y === objective.y
   ))
     || state.hazards.some((hazard) => (
-      hazard.warningTicks <= 0
+      hazard.damage > 0
+      && hazardIsActive(hazard)
       && positionsTouch(hazard, structurePosition, 0.68)
     ))
     || state.monsters.some((monster) => (
@@ -435,7 +456,7 @@ function updateMiniBossObjective(
   const guardAlive = state.monsters.some((monster) => (
     monster.id === getMiniBossGuardId(objective)
   ));
-  if (guardAlive) return { ...objective, current: 0 };
+  if (guardAlive) return objective.current === 0 ? objective : { ...objective, current: 0 };
 
   const reached = state.players.some((player) => (
     player.alive
@@ -446,32 +467,68 @@ function updateMiniBossObjective(
     : objective;
 }
 
+function sameStructures(
+  previous: CampaignRuntimeState['structures'],
+  next: CampaignRuntimeState['structures']
+): boolean {
+  return previous.length === next.length && previous.every((structure, index) => {
+    const other = next[index];
+    return structure.id === other.id
+      && structure.label === other.label
+      && structure.x === other.x
+      && structure.y === other.y
+      && structure.hp === other.hp
+      && structure.maxHp === other.maxHp
+      && structure.status === other.status;
+  });
+}
+
+function sameCampaignSummary(
+  previous: CampaignRuntimeState,
+  next: CampaignRuntimeState
+): boolean {
+  return previous.bossUnlocked === next.bossUnlocked
+    && previous.missionResult === next.missionResult
+    && previous.bossArena.unlocked === next.bossArena.unlocked
+    && previous.currentDistrictId === next.currentDistrictId
+    && previous.missionStep === next.missionStep
+    && previous.message === next.message
+    && sameStructures(previous.structures, next.structures);
+}
+
 export function advanceCampaignObjectives(
   state: GameEngineState,
   deltaMs = 0
 ): GameEngineState {
   if (!state.campaign) return state;
 
-  let objectives = state.campaign.objectives
-    .map((objective) => updateRescueObjective(state, objective));
+  let objectives = mapUnchanged(
+    state.campaign.objectives,
+    (objective) => updateRescueObjective(state, objective)
+  );
   objectives = refreshObjectiveStatuses(objectives);
-  objectives = objectives.map((objective) => updateDefenseObjective(
+  objectives = mapUnchanged(objectives, (objective) => updateDefenseObjective(
     state,
     objective,
     deltaMs
   ));
   objectives = refreshObjectiveStatuses(objectives);
 
-  let workingState: GameEngineState = {
-    ...state,
-    campaign: {
-      ...state.campaign,
-      objectives,
-    },
-  };
+  let workingState: GameEngineState = objectives === state.campaign.objectives
+    ? state
+    : {
+      ...state,
+      campaign: {
+        ...state.campaign,
+        objectives,
+      },
+    };
   workingState = spawnActiveMiniBossGuards(workingState);
   objectives = workingState.campaign?.objectives ?? objectives;
-  objectives = objectives.map((objective) => updateMiniBossObjective(workingState, objective));
+  objectives = mapUnchanged(
+    objectives,
+    (objective) => updateMiniBossObjective(workingState, objective)
+  );
   objectives = refreshObjectiveStatuses(objectives);
 
   const missionResult = anyObjectiveFailed(objectives)
@@ -489,14 +546,23 @@ export function advanceCampaignObjectives(
     },
   };
 
+  const nextCampaign: CampaignRuntimeState = {
+    ...campaign,
+    currentDistrictId: getCurrentDistrictId(campaign),
+    missionStep: getMissionStep(campaign, state.boss),
+    structures: getCampaignStructures(objectives),
+    message: getCampaignMessage(campaign, state.boss),
+  };
+  // Movement steps and most ticks change nothing here: keep the old state.
+  if (
+    workingState === state
+    && objectives === state.campaign.objectives
+    && sameCampaignSummary(state.campaign, nextCampaign)
+  ) {
+    return state;
+  }
   return {
     ...workingState,
-    campaign: {
-      ...campaign,
-      currentDistrictId: getCurrentDistrictId(campaign),
-      missionStep: getMissionStep(campaign, state.boss),
-      structures: getCampaignStructures(objectives),
-      message: getCampaignMessage(campaign, state.boss),
-    },
+    campaign: nextCampaign,
   };
 }
