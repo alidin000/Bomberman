@@ -16,7 +16,8 @@ import {
   StoryUpgradeId,
   selectStoryLoadout,
 } from '../../story/progress';
-import { fetchMapFromFile } from '../../engine';
+import { PlayerSlotController, fetchMapFromFile } from '../../engine';
+import { getControllerLabel, normalizeControllers } from '../../ai/controllers';
 
 export const SINGLE_MATCH_ROUNDS = '1';
 /** Local matches are best of 1, 3 or 5 rounds. */
@@ -47,6 +48,8 @@ export interface LaunchRequest {
   storyProgress: StoryProgress;
   /** Local matches only; campaign missions are always one round. */
   rounds?: MatchRounds;
+  // Local Arena only: human or CPU per slot (missing means all human).
+  controllers?: PlayerSlotController[];
 }
 
 /**
@@ -59,7 +62,7 @@ export async function launchGame(
   navigate: NavigateFunction
 ): Promise<StoryProgress | null> {
   const {
-    mode, stageId, characters, upgrade, players, keyBindings, storyProgress,
+    mode, stageId, characters, upgrade, players, keyBindings, storyProgress, controllers,
   } = request;
   const rounds = mode === 'local' ? toMatchRounds(request.rounds) : SINGLE_MATCH_ROUNDS;
   const safeStageId = mode === 'solo' && !storyProgress.unlockedStages.includes(stageId)
@@ -86,6 +89,9 @@ export async function launchGame(
     selectedCharacters: safeCharacters,
     selectedUpgrade: upgrade,
     ...(mode === 'local' ? { rounds } : {}),
+    controllers: mode === 'local'
+      ? normalizeControllers(controllers, safeCharacters.length)
+      : undefined,
   }));
   navigate(`/game/${players}/${rounds}/${stageDefinition.mapId}`);
   return progress;
@@ -98,6 +104,7 @@ export interface QuickPlayPlan {
   upgrade: StoryUpgradeId;
   players: string;
   rounds: MatchRounds;
+  controllers?: PlayerSlotController[];
   /** Short line that says what Quick Play starts. */
   summary: string;
 }
@@ -111,6 +118,7 @@ export function readLastLocalSetup(): {
   stageId: StageId;
   characters: CharacterId[];
   rounds: MatchRounds;
+  controllers?: PlayerSlotController[];
 } | null {
   try {
     const stored = JSON.parse(localStorage.getItem(GAME_SETUP_KEY) ?? 'null');
@@ -121,7 +129,12 @@ export function readLastLocalSetup(): {
       ? stored.selectedCharacters.filter((id: CharacterId) => ids.includes(id))
       : [];
     if (!stage || characters.length < 2 || characters.length > 3) return null;
-    return { stageId: stage.id, characters, rounds: toMatchRounds(stored.rounds) };
+    return {
+      stageId: stage.id,
+      characters,
+      rounds: toMatchRounds(stored.rounds),
+      controllers: normalizeControllers(stored.controllers, characters.length),
+    };
   } catch {
     return null;
   }
@@ -141,10 +154,16 @@ export function getQuickPlayPlan(storyProgress: StoryProgress): QuickPlayPlan {
       upgrade: storyProgress.selectedUpgrade,
       players: String(lastLocal.characters.length),
       rounds: lastLocal.rounds,
+      controllers: lastLocal.controllers,
       summary: [
         'Local rematch',
         getStageDefinition(lastLocal.stageId).name,
-        lastLocal.characters.map(characterName).join(' vs '),
+        lastLocal.characters.map((id, slot) => {
+          const controller = lastLocal.controllers?.[slot] ?? 'human';
+          return controller === 'human'
+            ? characterName(id)
+            : `${characterName(id)} (${getControllerLabel(controller)})`;
+        }).join(' vs '),
         ...(lastLocal.rounds === SINGLE_MATCH_ROUNDS ? [] : [`Best of ${lastLocal.rounds}`]),
       ].join(' · '),
     };

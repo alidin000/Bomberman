@@ -92,6 +92,9 @@ import {
   StoryUpgradeId,
 } from '../../story/progress';
 import { DifficultySelector } from './DifficultySelector';
+import { PlayerSlotsSelector } from './PlayerSlotsSelector';
+import type { PlayerSlotController } from '../../engine/types';
+import { getControllerLabel } from '../../ai/controllers';
 
 type KeyErrors = {
   [key: string]: boolean;
@@ -111,7 +114,7 @@ const GAME_MODES: {
   {
     id: 'local',
     title: 'Local Arena',
-    description: '2–3 players · one keyboard',
+    description: '2–3 shinobi · friends or CPU',
   },
   {
     id: 'onlinePreview',
@@ -170,6 +173,10 @@ export const ConfigScreen = () => {
   const [selectedCharacters, setSelectedCharacters] = useState<CharacterId[]>(
     lastLocalSetup?.characters ?? [initialStoryProgress.lastCharacter ?? DEFAULT_CHARACTER_ID]
   );
+  // Local Arena: human or CPU per slot (missing entries are human).
+  const [controllers, setControllers] = useState<PlayerSlotController[]>(
+    lastLocalSetup?.controllers ?? []
+  );
   const [selectedUpgrade, setSelectedUpgrade] = useState<StoryUpgradeId>(
     initialStoryProgress.selectedUpgrade
   );
@@ -181,6 +188,20 @@ export const ConfigScreen = () => {
   const [storyProgress, setStoryProgress] = useState(initialStoryProgress);
 
   const activePlayerCount = parseInt(numOfPlayers, 10);
+  const slotControllers = useMemo(() => {
+    const slots = Array.from(
+      { length: activePlayerCount },
+      (_, slot): PlayerSlotController => (mode === 'local' ? controllers[slot] ?? 'human' : 'human')
+    );
+    // Dropping a player may leave only CPUs: the first slot plays again.
+    if (slots.every((controller) => controller !== 'human')) slots[0] = 'human';
+    return slots;
+  }, [activePlayerCount, controllers, mode]);
+  // Only human slots play from the keyboard, so only they need keys.
+  const humanPlayerNumbers = useMemo(() => slotControllers
+    .map((controller, slot) => (controller === 'human' ? slot + 1 : 0))
+    .filter(Boolean), [slotControllers]);
+  const humanSlotsKey = humanPlayerNumbers.join(',');
   const selectedStageDefinition = useMemo(
     () => getStageDefinition(selectedStage),
     [selectedStage]
@@ -293,6 +314,7 @@ export const ConfigScreen = () => {
       keyBindings: playerKeyBindings,
       storyProgress,
       rounds,
+      controllers: slotControllers,
     }, navigate);
     if (progress) setStoryProgress(progress);
   };
@@ -353,6 +375,7 @@ export const ConfigScreen = () => {
 
     Object.values(playerKeyBindings)
       .slice(0, activePlayerCount).forEach((keys, playerIndex) => {
+        if (!humanPlayerNumbers.includes(playerIndex + 1)) return;
         keys.forEach((key, keyIndex) => {
           const keyId = `player${playerIndex + 1}-${keyIndex}`;
           if (keyMap.has(key)) {
@@ -368,19 +391,20 @@ export const ConfigScreen = () => {
 
   useEffect(() => {
     validateInputs();
-  }, [activePlayerCount, playerKeyBindings]);
+  }, [activePlayerCount, playerKeyBindings, humanSlotsKey]);
 
   const conflictKeyLabels = useMemo(() => {
     const counts = new Map<string, number>();
     Object.values(playerKeyBindings)
       .slice(0, activePlayerCount)
-      .forEach((keys) => {
+      .forEach((keys, playerIndex) => {
+        if (!humanPlayerNumbers.includes(playerIndex + 1)) return;
         keys.forEach((key) => counts.set(key, (counts.get(key) ?? 0) + 1));
       });
     return Array.from(counts.entries())
       .filter(([, count]) => count > 1)
       .map(([key]) => formatKeyLabel(key));
-  }, [activePlayerCount, playerKeyBindings]);
+  }, [activePlayerCount, playerKeyBindings, humanPlayerNumbers]);
 
   const battleSummary = useMemo(() => {
     const modeTitle = GAME_MODES.find((item) => item.id === mode)?.title ?? mode;
@@ -388,8 +412,9 @@ export const ConfigScreen = () => {
       .slice(0, activePlayerCount)
       .map((characterId, index) => {
         const character = CHARACTER_DEFINITIONS.find((item) => item.id === characterId);
+        const controller = slotControllers[index] ?? 'human';
         return {
-          label: `P${index + 1}`,
+          label: controller === 'human' ? `P${index + 1}` : `P${index + 1} · CPU`,
           name: character?.name ?? characterId,
           accent: character?.secondaryColor ?? '#fbbf24',
         };
@@ -398,7 +423,7 @@ export const ConfigScreen = () => {
       ? STORY_UPGRADES.find((item) => item.id === selectedUpgrade) ?? null
       : null;
     return { modeTitle, squad, upgrade };
-  }, [activePlayerCount, mode, selectedCharacters, selectedUpgrade]);
+  }, [activePlayerCount, mode, selectedCharacters, selectedUpgrade, slotControllers]);
 
   const renderKeyConfig = (player: number) => (
     <React.Fragment key={`player-config-${player}`}>
@@ -442,7 +467,8 @@ export const ConfigScreen = () => {
           })}
         </ActionKeysGrid>
       </PlayerControlsRow>
-      {player < activePlayerCount && <Divider style={{ margin: '16px 0' }} />}
+      {player < humanPlayerNumbers[humanPlayerNumbers.length - 1]
+        && <Divider style={{ margin: '16px 0' }} />}
     </React.Fragment>
   );
 
@@ -555,6 +581,9 @@ export const ConfigScreen = () => {
                       <ToggleButton value="3">3</ToggleButton>
                     </ToggleButtonGroup>
                   </SetupOption>
+                )}
+                {mode === 'local' && (
+                  <PlayerSlotsSelector controllers={slotControllers} onChange={setControllers} />
                 )}
                 {mode === 'local' && (
                   <SetupOption>
@@ -729,6 +758,8 @@ export const ConfigScreen = () => {
                     Player
                     {' '}
                     {playerIndex + 1}
+                    {slotControllers[playerIndex] !== 'human'
+                      && ` · ${getControllerLabel(slotControllers[playerIndex])}`}
                   </Typography>
                   <SelectionGrid className={mode === 'local' ? 'compact' : undefined}>
                     {CHARACTER_DEFINITIONS.map((character) => {
@@ -877,7 +908,7 @@ export const ConfigScreen = () => {
                 Click a key tile, then press the new key to rebind it. Every key must be unique.
               </KeyHint>
               <div>
-                {Array.from({ length: activePlayerCount }, (_, i) => renderKeyConfig(i + 1))}
+                {humanPlayerNumbers.map((player) => renderKeyConfig(player))}
               </div>
               {hasKeyConflicts && (
                 <>

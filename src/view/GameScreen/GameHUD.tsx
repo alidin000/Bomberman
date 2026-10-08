@@ -50,6 +50,7 @@ import { loadStoryProgress } from '../../story/progress';
 import RosterBoard from '../../assets/ninja-bomber-roster-board.png';
 import { CharacterId } from '../../content/types';
 import { playerSlotColor, playerSlotLabel, playerSlotTextColor } from './playerSlots';
+import { isCpuSlot } from '../../ai/controllers';
 
 const CHARACTER_POSITIONS: Record<CharacterId, string> = {
   deidara: '0% 0%',
@@ -110,6 +111,7 @@ function sameModel<T>(prev: T, next: T): boolean {
 
 type PlayerCardModel = {
   slot: number;
+  cpu: boolean;
   characterId: CharacterId;
   name: string;
   alive: boolean;
@@ -133,6 +135,7 @@ function toPlayerCardModel(
     .slice(-1)[0];
   return {
     slot,
+    cpu: isCpuSlot(state.config, slot),
     characterId: player.characterId,
     name: player.name,
     alive: player.alive,
@@ -166,7 +169,7 @@ const PlayerCard = React.memo(({ model }: { model: PlayerCardModel }) => {
   return (
     <PlayerCardPaper
       role="group"
-      aria-label={`${slotLabel} ${displayName}`}
+      aria-label={`${slotLabel}${model.cpu ? ' · CPU' : ''} ${displayName}`}
       alive={model.alive}
       slotColor={slotColor}
     >
@@ -181,7 +184,7 @@ const PlayerCard = React.memo(({ model }: { model: PlayerCardModel }) => {
           aria-label={`${character.name} portrait`}
         />
         <PlayerIdentity>
-          <strong>{displayName}</strong>
+          <strong>{model.cpu ? `${displayName} · CPU` : displayName}</strong>
           {model.alive ? (
             <PlayerStats>
               <StatCell>

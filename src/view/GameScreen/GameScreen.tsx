@@ -67,6 +67,7 @@ import {
 import { useGameFeedback } from './useGameFeedback';
 import { playerSlotColor, playerSlotLabel, playerSlotTextColor } from './playerSlots';
 import { loadCampaignDifficulty } from '../ConfigScreen/campaignDifficulty';
+import { isCpuSlot, normalizeControllers } from '../../ai/controllers';
 
 const CONTROLS_GUIDE_SEEN_KEY = 'shinobiControlsGuideSeen';
 
@@ -280,8 +281,9 @@ export const GameScreen = () => {
     if (!numOfPlayers || !numOfRounds || !selectedMap) return null;
     const setup = loadStoredGameSetup();
     const players = parseInt(numOfPlayers, 10);
+    const mode = (setup.mode as GameMode | undefined) ?? 'local';
     return {
-      mode: (setup.mode as GameMode | undefined) ?? 'local',
+      mode,
       numPlayers: players,
       totalRounds: parseInt(numOfRounds, 10),
       selectedMap,
@@ -291,6 +293,7 @@ export const GameScreen = () => {
         ?? Array.from({ length: players }, () => DEFAULT_CHARACTER_ID),
       selectedUpgrade: setup.selectedUpgrade,
       difficulty: loadCampaignDifficulty(),
+      controllers: mode === 'local' ? normalizeControllers(setup.controllers, players) : undefined,
     };
   }, [numOfPlayers, numOfRounds, selectedMap]);
 
@@ -374,6 +377,7 @@ export const GameScreen = () => {
   const controlRows = useMemo<ControlsRow[]>(() => {
     const characterIds = characterIdsKey ? characterIdsKey.split('|') as CharacterId[] : [];
     // The match's own roster when it is loaded; the route's count before that.
+    // CPU slots take no keys, so they get no row.
     return Array.from({ length: characterIds.length || activePlayerCount }, (_, index) => {
       const playerNumber = String(index + 1);
       const bindings = keyBindings[playerNumber] ?? DEFAULT_KEY_BINDINGS[playerNumber];
@@ -389,8 +393,8 @@ export const GameScreen = () => {
           cover: formatKeyLabel(bindings[7]),
         },
       };
-    });
-  }, [activePlayerCount, characterIdsKey, keyBindings]);
+    }).filter((row) => !isCpuSlot(config, row.slot));
+  }, [activePlayerCount, characterIdsKey, keyBindings, config]);
   // The static kit text the old HUD cards carried, kept for the pause menu.
   const playerKits = useMemo(() => (
     (characterIdsKey ? characterIdsKey.split('|') as CharacterId[] : []).map((characterId, index) => {

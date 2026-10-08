@@ -290,6 +290,11 @@ export interface FogOfWarState {
   sensedWalls: string[];
 }
 
+// Who plays each slot in Local Arena: a human at that slot's keys, or a CPU
+// at one of three levels. A missing list (or entry) means human, so configs
+// and replays from before CPU players load and play exactly as they did.
+export type PlayerSlotController = 'human' | 'cpu-easy' | 'cpu-normal' | 'cpu-hard';
+
 export interface GameConfig {
   mode?: GameMode;
   numPlayers: number;
@@ -304,6 +309,9 @@ export interface GameConfig {
   seed?: number;
   // Campaign difficulty; missing means Normal. Versus ignores it.
   difficulty?: DifficultyId;
+  // Per-slot controllers for Local Arena (see PlayerSlotController). The
+  // reducer never reads it: CPU players act through ordinary actions.
+  controllers?: PlayerSlotController[];
 }
 
 export interface GameEngineState {

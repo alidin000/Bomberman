@@ -93,6 +93,28 @@ describe('WelcomeScreen', () => {
     });
   });
 
+  it('keeps the CPU opponents in a Quick Play rematch', async () => {
+    localStorage.setItem('gameSetup', JSON.stringify({
+      mode: 'local',
+      stageId: 'hiddenMist',
+      selectedCharacters: ['gaara', 'itachi'],
+      selectedUpgrade: 'extraClay',
+      controllers: ['human', 'cpu-hard'],
+    }));
+    setup();
+    expect(screen.getByText(/Local rematch · Hidden Mist Village · Gaara vs Itachi \(CPU Hard\)/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /quick play/i }));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/2/1/hiddenMist');
+      expect(JSON.parse(localStorage.getItem('gameSetup') as string)).toMatchObject({
+        mode: 'local',
+        controllers: ['human', 'cpu-hard'],
+      });
+    });
+  });
+
   it('offers a rematch of the last local battle from Quick Play', async () => {
     localStorage.setItem('gameSetup', JSON.stringify({
       mode: 'local',

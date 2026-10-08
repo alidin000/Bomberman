@@ -169,3 +169,62 @@ describe('useGameEngine buffered turns', () => {
     expect(result.current.state!.players[0].y).toBeGreaterThan(2);
   });
 });
+
+// P2 is a CPU in a walled pocket around its spawn, with nothing to bomb.
+const pocketArena = parseMapRows([
+  'WWWWWWWWWWWWWWW',
+  'W             W',
+  'W             W',
+  'W             W',
+  'W             W',
+  'W             W',
+  'W           WWW',
+  'W          W  W',
+  'W          W  W',
+  'WWWWWWWWWWWWWWW',
+].map((row) => row.split('')));
+const cpuConfig: GameConfig = {
+  ...config,
+  mode: 'local',
+  selectedMap: 'cpu-pocket',
+  map: pocketArena,
+  controllers: ['human', 'cpu-normal'],
+};
+
+describe('useGameEngine with a CPU slot', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function playCpuMatch(pressCpuKeys: boolean) {
+    const hook = renderHook(() => useGameEngine(cpuConfig, DEFAULT_KEY_BINDINGS));
+    wait(3100);
+    if (pressCpuKeys) {
+      press('keydown', 'o');
+      press('keyup', 'o');
+      press('keydown', 'ArrowLeft');
+    }
+    wait(600);
+    if (pressCpuKeys) press('keyup', 'ArrowLeft');
+    return hook;
+  }
+
+  it('ignores human keys bound to a CPU slot', () => {
+    const first = playCpuMatch(false);
+    const untouched = first.result.current.state!;
+    first.unmount();
+    const { result } = playCpuMatch(true);
+    const state = result.current.state!;
+
+    expect(state.bombs.filter((bomb) => bomb.ownerId === 'player2')).toHaveLength(0);
+    const cpu = untouched.players[1];
+    expect(state.players[1]).toMatchObject({ x: cpu.x, y: cpu.y });
+
+    // The human slot still plays from its own keys.
+    press('keydown', '2');
+    expect(result.current.state!.bombs.filter((bomb) => bomb.ownerId === 'player1')).toHaveLength(1);
+  });
+});

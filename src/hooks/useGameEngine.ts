@@ -1,6 +1,6 @@
 /* eslint-disable prefer-destructuring, no-continue */
 import {
-  useState, useCallback, useEffect, useRef,
+  useState, useCallback, useEffect, useMemo, useRef,
 } from 'react';
 import {
   GameAction,
@@ -25,6 +25,7 @@ import {
   createEngineLoop,
 } from './engineLoop';
 import { useGamepadInput } from './useGamepadInput';
+import { isCpuSlot } from '../ai/controllers';
 
 type HeldDirection = {
   direction: Direction;
@@ -121,6 +122,7 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
   // resumes, since OS key repeat stops as soon as another key (Escape) is hit.
   const holdWhileIdle = useCallback((current: GameEngineState, key: string) => {
     current.players.forEach((player, index) => {
+      if (isCpuSlot(current.config, index)) return;
       const bindings = getPlayerBindings(keyBindings, index);
       const direction = bindings && getInputDirection(getInputStateForKey(key, bindings));
       if (!direction) return;
@@ -143,7 +145,8 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     let handledDirectionalInput = false;
 
     for (let i = 0; i < current.players.length; i += 1) {
-      const bindings = getPlayerBindings(keyBindings, i);
+      // A CPU slot's keys belong to nobody: they never move or act for it.
+      const bindings = isCpuSlot(current.config, i) ? undefined : getPlayerBindings(keyBindings, i);
       if (!bindings) continue;
 
       const player = current.players[i];
@@ -204,7 +207,7 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     }
 
     for (let i = 0; i < current.players.length; i += 1) {
-      const bindings = getPlayerBindings(keyBindings, i);
+      const bindings = isCpuSlot(current.config, i) ? undefined : getPlayerBindings(keyBindings, i);
       if (!bindings) continue;
 
       const player = current.players[i];
@@ -248,8 +251,22 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     };
   }, [handleKeyDown, handleKeyUp, clearMovement]);
 
-  // Pads press the same bound keys, so they reuse every handler above.
-  useGamepadInput(keyBindings);
+  // Pads press the same bound keys, so they reuse every handler above. The
+  // n-th pad plays the n-th human slot, skipping CPU slots.
+  const padBindings = useMemo(() => {
+    if (!config?.controllers?.some((_, slot) => isCpuSlot(config, slot))) return keyBindings;
+    const humans: KeyBindings = {};
+    let pad = 0;
+    for (let slot = 0; slot < config.numPlayers; slot += 1) {
+      const bindings = getPlayerBindings(keyBindings, slot);
+      if (!isCpuSlot(config, slot) && bindings) {
+        pad += 1;
+        humans[String(pad)] = bindings;
+      }
+    }
+    return humans;
+  }, [config, keyBindings]);
+  useGamepadInput(padBindings);
 
   useEffect(() => {
     loop.activeMovement = pruneInactiveMovement(loop.activeMovement, state);

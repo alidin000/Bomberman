@@ -14,6 +14,15 @@ import {
   recordPlayerStep,
   recordTickMotion,
 } from './motionStore';
+import {
+  CPU_MOVE_KEY,
+  CpuSquad,
+  cpuDirection,
+  cpuFallback,
+  createCpuSquad,
+  steerCpuPlayer,
+  thinkCpuPlayer,
+} from '../ai/cpuPlayer';
 
 export const MAX_FRAME_DELTA_MS = 100;
 export const MAX_TICK_STEPS_PER_FRAME = 4;
@@ -44,6 +53,8 @@ export type EngineLoop = {
   accumulatorMs: number;
   activeMovement: Record<string, ActiveMovement>;
   motion: MotionStore;
+  // CPU players of the current match (null when every slot is human).
+  cpu: CpuSquad | null;
 };
 
 export function createEngineLoop(): EngineLoop {
@@ -52,6 +63,7 @@ export function createEngineLoop(): EngineLoop {
     accumulatorMs: 0,
     activeMovement: {},
     motion: createMotionStore(),
+    cpu: null,
   };
 }
 
@@ -74,6 +86,8 @@ export function applyEngineAction(loop: EngineLoop, action: GameAction): void {
   loop.state = after;
   if (!before || !after || RESET_ACTIONS.has(action.type)) {
     clearMotion(loop.motion);
+    // A new match or round starts every CPU with a clean slate.
+    if (RESET_ACTIONS.has(action.type) && after !== before) loop.cpu = createCpuSquad(after);
     return;
   }
   if (after === before) return;
@@ -85,6 +99,47 @@ export function applyEngineAction(loop: EngineLoop, action: GameAction): void {
     return;
   }
   recordTickMotion(loop.motion, before, after, startMs, TICK_MS);
+}
+
+// After each tick, every CPU may decide; its bomb, ultimate or detonation
+// goes through the reducer like a human's key press.
+function thinkCpuPlayers(loop: EngineLoop, cpu: CpuSquad): void {
+  for (let i = 0; i < cpu.brains.length; i += 1) {
+    const { state } = loop;
+    if (!state) return;
+    const brain = cpu.brains[i];
+    const action = thinkCpuPlayer(cpu, brain, state, getMoveRepeatMs);
+    if (action) applyEngineAction(loop, { type: action, playerId: brain.playerId });
+  }
+}
+
+// Each frame, a CPU holds (or lets go of) a direction exactly like a key:
+// a new direction moves at once and then repeats from the held-move loop.
+function steerCpuPlayers(loop: EngineLoop, cpu: CpuSquad): void {
+  for (let i = 0; i < cpu.brains.length; i += 1) {
+    const { state } = loop;
+    if (!state) return;
+    const brain = cpu.brains[i];
+    const player = state.players[brain.slot];
+    const active = loop.activeMovement[brain.playerId];
+    const code = player ? steerCpuPlayer(cpu, brain, player) : 0;
+    const direction = cpuDirection(code);
+    if (!direction) {
+      if (active) delete loop.activeMovement[brain.playerId];
+    } else {
+      const fallbackDirection = cpuFallback(code) ?? undefined;
+      if (!active || active.direction !== direction) {
+        applyEngineAction(loop, {
+          type: 'MOVE', playerId: brain.playerId, direction, fallbackDirection,
+        });
+        loop.activeMovement[brain.playerId] = {
+          accumulatorMs: 0, direction, key: CPU_MOVE_KEY, fallbackDirection,
+        };
+      } else if (active.fallbackDirection !== fallbackDirection) {
+        loop.activeMovement[brain.playerId] = { ...active, fallbackDirection };
+      }
+    }
+  }
 }
 
 /**
@@ -115,7 +170,9 @@ export function advanceEngineFrame(loop: EngineLoop, frameDeltaMs: number): bool
       const dueMs = frameStartMs + tickSteps * TICK_MS - tickAccumulatorAtStart;
       recordTickMotion(loop.motion, before, after, dueMs, TICK_MS);
     }
+    if (loop.cpu) thinkCpuPlayers(loop, loop.cpu);
   }
+  if (loop.cpu && isPlaying(loop.state)) steerCpuPlayers(loop, loop.cpu);
   if (tickSteps === MAX_TICK_STEPS_PER_FRAME) {
     loop.accumulatorMs = Math.min(loop.accumulatorMs, TICK_MS);
   }

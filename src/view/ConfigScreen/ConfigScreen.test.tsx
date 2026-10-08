@@ -234,6 +234,39 @@ describe('ConfigScreen', () => {
     });
   });
 
+  it('starts a one-human, one-CPU battle and asks keys only of the human', async () => {
+    setup();
+    fireEvent.click(screen.getByText('Local Arena'));
+    fireEvent.click(screen.getByRole('button', { name: 'P2 CPU Normal' }));
+    // The last human slot cannot be turned into a CPU.
+    expect(screen.getByRole('button', { name: 'P1 CPU Hard' })).toBeDisabled();
+
+    fireEvent.click(screen.getByText('Next'));
+    expect(screen.getByText('Player 1 Loadout Keys')).toBeInTheDocument();
+    expect(screen.queryByText('Player 2 Loadout Keys')).not.toBeInTheDocument();
+    expect(screen.getByText('P2 · CPU')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^play$/i }));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/2/1/hiddenLeaf');
+      expect(JSON.parse(localStorage.getItem('gameSetup') as string)).toMatchObject({
+        mode: 'local',
+        controllers: ['human', 'cpu-normal'],
+      });
+    });
+  });
+
+  it('keeps an all-human local battle free of controllers', async () => {
+    setup();
+    fireEvent.click(screen.getByText('Local Arena'));
+    fireEvent.click(screen.getByRole('button', { name: /start battle/i }));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalled();
+      expect(JSON.parse(localStorage.getItem('gameSetup') as string).controllers).toBeUndefined();
+    });
+  });
+
   it('reopens on the last local battle setup', async () => {
     localStorage.setItem('gameSetup', JSON.stringify({
       mode: 'local',

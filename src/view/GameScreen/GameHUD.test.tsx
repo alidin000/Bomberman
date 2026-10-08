@@ -170,6 +170,28 @@ describe('GameHUD', () => {
     expect(screen.getByRole('group', { name: 'P2 Naruto' })).toHaveTextContent(/^P2/);
   });
 
+  it('marks CPU players on their cards', () => {
+    const state = createInitialState({
+      mode: 'local',
+      numPlayers: 3,
+      totalRounds: 1,
+      selectedMap: 'map1',
+      selectedCharacters: ['naruto', 'sasuke', 'gaara'],
+      map: parseMapRows(defaultMap),
+      controllers: ['human', 'cpu-hard', 'cpu-easy'],
+    });
+
+    render(
+      <ThemeProvider theme={theme}>
+        <GameHUD state={state} scale={100} />
+      </ThemeProvider>
+    );
+
+    expect(screen.getByRole('group', { name: 'P1 Naruto' })).not.toHaveTextContent('CPU');
+    expect(screen.getByRole('group', { name: 'P2 · CPU Sasuke' })).toHaveTextContent('Sasuke · CPU');
+    expect(screen.getByRole('group', { name: 'P3 · CPU Gaara' })).toBeInTheDocument();
+  });
+
   it('re-renders a player card only when its own numbers change', () => {
     const state = createInitialState({
       numPlayers: 2,

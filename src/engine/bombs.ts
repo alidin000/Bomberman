@@ -370,6 +370,25 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
   };
 }
 
+/**
+ * What DROP_BOMB (or USE_ULTIMATE) would place right now, and where its owner
+ * would then stand (Minato's ultimate teleports), without placing anything.
+ * CPU players plan their escape with it. The id counter is restored, so this
+ * look-ahead never shifts the ids a replay of the same actions produces.
+ */
+export function previewPlayerBombs(
+  state: GameEngineState,
+  playerId: string,
+  ultimate = false
+): { bombs: BombState[]; owner: PlayerState } | null {
+  const savedCounter = bombIdCounter;
+  const next = ultimate ? placeUltimateBomb(state, playerId) : placeBomb(state, playerId);
+  bombIdCounter = savedCounter;
+  if (next === state) return null;
+  const owner = next.players.find((p) => p.id === playerId);
+  return owner ? { bombs: next.bombs.slice(state.bombs.length), owner } : null;
+}
+
 function getTeleportDestination(
   state: GameEngineState,
   playerId: string,
