@@ -42,13 +42,10 @@ import {
 } from './scene/sceneSpace';
 import { StaticTiles } from './scene/StaticTiles';
 import {
-  MAX_FRAMING,
-  MIN_FRAMING,
   framingScaleFor,
   groupShift,
   hudInsets,
-  legacyFramingScale,
-  usesHudSafeFraming,
+  maxFramingFor,
 } from './scene/cameraFraming';
 import { getVisibleAbilityWarnings } from './scene/abilityWarnings';
 import {
@@ -3418,10 +3415,13 @@ function CameraRig({
   const lookTargetRef = useRef(new THREE.Vector3());
   const framingRef = useRef<number | null>(null);
   const shakeRef = useRef(0);
-  const insets = useMemo(
-    () => hudInsets(preferences.hudScale, size.width, size.height),
-    [preferences.hudScale, size.width, size.height],
-  );
+  // The HUD bands for this layout, and how far out this screen's shape
+  // needs to zoom for the widest spread players can reach.
+  const frame = useMemo(() => {
+    const insets = hudInsets(preferences.hudScale, size.width, size.height);
+    const aspect = size.width > 0 && size.height > 0 ? size.width / size.height : 16 / 9;
+    return { insets, aspect, maxFraming: maxFramingFor(aspect, insets) };
+  }, [preferences.hudScale, size.width, size.height]);
 
   useFrame(({ clock }, delta) => {
     const fallbackCenter = getMapWorldCenter(
@@ -3473,13 +3473,10 @@ function CameraRig({
     const [targetX, , targetZ] = toWorld(targetXCell, targetYCell);
     const halfWidth = count > 1 ? (maxX - minX) / 2 : 0;
     const halfDepth = count > 1 ? (maxY - minY) / 2 : 0;
-    const aspect = size.width > 0 && size.height > 0 ? size.width / size.height : 16 / 9;
-    const hudSafe = usesHudSafeFraming(size.width, size.height);
-    const framingScale = hudSafe
-      ? THREE.MathUtils.clamp(framingScaleFor(halfWidth, halfDepth, aspect, insets), MIN_FRAMING, MAX_FRAMING)
-      : legacyFramingScale(halfWidth * 2, halfDepth * 2, aspect);
-    // Aim a little up the map when the top players would sit under the HUD.
-    const shiftZ = hudSafe ? groupShift(framingScale, halfWidth, halfDepth, insets) * TILE_SIZE : 0;
+    const { insets, aspect, maxFraming } = frame;
+    const framingScale = framingScaleFor(halfWidth, halfDepth, aspect, insets, maxFraming);
+    // Aim a little off the box centre when its edge would sit under a HUD band.
+    const shiftZ = groupShift(framingScale, halfWidth, halfDepth, insets) * TILE_SIZE;
     // `impact` holds for a moment and then drops to 0; fade out from it
     // instead of cutting off mid-swing.
     shakeRef.current = preferences.reducedMotion ? 0 : decayShake(shakeRef.current, impact, delta);
