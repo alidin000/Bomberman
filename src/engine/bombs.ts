@@ -351,7 +351,7 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
       ? {
         ...p,
         ...(player.characterId === 'minato'
-          ? getTeleportDestination(state, origin.x, origin.y)
+          ? getTeleportDestination(state, playerId, origin.x, origin.y)
           : {}),
         activeBombs: p.activeBombs + 1,
         ultimateCooldownRemaining: p.ultimateCooldown,
@@ -370,6 +370,7 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
 
 function getTeleportDestination(
   state: GameEngineState,
+  playerId: string,
   x: number,
   y: number,
 ): { x: number; y: number } {
@@ -380,7 +381,17 @@ function getTeleportDestination(
     { x, y: y - 3 },
     { x: 1, y: 1 },
   ];
-  return candidates.find((point) => state.map[point.y]?.[point.x] === 'Empty') ?? { x, y };
+  // Never land on (or inside the reach of) another ninja, monster or boss.
+  const occupied = (point: { x: number; y: number }) => (
+    state.players.some((other) => (
+      other.id !== playerId && other.alive && positionOverlapsCell(other, point.x, point.y)
+    ))
+    || state.monsters.some((monster) => monster.x === point.x && monster.y === point.y)
+    || (state.boss?.x === point.x && state.boss?.y === point.y)
+  );
+  return candidates.find((point) => (
+    state.map[point.y]?.[point.x] === 'Empty' && !occupied(point)
+  )) ?? { x, y };
 }
 
 function getBombDeathLabel(kind: BombState['kind']): string {

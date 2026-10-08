@@ -31,6 +31,11 @@ type ActiveMovement = {
   key: string;
 };
 
+type HeldDirection = {
+  direction: Direction;
+  key: string;
+};
+
 function getInputDirection(input: ReturnType<typeof getInputStateForKey>): Direction | null {
   if (input.up) return 'up';
   if (input.down) return 'down';
@@ -66,6 +71,14 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
   const rafRef = useRef<number>();
   const humanControllerRef = useRef(new HumanController());
   const activeMovementRef = useRef<Record<string, ActiveMovement>>({});
+  // Every direction key each player is holding, oldest first. Releasing one
+  // falls back to the newest key still down instead of stopping the player.
+  const heldDirectionsRef = useRef<Record<string, HeldDirection[]>>({});
+
+  const clearMovement = useCallback(() => {
+    activeMovementRef.current = {};
+    heldDirectionsRef.current = {};
+  }, []);
 
   useEffect(() => {
     if (config) {
@@ -101,6 +114,10 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
         event.preventDefault();
         const direction = getInputDirection(input);
         if (direction) {
+          heldDirectionsRef.current[player.id] = [
+            ...(heldDirectionsRef.current[player.id] ?? []).filter((held) => held.key !== key),
+            { direction, key },
+          ];
           const active = activeMovementRef.current[player.id];
           if (!active || active.direction !== direction || active.key !== key) {
             dispatch({ type: 'MOVE', playerId: player.id, direction });
@@ -126,7 +143,7 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
   const handleKeyUp = useCallback((event: KeyboardEvent) => {
     const current = stateRef.current;
     if (!current || current.paused || current.phase !== 'playing') {
-      activeMovementRef.current = {};
+      clearMovement();
       return;
     }
 
@@ -137,22 +154,28 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
       if (!bindings) continue;
 
       const player = current.players[i];
-      const input = getInputStateForKey(key, bindings);
-      const direction = getInputDirection(input);
-      const active = activeMovementRef.current[player.id];
+      const direction = getInputDirection(getInputStateForKey(key, bindings));
+      if (!direction) continue;
 
-      if (direction && active?.key === key) {
+      const held = (heldDirectionsRef.current[player.id] ?? []).filter((item) => item.key !== key);
+      heldDirectionsRef.current[player.id] = held;
+      const active = activeMovementRef.current[player.id];
+      if (active?.key !== key) continue;
+
+      const fallback = held[held.length - 1];
+      if (fallback) {
+        activeMovementRef.current[player.id] = { ...active, ...fallback };
+      } else {
         delete activeMovementRef.current[player.id];
-        return;
       }
     }
-  }, [keyBindings]);
+  }, [keyBindings, clearMovement]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     const handleBlur = () => {
-      activeMovementRef.current = {};
+      clearMovement();
     };
     window.addEventListener('blur', handleBlur);
     return () => {
@@ -160,13 +183,14 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [handleKeyDown, handleKeyUp]);
+  }, [handleKeyDown, handleKeyUp, clearMovement]);
 
   useEffect(() => {
     activeMovementRef.current = pruneInactiveMovement(
       activeMovementRef.current,
       state as GameEngineState | null
     );
+    if (!state || state.paused || state.phase !== 'playing') heldDirectionsRef.current = {};
   }, [state]);
 
   useEffect(() => {
@@ -212,6 +236,7 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
         });
       } else {
         activeMovementRef.current = {};
+        heldDirectionsRef.current = {};
       }
       rafRef.current = requestAnimationFrame(loop);
     };

@@ -125,8 +125,9 @@ function isCellValidForPlayer(
 
   const cell = map[cellY][cellX];
   if (isBomb(cell)) {
-    return cell.ownerId === playerId
-      && overlapsCell(currentX, currentY, cellX, cellY);
+    if (cell.ownerId === playerId && overlapsCell(currentX, currentY, cellX, cellY)) return true;
+    // Someone else's bomb dropped onto a cell you overlap: you may walk out.
+    return isLeavingOverlappedCell(currentX, currentY, nextX, nextY, cellX, cellY);
   }
 
   if (cell === 'Wall' || cell === 'Box' || isObstacle(cell)) {
@@ -159,21 +160,42 @@ function getDirectionDelta(direction: Direction): { dx: number; dy: number } {
   }
 }
 
+function withinOrClosing(next: number, current: number, max: number): boolean {
+  return next <= max || next <= current;
+}
+
+// A move may never pull players further apart than the shared screen, but a
+// move that closes the gap is always allowed, so nobody gets frozen outside it.
 function staysInsideSharedScreen(
   state: GameEngineState,
-  playerId: string,
+  mover: PlayerState,
   x: number,
   y: number
 ): boolean {
   if (state.config.mode === 'solo' || state.config.numPlayers <= 1) return true;
 
   const aliveOthers = state.players.filter((player) => (
-    player.id !== playerId && player.alive
+    player.id !== mover.id && player.alive
   ));
   return aliveOthers.every((player) => (
-    Math.abs(player.x - x) <= SHARED_SCREEN_MAX_DELTA_X
-    && Math.abs(player.y - y) <= SHARED_SCREEN_MAX_DELTA_Y
+    withinOrClosing(
+      Math.abs(player.x - x),
+      Math.abs(player.x - mover.x),
+      SHARED_SCREEN_MAX_DELTA_X
+    )
+    && withinOrClosing(
+      Math.abs(player.y - y),
+      Math.abs(player.y - mover.y),
+      SHARED_SCREEN_MAX_DELTA_Y
+    )
   ));
+}
+
+function distanceSquared(
+  first: Pick<PlayerState, 'x' | 'y'>,
+  second: Pick<PlayerState, 'x' | 'y'>
+): number {
+  return (first.x - second.x) ** 2 + (first.y - second.y) ** 2;
 }
 
 export function movePlayer(
@@ -196,11 +218,12 @@ export function movePlayer(
   const ny = roundToMovementStep(dx === 0 ? y + dy : moveTowardCellCenter(y));
 
   if (!isValidMove(state, playerId, nx, ny, x, y)) return state;
-  if (!staysInsideSharedScreen(state, playerId, nx, ny)) return state;
-  const blocked = others.some((p) => positionsTouch(
-    { x: nx, y: ny },
-    p,
-    PLAYER_COLLISION_RADIUS * 2,
+  if (!staysInsideSharedScreen(state, player, nx, ny)) return state;
+  // Players block each other, but two players who end up overlapping (a
+  // teleport, a respawn) can always step apart.
+  const blocked = others.some((p) => (
+    positionsTouch({ x: nx, y: ny }, p, PLAYER_COLLISION_RADIUS * 2)
+    && distanceSquared({ x: nx, y: ny }, p) <= distanceSquared(player, p)
   ));
   if (blocked) return state;
 
