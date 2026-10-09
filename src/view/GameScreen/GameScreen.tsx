@@ -365,7 +365,12 @@ export const GameScreen = () => {
     : '';
   const [heldRoundOverKey, setHeldRoundOverKey] = useState('');
   useEffect(() => {
-    if (!roundOverKey) return undefined;
+    // Back in play: forget the last hold, so a later round end with the same
+    // key (a rematch decided on the same tick) is held again.
+    if (!roundOverKey) {
+      setHeldRoundOverKey('');
+      return undefined;
+    }
     const timer = window.setTimeout(() => setHeldRoundOverKey(roundOverKey), RESULT_HOLD_MS);
     return () => window.clearTimeout(timer);
   }, [roundOverKey]);

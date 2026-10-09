@@ -193,4 +193,29 @@ describe('GameScreen re-renders the scene and HUD only for what they draw', () =
       vi.useRealTimers();
     }
   });
+
+  it('holds again when a rematch ends on the same tick as the last match', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const live = liveRound();
+      engine.state = live;
+      const screen = renderScreen();
+      const over = {
+        ...tick(live), phase: 'game_over' as const, paused: true, roundWinners: [live.players[0].id],
+      };
+      screen.publish(over);
+      act(() => { vi.advanceTimersByTime(RESULT_HOLD_MS); });
+      expect(counts.idle).toBe(true);
+
+      // Rematch, and the new match ends on the very same tick and round.
+      screen.publish(live);
+      expect(counts.idle).toBe(false);
+      screen.publish({ ...over });
+      expect(counts.idle).toBe(false);
+      act(() => { vi.advanceTimersByTime(RESULT_HOLD_MS); });
+      expect(counts.idle).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
