@@ -1,0 +1,17 @@
+{
+  "name": "Explosive Shinobi Arena",
+  "short_name": "Shinobi Arena",
+  "description": "A 3D shinobi arena game with character-specific bombs, village stages and boss fights.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#18292f",
+  "theme_color": "#120b0a",
+  "icons": [
+    { "src": "/logo.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "/icons/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/icons/icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "/icons/icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}

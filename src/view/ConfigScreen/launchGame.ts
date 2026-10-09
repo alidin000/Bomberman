@@ -16,7 +16,7 @@ import {
   StoryUpgradeId,
   selectStoryLoadout,
 } from '../../story/progress';
-import { PlayerSlotController, fetchMapFromFile } from '../../engine';
+import { PlayerSlotController, loadStageMapRows } from '../../engine';
 import { getControllerLabel, normalizeControllers } from '../../ai/controllers';
 
 export const SINGLE_MATCH_ROUNDS = '1';
@@ -76,7 +76,7 @@ export async function launchGame(
     ))
     : characters;
   const stageDefinition = getStageDefinition(safeStageId);
-  const mapData = await fetchMapFromFile(stageDefinition.mapId);
+  const mapData = loadStageMapRows(stageDefinition.mapId);
   const characterId = safeCharacters[0] ?? DEFAULT_CHARACTER_ID;
   const progress = mode === 'solo'
     ? selectStoryLoadout(characterId, stageDefinition.id, upgrade)

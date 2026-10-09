@@ -18,7 +18,6 @@ import {
   QuickPlayPanel,
   QuickPlaySummary,
 } from './WelcomeScreen.styles';
-import StageAtlas from '../../assets/ninja-bomber-stage-atlas.webp';
 import { loadStoryProgress } from '../../story/progress';
 import {
   getQuickPlayPlan,
@@ -50,7 +49,7 @@ export const WelcomeScreen = () => {
   return (
     <WelcomeContainer>
       <HeroSection>
-        <HeroScene image={StageAtlas} role="img" aria-label="Hidden Leaf arena" />
+        <HeroScene role="img" aria-label="Hidden Leaf arena" />
         <HeroCopy>
           <HeroBadge>Shinobi Trial 01</HeroBadge>
           <Typography variant="h2" component="h1" gutterBottom fontWeight={900}>

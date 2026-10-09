@@ -47,7 +47,7 @@ import {
 import { getCharacterDefinition } from '../../content';
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
 import { loadStoryProgress } from '../../story/progress';
-import RosterBoard from '../../assets/ninja-bomber-roster-board.png';
+import RosterBoard from '../../assets/ninja-bomber-roster-hud.webp';
 import { CharacterId } from '../../content/types';
 import { playerSlotColor, playerSlotLabel, playerSlotTextColor } from './playerSlots';
 import { isCpuSlot } from '../../ai/controllers';

@@ -2,6 +2,28 @@ import { defaultMap } from '../constants/contants';
 import {
   GameMap, gameItem, genericPowerUpOptions,
 } from '../model/gameItem';
+// The stage maps ship inside the bundle (about 2 KB gzip for all seven), so
+// starting a match never waits on a network round trip. The files stay in
+// public/maps, where the engine tests read them.
+/* eslint-disable import/no-unresolved -- Vite `?raw` imports */
+import akatsukiHideout from '../../public/maps/akatsukiHideout.txt?raw';
+import greatShinobiWar from '../../public/maps/greatShinobiWar.txt?raw';
+import hiddenCloud from '../../public/maps/hiddenCloud.txt?raw';
+import hiddenLeaf from '../../public/maps/hiddenLeaf.txt?raw';
+import hiddenMist from '../../public/maps/hiddenMist.txt?raw';
+import hiddenSand from '../../public/maps/hiddenSand.txt?raw';
+import hiddenStone from '../../public/maps/hiddenStone.txt?raw';
+/* eslint-enable import/no-unresolved */
+
+const STAGE_MAP_TEXT: Readonly<Record<string, string>> = {
+  akatsukiHideout,
+  greatShinobiWar,
+  hiddenCloud,
+  hiddenLeaf,
+  hiddenMist,
+  hiddenSand,
+  hiddenStone,
+};
 
 function normalizeMapData(mapData: string[][]): string[][] {
   const width = Math.max(...mapData.map((row) => row.length));
@@ -73,11 +95,17 @@ export function loadMapFromStorage(): GameMap {
   return parseMapRows(readStoredMap() ?? defaultMap);
 }
 
-export async function fetchMapFromFile(mapName: string): Promise<string[][]> {
-  const response = await fetch(`/maps/${mapName}.txt`);
-  const mapText = await response.text();
+/** Splits an authored map file into rows of cells, dropping blank lines. */
+export function parseMapText(mapText: string): string[][] {
   return mapText
     .split(/\r?\n/)
     .filter((row) => row.trim().length > 0)
     .map((row) => row.trimEnd().split(''));
+}
+
+/** The authored rows for a stage map, from the bundle (no fetch). */
+export function loadStageMapRows(mapId: string): string[][] {
+  const mapText = STAGE_MAP_TEXT[mapId];
+  if (mapText === undefined) throw new Error(`Unknown stage map '${mapId}'`);
+  return parseMapText(mapText);
 }

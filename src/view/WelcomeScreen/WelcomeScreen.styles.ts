@@ -1,5 +1,8 @@
 import styled from '@emotion/styled';
 import { Box, Paper, Typography } from '@mui/material';
+// The Hidden Leaf tile of the stage atlas, cut to 512x512 (72 KB instead of the
+// 552 KB atlas). index.html preloads the same file and paints it before React.
+import HeroLeaf from '../../assets/ninja-bomber-hero-leaf.webp';
 
 const angularPanel = 'none';
 const bannerCut = 'polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)';
@@ -82,21 +85,18 @@ export const HeroSection = styled(Box)({
   boxShadow: '0 30px 80px rgba(6,15,19,0.34)',
 });
 
-export const HeroScene = styled(Box, {
-  shouldForwardProp: (prop) => prop !== 'image',
-})<{ image: string }>(({ image }) => ({
+export const HeroScene = styled(Box)({
   position: 'absolute',
   inset: 0,
   backgroundColor: '#bd6a70',
-  backgroundImage: `url(${image})`,
-  backgroundSize: '300% auto',
+  backgroundImage: `url(${HeroLeaf})`,
+  // Same framing as the old 300%-wide atlas crop: the tile fills the width on
+  // landscape screens and the height on portrait ones.
+  backgroundSize: 'cover',
   backgroundPosition: '0% 0%',
   backgroundRepeat: 'no-repeat',
   filter: 'saturate(0.8) contrast(0.95) brightness(0.88)',
   transform: 'scale(1.015)',
-  '@media (max-width: 560px)': {
-    backgroundSize: 'auto 200%',
-  },
   '@media (max-width: 720px) and (min-width: 561px)': {
     '& h1': {
       fontSize: '3.4rem',
@@ -115,7 +115,7 @@ export const HeroScene = styled(Box, {
       background: 'linear-gradient(180deg, rgba(14,22,25,0.3) 0%, rgba(14,22,25,0.66) 45%, rgba(14,22,25,0.86) 100%)',
     },
   },
-}));
+});
 
 export const HeroCopy = styled(Box)({
   position: 'relative',

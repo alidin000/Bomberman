@@ -17,3 +17,9 @@ declare module '*.webp' {
   const value: any;
   export = value;
 }
+
+// Vite `?raw` imports: the file's text, inlined into the bundle.
+declare module '*?raw' {
+  const content: string;
+  export default content;
+}

@@ -1,6 +1,8 @@
 import { vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { fetchMapFromFile, loadMapFromStorage, parseMapRows } from './mapLoader';
+import {
+  loadMapFromStorage, loadStageMapRows, parseMapRows, parseMapText,
+} from './mapLoader';
 import { defaultMap } from '../constants/contants';
 import { STAGE_DEFINITIONS } from '../content/stages';
 
@@ -16,17 +18,27 @@ describe('mapLoader', () => {
     vi.restoreAllMocks();
   });
 
-  it('loads campaign-width rows without trimming them to arena width', async () => {
+  it('loads campaign-width rows without trimming them to arena width', () => {
     const wideRow = `W${' '.repeat(33)}W`;
-    global.fetch = vi.fn().mockResolvedValue({
-      text: () => Promise.resolve(`${wideRow}\n${wideRow}`),
-    }) as typeof fetch;
 
-    const rows = await fetchMapFromFile('wideCampaign');
+    const rows = parseMapText(`${wideRow}\r\n${wideRow}\n\n`);
     const map = parseMapRows(rows);
 
+    expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveLength(35);
     expect(map[0]).toHaveLength(35);
+  });
+
+  it('serves every stage map from the bundle, with no network fetch', () => {
+    const fetchSpy = vi.fn(() => Promise.reject(new Error('offline')));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    STAGE_DEFINITIONS.forEach((stage) => {
+      expect(loadStageMapRows(stage.mapId)).toEqual(readCampaignMapRows(stage.mapId));
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(() => loadStageMapRows('noSuchStage')).toThrow(/Unknown stage map/);
+    vi.unstubAllGlobals();
   });
 
   it('assigns deterministic power-ups for authored power cells', () => {

@@ -3,6 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#120b0a" />
     <!-- Keep the art-directed light palette: opt out of Chrome Auto Dark Theme
@@ -14,10 +16,172 @@
       content="A 3D shinobi arena game with character-specific bombs, village stages, and tailed-beast boss fights."
     />
     <title>Explosive Shinobi Arena</title>
+    <!-- The title screen's largest image. A CSS background set from JS is
+         invisible to the preload scanner, so name it here. -->
+    <link
+      rel="preload"
+      as="image"
+      type="image/webp"
+      href="/src/assets/ninja-bomber-hero-leaf.webp"
+      fetchpriority="high"
+    />
+    <!-- Static first paint: the title screen's frame, art and copy, drawn
+         before the JS arrives. React replaces #root's content on mount.
+         Mirrors the hero in src/view/WelcomeScreen/WelcomeScreen.styles.ts;
+         the empty .boot-actions block holds the Quick Play panel's place. -->
+    <style>
+      .boot {
+        position: relative;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        padding: 20px;
+        background-color: #18292f;
+        font-family: "Trebuchet MS", "Arial Narrow", Arial, sans-serif;
+      }
+      .boot::before,
+      .boot::after {
+        content: "";
+        position: absolute;
+        pointer-events: none;
+      }
+      .boot::before {
+        inset: 0;
+        opacity: 0.2;
+        background-image: radial-gradient(rgba(255, 255, 255, 0.22) 0.6px, transparent 0.6px);
+        background-size: 7px 7px;
+      }
+      .boot::after {
+        inset: 10px;
+        border: 1px solid rgba(255, 248, 231, 0.22);
+      }
+      .boot-hero {
+        position: relative;
+        z-index: 1;
+        width: min(1120px, calc(100vw - 40px));
+        min-height: min(760px, calc(100dvh - 40px));
+        overflow: hidden;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 248, 231, 0.32);
+        box-shadow: 0 30px 80px rgba(6, 15, 19, 0.34);
+      }
+      .boot-scene {
+        position: absolute;
+        inset: 0;
+        background: #bd6a70 url(/src/assets/ninja-bomber-hero-leaf.webp) 0 0 / cover no-repeat;
+        filter: saturate(0.8) contrast(0.95) brightness(0.88);
+        transform: scale(1.015);
+      }
+      .boot-scene::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(14, 22, 25, 0.78) 0%, rgba(14, 22, 25, 0.56) 46%, rgba(20, 29, 32, 0.3) 100%);
+      }
+      .boot-copy {
+        position: relative;
+        min-height: min(760px, calc(100dvh - 40px));
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: flex-start;
+        padding: clamp(28px, 7vh, 72px);
+        color: #fff8e7;
+      }
+      .boot-badge {
+        display: inline-flex;
+        margin-bottom: 18px;
+        padding: 8px 16px 8px 18px;
+        background: rgba(24, 41, 47, 0.62);
+        border: 1px solid rgba(255, 248, 231, 0.48);
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+      .boot-title {
+        max-width: 540px;
+        margin: 0;
+        font-size: 4.4rem;
+        font-weight: 900;
+        line-height: 0.9;
+        text-transform: uppercase;
+        text-shadow: 0 3px 18px rgba(8, 16, 20, 0.52);
+        overflow-wrap: anywhere;
+      }
+      .boot-subtitle {
+        max-width: 520px;
+        margin: 16px 0 0;
+        color: rgba(255, 248, 231, 0.86);
+        font-size: 1.25rem;
+        font-weight: 800;
+        line-height: 1.36;
+      }
+      .boot-meta {
+        margin-top: 10px;
+        color: rgba(255, 248, 231, 0.84);
+        font-size: 0.78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+      .boot-actions {
+        height: 144px;
+        margin-top: 22px;
+      }
+      @media (max-width: 720px) {
+        .boot-scene::after {
+          background: linear-gradient(180deg, rgba(14, 22, 25, 0.3) 0%, rgba(14, 22, 25, 0.66) 45%, rgba(14, 22, 25, 0.86) 100%);
+        }
+      }
+      @media (max-width: 640px) {
+        .boot {
+          justify-content: flex-start;
+          padding: 10px;
+        }
+      }
+      @media (max-width: 560px) {
+        .boot-copy {
+          min-height: calc(100dvh - 40px);
+          padding: 28px 22px;
+        }
+        .boot-title {
+          font-size: 2.35rem;
+          line-height: 0.94;
+        }
+        .boot-actions {
+          height: 223px;
+        }
+      }
+      @media (max-height: 600px) {
+        .boot-copy {
+          padding: 20px;
+        }
+        .boot-title {
+          font-size: 2.5rem;
+          line-height: 0.94;
+        }
+      }
+    </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot">
+        <div class="boot-hero">
+          <div class="boot-scene"></div>
+          <div class="boot-copy">
+            <div class="boot-badge">Shinobi Trial 01</div>
+            <h1 class="boot-title">Explosive Shinobi Arena</h1>
+            <p class="boot-subtitle">Clear the village. Outsmart the beasts. Survive your own blast.</p>
+            <div class="boot-meta">Solo campaign · Local battle · Seven villages</div>
+            <div class="boot-actions"></div>
+          </div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/index.tsx"></script>
   </body>
 </html>
