@@ -30,6 +30,7 @@
     "build": "vite build",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "vitest run --coverage",
+    "test:e2e": "npm run build && playwright test",
     "preview": "vite preview"
   },
   "browserslist": {
@@ -45,6 +46,7 @@
     ]
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@typescript-eslint/eslint-plugin": "^7.7.0",
     "@typescript-eslint/parser": "^7.7.0",
     "@vitejs/plugin-react": "^4.7.0",

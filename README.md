@@ -45,7 +45,7 @@ Play it at <https://bomberman-zuqb.onrender.com>.
 | Build | Vite 6. The 3D match is a lazy chunk, and three.js and the other dependencies are split into `vendor-three` and `vendor` |
 | Tests | Vitest 4 with jsdom, Testing Library, and v8 coverage |
 | Lint | ESLint 8 with the Airbnb config and typescript-eslint 7 |
-| CI | GitHub Actions on every push and pull request to `main`: lint, test, build |
+| CI | GitHub Actions on every push and pull request to `main`: lint, test, build, then Playwright browser smoke tests on the build |
 | Hosting | Render static site that deploys `main`. `render.yaml` describes the intended setup as a Blueprint: build `npm ci && npm run build`, publish `build/`, the SPA rewrite, and long-lived caching for hashed assets |
 | Runtime | Node.js 22 (`.node-version`) |
 
@@ -327,7 +327,10 @@ Judge performance on a production build: `npm run build && npm run preview`. In 
 npm run lint
 npm test
 npm run build
+npm run test:e2e
 ```
+
+- **Browser tests.** `npm run test:e2e` builds the game and runs the Playwright smoke tests in `e2e/` in headless Chromium. Install the browser once with `npx playwright install chromium`.
 
 ## Project Layout
 
