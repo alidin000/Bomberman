@@ -237,6 +237,7 @@ export function movePlayer(
   let { x, y } = player;
   let map = state.map;
   let players = [...state.players];
+  let { timedPowerUps, pickupMessages } = state;
   const nx = roundToMovementStep(dy === 0 ? x + dx : moveTowardCellCenter(x));
   const ny = roundToMovementStep(dx === 0 ? y + dy : moveTowardCellCenter(y));
 
@@ -264,6 +265,8 @@ export function movePlayer(
     );
     map = result.map;
     players = result.players;
+    // Keep the pickup's timer (Ghost and Shield wear off) and its message.
+    ({ timedPowerUps, pickupMessages } = result);
     const newMap = map.map((row) => [...row]);
     newMap[playerCell.y][playerCell.x] = 'Empty';
     map = newMap;
@@ -272,7 +275,9 @@ export function movePlayer(
   players[playerIndex] = {
     ...players[playerIndex], x, y, facing: direction,
   };
-  return { ...state, map, players };
+  return {
+    ...state, map, players, timedPowerUps, pickupMessages,
+  };
 }
 
 // A held direction only counts as open if a short look-ahead keeps moving:

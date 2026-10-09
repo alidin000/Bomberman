@@ -11,7 +11,8 @@ import { GameEngineState } from '../engine/types';
 // blasts and flames burn a smaller body (FLAME_HURT_RADIUS); campaign
 // difficulty and lives; body flicker lands where it warned.
 // v5: multi-round matches end once a ninja has won most of the rounds.
-export const REPLAY_VERSION = 5;
+// v6: Ghost and Shield picked up on the map wear off like the others.
+export const REPLAY_VERSION = 6;
 
 export interface ReplayFrame {
   tick: number;
