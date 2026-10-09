@@ -10,6 +10,9 @@ import {
   CampaignMissionStep,
   CampaignObjectiveId,
   CampaignObjectiveKind,
+  CampaignPuzzleKind,
+  CampaignPuzzleRole,
+  CampaignPuzzleTuning,
   CampaignSpawnPointDefinition,
 } from '../content/campaignMissions';
 import { EnemyAbilityKind, EnemyArchetype } from '../content/enemies';
@@ -219,6 +222,52 @@ export interface CampaignRescueTargetState {
   rescued: boolean;
 }
 
+// One piece of a route puzzle (see engine/campaignPuzzles.ts).
+export interface CampaignPuzzleElementState {
+  id: string;
+  label: string;
+  role: CampaignPuzzleRole;
+  // Where the piece stands. A carried keystone keeps its bed here.
+  x: number;
+  y: number;
+  order?: number;
+  pair?: number;
+  flips?: string[];
+  // Lit, toppled, raised, struck, delivered: the piece's done state.
+  on: boolean;
+  // Engine tick at which `on` lapses (a pylon re-ties, a beacon burns out,
+  // a struck ward relights). Missing while on means it holds.
+  untilTick?: number;
+  // A player stands on it: stepping pieces react when this turns true.
+  pressed?: boolean;
+  // The player carrying this keystone.
+  carriedBy?: string;
+}
+
+export interface CampaignPuzzleState {
+  kind: CampaignPuzzleKind;
+  unit: string;
+  rule: string;
+  ruleShort: string;
+  // The mission difficulty's rules, fixed when the mission starts.
+  tuning: CampaignPuzzleTuning;
+  elements: CampaignPuzzleElementState[];
+  progress: number;
+  total: number;
+  solved: boolean;
+  // Wrong orders, re-tied pylons, burnt-out beacons: times the puzzle undid itself.
+  setbacks: number;
+  // Lever pulls since the spans last dropped (toggle).
+  pulls?: number;
+  // Tick by which a timed order must be finished (sequence on Hard).
+  deadlineTick?: number;
+  // Campaign lives when last checked, to notice a fall (carry).
+  livesSeen?: number;
+  // Shown instead of the objective hint until the given tick.
+  notice?: string;
+  noticeUntilTick?: number;
+}
+
 export interface CampaignObjectiveState {
   id: CampaignObjectiveId;
   kind: CampaignObjectiveKind;
@@ -239,6 +288,7 @@ export interface CampaignObjectiveState {
   gateLabel?: string;
   miniBossGuardId?: string;
   miniBossSpawned?: boolean;
+  puzzle?: CampaignPuzzleState;
   x?: number;
   y?: number;
   requires?: CampaignObjectiveId[];

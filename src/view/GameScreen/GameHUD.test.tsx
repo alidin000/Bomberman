@@ -8,6 +8,9 @@ import { createInitialState } from '../../engine/initialState';
 import { parseMapRows } from '../../engine/mapLoader';
 import { defaultMap } from '../../constants/contants';
 import * as content from '../../content';
+import {
+  campaignState, piece, reachPuzzle, stepOnto,
+} from '../../engine/campaignPuzzles.testutil';
 
 // Counts player-card renders: each card looks its character up once per render.
 const characterLookups = vi.hoisted(() => ({ count: 0 }));
@@ -225,6 +228,24 @@ describe('GameHUD', () => {
     expect(screen.queryByLabelText('mission objectives')).not.toBeInTheDocument();
     // The gate collapses to its padlock, named for screen readers.
     expect(screen.getByRole('img', { name: 'Gate locked' })).toBeInTheDocument();
+  });
+
+  it('shows route puzzle progress and its rule on the objective line', () => {
+    let state = reachPuzzle(campaignState('hiddenCloud', 'normal'));
+    state = stepOnto(state, piece(state, 'hiddenCloud-bell-1'));
+    state = stepOnto(state, piece(state, 'hiddenCloud-bell-2'));
+    const view = renderHud(state);
+
+    const panel = screen.getByLabelText('mission objectives');
+    expect(within(panel).getByText('Shrines 2/4 · ring them in order, I to IV')).toBeInTheDocument();
+    expect(within(panel).getByText('Thunderbell Shrines')).toBeInTheDocument();
+    view.unmount();
+
+    setViewport(390, 844);
+    renderHud(state);
+    const line = screen.getByLabelText('mission objective');
+    expect(line).toHaveTextContent('Thunderbell Shrines');
+    expect(line).toHaveTextContent('2/4 · ring in order');
   });
 
   it('never shows a negative bomb count while extra bombs are out', () => {

@@ -99,6 +99,7 @@ const BOMB_RULES = [
 const CAMPAIGN_RULES = [
   'Reach the marked mission targets first. Some stages use rescues, shrines, seals, bridges, or towers.',
   'Protect the village structure during defense objectives. If its HP reaches zero, the mission fails.',
+  'Then solve the village puzzle to unseal the mini-boss gate: blast lanterns, pylons or wards, step on levers, bells or beacons, or carry keystones. The objective line names the rule, and Story marks the next step.',
   'Defeat the mini-boss guard before the boss gate can complete.',
   'After all objectives are complete, enter the boss arena and defeat the stage boss to unlock the next route reward.',
   'Fog of war hides unexplored campaign tiles. Visible cells update around players; visited cells stay remembered.',

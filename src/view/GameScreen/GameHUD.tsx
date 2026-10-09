@@ -9,6 +9,7 @@ import {
 import { Power } from '../../model/gameItem';
 import { isPowerUpActive } from '../../engine/players';
 import { getRoundTimeRemainingMs, isSuddenDeathMode } from '../../engine/suddenDeath';
+import { describePuzzleProgress } from '../../engine/campaignPuzzles';
 import {
   HudRoot,
   MissionStrip,
@@ -460,6 +461,10 @@ function formatObjectiveDetail(objective: CampaignObjectiveState): string {
     return `${objective.current}/${objective.target} targets reached`;
   }
 
+  if (objective.kind === 'puzzle' && objective.puzzle) {
+    return describePuzzleProgress(objective.puzzle).line;
+  }
+
   if (objective.kind === 'miniBoss') {
     if (objective.status === 'complete') {
       return `${objective.gateLabel ?? objective.label} opened`;
@@ -477,6 +482,9 @@ function formatObjectiveDetail(objective: CampaignObjectiveState): string {
 function formatObjectiveShort(objective: CampaignObjectiveState): string {
   if (objective.kind === 'defense') {
     return `${Math.ceil((objective.ticksRemaining ?? 0) / 1000)}s`;
+  }
+  if (objective.kind === 'puzzle' && objective.puzzle) {
+    return describePuzzleProgress(objective.puzzle).short;
   }
   return `${objective.current}/${objective.target}`;
 }

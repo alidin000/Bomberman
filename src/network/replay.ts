@@ -12,7 +12,8 @@ import { GameEngineState } from '../engine/types';
 // difficulty and lives; body flicker lands where it warned.
 // v5: multi-round matches end once a ninja has won most of the rounds.
 // v6: Ghost and Shield picked up on the map wear off like the others.
-export const REPLAY_VERSION = 6;
+// v7: a route puzzle objective between the defense and the mini boss gate.
+export const REPLAY_VERSION = 7;
 
 export interface ReplayFrame {
   tick: number;

@@ -13,6 +13,7 @@ import { tickBossEncounter } from './bosses';
 import { resolveZetsuOutcomeKind } from './campaignExploration';
 import { STAGE_DEFINITIONS } from '../content/stages';
 import { CAMPAIGN_MISSIONS, getCampaignMission } from '../content/campaignMissions';
+import { solvePuzzle } from './campaignPuzzles.testutil';
 
 // Most tests exercise a live round; the "Ready... GO" freeze has its own tests.
 function createInitialState(config: GameConfig): GameEngineState {
@@ -229,6 +230,7 @@ describe('gameReducer', () => {
       'hiddenLeaf-entrance',
       'hiddenLeaf-outer-district',
       'hiddenLeaf-center',
+      'hiddenLeaf-puzzle',
       'hiddenLeaf-boss-gate',
     ]);
     // The first village refills slowly (26 s, x1.25 on Normal) and holds two.
@@ -254,6 +256,11 @@ describe('gameReducer', () => {
       status: 'locked',
     });
     expect(state.campaign?.objectives[2]).toMatchObject({
+      id: 'hiddenLeafPuzzle',
+      kind: 'puzzle',
+      status: 'locked',
+    });
+    expect(state.campaign?.objectives[3]).toMatchObject({
       id: 'confrontIruka',
       status: 'locked',
     });
@@ -271,10 +278,11 @@ describe('gameReducer', () => {
       expect(mission?.objectives.map((objective) => objective.kind)).toEqual([
         'rescue',
         'defense',
+        'puzzle',
         'miniBoss',
       ]);
       expect(mission?.bossArena.requires).toEqual([
-        mission?.objectives[2].id,
+        mission?.objectives[3].id,
       ]);
       expect(mission?.spawnPoints).toHaveLength(3);
       expect(mission?.spawnPoints.every((point) => (
@@ -313,7 +321,16 @@ describe('gameReducer', () => {
       state = gameReducer(state, { type: 'TICK', deltaMs: 20000 })!;
       expect(state.campaign?.objectives[1].status).toBe('complete');
 
-      const miniBoss = state.campaign?.objectives[2];
+      // The route puzzle (its own tests drive it on the real stage maps).
+      expect(state.campaign?.objectives[2]).toMatchObject({ kind: 'puzzle', status: 'active' });
+      state = solvePuzzle({
+        ...state,
+        map: state.map.map((row) => row.map((cell) => (cell === 'Box' ? 'Empty' : cell))),
+        players: state.players.map((player) => ({ ...player, alive: true })),
+      });
+      expect(state.campaign?.objectives[2].status).toBe('complete');
+
+      const miniBoss = state.campaign?.objectives[3];
       const guardId = `${miniBoss?.id}-guard`;
       expect(state.monsters.some((monster) => (
         monster.id === guardId
@@ -322,7 +339,7 @@ describe('gameReducer', () => {
       ))).toBe(true);
       state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
 
-      expect(state.campaign?.objectives[2].status).toBe('active');
+      expect(state.campaign?.objectives[3].status).toBe('active');
       expect(state.campaign?.bossUnlocked).toBe(false);
 
       state = {
@@ -338,7 +355,7 @@ describe('gameReducer', () => {
       };
       state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
 
-      expect(state.campaign?.objectives[2].status).toBe('complete');
+      expect(state.campaign?.objectives[3].status).toBe('complete');
       expect(state.campaign?.bossUnlocked).toBe(true);
       expect(state.boss?.id).toBe(stage.bossId);
     });
@@ -745,7 +762,18 @@ describe('gameReducer', () => {
     state = gameReducer(state, { type: 'TICK', deltaMs: 20000 })!;
 
     expect(state.campaign?.objectives[1].status).toBe('complete');
+    // The watchfire lanterns come between the defense and Iruka's gate.
     expect(state.campaign?.objectives[2].status).toBe('active');
+    expect(state.campaign?.missionStep).toBe('puzzle');
+    expect(state.monsters.some((monster) => monster.id === 'confrontIruka-guard')).toBe(false);
+    state = solvePuzzle({
+      ...state,
+      map: state.map.map((row) => row.map((cell) => (cell === 'Box' ? 'Empty' : cell))),
+      players: state.players.map((player) => ({ ...player, alive: true })),
+    });
+
+    expect(state.campaign?.objectives[2].status).toBe('complete');
+    expect(state.campaign?.objectives[3].status).toBe('active');
     expect(state.campaign?.missionStep).toBe('miniBoss');
     expect(state.campaign?.bossUnlocked).toBe(false);
     expect(state.boss).toBeNull();
@@ -759,7 +787,7 @@ describe('gameReducer', () => {
 
     state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
 
-    expect(state.campaign?.objectives[2].status).toBe('active');
+    expect(state.campaign?.objectives[3].status).toBe('active');
     expect(state.campaign?.bossUnlocked).toBe(false);
     expect(state.boss).toBeNull();
 
@@ -776,7 +804,7 @@ describe('gameReducer', () => {
     };
     state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
 
-    expect(state.campaign?.objectives[2].status).toBe('complete');
+    expect(state.campaign?.objectives[3].status).toBe('complete');
     expect(state.campaign?.missionStep).toBe('boss');
     expect(state.campaign?.bossArena.unlocked).toBe(true);
     expect(state.campaign?.bossUnlocked).toBe(true);

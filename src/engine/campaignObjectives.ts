@@ -14,6 +14,7 @@ import { positionsTouch } from './grid';
 import { hazardIsActive } from './bosses';
 import { getDifficulty, getMatchDifficulty } from './difficulty';
 import { FALL_NOTICE_TICKS, livesLabel } from './campaignLives';
+import { createPuzzleState, puzzleMessage, updatePuzzleObjective } from './campaignPuzzles';
 
 const RESCUE_TOUCH_DISTANCE = 0.72;
 const MINI_BOSS_TOUCH_DISTANCE = 0.82;
@@ -121,6 +122,7 @@ function getMissionStep(
   if (!activeObjective) return 'exploration';
   if (activeObjective.kind === 'rescue') return 'rescue';
   if (activeObjective.kind === 'defense') return 'defense';
+  if (activeObjective.kind === 'puzzle') return 'puzzle';
   if (activeObjective.kind === 'miniBoss') return 'miniBoss';
   return 'exploration';
 }
@@ -167,6 +169,7 @@ function getCampaignMessage(
     objective.status === 'active'
   ));
   if (!activeObjective) return 'Complete village objectives to open the boss arena.';
+  if (activeObjective.kind === 'puzzle') return puzzleMessage(activeObjective);
   return activeObjective.description;
 }
 
@@ -286,6 +289,10 @@ export function createCampaignRuntimeState(
     if (objective.kind === 'miniBoss') {
       target = 1;
     }
+    const puzzle = objective.kind === 'puzzle' && objective.puzzle
+      ? createPuzzleState(objective.puzzle, difficulty.id, difficulty.lives)
+      : undefined;
+    if (puzzle) target = puzzle.total;
     return {
       id: objective.id,
       kind: objective.kind,
@@ -308,6 +315,7 @@ export function createCampaignRuntimeState(
         ? `${objective.id}-guard`
         : undefined,
       miniBossSpawned: false,
+      puzzle,
       x: objective.x,
       y: objective.y,
       requires: objective.requires,
@@ -558,6 +566,8 @@ export function advanceCampaignObjectives(
         : objective
     ));
   }
+  objectives = refreshObjectiveStatuses(objectives);
+  objectives = mapUnchanged(objectives, (objective) => updatePuzzleObjective(state, objective));
   objectives = refreshObjectiveStatuses(objectives);
 
   let workingState: GameEngineState = objectives === state.campaign.objectives

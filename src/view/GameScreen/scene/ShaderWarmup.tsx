@@ -24,6 +24,9 @@ export function createWarmupMaterials(): THREE.Material[] {
   const labelMap = new THREE.Texture();
   return [
     new THREE.MeshStandardMaterial(),
+    // Flat-shaded standard: monster and boss figures and the route puzzle
+    // pieces (PuzzleMarkers), which mount as fog of war lifts.
+    new THREE.MeshStandardMaterial({ flatShading: true }),
     new THREE.MeshStandardMaterial({ transparent: true }),
     // Transparent double-sided materials draw in two passes (back, then
     // front), and each pass has its own program.

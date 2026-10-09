@@ -96,6 +96,7 @@ import { MonsterFigure, monsterIsTranslucent } from './scene/MonsterFigure';
 import { BossFigure } from './scene/BossFigure';
 import { BombClockState, createBombClock, refreshBombClock } from './scene/bombClock';
 import { canvasHudInsets } from './scene/canvasInsets';
+import { PuzzleMarkers } from './scene/PuzzleMarkers';
 import {
   HighContrastOverride, highContrastPalette, useHighContrastMaterials,
 } from './scene/highContrast';
@@ -2953,7 +2954,8 @@ function MissionObjectiveMarkers({
           )];
         }
         if (
-          typeof objective.x === 'number'
+          objective.kind === 'defense'
+          && typeof objective.x === 'number'
           && typeof objective.y === 'number'
           && cellVisibleInSet(visibleCells, objective.x, objective.y)
         ) {
@@ -3538,6 +3540,8 @@ function SceneContentBase({
     && sensedEnemyCells.has(bossCellKey);
   const multiplayer = state.players.length > 1;
   const motion = React.useContext(MotionContext);
+  const readLiveState = React.useContext(LiveStateContext);
+  const puzzleObjective = state.campaign?.objectives.find((objective) => objective.kind === 'puzzle');
   const cueChips = useCueChips(multiplayer ? state.players.length : 0);
 
   return (
@@ -3574,6 +3578,16 @@ function SceneContentBase({
         motion={motion}
       />
       <MissionObjectiveMarkersMemo state={state} visibleCells={visibleCellSet} />
+      {puzzleObjective && (
+        <PuzzleMarkers
+          objective={puzzleObjective}
+          fogOfWar={state.fogOfWar}
+          readState={readLiveState}
+          motion={motion}
+          reducedMotion={preferences.reducedMotion}
+          highContrast={highContrast}
+        />
+      )}
       {getUpcomingPressureCells(state).map((cell, order) => (
         <PressureBlockWarningMemo
           key={`pressure-${cell.x}-${cell.y}`}
