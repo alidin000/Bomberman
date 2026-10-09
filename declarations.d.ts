@@ -23,3 +23,5 @@ declare module '*?raw' {
   const content: string;
   export default content;
 }
+
+declare const __GAME_SERVER_URL__: string;

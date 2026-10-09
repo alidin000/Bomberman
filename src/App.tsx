@@ -7,12 +7,14 @@ import { WelcomeScreen } from './view/WelcomeScreen/WelcomeScreen';
 import { ConfigScreen } from './view/ConfigScreen/ConfigScreen';
 import { InstructionsScreen } from './view/InstructionsScreen/InstructionsScreen';
 import { DojoScreen } from './view/DojoScreen/DojoScreen';
+import { OnlineLobbyScreen } from './view/OnlineScreen/OnlineLobbyScreen';
 import { GameSettingsProvider } from './contexts/GameSettingsContext';
 import { MenuPad } from './input/MenuPad';
 import { TouchMode } from './input/TouchMode';
 import {
   dojoRoomChunk,
   gameScreenChunk,
+  onlineGameChunk,
   hubScreenChunk,
   lazyScreen,
   usePrefetchGameScreen,
@@ -23,6 +25,7 @@ import {
 // The match (three.js, the scene, the HUD) is about 255 KB gzip that the menus
 // never run, so it loads on demand. The menus start the download early.
 const GameScreen = lazyScreen(gameScreenChunk, 'GameScreen');
+const OnlineGameScreen = lazyScreen(onlineGameChunk, 'OnlineGameScreen');
 const DojoRoomScreen = lazyScreen(dojoRoomChunk, 'DojoRoomScreen');
 const HubScreen = lazyScreen(hubScreenChunk, 'HubScreen');
 
@@ -93,6 +96,12 @@ export function App() {
             )}
           />
           <Route path="/instructions" element={<InstructionsScreen />} />
+          <Route path="/online" element={<OnlineLobbyScreen />} />
+          <Route path="/online/:roomId" element={<OnlineLobbyScreen />} />
+          <Route
+            path="/online/:roomId/play"
+            element={<Suspense fallback={gameLoading}><OnlineGameScreen /></Suspense>}
+          />
           <Route
             path="/dojo"
             element={(

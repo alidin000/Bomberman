@@ -7,6 +7,7 @@ import SportsEsportsIcon from '@mui/icons-material/SportsEsports';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+import PublicIcon from '@mui/icons-material/Public';
 import {
   WelcomeContainer,
   HeroSection,
@@ -124,6 +125,14 @@ export const WelcomeScreen = () => {
               </QuickPlaySummary>
             )}
             <ActionButtons>
+              <Button
+                variant="outlined"
+                size="large"
+                startIcon={<PublicIcon />}
+                onClick={() => navigate('/online')}
+              >
+                Online Room
+              </Button>
               <Button
                 variant="outlined"
                 size="large"

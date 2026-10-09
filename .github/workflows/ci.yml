@@ -35,6 +35,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Build online server
+        run: npm run server:build
+
       # Browser smoke tests: the build above, served by `vite preview`, in
       # headless Chromium (software WebGL). Browsers are cached per version.
       - name: Read Playwright version

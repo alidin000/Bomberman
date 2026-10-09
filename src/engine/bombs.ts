@@ -166,7 +166,12 @@ function getBasicBombPlacements(
     }
   }
 
-  return bombs;
+  // Live placements derive ids from room state, so two server rooms cannot
+  // reset or advance one another's module-level helper counter.
+  return bombs.map((bomb, index) => ({
+    ...bomb,
+    id: `bomb-${state.tick}-${player.id}-${bomb.kind}-${state.bombs.length + index}`,
+  }));
 }
 
 export function getExplosionPositions(bomb: BombState, map: GameMap): { x: number; y: number }[] {
@@ -333,7 +338,7 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
   const origin = getPlayerCell(player);
   if (getCell(state.map, origin) !== 'Empty') return state;
 
-  const bomb = createBomb(
+  const created = createBomb(
     playerId,
     origin.x,
     origin.y,
@@ -342,6 +347,10 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
     ULTIMATE_BOMBS[player.characterId],
     getBombFuse(ULTIMATE_BOMBS[player.characterId]),
   );
+  const bomb = {
+    ...created,
+    id: `bomb-${state.tick}-${player.id}-${created.kind}-${state.bombs.length}`,
+  };
   const newMap = state.map.map((row) => [...row]);
   newMap[origin.y][origin.x] = {
     range: bomb.range,

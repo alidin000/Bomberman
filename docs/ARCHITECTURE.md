@@ -7,7 +7,7 @@ The game uses a **pure game engine** (`src/engine/`) separated from React UI, co
 - A fixed-step loop runs the reducer outside React.
 - The views read the resulting state through narrow subscriptions.
 
-Solo campaign, Local Arena, replays, and future online rooms all share this simulation.
+Solo campaign, Local Arena, replays, and private online rooms all share this simulation.
 
 ```mermaid
 flowchart TD
@@ -22,8 +22,9 @@ flowchart TD
   engineStore --> threeScene[3D Scene Renderer]
   motionCues --> threeScene
   gameState --> tests[Logic Tests and Replays]
-  futureNetwork[Future Multiplayer Server] --> gameEngine
-  inputLayer --> futureNetwork
+  onlineServer[Authoritative Online Server] --> gameEngine
+  inputLayer --> onlineServer
+  onlineServer --> gameState
 ```
 
 ## Directory Layout
@@ -37,10 +38,12 @@ flowchart TD
 | `src/hooks/useRenderState.ts` | Scene and HUD states that keep their identity across clock-only ticks |
 | `src/hooks/motionStore.ts`, `cueStore.ts` | Per-step motion tracks and render-only pose cues for the 3D scene |
 | `src/hooks/useGameEngine.ts` | React bridge: keyboard input, pad bindings, engine store |
+| `src/hooks/useOnlineGame.ts` | Online bridge: local input intent, snapshot state, motion and cue playback |
 | `src/input/` | Key bindings, the shared gamepad poll (`padHub.ts`), and gamepad menu navigation |
 | `src/content/` | Character, stage, stage look, enemy, boss, campaign, and power-up definitions |
 | `src/story/` | Saved campaign progress and unlocks |
-| `src/network/` | Replay helpers (`REPLAY_VERSION`) and message types for future online play |
+| `src/network/` | Replay helpers, strict room protocol, browser WebSocket session and reconnect handling |
+| `server/` | Authoritative two-seat rooms, fixed simulation ticks, reconnect grace, rate limits and health check |
 | `src/view/GameScreen/GameScreen.tsx` | Match screen: pause, confirmations, result hold, captions, gamepad claim |
 | `src/view/GameScreen/GameScene3D.tsx` | React Three Fiber arena renderer |
 | `src/view/GameScreen/scene/` | Light pool, shader warmup, instanced tiles, camera framing, stage atmosphere and landmarks, figures, ink outlines, hazard telegraphs, cue poses |
@@ -73,6 +76,8 @@ flowchart TD
    - The engine sets `phase` to `round_end` or `game_over` and pauses.
    - The screen holds the deciding moment for 1.2 s, then shows the result. A sealed boss holds for 2.2 s while it collapses and its reward card shows. The scene keeps drawing through the hold. The result ignores input for its first 600 ms.
    - `DISMISS_DIALOG` starts the next round, and `RESTART` rematches with a fresh seed.
+
+Online Arena replaces the local engine loop with the server loop. Each browser sends only direction and action intent. The server assigns the player ID, runs the reducer every 50 ms, and returns full or top-level delta snapshots with sequence acknowledgements. A disconnect pauses the room; a reconnect token restores the same seat and receives a full snapshot before play resumes.
 
 ## Render Pipeline
 
@@ -115,6 +120,8 @@ Character behavior is content-driven where possible and engine-driven where simu
 - `GameScreen.tsx` mixed UI, timers, spawning, and win detection.
 - Cell-by-cell rendering made movement look stiff; render-side interpolation now smooths entity motion.
 
-## Future Multiplayer
+## Online Multiplayer
 
-Engine actions in `src/engine/actions.ts` and messages in `src/network/types.ts` are JSON-serializable. A future WebSocket server can run the same reducer authoritatively; clients send input actions and room selections, then receive state snapshots.
+The first online slice is a private two-player arena on one server instance. `src/network/protocol.ts` validates every client message and never accepts a player ID, game action object, or game state from a browser. `server/onlineServer.ts` owns room setup, readiness, simulation, round advancement, reconnects and rematches.
+
+Rooms currently live in memory, so the Render service must remain at one instance. Matchmaking, spectators, shared persistence, rollback prediction, campaign co-op and multi-region routing remain future work.

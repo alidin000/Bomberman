@@ -466,6 +466,8 @@ export interface GameConfig {
   map: GameMap;
   stageId?: StageId;
   selectedCharacters?: CharacterId[];
+  // Optional display names for remote seats. Local modes use character names.
+  playerNames?: string[];
   selectedUpgrade?: StoryUpgradeId;
   // Seeds the match's random draws (power-up drops). Missing means the fixed
   // default seed, so recorded configs always replay the same way.

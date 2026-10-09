@@ -46,7 +46,7 @@ function createPlayer(index: number, config: GameConfig): PlayerState {
     : ULTIMATE_COOLDOWN_MS;
   return {
     id: PLAYER_NAMES[index],
-    name: character.name,
+    name: config.playerNames?.[index]?.trim() || character.name,
     x: spawn.x,
     y: spawn.y,
     alive: true,

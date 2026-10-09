@@ -6,6 +6,12 @@ services:
     runtime: static
     buildCommand: npm ci && npm run build
     staticPublishPath: ./build
+    envVars:
+      - key: VITE_GAME_SERVER_URL
+        fromService:
+          type: web
+          name: bomberman-online
+          envVarKey: RENDER_EXTERNAL_URL
     headers:
       # Vite fingerprints everything it emits into /assets, so a file there
       # never changes under the same name.
@@ -18,3 +24,17 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+
+  - type: web
+    name: bomberman-online
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run server:build
+    startCommand: npm run server:start
+    healthCheckPath: /healthz
+    envVars:
+      - key: ALLOWED_ORIGINS
+        fromService:
+          type: web
+          name: bomberman
+          envVarKey: RENDER_EXTERNAL_URL

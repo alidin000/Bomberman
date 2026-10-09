@@ -59,6 +59,7 @@ export function lazyScreen<M, K extends keyof M>(chunk: RouteChunk<M>, exportNam
 }
 
 export const gameScreenChunk = createRouteChunk(() => import('./GameScreen/GameScreen'));
+export const onlineGameChunk = createRouteChunk(() => import('./OnlineScreen/OnlineGameScreen'));
 // A Training Dojo room runs the match screen, so it shares the match chunk.
 export const dojoRoomChunk = createRouteChunk(() => import('./DojoScreen/DojoRoomScreen'));
 

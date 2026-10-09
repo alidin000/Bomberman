@@ -1,6 +1,6 @@
 # Explosive Shinobi Arena
 
-A 3D browser arena game built with React, TypeScript, Three.js, and React Three Fiber. It turns a grid-bomb combat loop into a shinobi arena with character-specific bombs, themed explosions, seven village stages, procedural monsters, tailed-beast bosses, a saved campaign, local battles against friends or CPU opponents, and a deterministic engine ready for future online rooms.
+A 3D browser arena game built with React, TypeScript, Three.js, and React Three Fiber. It turns a grid-bomb combat loop into a shinobi arena with character-specific bombs, themed explosions, seven village stages, procedural monsters, tailed-beast bosses, a saved campaign, local battles against friends or CPU opponents, and private two-player online rooms.
 
 Play it at <https://bomberman-zuqb.onrender.com>.
 
@@ -12,6 +12,7 @@ Play it at <https://bomberman-zuqb.onrender.com>.
   - Any seat can be a human or an Easy, Normal, or Hard CPU.
   - A match is one round, or best of 3 or 5.
   - Each round runs on a 90-second clock, then a sudden-death spiral closes the arena.
+- **Online Arena preview.** Two players create or join a private room, choose fighters, ready up, play a server-controlled best-of-three match, reconnect after a short network interruption, and request a rematch without rebuilding the room.
 - **Training Dojo.** Four short rooms (move, bomb and step clear, read a blast, power-up and enemy) teach the loop by playing it, with the player's own keys and pad buttons in each goal line and the explanation only after the room is cleared. A first visit suggests it once; the Shinobi Manual and the Mission Deck link it. Rooms can be skipped or replayed, and progress is saved.
 - **Quick starts.** The welcome screen offers Quick Play, which replays your last setup (or starts the campaign on a first visit), and Battle a CPU. The Mission Deck fits a Local Arena setup on one screen of player seat cards.
 - **Readable match flow.**
@@ -33,7 +34,7 @@ Play it at <https://bomberman-zuqb.onrender.com>.
 - **Village-themed enemies.** Rogue Genin, ANBU, Mist Ninja, Sand Ninja, Cloud Ninja, White Zetsu, and Black Zetsu. Their abilities are warned on the floor by shape, not only by colour.
 - **Campaign exploration.** Destroyed crates can reveal nothing, a reward, White Zetsu, elite Black Zetsu, rare fragments, or hidden-area secrets. Respawn points keep villages dangerous while objectives unfold.
 - **Installable web app.** The game ships a web manifest, so supported browsers can install it.
-- **Future multiplayer groundwork.** Serializable engine actions, replay helpers, and room message types.
+- **Server-authoritative multiplayer.** Clients send movement and action intent only. A Node WebSocket server validates the protocol, owns the deterministic simulation, and publishes snapshots with per-player acknowledgements.
 
 ## Tech Stack
 
@@ -47,7 +48,7 @@ Play it at <https://bomberman-zuqb.onrender.com>.
 | Tests | Vitest 4 with jsdom, Testing Library, and v8 coverage |
 | Lint | ESLint 8 with the Airbnb config and typescript-eslint 7 |
 | CI | GitHub Actions on every push and pull request to `main`: lint, test, build, then Playwright browser smoke tests on the build |
-| Hosting | Render static site that deploys `main`. `render.yaml` describes the intended setup as a Blueprint: build `npm ci && npm run build`, publish `build/`, the SPA rewrite, and long-lived caching for hashed assets |
+| Hosting | Render Blueprint with the existing static site plus one Node WebSocket service. The browser receives the service URL at build time and upgrades it to `wss://` in production |
 | Runtime | Node.js 22 (`.node-version`) |
 
 ## Architecture
@@ -140,7 +141,7 @@ The latest product direction is larger than the current implementation.
   - optional model slots with procedural fallbacks;
   - transformation overlays and boss phase cues;
   - large-map render optimizations.
-- **Still planned:** fully bespoke hubs, 50x50 maps, custom asset packs, and online multiplayer.
+- **Still planned:** fully bespoke hubs, 50x50 maps, custom asset packs, and expanded online modes.
 
 Implemented today:
 
@@ -191,7 +192,7 @@ Not implemented yet:
 - Lore collectible screens beyond persisted rare scroll and fragment counters.
 - Fully bespoke `.glb` pickup and enemy models beyond the current procedural fallbacks.
 - Touch controls for phones. Phones render the arena but need a keyboard or gamepad today.
-- Online multiplayer.
+- Online co-op campaign, raids, matchmaking, spectators, and multi-region hosting. The private two-player arena preview is implemented.
 
 ## Implementation Plan
 
@@ -269,6 +270,8 @@ Exit criteria:
 
 ### Phase 5 - Online Multiplayer
 
+Status: the first server-authoritative two-player arena slice is implemented. Campaign co-op and raids remain future work.
+
 Goal: use the existing deterministic architecture for online play.
 
 1. Finalize serializable action contracts for campaign co-op, arena PvP, boss raids, and lobby setup.
@@ -284,13 +287,13 @@ Exit criteria:
 
 ## Immediate Next Slice
 
-The next engineering slice should be **bespoke Phase 4 polish before Phase 5**:
+The next engineering slice should expand the online preview without weakening server authority:
 
-1. Add real hub screens for village NPCs, shops, loadout changes, and lore discoveries.
-2. Build route-specific puzzle mechanics beyond touch targets, such as shrine activation orders, bridge switches, earth-seal collection, and puppet tower disabling rules.
-3. Add touch controls for phones, built on the same input path as keyboards and gamepads.
-4. Add browser-level smoke tests for canvas rendering to CI.
-5. Start custom `.glb` enemy, pickup, structure, and boss asset production against the existing asset slots.
+1. Add online browser smoke coverage to CI and collect disconnect and room-lifetime metrics.
+2. Add stage selection and a compact map pool after validating fairness and bandwidth.
+3. Add touch controls for phones, built on the same intent protocol as keyboards and gamepads.
+4. Add campaign co-op only after its objectives and AI pass deterministic replay validation.
+5. Move room state to shared infrastructure before running more than one server instance.
 
 ## Character Loadouts
 
@@ -325,6 +328,15 @@ npm start
 
 The Vite dev server opens the game in the browser.
 
+To run online rooms locally, use two terminals:
+
+```bash
+npm run server
+npm start
+```
+
+Open `/online` in two browser windows. One player creates a room and shares its six-character code; the other joins and both players select **Ready**. The server defaults to `ws://127.0.0.1:8787`. Production builds read `VITE_GAME_SERVER_URL`; `render.yaml` wires that value to the online service automatically.
+
 Judge performance on a production build: `npm run build && npm run preview`. In development, React StrictMode runs effects twice, and the development build of React is several times slower on the overlay UI.
 
 ## Useful Scripts
@@ -348,7 +360,8 @@ npm run test:e2e
 | `src/input/` | Keyboard bindings, shared gamepad poll, and gamepad menu navigation |
 | `src/content/` | Character, stage, stage look, enemy, boss, campaign, and power-up catalogs |
 | `src/story/` | Saved campaign progress and unlocks |
-| `src/network/` | Replay helpers and future online-room message types |
+| `src/network/` | Replay helpers, strict online protocol validation, browser room session and reconnect handling |
+| `server/` | Authoritative WebSocket rooms, simulation ticks, reconnect grace, rate limits and health endpoint |
 | `src/view/WelcomeScreen/`, `ConfigScreen/`, `InstructionsScreen/` | Title screen, Mission Deck setup, and Shinobi Manual |
 | `src/view/GameScreen/` | Match screen, HUD, result dialog, settings, and the 3D scene (`GameScene3D.tsx`) |
 | `src/view/GameScreen/scene/` | Scene building blocks: light pool, shader warmup, instanced tiles, camera framing, stage atmosphere and landmarks, figures, outlines, telegraphs, cues |

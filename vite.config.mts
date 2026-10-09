@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __GAME_SERVER_URL__: JSON.stringify(process.env.VITE_GAME_SERVER_URL ?? ''),
+  },
   build: {
     outDir: 'build',
     chunkSizeWarningLimit: 800,

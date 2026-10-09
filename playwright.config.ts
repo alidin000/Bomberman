@@ -42,10 +42,18 @@ export default defineConfig({
       use: { ...devices['Pixel 7'] },
     },
   ],
-  webServer: {
-    command: `npm run preview -- --port ${PORT} --strictPort --host 127.0.0.1`,
-    url: `${BASE_URL}/`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  webServer: [
+    {
+      command: `npm run preview -- --port ${PORT} --strictPort --host 127.0.0.1`,
+      url: `${BASE_URL}/`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      command: 'npm run server:start',
+      url: 'http://127.0.0.1:8787/healthz',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+  ],
 });
