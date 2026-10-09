@@ -14,6 +14,7 @@ import {
   recordPlayerStep,
   recordTickMotion,
 } from './motionStore';
+import { advanceIdleCueClock, clearCues, recordStepCues } from './cueStore';
 import {
   CPU_MOVE_KEY,
   CpuSquad,
@@ -84,13 +85,25 @@ export function applyEngineAction(loop: EngineLoop, action: GameAction): void {
   const before = loop.state;
   const after = gameReducer(before, action);
   loop.state = after;
+  const { cues } = loop.motion;
   if (!before || !after || RESET_ACTIONS.has(action.type)) {
     clearMotion(loop.motion);
+    if (cues) clearCues(cues);
     // A new match or round starts every CPU with a clean slate.
     if (RESET_ACTIONS.has(action.type) && after !== before) loop.cpu = createCpuSquad(after);
     return;
   }
   if (after === before) return;
+  // Input lands between frames: its cue starts now and shows next frame.
+  if (cues) {
+    recordStepCues(
+      cues,
+      before,
+      after,
+      cues.clockMs,
+      action.type === 'MOVE' ? action.playerId : undefined
+    );
+  }
   const startMs = loop.motion.simTimeMs;
   if (action.type === 'MOVE') {
     const player = before.players.find((item) => item.id === action.playerId);
@@ -150,13 +163,20 @@ function steerCpuPlayers(loop: EngineLoop, cpu: CpuSquad): void {
  */
 export function advanceEngineFrame(loop: EngineLoop, frameDeltaMs: number): boolean {
   const current = loop.state;
+  const { cues } = loop.motion;
   if (!isPlaying(current)) {
     loop.activeMovement = {};
+    if (cues) {
+      advanceIdleCueClock(cues, current, Math.min(Math.max(frameDeltaMs, 0), MAX_FRAME_DELTA_MS));
+    }
     return false;
   }
 
   const delta = Math.min(Math.max(frameDeltaMs, 0), MAX_FRAME_DELTA_MS);
   const frameStartMs = loop.motion.simTimeMs;
+  // The presentation clock runs ahead of the simulation clock by the time
+  // spent on round results; cues use it so a pose finishes after play stops.
+  const cueOffsetMs = cues ? cues.clockMs - frameStartMs : 0;
   const tickAccumulatorAtStart = loop.accumulatorMs;
   loop.accumulatorMs += delta;
   let tickSteps = 0;
@@ -169,6 +189,7 @@ export function advanceEngineFrame(loop: EngineLoop, frameDeltaMs: number): bool
     if (before && after) {
       const dueMs = frameStartMs + tickSteps * TICK_MS - tickAccumulatorAtStart;
       recordTickMotion(loop.motion, before, after, dueMs, TICK_MS);
+      if (cues) recordStepCues(cues, before, after, dueMs + cueOffsetMs);
     }
     if (loop.cpu) thinkCpuPlayers(loop, loop.cpu);
   }
@@ -202,6 +223,7 @@ export function advanceEngineFrame(loop: EngineLoop, frameDeltaMs: number): bool
       if (before && after && before !== after) {
         const dueMs = frameStartMs + step * repeatMs - active.accumulatorMs;
         recordPlayerStep(loop.motion, before, after, playerId, dueMs, repeatMs);
+        if (cues) recordStepCues(cues, before, after, dueMs + cueOffsetMs, playerId);
       }
     }
     accumulatorMs -= moveSteps * repeatMs;
@@ -209,5 +231,6 @@ export function advanceEngineFrame(loop: EngineLoop, frameDeltaMs: number): bool
   });
 
   loop.motion.simTimeMs = frameStartMs + delta;
+  if (cues) cues.clockMs = loop.motion.simTimeMs + cueOffsetMs;
   return true;
 }

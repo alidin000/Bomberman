@@ -1,5 +1,6 @@
 /* eslint-disable comma-dangle */
 import { GameEngineState } from '../engine';
+import { CueStore, createCueStore } from './cueStore';
 
 // Render-side motion tracks. The simulation moves entities in discrete steps
 // (players 0.1 cell per move step, monsters and bosses one whole cell per
@@ -24,6 +25,12 @@ export type MotionStore = {
   /** Simulation clock: advances only while a round is live, so pauses freeze glides. */
   simTimeMs: number;
   tracks: Map<string, MotionTrack>;
+  /**
+   * Render-only player events (see cueStore). It rides with the motion store
+   * so the scene receives both through one reference; null switches the
+   * cues off without touching the simulation.
+   */
+  cues: CueStore | null;
 };
 
 export type MotionPoint = { x: number; y: number };
@@ -38,7 +45,7 @@ export const MOTION_SNAP_DISTANCE = 1.6;
 export const ENEMY_GLIDE_MS = 240;
 
 export function createMotionStore(): MotionStore {
-  return { simTimeMs: 0, tracks: new Map() };
+  return { simTimeMs: 0, tracks: new Map(), cues: createCueStore() };
 }
 
 export function playerMotionId(id: string): string {

@@ -57,9 +57,13 @@ import {
   createCountdown,
   fuseRingRadius,
 } from './scene/bombFuse';
-import { PLAYER_TAG_SPRITES, playerTagKey } from './scene/playerTags';
+import { PLAYER_TAG_SPRITES, PlayerTagSprite, playerTagKey } from './scene/playerTags';
 import { playerSlotColor } from './playerSlots';
-import { hazardWarningRemainingMs, isEnemyAbilityHazard } from './scene/hazardWarning';
+import { isCpuSlot } from '../../ai/controllers';
+import { HazardTelegraphs } from './scene/HazardTelegraphs';
+import { KoMarkers } from './scene/KoMarkers';
+import { useCueChips } from './scene/cueChips';
+import { createPlayerPose, samplePlayerCuePose } from './scene/playerCuePose';
 import { LightPool, PooledPointLight } from './scene/LightPool';
 import { disposeModelSkeletons } from './scene/modelDisposal';
 import { nextFlameAgeMs } from './scene/flameAge';
@@ -70,11 +74,13 @@ import { shareSkeletons } from './scene/sharedSkeletons';
 import {
   BOSS_MOTION_ID,
   MotionStore,
+  isTrackMoving,
   monsterMotionId,
   playerMotionId,
   samplePosition,
   trackProgress,
 } from '../../hooks/motionStore';
+import { PICKUP_CUE_MS, bodyCueAt, pickupCueAt } from '../../hooks/cueStore';
 import {
   FACING_HEADING, advanceStride, cameraFollowRate, decayShake, turnToward,
 } from './scene/motionFeel';
@@ -1684,9 +1690,11 @@ function TransformationOverlay({
   );
 }
 
-// "P1"-style chip in the HUD card's colour, over the fighter's head.
-function PlayerTag({ slot, color }: { slot: number; color: string }) {
-  const key = playerTagKey(slot, color);
+// "P1"-style chip in the HUD card's colour, over the fighter's head. A CPU
+// slot reads "P2 · CPU" on a square-cornered chip, so who is human shows by
+// text and shape, not by colour.
+function PlayerTag({ slot, color, cpu }: { slot: number; color: string; cpu: boolean }) {
+  const key = playerTagKey(slot, color, cpu);
   const sprite = useMemo(() => PLAYER_TAG_SPRITES.get(key), [key]);
 
   useEffect(() => {
@@ -1694,11 +1702,58 @@ function PlayerTag({ slot, color }: { slot: number; color: string }) {
     return () => PLAYER_TAG_SPRITES.release(key, sprite);
   }, [key, sprite]);
 
-  return <sprite position={[0, 0.98, 0]} scale={[0.78, 0.39, 1]} material={sprite.material} renderOrder={10} />;
+  return (
+    <sprite
+      position={[0, 0.98, 0]}
+      scale={[0.39 * sprite.aspect, 0.39, 1]}
+      material={sprite.material}
+      renderOrder={10}
+    />
+  );
 }
 
-function PlayerMesh({ player, state, slot }: { player: PlayerState; state: GameEngineState; slot?: number }) {
+// Scratch pose shared by every fighter: each one writes and applies it in
+// turn inside its own frame callback, so posing allocates nothing.
+const CUE_POSE = createPlayerPose();
+// Poses pivot on the feet: the body group's origin sits this far above them.
+const FEET_Y = -0.55;
+// Forward lean while running; it reaches 90% within ~50 ms of the first step.
+const RUN_LEAN = 0.1;
+const RUN_LEAN_RATE = 45;
+const PICKUP_CHIP_HEIGHT = 0.34;
+const PICKUP_LABEL_Y = 1.24;
+
+function PlayerMesh({
+  player,
+  state,
+  slot,
+  cpu = false,
+  pickupChips,
+}: {
+  player: PlayerState;
+  state: GameEngineState;
+  slot?: number;
+  cpu?: boolean;
+  pickupChips?: Map<Power, PlayerTagSprite>;
+}) {
   const ref = useRef<THREE.Group>(null);
+  // Everything that falls with the fighter; the pickup label stays outside.
+  const bodyRef = useRef<THREE.Group>(null);
+  // Cue poses (plant, hit, ultimate, fall) pivot on this child group, so the
+  // walk bob, turn and shield flicker written to the outer groups never fight
+  // them.
+  const poseRef = useRef<THREE.Group>(null);
+  const pickupRef = useRef<THREE.Sprite>(null);
+  const shownPickupRef = useRef(0);
+  const runLeanRef = useRef(0);
+  // Stable tags for the scene graph (and tests): a new object each render
+  // would be re-applied on every tick.
+  const marks = useMemo(() => ({
+    ring: { playerRing: player.id },
+    pickup: { pickupLabel: player.id },
+  }), [player.id]);
+  const motionId = useMemo(() => playerMotionId(player.id), [player.id]);
+  const motion = React.useContext(MotionContext);
   const motionRef = useRef(0);
   const ghost = isPowerUpActive(state, player.id, 'Ghost');
   const invincible = isPowerUpActive(state, player.id, 'Invincibility');
@@ -1721,7 +1776,7 @@ function PlayerMesh({ player, state, slot }: { player: PlayerState; state: GameE
   // recompile by accident; with a fixed light pool it has to be explicit.
   // Child effects (LoadedSceneModel) run first, so their flags are already set.
   useEffect(() => {
-    ref.current?.traverse((object) => {
+    bodyRef.current?.traverse((object) => {
       const { material } = object as THREE.Mesh;
       if (!material) return;
       (Array.isArray(material) ? material : [material]).forEach((entry) => {
@@ -1731,12 +1786,64 @@ function PlayerMesh({ player, state, slot }: { player: PlayerState; state: GameE
     });
   }, [ghost]);
 
+  const firstPickupChip = useMemo(
+    () => (pickupChips ? pickupChips.values().next().value as PlayerTagSprite | undefined : undefined),
+    [pickupChips],
+  );
+
   useFrame(({ clock }, delta) => {
     const group = ref.current;
-    if (!group) return;
+    const body = bodyRef.current;
+    const pose = poseRef.current;
+    if (!group || !body || !pose) return;
+    const cues = motion?.cues ?? null;
+    const now = cues ? cues.clockMs : 0;
+
+    const running = !reducedMotion && player.alive
+      && isTrackMoving(motion, motionId);
+    runLeanRef.current = THREE.MathUtils.lerp(
+      runLeanRef.current,
+      running ? RUN_LEAN : 0,
+      1 - Math.exp(-delta * RUN_LEAN_RATE),
+    );
+    samplePlayerCuePose(bodyCueAt(cues, player.id, now), now, player.alive, reducedMotion, CUE_POSE);
+    pose.rotation.set(CUE_POSE.lean + runLeanRef.current, CUE_POSE.spin, 0);
+    pose.scale.set(CUE_POSE.scaleXZ, CUE_POSE.scaleY, CUE_POSE.scaleXZ);
+    pose.position.y = FEET_Y + CUE_POSE.lift;
+
+    const label = pickupRef.current;
+    if (label) {
+      const pickup = player.alive ? pickupCueAt(cues, player.id, now) : null;
+      const chip = pickup ? pickupChips?.get(pickup.power) : undefined;
+      if (!pickup || !chip) {
+        label.visible = false;
+      } else {
+        if (shownPickupRef.current !== pickup.seq) {
+          label.material = chip.material;
+          shownPickupRef.current = pickup.seq;
+        }
+        const t = Math.min(1, (now - pickup.startMs) / PICKUP_CUE_MS);
+        // Rises and pops in; reduced motion holds it still, as long.
+        const rise = reducedMotion ? 0.2 : 0.55 * (1 - (1 - t) ** 2);
+        const pop = reducedMotion ? 1 : Math.min(1, 0.7 + t * 4);
+        label.position.y = PICKUP_LABEL_Y + rise;
+        label.scale.set(PICKUP_CHIP_HEIGHT * chip.aspect * pop, PICKUP_CHIP_HEIGHT * pop, 1);
+        label.visible = true;
+      }
+    }
+
+    if (CUE_POSE.hidden) {
+      body.visible = false;
+      return;
+    }
+    // A falling fighter holds its pose: no walk bob, no shield flicker.
+    if (!player.alive) {
+      body.visible = true;
+      return;
+    }
     if (reducedMotion) {
       group.rotation.z = 0;
-      group.visible = true;
+      body.visible = true;
       return;
     }
 
@@ -1759,130 +1866,151 @@ function PlayerMesh({ player, state, slot }: { player: PlayerState; state: GameE
     );
 
     if (invincible) {
-      group.visible = Math.sin(clock.elapsedTime * 10) > 0;
+      body.visible = Math.sin(clock.elapsedTime * 10) > 0;
     } else {
-      group.visible = true;
+      body.visible = true;
     }
   });
 
-  if (!player.alive) return null;
+  // Local Arena rings take the slot colour (red, blue, yellow), like the tag
+  // and the HUD card: two orange auras (Deidara vs Naruto) read as one. That
+  // includes the wider "ultimate ready" ring, which is up from round start;
+  // its extra ring and sparks, not its colour, say the ultimate is ready. The
+  // campaign keeps the character's aura.
+  const ringColor = slot !== undefined ? playerSlotColor(slot - 1) : visual.aura;
 
   return (
     <group ref={ref}>
-      <ShadowBlob />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.39, 0]}>
-        <torusGeometry args={[0.42, 0.022, 8, 36]} />
-        <meshStandardMaterial
-          color={visual.aura}
-          emissive={visual.aura}
-          emissiveIntensity={1.1}
-          transparent
-          opacity={ghost ? 0.25 : 0.46}
+      <group ref={bodyRef}>
+        <ShadowBlob />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.39, 0]} userData={marks.ring}>
+          <torusGeometry args={[0.42, 0.022, 8, 36]} />
+          <meshStandardMaterial
+            color={ringColor}
+            emissive={ringColor}
+            emissiveIntensity={1.1}
+            transparent
+            opacity={ghost ? 0.25 : 0.46}
+          />
+        </mesh>
+        <TransformationOverlay player={player} color={ringColor} />
+        {slot !== undefined && <PlayerTag slot={slot} color={playerSlotColor(slot - 1)} cpu={cpu} />}
+        <group ref={poseRef} position={[0, FEET_Y, 0]}>
+          <group position={[0, -FEET_Y, 0]}>
+            {characterModel ? (
+              <LoadedSceneModel asset={characterModel} ghost={ghost} motionRef={motionRef} warmGhostVariant />
+            ) : (
+              <>
+                <mesh position={[0, -0.04, 0]} castShadow>
+                  <capsuleGeometry args={[0.19, 0.26, 6, 10]} />
+                  <meshStandardMaterial
+                    color={visual.body}
+                    emissive={visual.body}
+                    emissiveIntensity={0.08}
+                    transparent={ghost}
+                    opacity={ghost ? 0.55 : 1}
+                    roughness={0.46}
+                    flatShading
+                  />
+                </mesh>
+                <mesh position={[0, -0.08, 0.16]} castShadow>
+                  <boxGeometry args={[0.38, 0.26, 0.035]} />
+                  <meshStandardMaterial
+                    color={visual.trim}
+                    emissive={visual.trim}
+                    emissiveIntensity={0.08}
+                    transparent={ghost}
+                    opacity={ghost ? 0.55 : 1}
+                  />
+                </mesh>
+                <mesh position={[0, 0.32, 0.02]} castShadow>
+                  <sphereGeometry args={[0.225, 10, 8]} />
+                  <meshStandardMaterial color="#f2c7a2" roughness={0.9} flatShading transparent={ghost} opacity={ghost ? 0.55 : 1} />
+                </mesh>
+                <CharacterHair characterId={player.characterId} visual={visual} ghost={ghost} />
+                <mesh position={[0, 0.35, 0.2]} castShadow>
+                  <boxGeometry args={[0.42, 0.055, 0.04]} />
+                  <meshStandardMaterial
+                    color={visual.headband}
+                    emissive={visual.headband}
+                    emissiveIntensity={0.18}
+                    transparent={ghost}
+                    opacity={ghost ? 0.55 : 1}
+                  />
+                </mesh>
+                <mesh position={[0, 0.35, 0.225]} castShadow>
+                  <boxGeometry args={[0.16, 0.05, 0.018]} />
+                  <meshStandardMaterial color="#d1d5db" metalness={0.6} roughness={0.32} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+                </mesh>
+                {[-0.22, 0.22].map((side) => (
+                  <mesh
+                    key={`${player.id}-arm-${side}`}
+                    position={[side, 0.04, 0.04]}
+                    rotation={[0.35, 0, side > 0 ? -0.55 : 0.55]}
+                    castShadow
+                  >
+                    <capsuleGeometry args={[0.055, 0.34, 5, 8]} />
+                    <meshStandardMaterial color={visual.accent} roughness={0.48} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+                  </mesh>
+                ))}
+                {[-0.09, 0.09].map((side) => (
+                  <mesh
+                    key={`${player.id}-leg-${side}`}
+                    position={[side, -0.36, 0.02]}
+                    rotation={[0.18, 0, side > 0 ? -0.08 : 0.08]}
+                    castShadow
+                  >
+                    <capsuleGeometry args={[0.052, 0.34, 5, 8]} />
+                    <meshStandardMaterial color={visual.body} roughness={0.5} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+                  </mesh>
+                ))}
+                {[-0.1, 0.1].map((side) => (
+                  <mesh key={`${player.id}-shoe-${side}`} position={[side, -0.55, 0.1]} rotation={[0.2, 0, 0]} castShadow>
+                    <boxGeometry args={[0.13, 0.06, 0.2]} />
+                    <meshStandardMaterial color="#111827" roughness={0.56} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+                  </mesh>
+                ))}
+                {[-0.09, 0.09].map((side) => (
+                  <mesh key={`${player.id}-eye-${side}`} position={[side, 0.34, 0.17]}>
+                    <sphereGeometry args={[0.025, 8, 8]} />
+                    <meshStandardMaterial color="#111827" />
+                  </mesh>
+                ))}
+                <CharacterAccessory characterId={player.characterId} visual={visual} ghost={ghost} />
+                <mesh position={[0, -0.27, -0.08]} rotation={[Math.PI / 2, 0, Math.PI / 2]} castShadow>
+                  <cylinderGeometry args={[0.075, 0.075, 0.42, 12]} />
+                  <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.12} />
+                </mesh>
+              </>
+            )}
+            {invincible && (
+              <>
+                <mesh position={[0, 0.04, 0]}>
+                  <sphereGeometry args={[0.56, 18, 18]} />
+                  <meshBasicMaterial color={visual.aura} transparent opacity={0.14} depthWrite={false} />
+                </mesh>
+                <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.34, 0]}>
+                  <torusGeometry args={[0.5, 0.03, 8, 36]} />
+                  <meshBasicMaterial color={visual.aura} transparent opacity={0.74} />
+                </mesh>
+                <mesh rotation={[-Math.PI / 2, 0, Math.PI / 4]} position={[0, 0.08, 0]}>
+                  <torusGeometry args={[0.42, 0.018, 8, 34]} />
+                  <meshBasicMaterial color={visual.accent} transparent opacity={0.5} />
+                </mesh>
+              </>
+            )}
+          </group>
+        </group>
+      </group>
+      {firstPickupChip && (
+        <sprite
+          ref={pickupRef}
+          visible={false}
+          position={[0, PICKUP_LABEL_Y, 0]}
+          material={firstPickupChip.material}
+          renderOrder={11}
+          userData={marks.pickup}
         />
-      </mesh>
-      <TransformationOverlay player={player} color={visual.aura} />
-      {slot !== undefined && <PlayerTag slot={slot} color={playerSlotColor(slot - 1)} />}
-      {characterModel ? (
-        <LoadedSceneModel asset={characterModel} ghost={ghost} motionRef={motionRef} warmGhostVariant />
-      ) : (
-        <>
-          <mesh position={[0, -0.04, 0]} castShadow>
-            <capsuleGeometry args={[0.19, 0.26, 6, 10]} />
-            <meshStandardMaterial
-              color={visual.body}
-              emissive={visual.body}
-              emissiveIntensity={0.08}
-              transparent={ghost}
-              opacity={ghost ? 0.55 : 1}
-              roughness={0.46}
-              flatShading
-            />
-          </mesh>
-          <mesh position={[0, -0.08, 0.16]} castShadow>
-            <boxGeometry args={[0.38, 0.26, 0.035]} />
-            <meshStandardMaterial
-              color={visual.trim}
-              emissive={visual.trim}
-              emissiveIntensity={0.08}
-              transparent={ghost}
-              opacity={ghost ? 0.55 : 1}
-            />
-          </mesh>
-          <mesh position={[0, 0.32, 0.02]} castShadow>
-            <sphereGeometry args={[0.225, 10, 8]} />
-            <meshStandardMaterial color="#f2c7a2" roughness={0.9} flatShading transparent={ghost} opacity={ghost ? 0.55 : 1} />
-          </mesh>
-          <CharacterHair characterId={player.characterId} visual={visual} ghost={ghost} />
-          <mesh position={[0, 0.35, 0.2]} castShadow>
-            <boxGeometry args={[0.42, 0.055, 0.04]} />
-            <meshStandardMaterial
-              color={visual.headband}
-              emissive={visual.headband}
-              emissiveIntensity={0.18}
-              transparent={ghost}
-              opacity={ghost ? 0.55 : 1}
-            />
-          </mesh>
-          <mesh position={[0, 0.35, 0.225]} castShadow>
-            <boxGeometry args={[0.16, 0.05, 0.018]} />
-            <meshStandardMaterial color="#d1d5db" metalness={0.6} roughness={0.32} transparent={ghost} opacity={ghost ? 0.55 : 1} />
-          </mesh>
-          {[-0.22, 0.22].map((side) => (
-            <mesh
-              key={`${player.id}-arm-${side}`}
-              position={[side, 0.04, 0.04]}
-              rotation={[0.35, 0, side > 0 ? -0.55 : 0.55]}
-              castShadow
-            >
-              <capsuleGeometry args={[0.055, 0.34, 5, 8]} />
-              <meshStandardMaterial color={visual.accent} roughness={0.48} transparent={ghost} opacity={ghost ? 0.55 : 1} />
-            </mesh>
-          ))}
-          {[-0.09, 0.09].map((side) => (
-            <mesh
-              key={`${player.id}-leg-${side}`}
-              position={[side, -0.36, 0.02]}
-              rotation={[0.18, 0, side > 0 ? -0.08 : 0.08]}
-              castShadow
-            >
-              <capsuleGeometry args={[0.052, 0.34, 5, 8]} />
-              <meshStandardMaterial color={visual.body} roughness={0.5} transparent={ghost} opacity={ghost ? 0.55 : 1} />
-            </mesh>
-          ))}
-          {[-0.1, 0.1].map((side) => (
-            <mesh key={`${player.id}-shoe-${side}`} position={[side, -0.55, 0.1]} rotation={[0.2, 0, 0]} castShadow>
-              <boxGeometry args={[0.13, 0.06, 0.2]} />
-              <meshStandardMaterial color="#111827" roughness={0.56} transparent={ghost} opacity={ghost ? 0.55 : 1} />
-            </mesh>
-          ))}
-          {[-0.09, 0.09].map((side) => (
-            <mesh key={`${player.id}-eye-${side}`} position={[side, 0.34, 0.17]}>
-              <sphereGeometry args={[0.025, 8, 8]} />
-              <meshStandardMaterial color="#111827" />
-            </mesh>
-          ))}
-          <CharacterAccessory characterId={player.characterId} visual={visual} ghost={ghost} />
-          <mesh position={[0, -0.27, -0.08]} rotation={[Math.PI / 2, 0, Math.PI / 2]} castShadow>
-            <cylinderGeometry args={[0.075, 0.075, 0.42, 12]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.12} />
-          </mesh>
-        </>
-      )}
-      {invincible && (
-        <>
-          <mesh position={[0, 0.04, 0]}>
-            <sphereGeometry args={[0.56, 18, 18]} />
-            <meshBasicMaterial color={visual.aura} transparent opacity={0.14} depthWrite={false} />
-          </mesh>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.34, 0]}>
-            <torusGeometry args={[0.5, 0.03, 8, 36]} />
-            <meshBasicMaterial color={visual.aura} transparent opacity={0.74} />
-          </mesh>
-          <mesh rotation={[-Math.PI / 2, 0, Math.PI / 4]} position={[0, 0.08, 0]}>
-            <torusGeometry args={[0.42, 0.018, 8, 34]} />
-            <meshBasicMaterial color={visual.accent} transparent opacity={0.5} />
-          </mesh>
-        </>
       )}
     </group>
   );
@@ -2496,7 +2624,8 @@ function BossMesh({ state }: { state: GameEngineState }) {
 // Telegraph marks. An enemy's targeted cell is usually the cell a player
 // stands on, so a floor mark alone hides under that player: a red pin hovers
 // above the cell and a square closes on it, meeting the cell edge when the
-// hit lands. Boss strikes reuse the closing square.
+// hit lands. Boss strikes close their family's floor shape instead (see
+// scene/HazardTelegraphs), so the square keeps meaning "this cell".
 const WARNING_PIN_GEOMETRY = new THREE.ConeGeometry(0.2, 0.46, 4).rotateX(Math.PI);
 const WARNING_CLOSE_GEOMETRY = new THREE.RingGeometry(0.6, 0.68, 4, 1)
   .rotateZ(Math.PI / 4)
@@ -2513,17 +2642,9 @@ function HazardMesh({ hazard }: { hazard: BossHazard }) {
   const beastColored = hazard.kind === 'beastBomb' || hazard.kind === 'chakraShockwave';
   const effectColor = beastColored ? hazard.color : visual.color;
   const effectAccent = beastColored ? '#fff7ed' : visual.accent;
-  const color = active ? effectColor : '#facc15';
-  const opacity = active ? 0.78 : 0.46;
   const reducedMotion = React.useContext(ReducedMotionContext);
-  const motion = React.useContext(MotionContext);
-  // Boss strikes close a square on their cell like enemy abilities do, so
-  // the moment it turns lethal is readable by shape, not only colour.
-  const closeRef = useRef<THREE.Mesh>(null);
-  const countdownRef = useRef(createCountdown());
-  const warningMs = hazardWarningRemainingMs(hazard);
-  const leadRef = useRef(warningMs);
-  const telegraph = !isEnemyAbilityHazard(hazard) && warningMs > 0;
+  // The floor shape that says which family this is, and when it can kill,
+  // is drawn by HazardTelegraphs; this draws the effect above it.
 
   useFrame(({ clock }) => {
     if (ref.current) {
@@ -2532,26 +2653,11 @@ function HazardMesh({ hazard }: { hazard: BossHazard }) {
       if (!reducedMotion && !active) scale = 0.85 + Math.sin(clock.elapsedTime * 8) * 0.08;
       ref.current.rotation.y = reducedMotion ? 0 : clock.elapsedTime * (active ? 2.6 : 1.5);
       ref.current.scale.setScalar(scale);
-      if (closeRef.current) {
-        const remaining = motion ? countdownNow(countdownRef.current, warningMs, motion.simTimeMs) : warningMs;
-        const closing = 1 + 0.9 * Math.min(1, remaining / Math.max(leadRef.current, 1));
-        // It rides in the spinning group: undo the group's turn and scale.
-        closeRef.current.rotation.y = -ref.current.rotation.y;
-        closeRef.current.scale.setScalar(closing / scale);
-      }
     }
   });
 
   return (
     <group ref={ref} position={[wx, 0.06, wz]}>
-      {telegraph && (
-        <mesh ref={closeRef} position={[0, -0.02, 0]} geometry={WARNING_CLOSE_GEOMETRY} material={WARNING_MARK_MATERIAL} />
-      )}
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.18, active ? 0.52 : 0.38, 26]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 1.25 : 0.62} transparent opacity={opacity} />
-      </mesh>
-
       {visual.effect === 'sand' && (
         <>
           <mesh position={[0, 0.28, 0]} rotation={[0, 0, 0.18]}>
@@ -3549,7 +3655,8 @@ function TargetCellWarning({ monster }: { monster: MonsterState }) {
           depthWrite={false}
         />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
+      {/* Square, like the closing mark: diamonds belong to a hazard family. */}
+      <mesh rotation={[-Math.PI / 2, 0, Math.PI / 4]} position={[0, 0.012, 0]}>
         <ringGeometry args={[0.5, 0.57, 4]} />
         <meshBasicMaterial color={urgent ? '#ffffff' : '#facc15'} transparent opacity={0.9} />
       </mesh>
@@ -3707,6 +3814,8 @@ function SceneContent({
     bombClock.current.detonationMs = detonationMs;
   }
   const multiplayer = state.players.length > 1;
+  const motion = React.useContext(MotionContext);
+  const cueChips = useCueChips(multiplayer ? state.players.length : 0);
 
   return (
     <LightPool>
@@ -3731,6 +3840,12 @@ function SceneContent({
       />
       <ExplosionFieldMemo explosions={visibleExplosions} />
       <BombBlastPreviews state={state} visibleCells={visibleCellSet} detonationMs={detonationMs} />
+      <HazardTelegraphs
+        hazards={state.hazards}
+        boss={state.boss}
+        visibleCells={visibleCellSet}
+        motion={motion}
+      />
       <MissionObjectiveMarkers state={state} visibleCells={visibleCellSet} />
       {getUpcomingPressureCells(state).map((cell, order) => (
         <PressureBlockWarning
@@ -3741,8 +3856,16 @@ function SceneContent({
         />
       ))}
       {state.players.map((p, index) => (
-        <PlayerMesh key={p.id} player={p} state={state} slot={multiplayer ? index + 1 : undefined} />
+        <PlayerMesh
+          key={p.id}
+          player={p}
+          state={state}
+          slot={multiplayer ? index + 1 : undefined}
+          cpu={multiplayer && isCpuSlot(state.config, index)}
+          pickupChips={cueChips.pickups}
+        />
       ))}
+      <KoMarkers players={state.players} chips={cueChips.ko} />
       {visibleMonsters.map((m) => (
         <MonsterMesh key={m.id} monster={m} />
       ))}

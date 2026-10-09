@@ -2,6 +2,12 @@ import { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
+function instancedWarmup(material: THREE.Material): THREE.Material {
+  const target = material;
+  target.userData.warmInstanced = true;
+  return target;
+}
+
 /**
  * One material per shader variant that entities mount and unmount mid-match:
  * bombs, pickups, hazards, markers, warnings and text labels. three.js deletes
@@ -21,7 +27,18 @@ export function createWarmupMaterials(): THREE.Material[] {
     new THREE.MeshStandardMaterial({ transparent: true, side: THREE.DoubleSide }),
     new THREE.MeshBasicMaterial({ transparent: true }),
     new THREE.SpriteMaterial({ map: labelMap, transparent: true, depthWrite: false }),
+    // Instanced floor marks (hazard telegraph shapes) leave the render list
+    // while empty, so their program must not depend on another instanced
+    // layer staying up. Compiled on an InstancedMesh: instancing is its own
+    // program.
+    instancedWarmup(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })),
   ];
+}
+
+function warmObject(material: THREE.Material, geometry: THREE.BufferGeometry): THREE.Object3D {
+  if (material instanceof THREE.SpriteMaterial) return new THREE.Sprite(material);
+  if (material.userData.warmInstanced) return new THREE.InstancedMesh(geometry, material, 1);
+  return new THREE.Mesh(geometry, material);
 }
 
 function disposeWarmupMaterials(materials: THREE.Material[]) {
@@ -46,11 +63,7 @@ export function ShaderWarmup() {
     const materials = createWarmupMaterials();
     const warmScene = new THREE.Scene();
     const geometry = new THREE.BoxGeometry(0.01, 0.01, 0.01);
-    materials.forEach((material) => {
-      warmScene.add(material instanceof THREE.SpriteMaterial
-        ? new THREE.Sprite(material)
-        : new THREE.Mesh(geometry, material));
-    });
+    materials.forEach((material) => warmScene.add(warmObject(material, geometry)));
 
     let cancelled = false;
     // Lights come from the target scene; only the warm objects are compiled.
