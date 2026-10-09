@@ -10,7 +10,7 @@ import { DEFAULT_GAME_PREFERENCES } from './gamePreferences';
 import { useGameFeedback } from './useGameFeedback';
 
 describe('useGameFeedback', () => {
-  it('combines simultaneous events and re-identifies repeated captions', () => {
+  it('puts the knockout first, never captions a blast, and keeps to one 40-character line', () => {
     const initial = createInitialState({
       numPlayers: 2,
       totalRounds: 1,
@@ -38,11 +38,12 @@ describe('useGameFeedback', () => {
     };
     rerender({ state: firstBlast });
 
-    expect(result.current.caption).toContain('Blast detonates');
-    expect(result.current.caption).toContain('Enemy defeated');
-    expect(result.current.caption).toContain('Shinobi down');
+    // "P1 Deidara is out. Enemy defeated" would be 34: both fit.
+    expect(result.current.caption).toBe('P1 Deidara is out. Enemy defeated');
+    expect(result.current.caption).not.toMatch(/blast|detonat/i);
     const firstEventId = result.current.eventId;
 
+    // A second blast with nothing else happening: the shake and tone only.
     rerender({ state: { ...firstBlast, tick: firstBlast.tick + 1, explosions: [] } });
     rerender({
       state: {
@@ -53,9 +54,8 @@ describe('useGameFeedback', () => {
         }],
       },
     });
-
-    expect(result.current.caption).toBe('Blast detonates');
-    expect(result.current.eventId).toBeGreaterThan(firstEventId);
+    expect(result.current.eventId).toBe(firstEventId);
+    expect(result.current.impact).toBeGreaterThan(0);
   });
 
   it('does not announce a fading water clone as a defeated enemy', () => {
@@ -111,7 +111,7 @@ describe('useGameFeedback', () => {
     expect(result.current.caption).toBe('P1 Clay Pouch');
   });
 
-  it('announces the blast that ends the round', () => {
+  it('names whose blast ended the round', () => {
     const start = createInitialState({
       numPlayers: 2,
       totalRounds: 1,
@@ -137,8 +137,7 @@ describe('useGameFeedback', () => {
     }
 
     expect(state.phase).toBe('game_over');
-    expect(result.current.caption).toMatch(/blasts? detonates?/i);
-    expect(result.current.caption).toContain('Shinobi down');
+    expect(result.current.caption).toBe('P1 Sasuke caught in own blast');
   });
 
   const blastPreferences = { ...DEFAULT_GAME_PREFERENCES, soundEnabled: false };
@@ -172,7 +171,7 @@ describe('useGameFeedback', () => {
     return state;
   };
 
-  it('counts detonated bombs, not flame cells, in the blast caption', () => {
+  it('leaves blasts without a caption, one bomb or several', () => {
     let single = startVersusRound(true);
     const singleHook = renderHook(
       ({ current }) => useGameFeedback(current, blastPreferences),
@@ -182,7 +181,8 @@ describe('useGameFeedback', () => {
     expect(single.bombs).toHaveLength(1);
     singleHook.rerender({ current: single });
     runUntilBlast(single, (next) => singleHook.rerender({ current: next }));
-    expect(singleHook.result.current.caption).toMatch(/^Blast detonates/);
+    expect(singleHook.result.current.caption).toBe('');
+    expect(singleHook.result.current.impact).toBeGreaterThan(0);
 
     let pair = startVersusRound(true);
     const pairHook = renderHook(
@@ -194,22 +194,35 @@ describe('useGameFeedback', () => {
     expect(pair.bombs).toHaveLength(2);
     pairHook.rerender({ current: pair });
     runUntilBlast(pair, (next) => pairHook.rerender({ current: next }));
-    expect(pairHook.result.current.caption).toMatch(/^2 blasts detonate/);
+    expect(pairHook.result.current.caption).toBe('');
   });
 
-  it('still announces the blast that decides the round', () => {
-    let state = startVersusRound(false);
+  it('names the slot of the player whose blast decides a mirror match', () => {
+    const start = createInitialState({
+      numPlayers: 2,
+      totalRounds: 1,
+      selectedMap: 'map1',
+      map: parseMapRows(defaultMap),
+      selectedCharacters: ['naruto', 'naruto'],
+    });
+    const initial: GameEngineState = { ...start, monsters: [], tick: 5 };
     const { result, rerender } = renderHook(
       ({ current }) => useGameFeedback(current, blastPreferences),
-      { initialProps: { current: state } }
+      { initialProps: { current: initial } }
     );
-    state = reduce(state, { type: 'DROP_BOMB', playerId: 'player1' });
-    rerender({ current: state });
-    state = runUntilBlast(state, (next) => rerender({ current: next }));
 
-    expect(state.phase).toBe('game_over');
-    expect(result.current.caption).toContain('Blast detonates');
-    expect(result.current.caption).toContain('Shinobi down');
+    rerender({
+      current: {
+        ...initial,
+        tick: 6,
+        players: initial.players.map((player, index) => (
+          index === 0
+            ? { ...player, alive: false, deathCause: { kind: 'blast' as const, byPlayerId: 'player2' } }
+            : player
+        )),
+      },
+    });
+    expect(result.current.caption).toBe("P2 Naruto's blast caught P1 Naruto");
   });
 
   it('says which slot went down', () => {
@@ -235,7 +248,7 @@ describe('useGameFeedback', () => {
       },
     });
 
-    expect(result.current.caption).toBe('Shinobi down: P2 Naruto');
+    expect(result.current.caption).toBe('P2 Naruto is out');
   });
 
   it('captions the last 30 and 15 seconds and the start of sudden death', () => {
@@ -253,9 +266,13 @@ describe('useGameFeedback', () => {
     rerender({ state: at(75000, 4) });
     expect(result.current.caption).toBe('15 seconds left');
 
-    rerender({ state: at(89950, 5) });
-    rerender({ state: at(90000, 6) });
-    expect(result.current.caption).toBe('Sudden death: walls closing');
+    rerender({ state: at(84950, 5) });
+    rerender({ state: at(85000, 6) });
+    expect(result.current.caption).toBe('Sudden death in 5');
+
+    rerender({ state: at(89950, 7) });
+    rerender({ state: at(90000, 8) });
+    expect(result.current.caption).toBe('Sudden death · walls closing');
   });
 
   it('has no clock captions in the campaign', () => {

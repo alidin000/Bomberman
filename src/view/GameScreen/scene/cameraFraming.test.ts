@@ -10,6 +10,7 @@ import {
   groupShift,
   hudInsets,
   hudLayout,
+  hudZoom,
   maxFramingFor,
 } from './cameraFraming';
 
@@ -80,10 +81,11 @@ describe('shared-screen camera framing', () => {
     });
   });
 
-  it('uses the closest zoom when the compact HUD leaves room for the players', () => {
+  it('stays within 1% of the closest zoom when the compact HUD leaves room for the players', () => {
+    // The cards' win-pip line costs two players at spawn 0.5% of zoom.
     const { scale } = frame([{ x: 1, y: 1 }, { x: 13, y: 8 }], LAPTOP_VIEW);
-    expect(scale).toBe(MIN_FRAMING);
-    expect(framingScaleFor(6, 4, LAPTOP, LAPTOP_INSETS)).toBe(MIN_FRAMING);
+    expect(scale).toBeLessThan(MIN_FRAMING * 1.01);
+    expect(framingScaleFor(6, 4, LAPTOP, LAPTOP_INSETS)).toBeLessThan(MIN_FRAMING * 1.01);
   });
 
   it('zooms in as far as the HUD-safe area allows, not further', () => {
@@ -107,16 +109,19 @@ describe('shared-screen camera framing', () => {
     expect(oldScale / scale).toBeGreaterThan(1.4);
   });
 
-  it('keeps the desktop framing exactly as it was', () => {
-    // [width, height, HUD %, halfWidth, halfDepth, scale, shift] from e28e51c.
+  it('keeps the desktop framing pinned to the measured HUD', () => {
+    // [width, height, HUD %, halfWidth, halfDepth, scale, shift] for the HUD
+    // with win pips and the viewport zoom. Against main 54df3d4 the cards
+    // grew from 69 to 80 px and scale with the screen, so 1366x768 frames
+    // the 18x12 spread 2.5% further out (1.2917) and 1920x1080 6.4% (1.2189).
     const pinned: [number, number, number, number, number, number, number][] = [
-      [1366, 768, 100, 9, 6, 1.2917, -0.8644],
-      [1366, 768, 125, 6, 4, 1.0825, -1.5095],
-      [1366, 768, 125, 9, 6, 1.4306, -1.7637],
-      [1920, 1080, 100, 9, 6, 1.2189, -0.3927],
-      [2560, 1080, 100, 9, 6, 1.2189, -0.3927],
-      [1280, 800, 80, 9, 6, 1.2397, -0.2417],
-      [1366, 768, 100, 30, 30, 1.8, -21.6159],
+      [1366, 768, 100, 9, 6, 1.3242, -1.0746],
+      [1366, 768, 125, 6, 4, 1.0906, -1.5621],
+      [1366, 768, 125, 9, 6, 1.4417, -1.8357],
+      [1920, 1080, 100, 9, 6, 1.2969, -0.8978],
+      [2560, 1080, 100, 9, 6, 1.2971, -0.8994],
+      [1280, 800, 80, 9, 6, 1.2535, -0.6167],
+      [1366, 768, 100, 30, 30, 1.8, -22.2005],
     ];
     pinned.forEach(([width, height, hud, halfWidth, halfDepth, scale, shift]) => {
       const insets = hudInsets(hud, width, height);
@@ -141,20 +146,20 @@ describe('shared-screen camera framing', () => {
   });
 });
 
-// HUD rectangles measured in Chromium on e28e51c at 100% HUD with three
-// players (left, top, right, bottom in CSS px): the match strip, the top
-// controls, and the union of the P1-P3 cards. Two-player cards sit inside
-// the same union.
+// HUD rectangles measured in Chromium (k2work/hud.cjs) at 100% HUD with
+// three players, best of 5 and two CPU slots (left, top, right, bottom in
+// CSS px): the match bar, the top controls, the union of the P1-P3 cards,
+// and on phones the one-line bottom strip (campaign objective or the
+// sudden-death banner). Two-player cards sit inside the same union.
 type Rect = [number, number, number, number];
 type Cell = { x: number; y: number };
 const MEASURED_HUD: Record<string, Rect[]> = {
-  '390x844': [[12, 12, 88, 66], [114, 18, 372, 76], [12, 84, 378, 183]],
-  '360x780': [[12, 12, 58, 66], [84, 18, 342, 76], [12, 84, 348, 183]],
-  '844x390': [[194, 12, 554, 66], [568, 18, 826, 76], [12, 309, 646, 378]],
-  '768x1024': [[118, 12, 478, 66], [492, 18, 750, 76], [12, 84, 646, 153]],
-  '1024x768': [[332, 12, 692, 66], [748, 18, 1006, 76], [12, 84, 772, 153]],
-  '1100x700': [[370, 12, 730, 66], [824, 18, 1082, 76], [12, 84, 772, 153]],
-  '1366x768': [[503, 12, 863, 66], [1090, 18, 1348, 76], [12, 84, 772, 153]],
+  '390x844': [[12, 12, 76, 66], [114, 18, 372, 76], [12, 84, 378, 183], [12, 789, 378, 832]],
+  '360x780': [[12, 12, 76, 66], [84, 18, 342, 76], [12, 84, 348, 183], [12, 725, 348, 768]],
+  '844x390': [[194, 12, 554, 69], [568, 18, 826, 76], [12, 298, 832, 378]],
+  '768x1024': [[118, 12, 478, 69], [492, 18, 750, 76], [12, 84, 756, 164]],
+  '1366x768': [[503, 12, 863, 69], [1090, 18, 1348, 76], [12, 84, 1354, 164]],
+  '1920x1080': [[707, 17, 1213, 95], [1644, 18, 1902, 76], [17, 110, 1903, 220]],
 };
 
 const SPREADS: [string, Cell[]][] = [
@@ -189,6 +194,19 @@ function pxPerCell(camera: THREE.Camera, view: [number, number], cell: Cell): nu
 
 const overlaps = (a: Rect, b: Rect) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
+describe('HUD zoom', () => {
+  it('grows the HUD with the screen from the 1366x768 reference, capped at 1.5x', () => {
+    expect(hudZoom(100, 1366, 768)).toBe(1);
+    expect(hudZoom(100, 1920, 1080)).toBeCloseTo(1920 / 1366, 4);
+    expect(hudZoom(100, 3840, 2160)).toBe(1.5);
+    // The tighter side decides, and small screens never shrink below 100%.
+    expect(hudZoom(100, 2560, 1080)).toBeCloseTo(1080 / 768, 4);
+    expect(hudZoom(100, 390, 844)).toBe(1);
+    // The HUD Size setting multiplies it.
+    expect(hudZoom(125, 1920, 1080)).toBeCloseTo(1.25 * (1920 / 1366), 4);
+  });
+});
+
 describe('camera framing on compact layouts', () => {
   const cases = Object.keys(MEASURED_HUD).flatMap((name) => SPREADS.map(
     ([label, players]) => [name, label, players] as [string, string, Cell[]]
@@ -207,13 +225,16 @@ describe('camera framing on compact layouts', () => {
   });
 
   it('puts every inset band over the HUD it stands for at 80-125% HUD', () => {
-    // [view, HUD %, band bottom (strip, controls or top cards), bottom cards' top or null].
+    // [view, HUD %, band bottom (strip, controls or top cards), bottom band's
+    // top (short: cards; phone: the one-line strip) or null]. Worst case of
+    // two and three players, measured in Chromium (k2work/meas).
     const measured: [[number, number], number, number, number | null][] = [
-      [[390, 844], 80, 162, null], [[390, 844], 100, 183, null], [[390, 844], 125, 218, null],
-      [[360, 780], 100, 183, null],
-      [[844, 390], 80, 76, 326], [[844, 390], 100, 76, 309], [[844, 390], 125, 83, 290],
-      [[1366, 768], 100, 153, null], [[1366, 768], 125, 183, null],
-      [[1024, 768], 100, 153, null], [[1024, 768], 125, 183, null], [[1100, 700], 100, 153, null],
+      [[390, 844], 80, 162, 801], [[390, 844], 100, 183, 789], [[390, 844], 125, 266, 777],
+      [[360, 780], 80, 162, 737], [[360, 780], 100, 183, 725], [[360, 780], 125, 266, 713],
+      [[844, 390], 80, 76, 317], [[844, 390], 100, 76, 298], [[844, 390], 125, 86, 276],
+      [[768, 1024], 80, 148, null], [[768, 1024], 100, 164, null], [[768, 1024], 125, 197, null],
+      [[1366, 768], 80, 148, null], [[1366, 768], 100, 164, null], [[1366, 768], 125, 197, null],
+      [[1920, 1080], 80, 177, null], [[1920, 1080], 100, 220, null], [[1920, 1080], 125, 276, null],
     ];
     measured.forEach(([[width, height], hud, topBandPx, cardsTopPx]) => {
       const insets = hudInsets(hud, width, height);

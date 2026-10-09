@@ -98,6 +98,7 @@ export function regroupFallenPlayers(state: GameEngineState): GameEngineState {
       y: cell.y,
       alive: true,
       deathReason: undefined,
+      deathCause: undefined,
       survivalGraceMs: REGROUP_GRACE_MS,
     };
   });

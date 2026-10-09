@@ -93,6 +93,7 @@ function dropPressureBlock(state: GameEngineState, { x, y }: Point): GameEngineS
       ...next,
       alive: false,
       deathReason: `${next.name} was crushed by a pressure block.`,
+      deathCause: { kind: 'pressure' as const },
     };
   });
 

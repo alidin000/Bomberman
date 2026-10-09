@@ -625,7 +625,8 @@ export function explodeBombs(
           if (!invincible) {
             players[index] = applyCharacterSurvival(
               p,
-              formatBombDeathReason(p, owner, bomb)
+              formatBombDeathReason(p, owner, bomb),
+              { kind: 'blast', byPlayerId: owner?.id, bombKind: bomb.kind }
             );
           }
         }
@@ -765,7 +766,13 @@ export function burnInLingeringFlames(state: GameEngineState): GameEngineState {
     } else if (owner) {
       reason = `${player.name} walked into ${owner}'s lingering flame.`;
     }
-    return applyCharacterSurvival(player, reason);
+    return applyCharacterSurvival(player, reason, {
+      kind: 'flame',
+      byPlayerId: state.players.some((other) => other.id === flame.ownerId)
+        ? flame.ownerId
+        : undefined,
+      bombKind: flame.kind,
+    });
   });
 
   const monsters = state.monsters.filter((monster) => {

@@ -704,7 +704,8 @@ function damagePlayerAtTarget(
         player,
         sourceAbility
           ? `${player.name} was hit by ${sourceName}'s ${sourceAbility}.`
-          : `${player.name} was caught by ${sourceName}.`
+          : `${player.name} was caught by ${sourceName}.`,
+        { kind: 'enemy', sourceName, sourceAbility }
       )
       : player;
   });
@@ -1026,7 +1027,11 @@ export function checkMonsterCollisions(state: GameEngineState): PlayerState[] {
 
     const hit = state.monsters.find((monster) => positionsTouch(monster, player));
     return hit
-      ? applyCharacterSurvival(player, `${player.name} was caught by ${hit.name}.`)
+      ? applyCharacterSurvival(
+        player,
+        `${player.name} was caught by ${hit.name}.`,
+        { kind: 'enemy', sourceName: hit.name }
+      )
       : player;
   });
 }

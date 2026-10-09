@@ -367,59 +367,6 @@ export const PlayerKits = styled.ul({
   },
 });
 
-export const CountdownOverlay = styled.div({
-  position: 'absolute',
-  inset: 0,
-  zIndex: 14,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  pointerEvents: 'none',
-  color: 'var(--anime-paper-light)',
-  textShadow: '4px 4px 0 var(--anime-ink)',
-  '& strong': {
-    minWidth: 134,
-    minHeight: 134,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 2,
-    background: 'var(--anime-vermilion)',
-    border: '3px solid var(--anime-ink)',
-    boxShadow: '8px 8px 0 var(--anime-mustard)',
-    fontSize: '4.1rem',
-    fontWeight: 900,
-  },
-});
-
-// A static plate: a CSS pop animation here re-ran style recalc on every
-// frame of the beat in the production A/B (about 30 extra recalcs per round
-// start), so "GO!" just appears for its 700 ms and goes.
-export const GoOverlay = styled.div({
-  position: 'absolute',
-  inset: 0,
-  zIndex: 14,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  pointerEvents: 'none',
-  color: 'var(--anime-ink)',
-  '& strong': {
-    minWidth: 180,
-    minHeight: 134,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '0 24px',
-    borderRadius: 2,
-    background: 'var(--anime-mustard)',
-    border: '3px solid var(--anime-ink)',
-    boxShadow: '8px 8px 0 var(--anime-teal)',
-    fontSize: '4.1rem',
-    fontWeight: 900,
-  },
-});
-
 export const FeedbackCaption = styled.div({
   position: 'absolute',
   left: '50%',
@@ -442,14 +389,21 @@ export const FeedbackCaption = styled.div({
     borderBottom: '2px solid var(--anime-mustard)',
     transform: 'skewX(-16deg)',
   },
-  fontSize: '0.82rem',
+  // Sentence case, 40 characters or fewer (useGameFeedback): one line on
+  // most screens, two at most on a 360 px phone.
+  width: 'max-content',
+  maxWidth: 'calc(100vw - 40px)',
+  fontSize: '0.9rem',
   fontWeight: 900,
   textAlign: 'center',
-  textTransform: 'uppercase',
   pointerEvents: 'none',
-  // Short landscape screens put the player cards on the bottom edge.
+  // Short landscape screens put the player cards on the bottom edge, and
+  // phones keep a one-line mission or sudden-death strip there.
   '@media (max-height: 560px) and (min-width: 641px)': {
     bottom: 104,
+  },
+  '@media (max-width: 640px)': {
+    bottom: 66,
   },
 });
 

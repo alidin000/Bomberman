@@ -4,6 +4,7 @@ import { getRoundTimeRemainingMs, isSuddenDeathMode } from '../../engine/suddenD
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
 import { GamePreferences } from './gamePreferences';
 import { playerSlotLabel } from './playerSlots';
+import { composeCaption, knockoutCaption, SUDDEN_DEATH_LEAD_MS } from './matchCopy';
 
 // Clock milestones worth a caption (and a screen-reader announcement, since
 // the clock itself is role="timer" and stays silent).
@@ -12,7 +13,7 @@ const CLOCK_MILESTONES_MS = [30000, 15000];
 type FeedbackSnapshot = {
   tick: number;
   phase: GameEngineState['phase'];
-  // Bomb id -> its cell, so a vanished bomb can be matched to its blast.
+  // Bomb id -> its cell.
   bombCells: Map<string, string>;
   explosionCells: Set<string>;
   monsterIds: Set<string>;
@@ -42,13 +43,6 @@ function snapshot(state: GameEngineState): FeedbackSnapshot {
     bossHealth: state.boss?.health ?? null,
     clockMs: isSuddenDeathMode(state) ? getRoundTimeRemainingMs(state) : null,
   };
-}
-
-// "P2 Sasuke": the slot first, because two players can pick the same shinobi.
-function playerTag(state: GameEngineState, playerId: string): string {
-  const slot = state.players.findIndex((player) => player.id === playerId);
-  if (slot < 0) return 'Shinobi';
-  return `${playerSlotLabel(slot)} ${state.players[slot].name}`;
 }
 
 function playTone(
@@ -119,12 +113,6 @@ export function useGameFeedback(
 
     const newExplosions = [...current.explosionCells]
       .filter((key) => !previous.explosionCells.has(key)).length;
-    // A blast always covers its bomb's own cell; a bomb crushed by sudden
-    // death leaves no flame there, so it is not counted.
-    const flameCells = new Set(state.explosions.map((cell) => `${cell.x},${cell.y}`));
-    const detonatedBombs = [...previous.bombCells]
-      .filter(([id, cell]) => !current.bombCells.has(id) && flameCells.has(cell)).length;
-    const blasts = Math.max(1, detonatedBombs);
     const newBombs = [...current.bombCells.keys()]
       .filter((id) => !previous.bombCells.has(id)).length;
     const defeated = [...previous.monsterIds].filter((id) => !current.monsterIds.has(id)).length;
@@ -143,24 +131,36 @@ export function useGameFeedback(
     const clockMilestone = clockRunning
       ? CLOCK_MILESTONES_MS.find((mark) => previousClock > mark && currentClock <= mark)
       : undefined;
+    const suddenDeathLeadIn = clockRunning
+      && previousClock > SUDDEN_DEATH_LEAD_MS && currentClock <= SUDDEN_DEATH_LEAD_MS;
     const suddenDeath = clockRunning && previousClock > 0 && currentClock <= 0;
     const volume = (preferences.effectsVolume / 100) * 0.08;
     const audio = preferences.soundEnabled ? audioRef.current : null;
 
+    // Captions in priority order, one line of 40 characters or fewer
+    // (composeCaption). Blasts get the shake and a tone, not a caption: they
+    // are on screen already, and "Blast detonates" filled every second.
     const captions: string[] = [];
     if (newExplosions > 0) {
-      captions.push(blasts > 1 ? `${blasts} blasts detonate` : 'Blast detonates');
       setImpact(Math.min(1, 0.3 + newExplosions * 0.12));
       if (audio) playTone(audio, 115, 0.24, volume * Math.min(1.8, 1 + newExplosions * 0.1), 'sawtooth');
     }
     if (playerDown) {
-      captions.push(`Shinobi down: ${fallen.map((id) => playerTag(state, id)).join(', ')}`);
+      // Who went down and whose blast it was, by slot: "P2 Itachi's blast
+      // caught P1 Gaara".
+      captions.push(knockoutCaption(state, fallen));
       setImpact(0.7);
       if (audio && newExplosions === 0) playTone(audio, 180, 0.42, volume, 'triangle');
     }
-    if (defeated > 0) {
-      captions.push(defeated > 1 ? `${defeated} enemies defeated` : 'Enemy defeated');
-      if (audio && newExplosions === 0) playTone(audio, 520, 0.16, volume * 0.75, 'square');
+    if (suddenDeath) {
+      captions.push('Sudden death · walls closing');
+      if (audio && newExplosions === 0) playTone(audio, 150, 0.5, volume, 'square');
+    } else if (suddenDeathLeadIn) {
+      captions.push(`Sudden death in ${SUDDEN_DEATH_LEAD_MS / 1000}`);
+      if (audio && newExplosions === 0) playTone(audio, 330, 0.16, volume * 0.7, 'square');
+    } else if (clockMilestone !== undefined) {
+      captions.push(`${clockMilestone / 1000} seconds left`);
+      if (audio && newExplosions === 0) playTone(audio, 440, 0.12, volume * 0.6, 'triangle');
     }
     if (bossHit) {
       captions.push('Boss hit');
@@ -179,18 +179,15 @@ export function useGameFeedback(
       }).join(', '));
       if (audio && newExplosions === 0) playTone(audio, 720, 0.14, volume * 0.65, 'sine');
     }
-    if (suddenDeath) {
-      captions.push('Sudden death: walls closing');
-      if (audio && newExplosions === 0) playTone(audio, 150, 0.5, volume, 'square');
-    } else if (clockMilestone !== undefined) {
-      captions.push(`${clockMilestone / 1000} seconds left`);
-      if (audio && newExplosions === 0) playTone(audio, 440, 0.12, volume * 0.6, 'triangle');
+    if (defeated > 0) {
+      captions.push(defeated > 1 ? `${defeated} enemies defeated` : 'Enemy defeated');
+      if (audio && newExplosions === 0) playTone(audio, 520, 0.16, volume * 0.75, 'square');
     }
-    if (newBombs > 0 && audio && captions.length === 0) {
+    if (newBombs > 0 && audio && captions.length === 0 && newExplosions === 0) {
       playTone(audio, 260, 0.08, volume * 0.45, 'triangle');
     }
     if (captions.length > 0) {
-      setCaption(captions.join('. '));
+      setCaption(composeCaption(captions));
       setEventId((currentId) => currentId + 1);
     }
   }, [preferences.effectsVolume, preferences.soundEnabled, state]);

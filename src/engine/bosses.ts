@@ -276,7 +276,11 @@ function damagePlayersInHazards(
     if (!hit) return player;
     // A spent survival passive's grace (applyCharacterSurvival) covers the
     // rest of this hazard's active window.
-    return applyCharacterSurvival(player, formatHazardDeathReason(player, hit));
+    return applyCharacterSurvival(player, formatHazardDeathReason(player, hit), {
+      kind: 'hazard',
+      sourceName: hit.sourceName,
+      sourceAbility: hit.sourceAbility || getHazardDeathLabel(hit.kind),
+    });
   });
   return { players: nextPlayers, hazards };
 }

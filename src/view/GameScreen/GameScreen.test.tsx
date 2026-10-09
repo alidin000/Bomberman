@@ -1,15 +1,16 @@
 import { vi } from 'vitest';
 import React from 'react';
 import {
-  fireEvent, render, screen, waitFor, within,
+  act, fireEvent, render, screen, waitFor, within,
 } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import theme from '../../theme/InstructionsTheme';
-import { GameScreen } from './GameScreen';
+import { GameScreen, RESULT_HOLD_MS } from './GameScreen';
 import { createInitialState } from '../../engine/initialState';
 import { parseMapRows } from '../../engine/mapLoader';
 import { defaultMap } from '../../constants/contants';
+import { hudInsets } from './scene/cameraFraming';
 
 const engineMocks = vi.hoisted(() => ({
   pause: vi.fn(),
@@ -53,6 +54,9 @@ function controlKey(table: HTMLElement, slot: string, column: string): string | 
 describe('GameScreen', () => {
   beforeEach(() => {
     localStorage.clear();
+    // jsdom's default window; one test sets a laptop size.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 768 });
     currentMockState = mockState;
     engineMocks.pause.mockClear();
     engineMocks.resume.mockClear();
@@ -353,14 +357,146 @@ describe('GameScreen', () => {
       ...mockState,
       roundStartTicksRemaining: 0,
       tick: mockState.tick + 1,
-      explosions: [{
-        x: 2, y: 1, ticksRemaining: 500, kind: 'standard',
-      }],
+      players: mockState.players.map((player, index) => (
+        index === 1 ? { ...player, alive: false } : player
+      )),
     };
     rerender(screenTree());
 
     expect(screen.getByRole('status')).toBe(liveRegion);
-    expect(liveRegion).toHaveTextContent('Blast detonates');
+    expect(liveRegion).toHaveTextContent('P2 Deidara is out');
+  });
+
+  it('holds on the deciding moment before the round result opens', () => {
+    vi.useFakeTimers();
+    try {
+      localStorage.setItem('shinobiControlsGuideSeen', 'true');
+      currentMockState = {
+        ...mockState,
+        totalRounds: 3,
+        phase: 'round_end',
+        paused: true,
+        roundWinners: ['player1'],
+        roundStartTicksRemaining: 0,
+      };
+      render(
+        <MemoryRouter initialEntries={['/game/2/3/map1']}>
+          <ThemeProvider theme={theme}>
+            <GameScreen />
+          </ThemeProvider>
+        </MemoryRouter>
+      );
+
+      // The frozen arena first, under a banner that names the winner by slot.
+      expect(screen.queryByRole('button', { name: 'Next Round' })).not.toBeInTheDocument();
+      expect(screen.getByText('P1 Deidara takes round 1', { selector: 'strong' })).toBeInTheDocument();
+      expect(screen.getAllByRole('status')[0]).toHaveTextContent('P1 Deidara takes round 1');
+
+      act(() => { vi.advanceTimersByTime(RESULT_HOLD_MS - 50); });
+      expect(screen.queryByRole('button', { name: 'Next Round' })).not.toBeInTheDocument();
+
+      act(() => { vi.advanceTimersByTime(50); });
+      expect(screen.getByRole('button', { name: 'Next Round' })).toBeInTheDocument();
+      expect(screen.queryByText('Next Trial')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows the score line under the countdown, slot first, and reads it once', () => {
+    localStorage.setItem('shinobiControlsGuideSeen', 'true');
+    currentMockState = {
+      ...mockState,
+      totalRounds: 3,
+      round: 2,
+      roundWinners: ['player2'],
+      roundStartTicksRemaining: 3000,
+    };
+    const screenTree = () => (
+      <MemoryRouter initialEntries={['/game/2/3/map1']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+    const { rerender } = render(screenTree());
+
+    expect(screen.getByText('Round 2 · P2 Deidara leads 1–0')).toBeInTheDocument();
+    expect(screen.getAllByRole('status')[0]).toHaveTextContent('Round 2 · P2 Deidara leads 1–0. 3');
+
+    currentMockState = { ...currentMockState, roundStartTicksRemaining: 2000 };
+    rerender(screenTree());
+    expect(screen.getAllByRole('status')[0]).toHaveTextContent(/^2$/);
+  });
+
+  it('moves the countdown off the middle of the arena: under the HUD band, or above it in the campaign', () => {
+    localStorage.setItem('shinobiControlsGuideSeen', 'true');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1366 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 768 });
+    const plateLayer = () => screen.getByLabelText('round countdown').parentElement as HTMLElement;
+    const versusBand = hudInsets(100, 1366, 768);
+
+    currentMockState = { ...mockState, roundStartTicksRemaining: 3000 };
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/game/2/1/map1']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+    // Versus players start at the corners of their box: the plate hangs
+    // from the bottom of the top HUD band, where the camera keeps them out.
+    expect(parseFloat(plateLayer().style.top)).toBeGreaterThanOrEqual(versusBand.top * 768);
+    expect(parseFloat(plateLayer().style.top)).toBeLessThan(768 * 0.3);
+    unmount();
+
+    // The campaign camera centres its lone player: the plate sits low.
+    const campaign = createInitialState({
+      mode: 'solo',
+      numPlayers: 1,
+      totalRounds: 1,
+      selectedMap: 'hiddenLeaf',
+      stageId: 'hiddenLeaf',
+      selectedCharacters: ['deidara'],
+      map: parseMapRows(defaultMap),
+    });
+    currentMockState = { ...campaign, roundStartTicksRemaining: 3000 };
+    render(
+      <MemoryRouter initialEntries={['/game/1/1/hiddenLeaf']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+    expect(plateLayer().style.top).toBe('');
+    expect(parseFloat(plateLayer().style.bottom)).toBeGreaterThanOrEqual(versusBand.bottom * 768);
+  });
+
+  it('keeps the full mission list in the pause menu for the one-line phone HUD', () => {
+    localStorage.setItem('shinobiControlsGuideSeen', 'true');
+    const campaign = createInitialState({
+      mode: 'solo',
+      numPlayers: 1,
+      totalRounds: 1,
+      selectedMap: 'hiddenLeaf',
+      stageId: 'hiddenLeaf',
+      selectedCharacters: ['deidara'],
+      map: parseMapRows(defaultMap),
+    });
+    currentMockState = { ...campaign, paused: true };
+    render(
+      <MemoryRouter initialEntries={['/game/1/1/hiddenLeaf']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+
+    const pause = screen.getByRole('dialog', { name: /Paused/ });
+    const list = within(pause).getByLabelText('mission objectives');
+    campaign.campaign!.objectives.forEach((objective) => {
+      expect(list).toHaveTextContent(objective.label);
+    });
   });
 
   it('shows GO for the first moments of play after the countdown, and announces both', () => {

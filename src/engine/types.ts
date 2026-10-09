@@ -56,6 +56,21 @@ export type HazardKind =
   | 'beastBomb'
   | 'chakraShockwave';
 
+// What took a player out, as data, so the view can name both sides by slot
+// (two players may be the same shinobi). Recorded next to `deathReason`
+// when the hit lands; it never feeds back into the simulation.
+export type DeathCauseKind = 'blast' | 'flame' | 'pressure' | 'enemy' | 'hazard' | 'ghost';
+
+export interface DeathCause {
+  kind: DeathCauseKind;
+  // The player whose bomb or lingering flame it was.
+  byPlayerId?: string;
+  bombKind?: BombKind;
+  // The enemy, boss or hazard source, and its attack.
+  sourceName?: string;
+  sourceAbility?: string;
+}
+
 export interface PlayerState {
   id: string;
   name: string;
@@ -63,6 +78,7 @@ export interface PlayerState {
   y: number;
   alive: boolean;
   deathReason?: string;
+  deathCause?: DeathCause;
   maxBombs: number;
   activeBombs: number;
   bombRange: number;

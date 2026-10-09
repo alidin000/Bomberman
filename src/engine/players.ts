@@ -4,7 +4,9 @@
 import {
   isBomb, isObstacle, isPower, Power,
 } from '../model/gameItem';
-import { Direction, GameEngineState, PlayerState } from './types';
+import {
+  DeathCause, Direction, GameEngineState, PlayerState,
+} from './types';
 import {
   GHOST_POWER_MS, INVINCIBILITY_POWER_MS, POWER_FLASH_MS, SURVIVAL_GRACE_MS,
 } from './constants';
@@ -56,7 +58,8 @@ function addPickupMessage(
 
 export function applyCharacterSurvival(
   player: PlayerState,
-  deathReason?: string
+  deathReason?: string,
+  deathCause?: DeathCause
 ): PlayerState {
   // A save covers the whole hit: the rest of that blast, its flames, or a
   // monster still in contact cannot undo it a moment later.
@@ -79,7 +82,11 @@ export function applyCharacterSurvival(
       survivalGraceMs: SURVIVAL_GRACE_MS,
     };
   }
-  return { ...player, alive: false, deathReason };
+  return deathCause
+    ? {
+      ...player, alive: false, deathReason, deathCause,
+    }
+    : { ...player, alive: false, deathReason };
 }
 
 function isGhostActive(state: GameEngineState, playerId: string): boolean {
@@ -591,6 +598,7 @@ export function tickPowerUps(state: GameEngineState, deltaMs: number): GameEngin
                   ...p,
                   alive: false,
                   deathReason: `${p.name} was sealed when Ghost faded inside a wall or cover.`,
+                  deathCause: { kind: 'ghost' as const },
                 }
                 : p
             ));

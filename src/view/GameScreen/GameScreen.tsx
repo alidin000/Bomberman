@@ -26,13 +26,14 @@ import {
   arrowKeySymbols,
   normalizeKeyBindings,
 } from '../../constants/props';
-import { RoundResultDialog } from './RoundResultDialog';
+import { RESULT_INPUT_LOCK_MS, RoundResultDialog } from './RoundResultDialog';
 import { ResultTone } from './RoundResultDialog.styles';
 import SettingsScreen from './SettingsScreen/SettingsScreen';
 import ModifyControlsDialog from './SettingsScreen/ModifyControlsDialog';
 import { MatchConfirmDialog, MatchConfirmKind } from './SettingsScreen/MatchConfirmDialog';
 import { GameScene3D } from './GameScene3D';
-import { GameHUD } from './GameHUD';
+import { GameHUD, PauseMissionDetails } from './GameHUD';
+import { MatchBeatOverlay } from './MatchBeatOverlay';
 import { useGameEngine } from '../../hooks/useGameEngine';
 import { useRenderState } from '../../hooks/useRenderState';
 import { GameConfig, GameEngineState, loadMapFromStorage } from '../../engine';
@@ -58,8 +59,6 @@ import {
   ControlTable,
   ControlSlot,
   PlayerKits,
-  CountdownOverlay,
-  GoOverlay,
   FeedbackCaption,
   CaptionLiveRegion,
 } from './GameScreen.styles';
@@ -73,6 +72,9 @@ import { loadCampaignDifficulty } from '../ConfigScreen/campaignDifficulty';
 import { isCpuSlot, normalizeControllers } from '../../ai/controllers';
 import { usePadGameSurface } from '../../input/MenuPad';
 import { PAD_START_EVENT } from '../../input/padNavigator';
+import {
+  isVersus, lastRoundWinnerSlot, matchWinnerSlot, roundOverBanner, roundStartLine,
+} from './matchCopy';
 
 const CONTROLS_GUIDE_SEEN_KEY = 'shinobiControlsGuideSeen';
 
@@ -166,6 +168,10 @@ const ControlsTable = ({ rows, label }: { rows: ControlsRow[]; label: string }) 
 // it pauses with the game and needs no timer or extra render: GameScreen
 // already renders on every engine publish.
 const GO_BEAT_TICKS = 14;
+
+// The arena holds on the deciding moment (the engine already froze it) this
+// long before the result dialog covers it.
+export const RESULT_HOLD_MS = 1200;
 
 function useRoundStartBeat(state: GameEngineState | null): { countdown: string; go: boolean } {
   const beatRef = useRef<{ armed: boolean; liveTick: number | null }>({ armed: false, liveTick: null });
@@ -376,7 +382,19 @@ export const GameScreen = () => {
   }, [campaignSecretsKey, campaignStageId, gameMode, leadCharacterId]);
 
   const isPaused = state?.paused ?? false;
+  // The round is over (and the engine paused) from the deciding tick; the
+  // result dialog itself opens RESULT_HOLD_MS later.
   const dialogOpen = state?.phase === 'round_end' || state?.phase === 'game_over';
+  const roundOverKey = state && dialogOpen
+    ? `${state.phase}:${state.round}:${state.roundWinners.length}:${state.tick}`
+    : '';
+  const [heldRoundOverKey, setHeldRoundOverKey] = useState('');
+  useEffect(() => {
+    if (!roundOverKey) return undefined;
+    const timer = window.setTimeout(() => setHeldRoundOverKey(roundOverKey), RESULT_HOLD_MS);
+    return () => window.clearTimeout(timer);
+  }, [roundOverKey]);
+  const resultVisible = dialogOpen && heldRoundOverKey === roundOverKey;
   const resultTone = useMemo<ResultTone>(() => {
     if (!state || state.phase !== 'game_over' || state.config.mode !== 'solo') {
       return 'neutral';
@@ -571,26 +589,50 @@ export const GameScreen = () => {
     || pendingConfirm !== null;
   usePadGameSurface(padMenuActive);
 
-  // Start on the round result continues, like its focused main button.
+  // Start on the round result continues, like its focused main button. It
+  // waits for the dialog itself (not the hold before it) and, like a click,
+  // ignores the first RESULT_INPUT_LOCK_MS so a mashed button skips nothing.
   const isGameOver = state?.phase === 'game_over';
   useEffect(() => {
     if (!dialogOpen) return undefined;
+    const shownAt = resultVisible ? Date.now() : null;
     const handlePadStart = (event: Event) => {
       event.preventDefault();
+      if (shownAt === null || Date.now() - shownAt < RESULT_INPUT_LOCK_MS) return;
       if (isGameOver) restart();
       else dismissDialog();
     };
     window.addEventListener(PAD_START_EVENT, handlePadStart);
     return () => window.removeEventListener(PAD_START_EVENT, handlePadStart);
-  }, [dialogOpen, dismissDialog, isGameOver, restart]);
+  }, [dialogOpen, resultVisible, dismissDialog, isGameOver, restart]);
 
-  // The countdown overlay is visual only; the live region reads "3, 2, 1,
-  // Go!" (nothing else happens while the arena is frozen) and then captions.
+  // The countdown overlay is visual only; the live region reads the round
+  // line with the first number, then "2, 1, Go!" (nothing else happens while
+  // the arena is frozen), then captions.
   const countdownVisible = !!roundStart.countdown && !isPaused && !dialogOpen;
   const goVisible = roundStart.go && !isPaused && !dialogOpen;
+  const roundLine = countdownVisible && state ? roundStartLine(state) : '';
+  const roundOver = useMemo(() => {
+    if (!state || !dialogOpen || resultVisible) return null;
+    let winner: number | null = null;
+    if (isVersus(state)) {
+      winner = state.phase === 'game_over' ? matchWinnerSlot(state) : lastRoundWinnerSlot(state);
+    }
+    return {
+      text: roundOverBanner(state),
+      accent: winner !== null ? playerSlotColor(winner) : 'var(--anime-mustard)',
+    };
+  }, [dialogOpen, resultVisible, state]);
   let liveAnnouncement = feedback.caption;
-  if (countdownVisible) liveAnnouncement = roundStart.countdown;
-  else if (goVisible) liveAnnouncement = 'Go!';
+  if (countdownVisible) {
+    liveAnnouncement = roundStart.countdown === '3' && roundLine
+      ? `${roundLine}. 3`
+      : roundStart.countdown;
+  } else if (goVisible) liveAnnouncement = 'Go!';
+  else if (roundOver) {
+    // The knockout that decided it, then who took the round.
+    liveAnnouncement = feedback.caption ? `${feedback.caption}. ${roundOver.text}` : roundOver.text;
+  }
 
   if (!state || !renderState) {
     return (
@@ -629,16 +671,14 @@ export const GameScreen = () => {
           {feedback.caption}
         </FeedbackCaption>
       )}
-      {countdownVisible && (
-        <CountdownOverlay aria-label="round countdown">
-          <strong>{roundStart.countdown}</strong>
-        </CountdownOverlay>
-      )}
-      {goVisible && (
-        <GoOverlay aria-hidden="true">
-          <strong>GO!</strong>
-        </GoOverlay>
-      )}
+      <MatchBeatOverlay
+        countdown={countdownVisible ? roundStart.countdown : ''}
+        go={goVisible}
+        line={roundLine}
+        roundOver={roundOver}
+        hudScale={preferences.hudScale}
+        campaign={!!state.campaign}
+      />
       {showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
         <ControlsGuide aria-label="controls guide" data-pad-layer="">
           <ControlsGuideHeader>
@@ -700,6 +740,7 @@ export const GameScreen = () => {
                   Quit Game
                 </PauseMenuButton>
               </PauseMenuActions>
+              <PauseMissionDetails state={state} />
               <ControlsTable rows={controlRows} label="controls" />
               <PlayerKits aria-label="shinobi kits">
                 {playerKits.map((kit) => (
@@ -727,7 +768,7 @@ export const GameScreen = () => {
         onConfirm={handleConfirm}
       />
       <MemoRoundResultDialog
-        open={dialogOpen}
+        open={resultVisible}
         onClose={handleCloseDialog}
         onRestart={restart}
         resultMessage={state.resultMessage}

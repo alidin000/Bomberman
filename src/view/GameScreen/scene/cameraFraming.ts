@@ -71,32 +71,71 @@ export function hudLayout(width: number, height: number): HudLayout {
   return 'row';
 }
 
+/**
+ * The HUD's CSS zoom: the HUD Size setting times a viewport factor, so the
+ * HUD that reads at 100% on a 1366x768 laptop grows on bigger screens
+ * instead of shrinking to a corner (1.41x at 1920x1080, capped at 1.5x).
+ * The factor follows the tighter of width and height, so a wide but short
+ * window does not give the HUD more of its height.
+ */
+export const HUD_REFERENCE_VIEW = { width: 1366, height: 768 };
+export const MAX_VIEWPORT_HUD_ZOOM = 1.5;
+
+export function hudZoom(hudScale: number, width: number, height: number): number {
+  const fit = Math.min(width / HUD_REFERENCE_VIEW.width, height / HUD_REFERENCE_VIEW.height);
+  return (hudScale / 100) * Math.min(MAX_VIEWPORT_HUD_ZOOM, Math.max(1, fit));
+}
+
 /** Screen fractions the players must stay out of: the HUD bands. */
 export type ScreenInsets = { top: number; bottom: number; side: number };
 
 /**
- * The HUD bands as screen fractions, from the rectangles measured in the
- * browser at 100% HUD (the HUD zoom scales the zoomed parts):
- * - row: cards end at 153 px at 768-1920 px wide; 162 keeps a little air.
- * - phone: mini cards from max(78z, 84) px (below the unzoomed top
- *   controls), 99z tall: 84-183 px at 360 and 390 px wide.
- * - short: strip (12-66z px) and controls (18-76 px) on top; cards 12z from
- *   the bottom, 69z tall: 309-378 px on an 844x390 screen.
+ * The HUD bands as screen fractions, from the rectangles measured in
+ * Chromium at 80, 100 and 125% HUD (z = hudZoom, which also carries the
+ * viewport factor). Card heights are in HUD px, so they scale with z:
+ * - row: cards from max(78z, 84) px (below the unzoomed top controls), 80z
+ *   tall with win pips: 84-164 px at 1366x768, 110-220 px at 1920x1080.
+ * - phone: mini cards from the same top, 99z tall; a CPU badge or the
+ *   numbers wrap at a HUD size over 100%, up to 134z with three players.
+ *   The bottom edge keeps a 43z one-line strip (the campaign objective, or
+ *   the sudden-death banner) 12z above the edge.
+ * - short: match bar (12z + 57z) and controls (18-76 px) on top; cards 80z
+ *   tall, 12z from the bottom: 298-378 px on an 844x390 screen.
  */
+const ROW_CARD_PX = 80;
+const PHONE_CARD_PX = 99;
+const PHONE_WRAPPED_CARD_PX = 134;
+const PHONE_LINE_PX = 43;
+const SHORT_STRIP_PX = 69;
+const EDGE_PX = 12;
+const AIR_PX = 8;
+
+function belowControls(zoom: number): number {
+  return Math.max(78 * zoom, 84);
+}
+
 export function hudInsets(hudScale: number, width: number, height: number): ScreenInsets {
-  const zoom = hudScale / 100;
+  const zoom = hudZoom(hudScale, width, height);
   const h = Math.max(height, 1);
   const layout = hudLayout(width, height);
   if (layout === 'phone') {
-    const cardsBottomPx = Math.max(78 * zoom, 84) + 99 * zoom + 9;
-    return { top: Math.min(0.45, cardsBottomPx / h), bottom: 0.03, side: 0.03 };
+    // Cards wrap only above 100%; interpolate to the measured 125% worst case.
+    const cardPx = PHONE_CARD_PX
+      + Math.max(0, Math.min(1, (zoom - 1) / 0.25)) * (PHONE_WRAPPED_CARD_PX - PHONE_CARD_PX);
+    const cardsBottomPx = belowControls(zoom) + cardPx * zoom + AIR_PX;
+    const linePx = (EDGE_PX + PHONE_LINE_PX) * zoom + AIR_PX;
+    return {
+      top: Math.min(0.45, cardsBottomPx / h),
+      bottom: Math.min(0.2, linePx / h),
+      side: 0.03,
+    };
   }
   if (layout === 'short') {
-    const topPx = Math.max(66 * zoom, 76) + 8;
-    const cardsTopPx = 81 * zoom + 8;
+    const topPx = Math.max(SHORT_STRIP_PX * zoom, 76) + AIR_PX;
+    const cardsTopPx = (EDGE_PX + ROW_CARD_PX) * zoom + AIR_PX;
     return { top: Math.min(0.3, topPx / h), bottom: Math.min(0.3, cardsTopPx / h), side: 0.03 };
   }
-  const cardsBottomPx = 162 * zoom;
+  const cardsBottomPx = belowControls(zoom) + ROW_CARD_PX * zoom + AIR_PX;
   return {
     top: Math.min(0.45, Math.max(0.18, cardsBottomPx / h)),
     bottom: 0.03,

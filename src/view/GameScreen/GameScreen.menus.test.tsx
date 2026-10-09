@@ -9,6 +9,8 @@ import { createInitialState } from '../../engine/initialState';
 import { parseMapRows } from '../../engine/mapLoader';
 import { defaultMap } from '../../constants/contants';
 import { GameEngineState } from '../../engine/types';
+import { RESULT_HOLD_MS } from './GameScreen';
+import { RESULT_INPUT_LOCK_MS } from './RoundResultDialog';
 
 // Menus on the game screen, driven the way players drive them: a pad, a
 // mouse, a held Escape. The whole app is mounted so whatever listens for
@@ -175,13 +177,29 @@ describe('game screen menus', () => {
     delete (navigator as { getGamepads?: unknown }).getGamepads;
   });
 
+  // The result opens RESULT_HOLD_MS after the round ends and then ignores
+  // input for RESULT_INPUT_LOCK_MS, so these also fake timeouts and the clock.
+  function showResult() {
+    vi.useFakeTimers({
+      toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'setTimeout', 'clearTimeout', 'Date'],
+    });
+    renderGame();
+    connectPad();
+    tap(START);
+    wait(RESULT_HOLD_MS);
+  }
+
   it('lets a pad continue from the round result with A, and with Start', () => {
     currentState = {
       ...baseState, phase: 'round_end', paused: true, roundWinners: [baseState.players[0].id],
     };
-    renderGame();
-    expect(screen.getByRole('button', { name: 'Next Trial' })).toHaveFocus();
-    connectPad();
+    showResult();
+    expect(screen.getByRole('button', { name: 'Next Round' })).toHaveFocus();
+    // Neither the hold nor a mash in the first moments of the dialog skips it.
+    tap(A);
+    tap(START);
+    expect(engineMocks.dismissDialog).not.toHaveBeenCalled();
+    wait(RESULT_INPUT_LOCK_MS);
 
     tap(A);
     expect(engineMocks.dismissDialog).toHaveBeenCalledTimes(1);
@@ -193,8 +211,10 @@ describe('game screen menus', () => {
 
   it('rematches with Start on the final result', () => {
     currentState = { ...baseState, phase: 'game_over', paused: true };
-    renderGame();
-    connectPad();
+    showResult();
+    tap(START);
+    expect(engineMocks.restart).not.toHaveBeenCalled();
+    wait(RESULT_INPUT_LOCK_MS);
 
     tap(START);
 

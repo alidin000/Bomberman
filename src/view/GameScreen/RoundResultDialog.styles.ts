@@ -13,9 +13,14 @@ export const RESULT_TONE_ACCENTS: Record<ResultTone, string> = {
   neutral: '#d4a33f',
 };
 
-export const StyledResultDialog = styled(Dialog)({
+// Between rounds the backdrop stays light, so the frozen arena (and the
+// blast that decided the round) shows behind the tally. No blur: a
+// backdrop-filter over the canvas re-blurs the WebGL frame every frame.
+export const StyledResultDialog = styled(Dialog, {
+  shouldForwardProp: (prop) => prop !== 'betweenRounds',
+})<{ betweenRounds?: boolean }>(({ betweenRounds }) => ({
   '& .MuiBackdrop-root': {
-    backgroundColor: 'rgba(33, 29, 26, 0.82)',
+    backgroundColor: betweenRounds ? 'rgba(33, 29, 26, 0.45)' : 'rgba(33, 29, 26, 0.78)',
   },
   '& .MuiDialog-paper': {
     width: '480px',
@@ -53,7 +58,7 @@ export const StyledResultDialog = styled(Dialog)({
     borderColor: 'var(--anime-ink)',
     background: 'rgba(212,163,63,0.18)',
   },
-});
+}));
 
 export const ResultBanner = styled.h2<{ accent: string; textColor?: string }>`
   width: fit-content;
@@ -91,7 +96,7 @@ export const ResultBreakdown = styled.div`
   h3 {
     margin: 0 0 8px;
     color: var(--anime-teal);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 900;
     letter-spacing: 0;
     text-transform: uppercase;
@@ -100,7 +105,7 @@ export const ResultBreakdown = styled.div`
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.76rem;
+    font-size: 0.82rem;
   }
 
   th, td {
@@ -112,7 +117,7 @@ export const ResultBreakdown = styled.div`
 
   th {
     color: rgba(33, 29, 26, 0.82);
-    font-size: 0.64rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
   }
 
@@ -121,12 +126,31 @@ export const ResultBreakdown = styled.div`
     font-weight: 700;
   }
 
-  /* Phones: the death summary is already in the message above. */
-  @media (max-width: 480px) {
-    th:nth-of-type(4), td:nth-of-type(4) {
-      display: none;
-    }
+  td small {
+    display: block;
+    margin-top: 2px;
+    color: rgba(33, 29, 26, 0.82);
+    font-size: 0.75rem;
+    font-weight: 800;
   }
+`;
+
+export const ResultPips = styled.span`
+  display: inline-flex;
+  gap: 4px;
+  padding-top: 2px;
+`;
+
+// Filled per round won: shape and fill, not colour, carry the score.
+export const ResultPip = styled('span', {
+  shouldForwardProp: (prop) => prop !== 'filled',
+})<{ filled: boolean }>`
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--anime-ink);
+  background: ${(props) => (props.filled ? 'var(--anime-ink)' : 'var(--anime-paper-light)')};
 `;
 
 // Slot colour down the left edge; the winner's row is bold on mustard.
@@ -157,7 +181,7 @@ export const ResultIntel = styled.div`
     padding: 7px;
     color: rgba(33, 29, 26, 0.82);
     background: var(--anime-paper);
-    font-size: 0.62rem;
+    font-size: 0.75rem;
     font-weight: 800;
     text-align: center;
     text-transform: uppercase;
