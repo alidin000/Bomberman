@@ -13,70 +13,74 @@ export const StyledDialog = styled(Dialog)({
   '& .MuiBackdrop-root': {
     backgroundColor: 'rgba(33, 29, 26, 0.78)',
   },
+  // The house dialog frame (shared with Settings): paper, ink keyline and a
+  // hard teal offset. The footer sits below the scrolling content, never on it.
   '& .MuiDialog-paper': {
     width: '980px',
     maxWidth: 'calc(100vw - 16px)',
     minHeight: 'min(760px, calc(100dvh - 16px))',
     maxHeight: 'calc(100dvh - 16px)',
     margin: 8,
-    padding: '18px 20px 0',
+    padding: '16px 20px 0',
     overflow: 'hidden',
-    borderRadius: 8,
+    borderRadius: 'var(--radius)',
     clipPath: panelCut,
     color: 'var(--anime-ink)',
-    backgroundColor: '#f5eee1',
+    backgroundColor: 'var(--anime-paper-light)',
     backgroundImage: 'none',
-    border: '1px solid rgba(255,255,255,0.45)',
-    boxShadow: '0 30px 90px rgba(17,31,36,0.3)',
+    border: '3px solid var(--anime-ink)',
+    boxShadow: 'var(--shadow-frame)',
   },
   '& .MuiDialogTitle-root': {
     position: 'relative',
     width: 'fit-content',
-    minWidth: 320,
-    margin: '0 auto 12px',
-    padding: '8px 38px 9px',
+    minWidth: 280,
+    margin: '0 auto 8px',
+    padding: '6px 34px 7px',
     clipPath: bannerCut,
     color: 'var(--anime-paper-light)',
-    background: 'var(--anime-teal)',
+    background: 'var(--anime-ink)',
+    fontSize: '1.1rem',
     fontWeight: 900,
     letterSpacing: 0,
     textAlign: 'center',
     textTransform: 'uppercase',
-    borderRadius: 8,
-    boxShadow: '0 10px 24px rgba(17,31,36,0.16)',
+    // Focused by script when a step opens, so screen readers announce it.
+    // It is not a control, so it shows no focus ring.
+    '&:focus': {
+      outline: 'none',
+    },
   },
   '& .MuiDialogContent-root': {
-    padding: '0 4px 18px',
+    padding: '0 4px 14px',
     overflowX: 'hidden',
     borderTop: 0,
-    // Focus moves scroll items into view; keep them above the sticky footer.
-    scrollPaddingBottom: 110,
+    scrollPaddingBottom: 14,
   },
   '& .MuiStepper-root': {
-    margin: '0 auto 14px',
-    padding: '9px 12px',
-    maxWidth: 760,
+    margin: '0 auto 10px',
+    padding: '2px 12px',
+    maxWidth: 640,
     clipPath: chipCut,
-    background: 'rgba(255,255,255,0.42)',
+    background: 'transparent',
     border: 0,
-    borderRadius: 8,
   },
   '& .MuiStepLabel-label': {
-    color: 'rgba(33,29,26,0.8)',
+    color: 'var(--ink-3)',
     fontWeight: 900,
     letterSpacing: 0,
     textTransform: 'uppercase',
-    fontSize: '0.72rem',
+    fontSize: '0.75rem',
   },
   '& .MuiStepLabel-label.Mui-active, & .MuiStepLabel-label.Mui-completed': {
     color: 'var(--anime-ink)',
   },
   '& .MuiStepIcon-root': {
-    color: 'rgba(33,29,26,0.62)',
+    color: 'var(--ink-2)',
   },
   '& .MuiStepLabel-labelContainer .MuiTypography-caption': {
     display: 'block',
-    color: 'rgba(33,29,26,0.72)',
+    color: 'var(--ink-2)',
     fontSize: '0.66rem',
     lineHeight: 1.1,
   },
@@ -85,30 +89,33 @@ export const StyledDialog = styled(Dialog)({
     fontWeight: 900,
   },
   '& .MuiStepIcon-root.Mui-active, & .MuiStepIcon-root.Mui-completed': {
-    color: 'var(--anime-vermilion)',
+    color: 'var(--action)',
   },
   '& .MuiTypography-colorTextSecondary': {
-    color: 'rgba(33,29,26,0.66)',
+    color: 'var(--ink-2)',
   },
   '& .MuiButton-root': {
-    borderRadius: 8,
+    borderRadius: 'var(--radius)',
     clipPath: chipCut,
     fontWeight: 900,
     letterSpacing: 0,
     textTransform: 'uppercase',
   },
-  '& .MuiButton-contained': {
-    background: 'var(--anime-vermilion)',
+  // The one primary call-to-action look: teal, ink keyline, hard shadow.
+  '& .MuiButton-contained, & .MuiButton-contained.Mui-focusVisible': {
+    background: 'var(--action)',
     color: 'var(--anime-paper-light)',
-    border: 0,
-    boxShadow: '0 8px 18px rgba(33,29,26,0.16)',
+    border: '2px solid var(--anime-ink)',
+    boxShadow: 'var(--shadow-1)',
   },
   '& .MuiButton-contained:hover': {
-    background: 'var(--anime-vermilion-deep)',
+    background: 'var(--action-deep)',
+    boxShadow: 'var(--shadow-1)',
   },
   '& .MuiButton-contained.Mui-disabled': {
-    color: 'rgba(33,29,26,0.6)',
+    color: 'var(--ink-2)',
     background: 'rgba(33,29,26,0.12)',
+    borderColor: 'var(--ink-1)',
     boxShadow: 'none',
   },
   '& .MuiButton-text': {
@@ -119,16 +126,20 @@ export const StyledDialog = styled(Dialog)({
     background: 'rgba(33,29,26,0.08)',
   },
   '& .MuiButtonBase-root.Mui-focusVisible': {
-    outline: '3px solid var(--anime-ink)',
+    outline: 'var(--focus-ring)',
     outlineOffset: 2,
+  },
+  // The teal ring is the focus mark; MUI's pulsing focus ripple would be a second one.
+  '& .MuiTouchRipple-ripplePulsate': {
+    display: 'none',
   },
   '& .MuiButton-outlined': {
     color: 'var(--anime-ink)',
-    borderColor: 'rgba(33,29,26,0.32)',
+    borderColor: 'var(--anime-ink)',
   },
   '& .MuiButton-outlined:hover': {
-    borderColor: 'var(--anime-teal)',
-    background: 'rgba(212,163,63,0.2)',
+    borderColor: 'var(--action)',
+    background: 'rgba(53,111,107,0.1)',
   },
   '& .MuiStepButton-root': {
     padding: '4px 8px',
@@ -137,17 +148,17 @@ export const StyledDialog = styled(Dialog)({
   '& .MuiToggleButton-root': {
     minWidth: 58,
     color: 'var(--anime-ink)',
-    borderColor: 'rgba(33,29,26,0.22)',
+    borderColor: 'var(--ink-1)',
     background: 'rgba(255,255,255,0.42)',
     fontWeight: 900,
     clipPath: chipCut,
   },
   '& .MuiToggleButton-root.Mui-selected': {
     color: 'var(--anime-paper-light)',
-    background: 'var(--anime-teal)',
+    background: 'var(--action)',
   },
   '& .MuiToggleButton-root.Mui-selected:hover': {
-    background: '#2b5c58',
+    background: 'var(--action-deep)',
   },
   '& .MuiToggleButton-root.Mui-disabled': {
     color: 'rgba(33,29,26,0.6)',
@@ -158,73 +169,126 @@ export const StyledDialog = styled(Dialog)({
   },
   '@media (max-width: 680px)': {
     '& .MuiDialog-paper': {
-      padding: '14px 12px 0',
+      padding: '12px 12px 0',
     },
     // Keep the footer actions on one row on phones.
     '& .MuiButton-sizeLarge': {
       minWidth: 0,
-      padding: '8px 12px',
-      fontSize: '0.86rem',
+      padding: '8px 10px',
+      fontSize: '0.8rem',
     },
     '& .MuiDialogTitle-root': {
       minWidth: 0,
-      width: '100%',
-      fontSize: '1rem',
+      fontSize: '0.95rem',
+    },
+  },
+  // Narrow phones: drop the play icon so the three footer actions share one row.
+  '@media (max-width: 420px)': {
+    '& .MuiButton-startIcon': {
+      display: 'none',
+    },
+  },
+  // Landscape phones: a small title and a slim footer leave room for the setup.
+  '@media (max-height: 560px)': {
+    '& .MuiDialog-paper': {
+      padding: '6px 14px 0',
+    },
+    '& .MuiDialogTitle-root': {
+      margin: '0 auto 2px',
+      padding: '2px 26px 3px',
+      fontSize: '0.85rem',
+      minWidth: 0,
+    },
+    '& .MuiStepper-root': {
+      marginBottom: 2,
+      padding: '0 8px',
+    },
+    '& .MuiStepLabel-labelContainer .MuiTypography-caption': {
+      display: 'none',
+    },
+    '& .MuiButton-sizeLarge': {
+      minWidth: 0,
+      padding: '4px 14px',
+      fontSize: '0.84rem',
     },
   },
 });
 
 export const StepContent = styled.div`
-  margin-top: 14px;
+  margin-top: 12px;
   margin-bottom: 0;
-  padding-bottom: 98px;
+
+  @media (max-height: 560px) {
+    margin-top: 6px;
+  }
 `;
 
-export const CenteredButtonContainer = styled.div`
-  position: sticky;
-  bottom: 0;
-  z-index: 4;
+/** The deck footer: Back/Main Menu, Next and the one primary action. */
+export const DeckFooter = styled.div`
+  flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  width: 100%;
-  margin-top: 22px;
-  padding: 16px 0 18px;
-  background: linear-gradient(180deg, transparent, #f5eee1 42%);
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 0 -20px;
+  padding: 10px 20px 12px;
+  background: var(--anime-paper-light);
+  border-top: 2px solid var(--anime-ink);
 
   @media (max-width: 680px) {
-    gap: 8px;
+    margin: 0 -12px;
+    padding: 8px 12px 10px;
+  }
+
+  @media (max-height: 560px) {
+    margin: 0 -14px;
+    padding: 5px 14px 6px;
   }
 `;
 
-/** Row of pre-match options; hidden while it has no options. */
-export const SetupOptions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  margin: 14px 0 4px;
-
-  &:empty {
-    display: none;
-  }
-`;
-
-export const SetupOption = styled.div`
-  display: flex;
-  flex-wrap: wrap;
+/**
+ * Back on the left, the primary action in the centre (straight below the
+ * setup, so the arrow keys reach it), and Next on the right.
+ */
+export const FooterActions = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  padding: 8px 14px;
-  background: rgba(255, 255, 255, 0.38);
-  border: 1px solid rgba(33, 29, 26, 0.16);
-  border-radius: 8px;
+  width: 100%;
 
-  & .MuiTypography-h6 {
-    font-size: 1rem;
-    font-weight: 900;
-    text-transform: uppercase;
+  & > :first-of-type {
+    justify-self: end;
+  }
+
+  & > :last-of-type {
+    justify-self: start;
+  }
+
+  & .MuiButton-root {
+    white-space: nowrap;
+  }
+
+  @media (max-width: 680px) {
+    gap: 6px;
+  }
+
+  /* Phones: the three actions sit side by side at their own widths. */
+  @media (max-width: 560px) {
+    display: flex;
+    justify-content: center;
+  }
+`;
+
+/** One line on how to drive the menu from the keyboard. */
+export const FooterHint = styled.p`
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 0.75rem;
+  font-weight: 700;
+
+  @media (max-width: 560px), (max-height: 560px) {
+    display: none;
   }
 `;
 
@@ -236,7 +300,7 @@ export const ModeToggleText = styled.span`
   line-height: 1.15;
 
   & small {
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     font-weight: 700;
     text-transform: none;
     opacity: 0.9;
@@ -262,15 +326,20 @@ export const PlayerControlsRow = styled.div<PlayerControlsRowProps>`
   grid-template-columns: minmax(120px, 0.28fr) minmax(160px, 0.34fr) minmax(280px, 1fr);
   align-items: center;
   gap: 16px;
-  margin-bottom: ${(props) => (props.numOfPlayers === '2' ? '28px' : '16px')};
-  margin-top: ${(props) => (props.numOfPlayers === '2' ? '22px' : '14px')};
-  padding: 14px;
+  margin-bottom: ${(props) => (props.numOfPlayers === '2' ? '16px' : '10px')};
+  margin-top: ${(props) => (props.numOfPlayers === '2' ? '12px' : '8px')};
+  padding: 10px 4px 0;
   clip-path: ${panelCut};
-  background: var(--anime-paper);
-  border: 2px solid var(--anime-ink);
+  border-top: 2px solid var(--ink-1);
 
   @media (max-width: 820px) {
     grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  @media (max-height: 560px) {
+    margin: 4px 0;
+    padding-top: 4px;
   }
 `;
 
@@ -309,14 +378,20 @@ export const KeyConfigInput = styled.input`
   box-shadow: 2px 2px 0 var(--anime-mustard);
   transition: border-color 0.14s ease, box-shadow 0.14s ease;
   &:focus {
-    outline: 2px solid var(--anime-ink);
+    outline: var(--focus-ring);
     outline-offset: 2px;
-    border-color: var(--anime-teal);
-    box-shadow: 0 0 0 3px rgba(53, 111, 107, 0.24);
+    border-color: var(--anime-ink);
   }
   &[data-error='true'] {
-    border-color: var(--anime-vermilion);
-    box-shadow: 0 0 0 3px rgba(189, 63, 50, 0.24);
+    border-color: var(--danger);
+    border-style: dashed;
+    box-shadow: 2px 2px 0 var(--danger);
+  }
+
+  @media (max-height: 560px) {
+    width: 40px;
+    height: 40px;
+    margin: 2px;
   }
 `;
 
@@ -342,36 +417,34 @@ export const MovementKeyCell = styled.label<{ area: string }>`
 `;
 
 export const KeyHint = styled.p`
-  margin: 6px 0 14px;
-  color: rgba(33, 29, 26, 0.8);
-  font-size: 0.72rem;
+  margin: 4px 0 8px;
+  color: var(--ink-3);
+  font-size: 0.8rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
   text-align: center;
-  text-transform: uppercase;
 `;
 
+/** One line that recaps the battle plan: "Stage Hidden Leaf · P1 Deidara · …". */
 export const SummaryStrip = styled.div`
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
-  margin: 4px 0 18px;
+  gap: 4px 14px;
+  margin: 0 0 6px;
 `;
 
 export const SummaryItem = styled.div<{ accent: string }>`
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  align-items: baseline;
+  gap: 6px;
+  padding-left: 8px;
   clip-path: ${chipCut};
-  background: color-mix(in srgb, ${(props) => props.accent} 12%, var(--anime-paper-light));
-  border: 2px solid var(--anime-ink);
-  font-size: 0.74rem;
+  border-left: 4px solid ${(props) => props.accent};
+  font-size: 0.82rem;
 
   & span {
-    color: rgba(33, 29, 26, 0.8);
-    font-size: 0.62rem;
+    color: var(--ink-2);
+    font-size: 0.72rem;
     font-weight: 900;
     text-transform: uppercase;
   }
@@ -468,33 +541,34 @@ export const ConfigIntro = styled.div`
   }
 `;
 
+/** The one framed panel on the mission step: picture, title and goals. */
 export const MissionBriefing = styled.div<{ accent: string }>`
   display: grid;
-  grid-template-columns: minmax(220px, 0.82fr) minmax(320px, 1.18fr);
+  grid-template-columns: 200px minmax(0, 1fr);
   gap: 14px;
-  margin: 0 0 18px;
-  padding: 14px;
+  margin: 12px 0 4px;
+  padding: 10px;
   clip-path: ${panelCut};
-  border: 0;
-  border-radius: 8px;
-  background: color-mix(in srgb, ${(props) => props.accent} 8%, #fffaf0);
-  box-shadow: 0 14px 34px rgba(33, 29, 26, 0.1);
+  border: 2px solid var(--anime-ink);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, ${(props) => props.accent} 8%, var(--anime-paper));
 
-  @media (max-width: 780px) {
+  @media (max-width: 620px) {
     grid-template-columns: 1fr;
+    gap: 8px;
   }
 `;
 
 export const MissionBriefingPreview = styled.div`
-  min-height: 238px;
+  height: 124px;
   overflow: hidden;
   clip-path: ${panelCut};
-  border: 0;
-  border-radius: 7px;
+  border: 2px solid var(--anime-ink);
+  border-radius: var(--radius);
   background: var(--anime-paper-light);
 
-  @media (max-width: 780px) {
-    min-height: 150px;
+  @media (max-width: 620px) {
+    height: 96px;
   }
 `;
 
@@ -505,32 +579,30 @@ export const MissionBriefingDetails = styled.div`
   min-width: 0;
 
   & .MuiTypography-overline {
-    color: var(--anime-teal);
+    color: var(--anime-teal-deep);
     letter-spacing: 0;
+    line-height: 1.6;
+  }
+
+  & .MuiTypography-h5 {
+    font-size: 1.35rem;
+    line-height: 1.2;
   }
 `;
 
-export const MissionObjectiveList = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 12px;
-
-  @media (max-width: 620px) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
+export const MissionObjectiveList = styled.ul`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
 `;
 
-export const MissionObjectiveItem = styled.div<{ accent: string }>`
-  min-height: 36px;
-  padding: 8px 10px;
+export const MissionObjectiveItem = styled.li<{ accent: string }>`
+  padding-left: 8px;
   clip-path: ${chipCut};
-  background: var(--anime-paper-light);
-  border: 0;
   border-left: 4px solid ${(props) => props.accent};
-  border-radius: 6px;
 
   & strong {
     display: block;
@@ -538,27 +610,25 @@ export const MissionObjectiveItem = styled.div<{ accent: string }>`
     color: var(--anime-ink);
     font-size: 0.82rem;
   }
-
-  & span {
-    color: rgba(33, 29, 26, 0.7);
-    font-size: 0.72rem;
-    font-weight: 900;
-    text-transform: uppercase;
-  }
 `;
 
 export const MissionActionRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 10px;
 `;
 
 export const CampaignRoute = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
-  margin: 10px 0 16px;
+  /* One row of seven villages in the 980px deck, four per row on phones. */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 4px;
+
+  @media (max-width: 760px) {
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  }
 `;
 
 export const CampaignRouteCard = styled.button<{
@@ -568,33 +638,35 @@ export const CampaignRouteCard = styled.button<{
   accent: string;
 }>`
   position: relative;
-  min-height: 82px;
-  padding: 12px;
+  min-height: 56px;
+  padding: 6px 8px;
   clip-path: ${panelCut};
-  border: ${(props) => (props.active ? '2px solid var(--anime-ink)' : '1px solid rgba(33, 29, 26, 0.14)')};
+  border: ${(props) => (props.active ? '2px solid var(--anime-ink)' : '2px solid var(--ink-1)')};
   border-style: ${(props) => (props.locked ? 'dashed' : 'solid')};
-  border-radius: 8px;
+  border-radius: var(--radius);
   border-top: 4px solid ${(props) => (props.active ? props.accent : 'transparent')};
   background: ${(props) => {
     if (props.locked) return '#e4dccb';
     if (props.completed) return `color-mix(in srgb, ${props.accent} 18%, var(--anime-paper-light))`;
     return 'var(--anime-paper-light)';
   }};
-  color: ${(props) => (props.locked ? 'rgba(33, 29, 26, 0.72)' : 'var(--anime-ink)')};
+  color: ${(props) => (props.locked ? 'var(--ink-2)' : 'var(--anime-ink)')};
   text-align: left;
   cursor: ${(props) => (props.locked ? 'not-allowed' : 'pointer')};
-  box-shadow: ${(props) => (props.active ? '0 12px 24px rgba(33,29,26,0.14)' : 'none')};
-  transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+  box-shadow: ${(props) => (props.active ? 'var(--shadow-1)' : 'none')};
+  transition: transform 0.16s ease;
 
   &:hover:not(:disabled) {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 24px rgba(33,29,26,0.14);
+    transform: translateY(-2px);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--anime-ink);
-    outline-offset: 3px;
-    box-shadow: inset 0 0 0 3px var(--anime-paper-light), 0 0 0 2px ${(props) => props.accent};
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 `;
 
@@ -607,8 +679,8 @@ export const RouteStatusBadge = styled.span<{ accent: string }>`
   color: var(--anime-ink);
   background: color-mix(in srgb, ${(props) => props.accent} 18%, var(--anime-paper-light));
   border: 1px solid ${(props) => props.accent};
-  border-radius: 999px;
-  font-size: 0.62rem;
+  border-radius: var(--radius);
+  font-size: 0.68rem;
   font-weight: 900;
   text-transform: uppercase;
 
@@ -654,11 +726,11 @@ export const ReferenceImage = styled.img`
 
 export const CharacterPortrait = styled.div`
   height: 140px;
-  margin: -6px -6px 10px;
+  margin: -4px -4px 8px;
   overflow: hidden;
   clip-path: ${panelCut};
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--anime-paper-light);
 
   &.compact {
@@ -680,19 +752,26 @@ export const CharacterPortraitImage = styled('div', {
   background-repeat: no-repeat;
 `;
 
+// The cast keeps Typography's component prop, so a section title can be an h3.
 export const SectionTitle = styled(Typography)`
   position: relative;
   z-index: 0;
   width: fit-content;
-  margin: 20px auto 12px;
+  margin: 14px auto 6px;
   padding: 0;
   color: var(--anime-ink);
   background: transparent;
+  font-size: 0.82rem;
   font-weight: 900;
+  line-height: 1.4;
   letter-spacing: 0;
   text-transform: uppercase;
   text-align: left;
-`;
+
+  @media (max-height: 560px) {
+    margin: 8px auto 4px;
+  }
+` as typeof Typography;
 
 export const SelectionGrid = styled.div`
   display: grid;
@@ -718,10 +797,10 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
   justify-content: flex-start;
   align-items: stretch;
   min-height: 88px;
-  padding: 10px;
+  padding: 8px;
   clip-path: ${panelCut};
-  border: 2px solid ${(props) => (props.selected ? 'var(--anime-ink)' : 'rgba(33, 29, 26, 0.12)')};
-  border-radius: 8px;
+  border: 2px solid ${(props) => (props.selected ? 'var(--anime-ink)' : 'var(--ink-1)')};
+  border-radius: var(--radius);
   background: ${(props) => (
     props.selected
       ? `color-mix(in srgb, ${props.accent} 18%, var(--anime-paper-light))`
@@ -730,12 +809,8 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
   color: var(--anime-ink);
   cursor: pointer;
   text-align: left;
-  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
-  box-shadow: ${(props) => (
-    props.selected
-      ? '0 12px 26px rgba(33,29,26,0.14)'
-      : '0 5px 16px rgba(33,29,26,0.06)'
-  )};
+  transition: transform 0.16s ease, border-color 0.16s ease;
+  box-shadow: ${(props) => (props.selected ? 'var(--shadow-1)' : 'none')};
 
   &::before {
     content: '';
@@ -761,26 +836,18 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
   }
 
   &:hover:not(:disabled) {
-    transform: translateY(-3px);
-    border-color: ${(props) => props.accent};
-    box-shadow: 0 12px 26px rgba(33,29,26,0.14);
+    transform: translateY(-2px);
+    border-color: var(--anime-ink);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--anime-ink);
-    outline-offset: 3px;
-    box-shadow: inset 0 0 0 3px var(--anime-paper-light), 0 0 0 2px ${(props) => props.accent};
+    outline: var(--focus-ring);
+    outline-offset: 2px;
   }
-`;
 
-export const StagePreview = styled.div`
-  height: 110px;
-  margin: -6px -6px 10px;
-  overflow: hidden;
-  clip-path: ${panelCut};
-  border: 0;
-  border-radius: 6px;
-  background: var(--anime-paper-light);
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `;
 
 export const StagePreviewImage = styled('div', {
@@ -929,5 +996,335 @@ export const ModeGrid = styled.div`
 
   @media (max-width: 760px) {
     grid-template-columns: 1fr;
+  }
+`;
+
+/* ---- Local Arena: one row of slot cards ---------------------------------- */
+
+/** Two or three seats plus the "+ Add shinobi" seat, in one row. */
+export const SlotRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+
+  @media (max-height: 560px) {
+    margin-top: 6px;
+    gap: 10px;
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+`;
+
+/**
+ * A seat: slot nameplate, portrait, shinobi picker, Human/CPU chip and keys.
+ * No frame of its own: the nameplate and portrait carry the shape.
+ */
+export const SlotCard = styled.div`
+  display: grid;
+  grid-template-areas:
+    'plate'
+    'portrait'
+    'picker'
+    'controller'
+    'keys';
+  justify-items: center;
+  gap: 6px;
+  min-width: 0;
+
+  /* Phones and short screens: portrait beside the controls, not above them. */
+  @media (max-width: 560px), (max-height: 560px) {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'plate plate'
+      'portrait picker'
+      'portrait controller'
+      'portrait keys';
+    justify-items: start;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 4px;
+  }
+`;
+
+export const SlotPlate = styled.div<{ slotColor: string; textColor: string }>`
+  grid-area: plate;
+  justify-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 0 4px 0 10px;
+  color: ${(props) => props.textColor};
+  background: ${(props) => props.slotColor};
+  border: 2px solid var(--anime-ink);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-weight: 900;
+`;
+
+/** The x that removes the third seat. */
+export const SlotRemoveButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  color: var(--anime-paper-light);
+  background: var(--anime-ink);
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+
+  & svg {
+    font-size: 1rem;
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--anime-ink);
+    outline-offset: 2px;
+  }
+`;
+
+/** Fixed-size bust cut from the roster board; the picker cycles it. */
+export const SlotPortrait = styled('div', {
+  shouldForwardProp: (prop) => !['image', 'backgroundPosition'].includes(String(prop)),
+})<{ image: string; backgroundPosition: string }>`
+  grid-area: portrait;
+  width: 104px;
+  height: 84px;
+  background-color: var(--anime-night);
+  background-image: url(${(props) => props.image});
+  /* Six busts across the board: each one is the box width. */
+  background-size: 600% auto;
+  background-position: ${(props) => props.backgroundPosition};
+  background-repeat: no-repeat;
+  border: 2px solid var(--anime-ink);
+  border-radius: var(--radius);
+
+  @media (max-width: 560px), (max-height: 560px) {
+    width: 72px;
+    height: 58px;
+  }
+`;
+
+export const SlotPicker = styled.div`
+  grid-area: picker;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`;
+
+export const SlotPickerButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--anime-ink);
+  background: var(--anime-paper-light);
+  border: 2px solid var(--anime-ink);
+  border-radius: var(--radius);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--anime-paper);
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+  }
+`;
+
+export const SlotName = styled.span`
+  min-width: 82px;
+  color: var(--anime-ink);
+  font-size: 1rem;
+  font-weight: 900;
+  text-align: center;
+`;
+
+/**
+ * Human or CPU at a level. A CPU chip is filled ink with a robot mark, so it
+ * does not rely on colour to read differently from a human chip.
+ */
+export const ControllerChip = styled.button<{ cpu: boolean }>`
+  grid-area: controller;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 3px 12px;
+  color: ${(props) => (props.cpu ? 'var(--anime-paper-light)' : 'var(--anime-ink)')};
+  background: ${(props) => (props.cpu ? 'var(--anime-ink)' : 'var(--anime-paper-light)')};
+  border: 2px solid var(--anime-ink);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  cursor: pointer;
+
+  & svg {
+    font-size: 1.05rem;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    border-style: dashed;
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+  }
+`;
+
+/** That seat's keys in one short line; a clash turns it into a warning. */
+export const SlotKeys = styled.p<{ clash?: boolean }>`
+  grid-area: keys;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  color: ${(props) => (props.clash ? 'var(--anime-vermilion-deep)' : 'var(--ink-2)')};
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-align: center;
+
+  & svg {
+    font-size: 0.95rem;
+  }
+`;
+
+/** The empty seat: a dashed outline that adds a third shinobi. */
+export const AddSlotButton = styled.button`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 200px;
+  padding: 12px;
+  color: var(--anime-ink);
+  background: transparent;
+  border: 2px dashed var(--ink-2);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  cursor: pointer;
+
+  & svg {
+    font-size: 2rem;
+  }
+
+  &:hover {
+    border-color: var(--anime-ink);
+    background: rgba(33, 29, 26, 0.04);
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 560px), (max-height: 560px) {
+    flex-direction: row;
+    min-height: 44px;
+
+    & svg {
+      font-size: 1.3rem;
+    }
+  }
+`;
+
+/* ---- Local Arena: stage strip and rounds --------------------------------- */
+
+export const StageStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+
+  @media (max-width: 760px) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+`;
+
+export const StageThumb = styled.button<{ chosen: boolean }>`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px 2px 6px;
+  color: var(--anime-ink);
+  background: ${(props) => (props.chosen ? 'var(--anime-paper)' : 'transparent')};
+  border: 2px solid ${(props) => (props.chosen ? 'var(--anime-ink)' : 'transparent')};
+  border-radius: var(--radius);
+  cursor: pointer;
+
+  & > span:last-of-type {
+    font-size: 0.75rem;
+    font-weight: 800;
+    line-height: 1.15;
+    text-align: center;
+  }
+
+  &:hover {
+    border-color: var(--ink-1);
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+  }
+`;
+
+export const StageThumbArt = styled.span`
+  display: block;
+  width: 100%;
+  max-width: 72px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 2px solid var(--anime-ink);
+  border-radius: var(--radius);
+
+  @media (max-height: 560px) {
+    max-width: 52px;
+  }
+`;
+
+/** The selected stage's rule, said once under the strip. */
+export const StageCaption = styled.p`
+  margin: 6px 0 0;
+  color: var(--ink-3);
+  font-size: 0.82rem;
+  text-align: center;
+
+  & strong {
+    color: var(--anime-ink);
+  }
+`;
+
+export const RoundsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+
+  & > span {
+    color: var(--anime-ink);
+    font-size: 0.82rem;
+    font-weight: 900;
+    text-transform: uppercase;
   }
 `;

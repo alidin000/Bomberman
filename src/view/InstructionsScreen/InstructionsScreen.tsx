@@ -48,6 +48,7 @@ import {
   getBossDefinition,
 } from '../../content';
 import { getCharacterPowerLoadout } from '../../content/characterPowerups';
+import { MAIN_MENU_LABEL } from '../ConfigScreen/menuCopy';
 
 const LOCAL_BEASTS = [
   'Leaf: Rogue Genin, Rogue Chunin, Training Clone.',
@@ -243,7 +244,7 @@ export const InstructionsScreen = () => {
                     </ManualItem>
                     <ManualItem>
                       <ManualBadge>Online</ManualBadge>
-                      Online rooms are visible as future groundwork and are not playable yet.
+                      Online play is not available yet. Every battle is on one screen.
                     </ManualItem>
                   </ManualList>
                 </ManualSection>
@@ -464,7 +465,7 @@ export const InstructionsScreen = () => {
         <DialogActions>
           <BackButton type="button" onClick={handleClose}>
             <SportsEsportsIcon fontSize="small" />
-            Back to Title
+            {MAIN_MENU_LABEL}
           </BackButton>
         </DialogActions>
       </StyledDialog>

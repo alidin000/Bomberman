@@ -49,8 +49,8 @@ export const StyledDialog = styled(Dialog)({
     clipPath: panelCut,
     background: 'var(--anime-paper-light)',
     border: '3px solid var(--anime-ink)',
-    boxShadow: '8px 8px 0 var(--anime-vermilion)',
-    borderRadius: 2,
+    boxShadow: 'var(--shadow-frame)',
+    borderRadius: 'var(--radius)',
   },
 });
 
@@ -102,16 +102,16 @@ export const BackButton = styled('button')({
   borderRadius: 2,
   clipPath: chipCut,
   color: 'var(--anime-paper-light)',
-  background: 'var(--anime-vermilion)',
-  boxShadow: '3px 3px 0 var(--anime-ink)',
+  background: 'var(--action)',
+  boxShadow: 'var(--shadow-1)',
   cursor: 'pointer',
   fontWeight: 900,
   textTransform: 'uppercase',
   '&:hover': {
-    background: 'var(--anime-vermilion-deep)',
+    background: 'var(--action-deep)',
   },
   '&:focus-visible': {
-    outline: '3px solid var(--anime-ink)',
+    outline: 'var(--focus-ring)',
     outlineOffset: 3,
   },
 });
@@ -231,7 +231,7 @@ export const ManualNavLink = styled('a')({
     background: 'var(--anime-mustard)',
   },
   '&:focus-visible': {
-    outline: '3px solid var(--anime-vermilion)',
+    outline: 'var(--focus-ring)',
     outlineOffset: 2,
   },
 });

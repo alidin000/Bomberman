@@ -19,6 +19,28 @@
   --anime-night: #272b35;
   --anime-line: rgba(33, 29, 26, 0.78);
   --anime-shadow: 4px 4px 0 rgba(33, 29, 26, 0.8);
+  /* Hover/pressed teal: keeps 7.2:1 against --anime-paper-light text. */
+  --anime-teal-deep: #2b5c58;
+
+  /*
+   * Colour roles. Teal is the normal action and focus colour; vermilion is
+   * kept for danger and destructive actions only.
+   */
+  --action: var(--anime-teal);
+  --action-deep: var(--anime-teal-deep);
+  --danger: var(--anime-vermilion);
+  --focus-ring: 3px solid var(--anime-teal);
+
+  /* Shape: one corner radius, and hard ink offsets instead of soft blurs. */
+  --radius: 2px;
+  --shadow-1: 2px 2px 0 var(--anime-ink);
+  --shadow-2: 4px 4px 0 var(--anime-ink);
+  --shadow-frame: 8px 8px 0 var(--anime-teal);
+
+  /* Ink strengths on paper, instead of one-off alphas. */
+  --ink-1: rgba(33, 29, 26, 0.16); /* hairlines and quiet borders */
+  --ink-2: rgba(33, 29, 26, 0.72); /* secondary text: 5.8:1 or better on paper */
+  --ink-3: rgba(33, 29, 26, 0.82); /* labels: 7.9:1 or better on paper */
 }
 
 * {

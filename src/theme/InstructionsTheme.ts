@@ -55,9 +55,19 @@ const theme = createTheme({
           borderRadius: 2,
           padding: '10px 24px',
           border: '2px solid #211d1a',
+          // Keyboard focus is a teal ring (index.css --focus-ring).
+          '&.Mui-focusVisible': {
+            outline: 'var(--focus-ring)',
+            outlineOffset: 2,
+          },
         },
         contained: {
           boxShadow: '3px 3px 0 #211d1a',
+          // MUI swaps in soft elevation shadows on hover, press and keyboard
+          // focus; keep the one hard ink shadow instead.
+          '&:hover, &:active, &.Mui-focusVisible': {
+            boxShadow: '3px 3px 0 #211d1a',
+          },
         },
       },
     },

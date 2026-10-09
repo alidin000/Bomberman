@@ -38,21 +38,22 @@ export const WelcomeContainer = styled(Box)({
   },
   '& .MuiButton-root': {
     minHeight: 46,
-    borderRadius: 8,
+    borderRadius: 'var(--radius)',
     clipPath: chipCut,
     fontWeight: 900,
     textTransform: 'uppercase',
     letterSpacing: 0,
   },
-  '& .MuiButton-contained': {
-    color: '#fff8e7',
-    background: '#bd3f32',
-    border: '1px solid rgba(255,248,231,0.5)',
-    boxShadow: '0 10px 28px rgba(18,24,28,0.22)',
+  // The one primary call-to-action look (teal, keyline, hard shadow). The
+  // keyline is paper here so the button holds its edge on the dark scene.
+  '& .MuiButton-contained, & .MuiButton-contained.Mui-focusVisible': {
+    color: 'var(--anime-paper-light)',
+    background: 'var(--action)',
+    border: '2px solid var(--anime-paper-light)',
+    boxShadow: 'var(--shadow-1)',
   },
   '& .MuiButton-contained:hover': {
-    background: 'var(--anime-vermilion-deep)',
-    transform: 'translateY(-2px)',
+    background: 'var(--action-deep)',
   },
   '& .MuiButton-outlined': {
     color: '#fff8e7',
@@ -64,8 +65,10 @@ export const WelcomeContainer = styled(Box)({
     borderColor: '#fff8e7',
     background: 'rgba(255,248,231,0.14)',
   },
+  // Teal is the focus colour on paper; on this dark scene it would fall
+  // under 3:1, so the ring here is paper.
   '& .MuiButtonBase-root.Mui-focusVisible': {
-    outline: '3px solid #fff8e7',
+    outline: '3px solid var(--anime-paper-light)',
     outlineOffset: 3,
   },
   '@media (max-width: 640px)': {
@@ -153,24 +156,6 @@ export const HeroCopy = styled(Box)({
       lineHeight: 0.94,
     },
   },
-});
-
-export const HeroBadge = styled(Box)({
-  width: 'fit-content',
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 8,
-  marginBottom: 18,
-  padding: '8px 16px 8px 18px',
-  color: '#fff8e7',
-  background: 'rgba(24,41,47,0.62)',
-  border: '1px solid rgba(255,248,231,0.48)',
-  borderRadius: 999,
-  fontSize: '0.78rem',
-  fontWeight: 900,
-  letterSpacing: 0,
-  textTransform: 'uppercase',
-  boxShadow: 'none',
 });
 
 export const HeroSubtitle = styled(Typography)({
@@ -561,14 +546,30 @@ export const QuickPlayPanel = styled(Box)({
   flexDirection: 'column',
   alignItems: 'flex-start',
   marginTop: 22,
-  '& > .MuiButton-contained': {
-    minWidth: 240,
+  '@media (max-width: 560px)': {
+    alignSelf: 'stretch',
+  },
+});
+
+/** Quick Play and Battle a CPU: the two big doors, side by side. */
+export const QuickPlayDoors = styled(Box)({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 12,
+  '& .MuiButton-root': {
+    minWidth: 220,
     minHeight: 56,
-    fontSize: '1.15rem',
+    fontSize: '1.1rem',
+  },
+  '& .MuiButton-outlined': {
+    borderWidth: 2,
+    borderColor: 'var(--anime-paper-light)',
   },
   '@media (max-width: 560px)': {
     alignSelf: 'stretch',
-    '& > .MuiButton-contained': {
+    flexDirection: 'column',
+    gap: 8,
+    '& .MuiButton-root': {
       width: '100%',
     },
   },

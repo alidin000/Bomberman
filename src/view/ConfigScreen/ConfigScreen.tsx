@@ -13,7 +13,6 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Button,
-  Divider,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import Info from '@mui/icons-material/Info';
@@ -22,10 +21,10 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import {
   StyledDialog,
   StepContent,
-  SetupOptions,
-  SetupOption,
+  DeckFooter,
+  FooterActions,
+  FooterHint,
   ModeToggleText,
-  CenteredButtonContainer,
   KeyConfigInput,
   PlayerControlsRow,
   ControlsLabel,
@@ -44,8 +43,12 @@ import {
   CardMeta,
   LockBadge,
   SelectedMark,
-  StagePreview,
   StagePreviewImage,
+  StageStrip,
+  StageThumb,
+  StageThumbArt,
+  StageCaption,
+  RoundsRow,
   CharacterPortrait,
   CharacterPortraitImage,
   CampaignRoute,
@@ -70,7 +73,12 @@ import {
 import {
   MatchRounds, launchGame, loadStoredKeyBindings, readLastLocalSetup,
 } from './launchGame';
-import { moveFocusWithArrows } from './menuNavigation';
+import {
+  RovingTabStops,
+  keepRovingStopOnFocus,
+  moveFocusWithArrows,
+} from './menuNavigation';
+import { KEY_REBIND_HINT, MAIN_MENU_LABEL, MENU_KEYS_HINT } from './menuCopy';
 import RosterBoard from '../../assets/ninja-bomber-roster-board.png';
 import StageAtlas from '../../assets/ninja-bomber-stage-atlas.webp';
 import GreatWarStage from '../../assets/great-shinobi-war-stage.webp';
@@ -92,19 +100,23 @@ import {
   StoryUpgradeId,
 } from '../../story/progress';
 import { DifficultySelector } from './DifficultySelector';
-import { PlayerSlotsSelector } from './PlayerSlotsSelector';
+import {
+  MAX_LOCAL_PLAYERS,
+  MIN_LOCAL_PLAYERS,
+  PlayerSlotsSelector,
+} from './PlayerSlotsSelector';
 import type { PlayerSlotController } from '../../engine/types';
-import { getControllerLabel } from '../../ai/controllers';
+import { playerSlotLabel } from '../GameScreen/playerSlots';
 
 type KeyErrors = {
   [key: string]: boolean;
 };
 
+// Online play is not built yet, so it is not offered as a mode.
 const GAME_MODES: {
   id: GameMode;
   title: string;
   description: string;
-  disabled?: boolean;
 }[] = [
   {
     id: 'solo',
@@ -115,12 +127,6 @@ const GAME_MODES: {
     id: 'local',
     title: 'Local Arena',
     description: '2–3 shinobi · friends or CPU',
-  },
-  {
-    id: 'onlinePreview',
-    title: 'Online Rooms',
-    description: 'Coming soon',
-    disabled: true,
   },
 ];
 
@@ -142,13 +148,14 @@ const STAGE_PREVIEW_POSITIONS: Record<StageId, string> = {
   greatShinobiWar: '50% 100%',
 };
 
+// 5% down skips the roster board's title band above the busts.
 const CHARACTER_POSITIONS: Record<CharacterId, string> = {
-  deidara: '0% 0%',
-  naruto: '20% 0%',
-  sasuke: '40% 0%',
-  gaara: '60% 0%',
-  minato: '80% 0%',
-  itachi: '100% 0%',
+  deidara: '0% 5%',
+  naruto: '20% 5%',
+  sasuke: '40% 5%',
+  gaara: '60% 5%',
+  minato: '80% 5%',
+  itachi: '100% 5%',
 };
 
 function formatKeyLabel(key: string): string {
@@ -156,6 +163,12 @@ function formatKeyLabel(key: string): string {
 }
 
 const MOVEMENT_KEY_AREAS = ['up', 'left', 'down', 'right'] as const;
+const BOMB_KEY_INDEX = MOVEMENT_BINDING_LABELS.length;
+
+// "Hidden Leaf Village" fits a thumbnail as "Hidden Leaf"; the caption says it in full.
+function shortStageName(name: string): string {
+  return name.replace(/ Village$/, '');
+}
 
 export const ConfigScreen = () => {
   const initialStoryProgress = useMemo(() => loadStoryProgress(), []);
@@ -257,6 +270,16 @@ export const ConfigScreen = () => {
     ));
   };
 
+  const handleAddPlayer = () => {
+    if (activePlayerCount >= MAX_LOCAL_PLAYERS) return;
+    handlePlayerCountChange(String(activePlayerCount + 1));
+  };
+
+  const handleRemovePlayer = () => {
+    if (activePlayerCount <= MIN_LOCAL_PLAYERS) return;
+    handlePlayerCountChange(String(activePlayerCount - 1));
+  };
+
   const handleCharacterSelect = (playerIndex: number, characterId: CharacterId) => {
     setSelectedCharacters((current) => current.map((id, index) => (
       index === playerIndex ? characterId : id
@@ -265,10 +288,6 @@ export const ConfigScreen = () => {
 
   const handleNext = () => {
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
-  };
-
-  const handleStoryNext = () => {
-    handleNext();
   };
 
   const handleCancel = () => {
@@ -406,6 +425,35 @@ export const ConfigScreen = () => {
       .map(([key]) => formatKeyLabel(key));
   }, [activePlayerCount, playerKeyBindings, humanPlayerNumbers]);
 
+  // Each seat's keys in one short line, as the slot cards show them.
+  const keyLines = useMemo(() => Array.from({ length: activePlayerCount }, (_, slot) => {
+    const keys = playerKeyBindings[slot + 1];
+    const movement = keys.slice(0, BOMB_KEY_INDEX).map(formatKeyLabel).join(' ');
+    return `${movement} · Bomb ${formatKeyLabel(keys[BOMB_KEY_INDEX])}`;
+  }), [activePlayerCount, playerKeyBindings]);
+
+  // A human seat that shares a key with another seat says so on its card.
+  const keyClashes = useMemo(() => {
+    const humanSlots = humanPlayerNumbers.map((player) => player - 1);
+    const owners = new Map<string, number[]>();
+    humanSlots.forEach((slot) => playerKeyBindings[slot + 1].forEach((key) => {
+      owners.set(key, [...(owners.get(key) ?? []), slot]);
+    }));
+    const clashes: Record<number, string> = {};
+    humanSlots.forEach((slot) => {
+      const shared = Array.from(new Set(playerKeyBindings[slot + 1]))
+        .filter((key) => (owners.get(key) ?? []).length > 1);
+      if (shared.length === 0) return;
+      const others = Array.from(new Set(shared.flatMap((key) => owners.get(key) ?? [])))
+        .filter((other) => other !== slot);
+      const keys = shared.map(formatKeyLabel).join(' ');
+      clashes[slot] = others.length > 0
+        ? `Clashes with ${others.map(playerSlotLabel).join(', ')}: ${keys}`
+        : `Used twice: ${keys}`;
+    });
+    return clashes;
+  }, [humanPlayerNumbers, playerKeyBindings]);
+
   const battleSummary = useMemo(() => {
     const modeTitle = GAME_MODES.find((item) => item.id === mode)?.title ?? mode;
     const squad = selectedCharacters
@@ -467,8 +515,6 @@ export const ConfigScreen = () => {
           })}
         </ActionKeysGrid>
       </PlayerControlsRow>
-      {player < humanPlayerNumbers[humanPlayerNumbers.length - 1]
-        && <Divider style={{ margin: '16px 0' }} />}
     </React.Fragment>
   );
 
@@ -476,16 +522,30 @@ export const ConfigScreen = () => {
     setStoryProgress(loadStoryProgress());
   }, []);
 
-  // Each step opens at its top, not at the previous step's scroll position.
   const contentRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  // The deck opens with the selected mode focused, so the arrow keys work at
+  // once. Only the first open: later step changes focus the step's heading.
+  const deckOpened = useRef(false);
   useEffect(() => {
+    deckOpened.current = true;
+  }, []);
+  const firstStep = useRef(true);
+  useEffect(() => {
+    // Each step opens at its top, not at the previous step's scroll position.
     if (contentRef.current) contentRef.current.scrollTop = 0;
+    if (firstStep.current) {
+      firstStep.current = false;
+      return;
+    }
+    titleRef.current?.focus();
   }, [activeStep]);
 
   const steps = mode === 'solo'
     ? ['Mission', 'Upgrade', 'Controls']
     : ['Setup', 'Controls'];
   const optionalSteps = mode === 'solo' ? ['Upgrade', 'Controls'] : ['Controls'];
+  const isKeysStep = activeStep === steps.length - 1;
   const hasKeyConflicts = Object.keys(keyErrors).length > 0;
   // "Continue Campaign" only differs from "Deploy Mission" once the player has
   // picked another village, shinobi or upgrade than the saved run.
@@ -495,6 +555,10 @@ export const ConfigScreen = () => {
       !== (storyProgress.lastCharacter ?? DEFAULT_CHARACTER_ID)
     || selectedUpgrade !== storyProgress.selectedUpgrade
   );
+  // One primary action per mode, in the footer on every step.
+  const startsMissionFromBriefing = mode === 'solo' && activeStep === 0;
+  const primaryLabel = mode === 'solo' ? 'Deploy Mission' : 'Start Battle';
+  const handlePrimary = startsMissionFromBriefing ? handleStartSelectedMission : handlePlay;
 
   return (
     <WelcomeContainer
@@ -508,35 +572,39 @@ export const ConfigScreen = () => {
         },
       }}
     >
-      <StyledDialog open aria-labelledby="config-dialog-title" onClose={handleDialogClose}>
-        <DialogTitle id="config-dialog-title">
+      <StyledDialog
+        open
+        aria-labelledby="config-dialog-title"
+        onClose={handleDialogClose}
+        PaperProps={{ onKeyDown: moveFocusWithArrows, onFocus: keepRovingStopOnFocus }}
+      >
+        <DialogTitle id="config-dialog-title" ref={titleRef} tabIndex={-1}>
           {activeStep === 0 && 'Mission Deck'}
           {activeStep === 1 && mode === 'solo' && 'Upgrade Arsenal'}
           {((activeStep === 1 && mode === 'local') || activeStep === 2)
             && 'Key Bindings'}
         </DialogTitle>
-        <DialogContent ref={contentRef} onKeyDown={moveFocusWithArrows}>
-          <Stepper activeStep={activeStep} nonLinear>
-            {steps.map((label, index) => {
-              const optional = optionalSteps.includes(label)
-                ? <Typography variant="caption">Optional</Typography>
-                : undefined;
-              return (
-                <Step key={label} completed={index < activeStep}>
-                  {index < activeStep ? (
-                    <StepButton onClick={() => setActiveStep(index)} optional={optional}>
-                      {label}
-                    </StepButton>
-                  ) : (
-                    <StepLabel optional={optional}>{label}</StepLabel>
-                  )}
-                </Step>
-              );
-            })}
-          </Stepper>
+        <Stepper activeStep={activeStep} nonLinear>
+          {steps.map((label, index) => {
+            const optional = optionalSteps.includes(label)
+              ? <Typography variant="caption">Optional</Typography>
+              : undefined;
+            return (
+              <Step key={label} completed={index < activeStep}>
+                {index < activeStep ? (
+                  <StepButton onClick={() => setActiveStep(index)} optional={optional}>
+                    {label}
+                  </StepButton>
+                ) : (
+                  <StepLabel optional={optional}>{label}</StepLabel>
+                )}
+              </Step>
+            );
+          })}
+        </Stepper>
+        <DialogContent ref={contentRef}>
           {activeStep === 0 && (
             <StepContent>
-              <SectionTitle variant="subtitle2">Mode</SectionTitle>
               <ToggleButtonGroup
                 value={mode}
                 exclusive
@@ -545,12 +613,14 @@ export const ConfigScreen = () => {
                   if (nextMode) handleModeSelect(nextMode);
                 }}
                 aria-label="game mode"
+                data-roving-group
               >
                 {GAME_MODES.map((item) => (
                   <ToggleButton
                     key={item.id}
                     value={item.id}
-                    disabled={item.disabled}
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
+                    autoFocus={!deckOpened.current && item.id === mode}
                   >
                     <ModeToggleText>
                       <span>{item.title}</span>
@@ -561,47 +631,69 @@ export const ConfigScreen = () => {
                 ))}
               </ToggleButtonGroup>
 
-              {/*
-                Match options for the chosen mode. Add new pre-match options (for
-                example a difficulty selector) here as another SetupOption; the
-                row hides itself while it is empty.
-              */}
-              <SetupOptions>
-                {mode === 'local' && (
-                  <SetupOption>
-                    <Typography variant="h6" component="span">Shinobi Count:</Typography>
+              {mode === 'local' && (
+                <>
+                  <PlayerSlotsSelector
+                    characters={selectedCharacters.slice(0, activePlayerCount)}
+                    controllers={slotControllers}
+                    keyLines={keyLines}
+                    keyClashes={keyClashes}
+                    onCharacterChange={handleCharacterSelect}
+                    onControllersChange={setControllers}
+                    onAddPlayer={handleAddPlayer}
+                    onRemovePlayer={handleRemovePlayer}
+                  />
+                  <SectionTitle variant="subtitle2" component="h3" id="stage-label">Stage</SectionTitle>
+                  <StageStrip role="group" aria-labelledby="stage-label" data-roving-group>
+                    {STAGE_DEFINITIONS.map((item) => {
+                      const selected = selectedStage === item.id;
+                      return (
+                        <StageThumb
+                          key={item.id}
+                          type="button"
+                          chosen={selected}
+                          onClick={() => setSelectedStage(item.id)}
+                          aria-label={item.name}
+                          aria-describedby={selected ? 'stage-mechanic' : undefined}
+                          aria-pressed={selected}
+                        >
+                          {selected && <SelectedMark aria-hidden="true">✓</SelectedMark>}
+                          <StageThumbArt>
+                            <StagePreviewImage
+                              image={item.id === 'greatShinobiWar' ? GreatWarStage : StageAtlas}
+                              aria-hidden="true"
+                              standalone={item.id === 'greatShinobiWar'}
+                              backgroundPosition={item.id === 'greatShinobiWar'
+                                ? 'center'
+                                : STAGE_PREVIEW_POSITIONS[item.id]}
+                            />
+                          </StageThumbArt>
+                          <span aria-hidden="true">{shortStageName(item.name)}</span>
+                        </StageThumb>
+                      );
+                    })}
+                  </StageStrip>
+                  <StageCaption id="stage-mechanic">
+                    <strong>{selectedStageDefinition.name}</strong>
+                    {' · '}
+                    {selectedStageDefinition.mechanic}
+                  </StageCaption>
+                  <RoundsRow>
+                    <span id="rounds-label">Rounds</span>
                     <ToggleButtonGroup
-                      size="large"
-                      value={numOfPlayers}
-                      exclusive
-                      onChange={(_e, newNumOfPlayers) => handlePlayerCountChange(newNumOfPlayers)}
-                      aria-label="number of shinobi"
-                    >
-                      <ToggleButton value="2">2</ToggleButton>
-                      <ToggleButton value="3">3</ToggleButton>
-                    </ToggleButtonGroup>
-                  </SetupOption>
-                )}
-                {mode === 'local' && (
-                  <PlayerSlotsSelector controllers={slotControllers} onChange={setControllers} />
-                )}
-                {mode === 'local' && (
-                  <SetupOption>
-                    <Typography variant="h6" component="span">Rounds:</Typography>
-                    <ToggleButtonGroup
-                      size="large"
                       value={rounds}
                       exclusive
                       onChange={(_e, next: MatchRounds | null) => { if (next) setRounds(next); }}
-                      aria-label="rounds per match"
+                      aria-labelledby="rounds-label"
+                      data-roving-group
                     >
                       <ToggleButton value="1" aria-label="1 round">1</ToggleButton>
                       <ToggleButton value="3" aria-label="best of 3">Best of 3</ToggleButton>
                       <ToggleButton value="5" aria-label="best of 5">Best of 5</ToggleButton>
                     </ToggleButtonGroup>
-                  </SetupOption>
-                )}
-              </SetupOptions>
+                  </RoundsRow>
+                </>
+              )}
 
               {mode === 'solo' && selectedMission && (
                 <MissionBriefing accent={selectedStageDefinition.palette.accent}>
@@ -619,7 +711,7 @@ export const ConfigScreen = () => {
                       {' '}
                       Campaign
                     </Typography>
-                    <Typography variant="h5" fontWeight="bold">
+                    <Typography variant="h5" component="h3" fontWeight="bold">
                       {selectedMission.title}
                     </Typography>
                     <CardMeta variant="body2">
@@ -631,7 +723,7 @@ export const ConfigScreen = () => {
                       {' '}
                       {selectedBoss?.name ?? 'Village Boss'}
                     </CardMeta>
-                    <MissionObjectiveList>
+                    <MissionObjectiveList aria-label="mission goals">
                       {selectedMission.objectives.map((objective) => (
                         <MissionObjectiveItem
                           key={objective.id}
@@ -641,29 +733,21 @@ export const ConfigScreen = () => {
                         </MissionObjectiveItem>
                       ))}
                     </MissionObjectiveList>
-                    <MissionActionRow>
-                      <Button
-                        variant="contained"
-                        size="large"
-                        startIcon={<PlayArrowIcon />}
-                        onClick={handleStartSelectedMission}
-                      >
-                        Deploy Mission
-                      </Button>
-                      {showContinueCampaign && (
-                        <Button variant="outlined" size="large" onClick={handleContinueCampaign}>
+                    {showContinueCampaign && (
+                      <MissionActionRow>
+                        <Button variant="outlined" onClick={handleContinueCampaign}>
                           Continue Campaign
                         </Button>
-                      )}
-                    </MissionActionRow>
+                      </MissionActionRow>
+                    )}
                   </MissionBriefingDetails>
                 </MissionBriefing>
               )}
 
               {mode === 'solo' && (
                 <>
-                  <SectionTitle variant="subtitle2">Campaign Route</SectionTitle>
-                  <CampaignRoute>
+                  <SectionTitle variant="subtitle2" component="h3" id="route-label">Campaign Route</SectionTitle>
+                  <CampaignRoute role="group" aria-labelledby="route-label" data-roving-group>
                     {CAMPAIGN_VILLAGES.map((village) => {
                       const stageDefinition = STAGE_DEFINITIONS.find(
                         (item) => item.id === village.stageId
@@ -671,8 +755,7 @@ export const ConfigScreen = () => {
                       const accent = stageDefinition?.palette.accent ?? '#f59e0b';
                       const completed = storyProgress.completedStages.includes(village.stageId);
                       const active = storyProgress.lastStage === village.stageId;
-                      const locked = mode === 'solo'
-                        && !storyProgress.unlockedStages.includes(village.stageId);
+                      const locked = !storyProgress.unlockedStages.includes(village.stageId);
                       let status = 'Unlocked';
                       if (completed) status = 'Cleared';
                       if (active) status = 'Current';
@@ -702,7 +785,7 @@ export const ConfigScreen = () => {
                             {status}
                           </RouteStatusBadge>
                           {selectedStage === village.stageId && <SelectedMark aria-hidden="true">✓</SelectedMark>}
-                          <Typography component="span" variant="subtitle2" fontWeight="bold" sx={{ mt: 1, display: 'block' }}>
+                          <Typography component="span" variant="subtitle2" fontWeight="bold" sx={{ mt: 0.5, display: 'block', lineHeight: 1.2 }}>
                             {village.villageName}
                           </Typography>
                         </CampaignRouteCard>
@@ -710,76 +793,25 @@ export const ConfigScreen = () => {
                     })}
                   </CampaignRoute>
                   <DifficultySelector />
-                </>
-              )}
-
-              {mode === 'local' && (
-                <>
-                  <SectionTitle variant="subtitle2">Stage</SectionTitle>
-                  <SelectionGrid>
-                    {STAGE_DEFINITIONS.map((item) => (
-                      <SelectionCard
-                        key={item.id}
-                        type="button"
-                        selected={selectedStage === item.id}
-                        accent={item.palette.accent}
-                        onClick={() => setSelectedStage(item.id)}
-                        aria-label={item.name}
-                        aria-describedby={`stage-mechanic-${item.id}`}
-                        aria-pressed={selectedStage === item.id}
-                      >
-                        {selectedStage === item.id && <SelectedMark aria-hidden="true">✓</SelectedMark>}
-                        <StagePreview>
-                          <StagePreviewImage
-                            image={item.id === 'greatShinobiWar' ? GreatWarStage : StageAtlas}
-                            aria-hidden="true"
-                            standalone={item.id === 'greatShinobiWar'}
-                            backgroundPosition={item.id === 'greatShinobiWar'
-                              ? 'center'
-                              : STAGE_PREVIEW_POSITIONS[item.id]}
-                          />
-                        </StagePreview>
-                        <CardHeader>
-                          <div>
-                            <Typography component="span" variant="subtitle2" fontWeight="bold">{item.name}</Typography>
-                            <CardMeta id={`stage-mechanic-${item.id}`} variant="caption">{item.mechanic}</CardMeta>
-                          </div>
-                        </CardHeader>
-                      </SelectionCard>
-                    ))}
-                  </SelectionGrid>
-                </>
-              )}
-
-              <SectionTitle variant="subtitle2">Character Select</SectionTitle>
-              {Array.from({ length: activePlayerCount }, (_, playerIndex) => (
-                <div key={`player-select-${playerIndex}`}>
-                  <Typography variant="subtitle2" sx={{ mt: 1, mb: 1 }}>
-                    Player
-                    {' '}
-                    {playerIndex + 1}
-                    {slotControllers[playerIndex] !== 'human'
-                      && ` · ${getControllerLabel(slotControllers[playerIndex])}`}
-                  </Typography>
-                  <SelectionGrid className={mode === 'local' ? 'compact' : undefined}>
+                  <SectionTitle variant="subtitle2" component="h3" id="shinobi-label">Shinobi</SectionTitle>
+                  <SelectionGrid className="compact" role="group" aria-labelledby="shinobi-label" data-roving-group>
                     {CHARACTER_DEFINITIONS.map((character) => {
-                      const locked = mode === 'solo'
-                        && !storyProgress.unlockedCharacters.includes(character.id);
-                      const selected = selectedCharacters[playerIndex] === character.id;
+                      const locked = !storyProgress.unlockedCharacters.includes(character.id);
+                      const selected = selectedCharacters[0] === character.id;
                       const unlockedBy = UNLOCKED_BY.get(character.id);
                       return (
                         <SelectionCard
-                          key={`${playerIndex}-${character.id}`}
+                          key={character.id}
                           type="button"
                           selected={selected}
                           accent={character.secondaryColor}
                           disabled={locked}
-                          onClick={() => handleCharacterSelect(playerIndex, character.id)}
-                          aria-label={`${character.name} player ${playerIndex + 1}${locked ? ', locked' : ''}`}
+                          onClick={() => handleCharacterSelect(0, character.id)}
+                          aria-label={`${character.name} player 1${locked ? ', locked' : ''}`}
                           aria-pressed={selected}
                         >
-                          {selected && <SelectedMark aria-hidden="true">{`P${playerIndex + 1} ✓`}</SelectedMark>}
-                          <CharacterPortrait className={`card-art${mode === 'local' ? ' compact' : ''}`}>
+                          {selected && <SelectedMark aria-hidden="true">✓</SelectedMark>}
+                          <CharacterPortrait className="card-art compact">
                             <CharacterPortraitImage
                               image={RosterBoard}
                               aria-hidden="true"
@@ -787,10 +819,7 @@ export const ConfigScreen = () => {
                             />
                           </CharacterPortrait>
                           <CardHeader>
-                            <div>
-                              <Typography component="span" variant="subtitle2" fontWeight="bold">{character.name}</Typography>
-                              <CardMeta variant="caption">{character.title}</CardMeta>
-                            </div>
+                            <Typography component="span" variant="subtitle2" fontWeight="bold">{character.name}</Typography>
                           </CardHeader>
                           {locked && (
                             <LockBadge>
@@ -803,38 +832,16 @@ export const ConfigScreen = () => {
                       );
                     })}
                   </SelectionGrid>
-                </div>
-              ))}
-
-              {mode === 'local' && hasKeyConflicts && (
-                <Typography variant="body2" color="error" align="center" sx={{ mt: 2 }}>
-                  Two players share a key. Open Next to fix the controls.
-                </Typography>
+                </>
               )}
-              <CenteredButtonContainer>
-                <Button variant="text" size="large" onClick={handleCancel}>Cancel</Button>
-                <Button variant="outlined" size="large" onClick={handleStoryNext}>Next</Button>
-                {mode === 'local' && (
-                  <Button
-                    variant="contained"
-                    size="large"
-                    startIcon={<PlayArrowIcon />}
-                    onClick={handlePlay}
-                    disabled={hasKeyConflicts}
-                  >
-                    Start Battle
-                  </Button>
-                )}
-              </CenteredButtonContainer>
             </StepContent>
           )}
           {activeStep === 1 && mode === 'solo' && (
             <StepContent>
-              <SectionTitle variant="subtitle2">Upgrade Arsenal</SectionTitle>
               <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
                 Pick one story upgrade for this mission run.
               </Typography>
-              <SelectionGrid>
+              <SelectionGrid role="group" aria-label="story upgrade" data-roving-group>
                 {STORY_UPGRADES.map((upgrade) => {
                   const unlocked = storyProgress.unlockedUpgrades.includes(upgrade.id);
                   const selected = selectedUpgrade === upgrade.id;
@@ -865,22 +872,9 @@ export const ConfigScreen = () => {
                   );
                 })}
               </SelectionGrid>
-              <CenteredButtonContainer>
-                <Button variant="text" size="large" onClick={handleBack}>Back</Button>
-                <Button variant="outlined" size="large" onClick={handleNext}>Next</Button>
-                <Button
-                  variant="contained"
-                  size="large"
-                  startIcon={<PlayArrowIcon />}
-                  onClick={handlePlay}
-                  disabled={hasKeyConflicts}
-                >
-                  Start Mission
-                </Button>
-              </CenteredButtonContainer>
             </StepContent>
           )}
-          {((activeStep === 1 && mode === 'local') || activeStep === 2) && (
+          {isKeysStep && (
             <StepContent>
               <SummaryStrip aria-label="battle plan summary">
                 <SummaryItem accent="#fbbf24">
@@ -904,9 +898,7 @@ export const ConfigScreen = () => {
                   </SummaryItem>
                 )}
               </SummaryStrip>
-              <KeyHint>
-                Click a key tile, then press the new key to rebind it. Every key must be unique.
-              </KeyHint>
+              <KeyHint>{KEY_REBIND_HINT}</KeyHint>
               <div>
                 {humanPlayerNumbers.map((player) => renderKeyConfig(player))}
               </div>
@@ -923,22 +915,34 @@ export const ConfigScreen = () => {
                   )}
                 </>
               )}
-              <CenteredButtonContainer>
-                <Button variant="text" size="large" onClick={handleBack}>Back</Button>
-                <Button variant="outlined" size="large" onClick={handleResetBindings}>Reset Keys</Button>
-                <Button
-                  variant="contained"
-                  size="large"
-                  startIcon={<PlayArrowIcon />}
-                  onClick={handlePlay}
-                  disabled={hasKeyConflicts}
-                >
-                  Play
-                </Button>
-              </CenteredButtonContainer>
             </StepContent>
           )}
         </DialogContent>
+        <DeckFooter data-deck-footer>
+          <FooterActions>
+            {activeStep === 0 ? (
+              <Button variant="text" size="large" onClick={handleCancel}>{MAIN_MENU_LABEL}</Button>
+            ) : (
+              <Button variant="text" size="large" onClick={handleBack}>Back</Button>
+            )}
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<PlayArrowIcon />}
+              onClick={handlePrimary}
+              disabled={!startsMissionFromBriefing && hasKeyConflicts}
+            >
+              {primaryLabel}
+            </Button>
+            {isKeysStep ? (
+              <Button variant="outlined" size="large" onClick={handleResetBindings}>Reset Keys</Button>
+            ) : (
+              <Button variant="outlined" size="large" onClick={handleNext}>Next</Button>
+            )}
+          </FooterActions>
+          {!isKeysStep && <FooterHint>{MENU_KEYS_HINT}</FooterHint>}
+        </DeckFooter>
+        <RovingTabStops root={contentRef} />
       </StyledDialog>
     </WelcomeContainer>
   );

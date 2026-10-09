@@ -115,6 +115,44 @@ describe('WelcomeScreen', () => {
     });
   });
 
+  it('starts a local match against one CPU Normal from Battle a CPU on a first visit', async () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: /battle a cpu/i }));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/2/1/hiddenLeaf');
+      expect(JSON.parse(localStorage.getItem('gameSetup') as string)).toMatchObject({
+        mode: 'local',
+        stageId: 'hiddenLeaf',
+        selectedCharacters: ['deidara', 'naruto'],
+        controllers: ['human', 'cpu-normal'],
+        rounds: '1',
+      });
+    });
+  });
+
+  it('keeps the last local stage, shinobi and rounds when battling a CPU', async () => {
+    localStorage.setItem('gameSetup', JSON.stringify({
+      mode: 'local',
+      stageId: 'hiddenMist',
+      selectedCharacters: ['gaara', 'itachi', 'minato'],
+      rounds: '3',
+    }));
+    setup();
+    // Quick Play keeps its rematch and stays the focused default.
+    expect(screen.getByRole('button', { name: /quick play/i })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: /battle a cpu/i }));
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/2/3/hiddenMist');
+      expect(JSON.parse(localStorage.getItem('gameSetup') as string)).toMatchObject({
+        mode: 'local',
+        selectedCharacters: ['gaara', 'itachi'],
+        controllers: ['human', 'cpu-normal'],
+      });
+    });
+  });
+
   it('offers a rematch of the last local battle from Quick Play', async () => {
     localStorage.setItem('gameSetup', JSON.stringify({
       mode: 'local',

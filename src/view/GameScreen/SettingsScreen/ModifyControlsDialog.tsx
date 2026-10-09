@@ -1,8 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  DialogTitle,
   DialogContent,
-  Button,
   DialogActions,
   Typography,
 } from '@mui/material';
@@ -13,11 +11,12 @@ import {
   MovementKeyCell,
   PlayerControlsRow,
   ControlsLabel,
-  StyledDialog,
   ActionKeysGrid,
   ActionKeyCell,
   ActionKeyName,
 } from '../../ConfigScreen/ConfigScreen.styles';
+import { KEY_REBIND_HINT } from '../../ConfigScreen/menuCopy';
+import { SettingsButton, SettingsTitle, StyledSettingsDialog } from './SettingsScreen.styles';
 import {
   ACTION_BINDING_LABELS,
   MOVEMENT_BINDING_LABELS,
@@ -95,18 +94,18 @@ const ModifyControlsDialog = ({
     });
   };
 
+  // The Settings frame, widened so a player's key tiles fit on one row.
   return (
-    <StyledDialog
+    <StyledSettingsDialog
       open={isOpen}
       onClose={onClose}
       aria-labelledby="modify-controls-title"
       style={{ zIndex: 2100 }}
+      PaperProps={{ style: { width: 760, maxWidth: 'calc(100vw - 16px)', margin: 8 } }}
     >
-      <DialogTitle id="modify-controls-title">Modify Controls</DialogTitle>
-      <DialogContent dividers>
-        <KeyHint>
-          Click a key tile, then press the new key to rebind it. Every key must be unique.
-        </KeyHint>
+      <SettingsTitle id="modify-controls-title">Modify Controls</SettingsTitle>
+      <DialogContent>
+        <KeyHint>{KEY_REBIND_HINT}</KeyHint>
         {activePlayers.map((player) => (
           <PlayerControlsRow key={`player-${player}-controls`} numOfPlayers={numOfPlayers}>
             <ControlsLabel>{`Player ${player} Controls:`}</ControlsLabel>
@@ -154,16 +153,16 @@ const ModifyControlsDialog = ({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
+        <SettingsButton variant="outlined" onClick={onClose}>Cancel</SettingsButton>
+        <SettingsButton
+          variant="contained"
           onClick={() => onSave(draftBindings)}
-          color="primary"
           disabled={keyErrors.size > 0}
         >
           Save
-        </Button>
+        </SettingsButton>
       </DialogActions>
-    </StyledDialog>
+    </StyledSettingsDialog>
   );
 };
 

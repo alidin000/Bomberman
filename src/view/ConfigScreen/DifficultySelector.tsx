@@ -16,7 +16,7 @@ export const DifficultySelector = () => {
 
   return (
     <div>
-      <SectionTitle variant="subtitle2" id="campaign-difficulty-label">Difficulty</SectionTitle>
+      <SectionTitle variant="subtitle2" component="h3" id="campaign-difficulty-label">Difficulty</SectionTitle>
       <ToggleButtonGroup
         value={difficulty}
         exclusive
@@ -24,6 +24,7 @@ export const DifficultySelector = () => {
         size="small"
         onChange={handleChange}
         aria-labelledby="campaign-difficulty-label"
+        data-roving-group
       >
         {DIFFICULTY_IDS.map((id) => (
           <ToggleButton key={id} value={id} aria-describedby="campaign-difficulty-detail">

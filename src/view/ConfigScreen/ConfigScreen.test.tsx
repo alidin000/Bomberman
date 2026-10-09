@@ -2,7 +2,7 @@ import { vi, type Mock } from 'vitest';
 /* eslint-disable no-plusplus */
 import React from 'react';
 import {
-  render, screen, fireEvent, waitFor,
+  render, screen, fireEvent, waitFor, within,
 } from '@testing-library/react';
 import { BrowserRouter, useNavigate, NavigateFunction } from 'react-router-dom';
 import { ConfigScreen } from './ConfigScreen';
@@ -74,10 +74,9 @@ describe('ConfigScreen', () => {
     expect(screen.getByText('Deploy Mission')).toBeInTheDocument();
   });
 
-  it('should navigate to the home page when the cancel button is clicked', () => {
+  it('goes back to the main menu from the first step', () => {
     setup();
-    const cancelButton = screen.getByText('Cancel');
-    fireEvent.click(cancelButton);
+    fireEvent.click(screen.getByRole('button', { name: 'Main Menu' }));
     expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 
@@ -147,15 +146,136 @@ describe('ConfigScreen', () => {
     fireEvent.click(screen.getByText('Local Arena'));
     const mistButton = screen.getByLabelText('Hidden Mist Village');
     fireEvent.click(mistButton);
-    expect(screen.getByText('Water cannons fire long telegraphed lines.')).toBeInTheDocument();
+    expect(mistButton).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/Water cannons fire long telegraphed lines\./)).toBeInTheDocument();
   });
 
-  it('should not ask players to choose rounds in local setup', () => {
+  const seat = (label: string) => screen.getByRole('group', { name: new RegExp(`^${label} · `) });
+
+  it('adds a third shinobi from the "Add shinobi" seat and removes it again', async () => {
+    setup();
+    fireEvent.click(screen.getByText('Local Arena'));
+    expect(screen.queryByRole('group', { name: /^P3 · / })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /add shinobi/i }));
+    expect(within(seat('P3')).getByText('Sasuke')).toBeInTheDocument();
+    // Three seats is the most: the add seat is gone.
+    expect(screen.queryByRole('button', { name: /add shinobi/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove P3' }));
+    expect(screen.queryByRole('group', { name: /^P3 · / })).not.toBeInTheDocument();
+    // Two seats is the least: nothing else can be removed.
+    expect(screen.queryByRole('button', { name: /^Remove/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /add shinobi/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start battle/i }));
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/3/1/hiddenLeaf');
+      expect(JSON.parse(localStorage.getItem('gameSetup') as string)).toMatchObject({
+        mode: 'local',
+        selectedCharacters: ['deidara', 'naruto', 'sasuke'],
+      });
+    });
+  });
+
+  it('starts a CPU match from the seat cards: shinobi picker and Human/CPU chip', async () => {
+    setup();
+    fireEvent.click(screen.getByText('Local Arena'));
+    // Each seat names its keys, so players see who plays where.
+    expect(within(seat('P1')).getByText('W A S D · Bomb 2')).toBeInTheDocument();
+    expect(within(seat('P2')).getByText('↑ ← ↓ → · Bomb O')).toBeInTheDocument();
+
+    fireEvent.click(within(seat('P2')).getByRole('button', { name: 'Next shinobi for P2' }));
+    expect(within(seat('P2')).getByText('Sasuke')).toBeInTheDocument();
+
+    // One press makes the seat the usual opponent; more presses walk the levels.
+    const chip = screen.getByRole('button', { name: 'P2 controller: Human' });
+    fireEvent.click(chip);
+    expect(chip).toHaveAccessibleName('P2 controller: CPU Normal');
+    expect(within(seat('P2')).getByText('No keys needed')).toBeInTheDocument();
+    fireEvent.click(chip);
+    expect(chip).toHaveAccessibleName('P2 controller: CPU Hard');
+    fireEvent.click(chip);
+    expect(chip).toHaveAccessibleName('P2 controller: CPU Easy');
+    fireEvent.click(chip);
+    expect(chip).toHaveAccessibleName('P2 controller: Human');
+    fireEvent.click(chip);
+
+    fireEvent.click(screen.getByRole('button', { name: /start battle/i }));
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/2/1/hiddenLeaf');
+      expect(JSON.parse(localStorage.getItem('gameSetup') as string)).toMatchObject({
+        mode: 'local',
+        selectedCharacters: ['deidara', 'sasuke'],
+        controllers: ['human', 'cpu-normal'],
+      });
+    });
+  });
+
+  it('flags a key clash on both seats and blocks the start until it is fixed', () => {
+    localStorage.setItem('playerKeyBindings', JSON.stringify({
+      1: ['w', 'a', 's', 'd', 'o', '1', '3', '4'],
+      2: ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight', 'o', 'i', 'p', '['],
+    }));
     setup();
     fireEvent.click(screen.getByText('Local Arena'));
 
-    expect(screen.queryByText('Victory Seals:')).not.toBeInTheDocument();
-    expect(screen.getByText('Shinobi Count:')).toBeInTheDocument();
+    expect(within(seat('P1')).getByText('Clashes with P2: O')).toBeInTheDocument();
+    expect(within(seat('P2')).getByText('Clashes with P1: O')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /start battle/i })).toBeDisabled();
+
+    // A CPU seat needs no keys, so the clash is gone.
+    fireEvent.click(screen.getByRole('button', { name: 'P2 controller: Human' }));
+    expect(within(seat('P1')).getByText('W A S D · Bomb O')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /start battle/i })).toBeEnabled();
+  });
+
+  it('makes each toggle group and card grid a single Tab stop', () => {
+    setup();
+    fireEvent.click(screen.getByText('Local Arena'));
+    const dialog = screen.getByRole('dialog');
+    const tabStops = (root: HTMLElement) => Array.from(root.querySelectorAll<HTMLElement>('button, input, a[href]'))
+      .filter((element) => element.tabIndex >= 0 && !(element as HTMLButtonElement).disabled);
+    const groups = within(dialog).getAllByRole('group')
+      .filter((group) => !group.parentElement?.closest('[role="group"]'));
+
+    expect(groups.length).toBeGreaterThanOrEqual(4);
+    groups.forEach((group) => expect(tabStops(group)).toHaveLength(1));
+    // Mode, seats, stage, rounds and the three footer actions.
+    expect(tabStops(dialog).length).toBeLessThanOrEqual(8);
+
+    // The stop follows the focus, so Tab returns to the last seat control used.
+    const chip = screen.getByRole('button', { name: 'P2 controller: Human' });
+    fireEvent.focus(chip);
+    expect(chip).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('button', { name: 'Next shinobi for P1' })).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('focuses the selected mode when the deck opens and the new step heading on Next and Back', () => {
+    setup();
+    expect(screen.getByRole('button', { name: /solo campaign/i })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('heading', { name: 'Upgrade Arsenal' })).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { name: 'Mission Deck' })).toHaveFocus();
+  });
+
+  it('asks the mission questions in order, with Deploy Mission after them in the footer', () => {
+    setup();
+    const route = screen.getByLabelText('Hidden Leaf campaign route');
+    const difficulty = screen.getByRole('group', { name: 'Difficulty' });
+    const shinobi = screen.getByLabelText('Deidara player 1');
+    const deploy = screen.getByRole('button', { name: /deploy mission/i });
+    const follows = (a: Element, b: Element) => Boolean(
+      // eslint-disable-next-line no-bitwise
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING
+    );
+
+    expect(follows(screen.getByText('Hidden Leaf Emergency'), route)).toBe(true);
+    expect(follows(route, difficulty)).toBe(true);
+    expect(follows(difficulty, shinobi)).toBe(true);
+    expect(follows(shinobi, deploy)).toBe(true);
   });
 
   it('should continue campaign from the saved village', async () => {
@@ -237,15 +357,15 @@ describe('ConfigScreen', () => {
   it('starts a one-human, one-CPU battle and asks keys only of the human', async () => {
     setup();
     fireEvent.click(screen.getByText('Local Arena'));
-    fireEvent.click(screen.getByRole('button', { name: 'P2 CPU Normal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'P2 controller: Human' }));
     // The last human slot cannot be turned into a CPU.
-    expect(screen.getByRole('button', { name: 'P1 CPU Hard' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'P1 controller: Human' })).toBeDisabled();
 
     fireEvent.click(screen.getByText('Next'));
     expect(screen.getByText('Player 1 Loadout Keys')).toBeInTheDocument();
     expect(screen.queryByText('Player 2 Loadout Keys')).not.toBeInTheDocument();
     expect(screen.getByText('P2 · CPU')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^play$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start battle/i }));
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/game/2/1/hiddenLeaf');
@@ -277,8 +397,9 @@ describe('ConfigScreen', () => {
     setup();
 
     expect(screen.getByLabelText('Hidden Cloud Village')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByLabelText('Itachi player 2')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: '3' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(seat('P1')).getByText('Gaara')).toBeInTheDocument();
+    expect(within(seat('P2')).getByText('Itachi')).toBeInTheDocument();
+    expect(within(seat('P3')).getByText('Minato')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /start battle/i }));
 
     await waitFor(() => {
@@ -328,12 +449,14 @@ describe('ConfigScreen', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it('shows each stage mechanic on its own line under the stage name', () => {
+  it('describes the selected stage with its rule, once, under the stage strip', () => {
     setup();
     fireEvent.click(screen.getByText('Local Arena'));
-    const mechanic = screen.getByText('Water cannons fire long telegraphed lines.');
+    fireEvent.click(screen.getByLabelText('Hidden Mist Village'));
 
-    expect(window.getComputedStyle(mechanic).display).toBe('block');
+    expect(screen.getByLabelText('Hidden Mist Village'))
+      .toHaveAccessibleDescription(/Water cannons fire long telegraphed lines\./);
+    expect(screen.getByLabelText('Hidden Leaf Village')).not.toHaveAttribute('aria-describedby');
   });
 
   it('says which village unlocks a locked campaign shinobi', () => {
@@ -346,8 +469,7 @@ describe('ConfigScreen', () => {
 
   it('should save configuration and navigate to game screen on play', async () => {
     setup(2);
-    const playButton = screen.getByText('Play');
-    fireEvent.click(playButton);
+    fireEvent.click(screen.getByRole('button', { name: /deploy mission/i }));
     await waitFor(() => {
       expect(localStorage.getItem('playerKeyBindings')).not.toBeNull();
       expect(localStorage.getItem('gameSetup')).not.toBeNull();

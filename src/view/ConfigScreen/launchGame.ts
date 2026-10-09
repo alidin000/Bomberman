@@ -141,6 +141,35 @@ export function readLastLocalSetup(): {
 }
 
 /**
+ * The title screen's "Battle a CPU": you (P1) against one CPU Normal shinobi
+ * in Local Arena, on the last local stage (else the first stage), with the
+ * last local shinobi and round count when there are any.
+ */
+export function getCpuBattlePlan(storyProgress: StoryProgress): QuickPlayPlan {
+  const lastLocal = readLastLocalSetup();
+  const stageId = lastLocal?.stageId ?? STAGE_DEFINITIONS[0].id;
+  const player = lastLocal?.characters[0] ?? storyProgress.lastCharacter ?? DEFAULT_CHARACTER_ID;
+  const rival = lastLocal?.characters[1]
+    ?? CHARACTER_DEFINITIONS.find((character) => character.id !== player)?.id
+    ?? player;
+  const rounds = lastLocal?.rounds ?? SINGLE_MATCH_ROUNDS;
+  return {
+    mode: 'local',
+    stageId,
+    characters: [player, rival],
+    upgrade: storyProgress.selectedUpgrade,
+    players: '2',
+    rounds,
+    controllers: ['human', 'cpu-normal'],
+    summary: [
+      getStageDefinition(stageId).name,
+      `${characterName(player)} vs ${characterName(rival)} (${getControllerLabel('cpu-normal')})`,
+      ...(rounds === SINGLE_MATCH_ROUNDS ? [] : [`Best of ${rounds}`]),
+    ].join(' · '),
+  };
+}
+
+/**
  * What Quick Play starts: the last local battle if that was the last match,
  * otherwise the current campaign mission with the saved shinobi and upgrade.
  */
