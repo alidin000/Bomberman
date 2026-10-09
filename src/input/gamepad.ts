@@ -14,6 +14,9 @@ export type PadSnapshot = {
 
 export type KeySink = (type: 'keydown' | 'keyup', key: string) => void;
 
+/** A press or release of a pad control the menu owns. */
+export type PadMenuSink = (control: number, pressed: boolean, slot: number) => void;
+
 export const STICK_DEADZONE = 0.5;
 export const PAUSE_KEY = 'Escape';
 
@@ -26,6 +29,28 @@ const START_BUTTON = 9;
 const CONTROL_COUNT = KEY_BINDING_COUNT + 1;
 const PAUSE_CONTROL = KEY_BINDING_COUNT;
 
+/**
+ * Control indices as the poller reads them: binding order, then Start. The
+ * face buttons are named by position, since they also carry game actions.
+ */
+export const PAD_CONTROL = {
+  UP: 0,
+  LEFT: 1,
+  DOWN: 2,
+  RIGHT: 3,
+  SOUTH: 4,
+  EAST: 5,
+  NORTH: 6,
+  WEST: 7,
+  START: PAUSE_CONTROL,
+} as const;
+export const PAD_CONTROL_COUNT = CONTROL_COUNT;
+
+// Who a held control belongs to: its press went to the keys or the menu.
+const NO_OWNER = 0;
+const KEY_OWNER = 1;
+const MENU_OWNER = 2;
+
 function isPressed(pad: PadSnapshot, button: number): boolean {
   return pad.buttons[button]?.pressed === true;
 }
@@ -35,28 +60,36 @@ function isPressed(pad: PadSnapshot, button: number): boolean {
  * n+1. Only changes produce key events, and a release always sends the key
  * that was pressed, even if the bindings changed in between. Polling
  * allocates nothing after a slot's first use.
+ *
+ * While `menuTakesPresses`, new presses go to the `menu` sink instead of the
+ * keys. Each press keeps the owner it started with until it is released, so
+ * one press never both plays and steers a menu: a bomb held into the round
+ * result stays a key, and an A that resumed from the pause menu never bombs.
  */
 export class GamepadPoller {
-  private readonly slots: { held: boolean[]; keys: string[] }[] = [];
+  private readonly slots: { held: boolean[]; keys: string[]; owners: number[] }[] = [];
 
   private readonly scratch: boolean[] = new Array(CONTROL_COUNT).fill(false);
 
   poll(
     pads: readonly (PadSnapshot | null)[],
     keyBindings: KeyBindings,
-    sink: KeySink
+    sink: KeySink,
+    menu: PadMenuSink | null = null,
+    menuTakesPresses = menu !== null
   ): void {
+    const pressSink = menuTakesPresses ? menu : null;
     let slotIndex = 0;
     for (let i = 0; i < pads.length; i += 1) {
       const pad = pads[i];
       if (pad && pad.connected) {
-        this.applySlot(slotIndex, pad, keyBindings, sink);
+        this.applySlot(slotIndex, pad, keyBindings, sink, menu, pressSink);
         slotIndex += 1;
       }
     }
     // Slots whose pad went away release everything they still hold.
     for (let i = slotIndex; i < this.slots.length; i += 1) {
-      this.applySlot(i, null, keyBindings, sink);
+      this.applySlot(i, null, keyBindings, sink, menu, pressSink);
     }
   }
 
@@ -68,6 +101,7 @@ export class GamepadPoller {
   reset(): void {
     this.slots.forEach((slot) => {
       slot.held.fill(false);
+      slot.owners.fill(NO_OWNER);
     });
   }
 
@@ -101,13 +135,16 @@ export class GamepadPoller {
     slotIndex: number,
     pad: PadSnapshot | null,
     keyBindings: KeyBindings,
-    sink: KeySink
+    sink: KeySink,
+    menu: PadMenuSink | null,
+    pressSink: PadMenuSink | null
   ): void {
     let slot = this.slots[slotIndex];
     if (!slot) {
       slot = {
         held: new Array(CONTROL_COUNT).fill(false),
         keys: new Array(CONTROL_COUNT).fill(''),
+        owners: new Array(CONTROL_COUNT).fill(NO_OWNER),
       };
       this.slots[slotIndex] = slot;
     }
@@ -116,15 +153,24 @@ export class GamepadPoller {
     for (let i = 0; i < CONTROL_COUNT; i += 1) {
       if (controls[i] !== slot.held[i]) {
         if (controls[i]) {
-          const key = i === PAUSE_CONTROL ? PAUSE_KEY : bindings?.[i];
-          if (key) {
+          if (pressSink) {
             slot.held[i] = true;
-            slot.keys[i] = key;
-            sink('keydown', key);
+            slot.owners[i] = MENU_OWNER;
+            pressSink(i, true, slotIndex);
+          } else {
+            const key = i === PAUSE_CONTROL ? PAUSE_KEY : bindings?.[i];
+            if (key) {
+              slot.held[i] = true;
+              slot.owners[i] = KEY_OWNER;
+              slot.keys[i] = key;
+              sink('keydown', key);
+            }
           }
         } else {
           slot.held[i] = false;
-          sink('keyup', slot.keys[i]);
+          if (slot.owners[i] === MENU_OWNER) menu?.(i, false, slotIndex);
+          else sink('keyup', slot.keys[i]);
+          slot.owners[i] = NO_OWNER;
         }
       }
     }

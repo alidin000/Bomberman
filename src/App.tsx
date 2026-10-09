@@ -7,6 +7,7 @@ import { WelcomeScreen } from './view/WelcomeScreen/WelcomeScreen';
 import { ConfigScreen } from './view/ConfigScreen/ConfigScreen';
 import { InstructionsScreen } from './view/InstructionsScreen/InstructionsScreen';
 import { GameSettingsProvider } from './contexts/GameSettingsContext';
+import { MenuPad } from './input/MenuPad';
 import {
   gameScreenChunk,
   lazyScreen,
@@ -49,6 +50,8 @@ export function App() {
   return (
     <GameSettingsProvider>
       <ThemeProvider theme={theme}>
+        {/* Gamepads drive every screen's menus and dialogs. */}
+        <MenuPad />
         <Routes>
           <Route
             path="/"

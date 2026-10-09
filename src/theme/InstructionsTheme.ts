@@ -13,6 +13,15 @@ const theme = createTheme({
       light: '#789a91',
       dark: '#244d4a',
     },
+    // Destructive actions (Quit, Leave, Restart in a confirm). MUI's default
+    // orange read 2.94:1 on the paper panels; --anime-vermilion-deep reads
+    // 6.7:1 on paper-light and 5.6:1 on paper.
+    warning: {
+      main: '#9e3328',
+      light: '#bd3f32',
+      dark: '#832b24',
+      contrastText: '#fff8e7',
+    },
     background: {
       default: '#272b35',
       paper: '#efe3c4',

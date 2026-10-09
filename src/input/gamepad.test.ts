@@ -88,4 +88,32 @@ describe('GamepadPoller', () => {
     poller.reset();
     expect(run(poller, [pad])).toEqual(['keydown:a']);
   });
+
+  it('keeps each press with whoever got it, game keys or menu, until it is let go', () => {
+    const poller = new GamepadPoller();
+    const pad = createPad();
+    const events: string[] = [];
+    const poll = (menuTakesPresses: boolean) => poller.poll(
+      [pad],
+      DEFAULT_KEY_BINDINGS,
+      (type, key) => events.push(`${type}:${key}`),
+      (control, pressed) => events.push(`menu:${control}:${pressed ? 'down' : 'up'}`),
+      menuTakesPresses
+    );
+
+    pad.buttons[0].pressed = true; // bomb, in play
+    poll(false);
+    // The round ends with it still held; the menu now takes new presses.
+    pad.buttons[15].pressed = true; // d-pad right
+    poll(true);
+    poll(true);
+    // Play resumes while right is still held.
+    pad.buttons[0].pressed = false;
+    poll(false);
+    pad.buttons[15].pressed = false;
+    poll(false);
+
+    // The bomb never reached the menu, and the menu's press never walked.
+    expect(events).toEqual(['keydown:2', 'menu:3:down', 'keyup:2', 'menu:3:up']);
+  });
 });

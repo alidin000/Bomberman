@@ -83,7 +83,9 @@ describe('GameScreen', () => {
     expect(screen.getByRole('group', { name: 'P2 Deidara' })).toBeInTheDocument();
   });
 
-  it('restarts the same setup from the top controls', () => {
+  it('restarts the same setup only from the pause menu, after confirming', async () => {
+    localStorage.setItem('shinobiControlsGuideSeen', 'true');
+    currentMockState = { ...mockState, paused: true };
     render(
       <MemoryRouter initialEntries={['/game/2/1/map1']}>
         <ThemeProvider theme={theme}>
@@ -92,8 +94,23 @@ describe('GameScreen', () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getByLabelText('restart same setup'));
+    // No one-click restart beside Pause any more.
+    expect(screen.queryByLabelText('restart same setup')).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('button', { name: /^restart$/i }));
+    expect(engineMocks.restart).not.toHaveBeenCalled();
+    const confirm = screen.getByRole('dialog', { name: 'Restart The Match?' });
+    expect(within(confirm).getByRole('button', { name: 'Stay' })).toHaveFocus();
+
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Stay' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Restart The Match?' })).not.toBeInTheDocument();
+    });
+    expect(engineMocks.restart).not.toHaveBeenCalled();
+    expect(screen.getByText('Paused')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^restart$/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Restart Match' }));
     expect(engineMocks.restart).toHaveBeenCalledTimes(1);
   });
 

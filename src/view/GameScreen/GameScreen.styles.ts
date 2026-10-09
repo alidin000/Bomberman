@@ -139,10 +139,12 @@ export const ControlButton = styled(IconButton)({
   },
 });
 
+// Above TopControls (20): the menu is modal, and the bar under its scrim is
+// inert while it is up.
 export const PauseOverlay = styled.div({
   position: 'absolute',
   inset: 0,
-  zIndex: 18,
+  zIndex: 21,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',

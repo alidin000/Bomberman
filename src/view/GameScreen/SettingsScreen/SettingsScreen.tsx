@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  DialogContent, DialogActions, FormControlLabel, Slider, Switch
+  DialogContent, FormControlLabel, Slider, Switch
 } from '@mui/material';
 import AccessibilityNewIcon from '@mui/icons-material/AccessibilityNew';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
@@ -10,7 +10,6 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useNavigate } from 'react-router-dom';
 import {
   ButtonContainer,
-  ConfirmText,
   PreferenceGrid,
   PreferenceSection,
   PreferenceSlider,
@@ -20,6 +19,7 @@ import {
   StyledSettingsDialog,
 } from './SettingsScreen.styles';
 import { SettingsScreenProps } from '../../../constants/props';
+import { MatchConfirmDialog, MatchConfirmKind } from './MatchConfirmDialog';
 
 // `onClose` goes back to wherever settings were opened from (the pause menu
 // or live play); `onResume` always gives play back.
@@ -38,18 +38,13 @@ const SettingsScreen: React.FC<Props> = (
   }
 ) => {
   const navigate = useNavigate();
-  const [openConfirm, setOpenConfirm] = useState(false);
+  // Restart and Quit both wipe the match, so both ask first.
+  const [confirmKind, setConfirmKind] = useState<MatchConfirmKind | null>(null);
 
-  const handleQuitClick = () => {
-    setOpenConfirm(true);
-  };
-
-  const handleQuitConfirm = () => {
-    navigate('/');
-  };
-
-  const handleQuitCancel = () => {
-    setOpenConfirm(false);
+  const handleConfirm = (kind: MatchConfirmKind) => {
+    setConfirmKind(null);
+    if (kind === 'quit') navigate('/');
+    else onRestart();
   };
 
   return (
@@ -63,13 +58,13 @@ const SettingsScreen: React.FC<Props> = (
           <SettingsButton variant="contained" startIcon={<PlayArrowIcon />} onClick={onResume ?? onClose}>
             Resume Game
           </SettingsButton>
-          <SettingsButton variant="outlined" startIcon={<RestartAltIcon />} onClick={onRestart}>
+          <SettingsButton variant="outlined" startIcon={<RestartAltIcon />} onClick={() => setConfirmKind('restart')}>
             Restart Same Setup
           </SettingsButton>
           <SettingsButton variant="outlined" startIcon={<KeyboardIcon />} onClick={onModifyControls}>
             Modify Controls
           </SettingsButton>
-          <SettingsButton variant="outlined" color="warning" startIcon={<ExitToAppIcon />} onClick={handleQuitClick}>
+          <SettingsButton variant="outlined" color="warning" startIcon={<ExitToAppIcon />} onClick={() => setConfirmKind('quit')}>
             Quit Game
           </SettingsButton>
         </ButtonContainer>
@@ -179,16 +174,11 @@ const SettingsScreen: React.FC<Props> = (
           </PreferenceSlider>
         </PreferenceSection>
       </DialogContent>
-      <StyledSettingsDialog open={openConfirm} onClose={handleQuitCancel} aria-labelledby="confirm-dialog-title">
-        <SettingsTitle id="confirm-dialog-title">Leave The Arena?</SettingsTitle>
-        <ConfirmText>Your current match progress will be lost.</ConfirmText>
-        <DialogActions>
-          <SettingsButton variant="outlined" onClick={handleQuitCancel}>Stay</SettingsButton>
-          <SettingsButton variant="outlined" color="warning" onClick={handleQuitConfirm}>
-            Leave Match
-          </SettingsButton>
-        </DialogActions>
-      </StyledSettingsDialog>
+      <MatchConfirmDialog
+        kind={confirmKind}
+        onCancel={() => setConfirmKind(null)}
+        onConfirm={handleConfirm}
+      />
     </StyledSettingsDialog>
   );
 };

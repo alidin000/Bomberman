@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { Button, Dialog, DialogTitle } from '@mui/material';
+import theme from '../../../theme/InstructionsTheme';
 
 const panelCut = 'none';
 const chipCut = 'none';
@@ -80,9 +81,11 @@ export const SettingsButton = styled(Button)({
     borderColor: 'var(--anime-ink)',
     background: 'var(--anime-paper)',
   },
+  // The theme's warning ink: 5.8:1 on this tint over paper-light (the old
+  // vermilion read 4.37:1).
   '&.MuiButton-colorWarning': {
-    color: 'var(--anime-vermilion)',
-    borderColor: 'var(--anime-vermilion)',
+    color: theme.palette.warning.main,
+    borderColor: theme.palette.warning.main,
     background: 'rgba(189,63,50,0.1)',
   },
 });

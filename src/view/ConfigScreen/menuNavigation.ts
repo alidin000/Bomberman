@@ -8,23 +8,20 @@ const DIRECTIONS: Record<string, [number, number]> = {
 };
 
 /**
- * Lets the arrow keys move focus to the nearest enabled button in that
- * direction, like a console menu. Tab order is unchanged. Text inputs (the key
- * rebinding tiles) keep the arrow keys for themselves.
+ * The candidate nearest to `current` in `direction` (a unit [x, y] step), or
+ * null: the arrow-key scoring below, shared with gamepad menu navigation.
  */
-export function moveFocusWithArrows(event: React.KeyboardEvent<HTMLElement>): void {
-  const direction = DIRECTIONS[event.key];
-  if (!direction || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-  const current = document.activeElement as HTMLElement | null;
-  const container = event.currentTarget;
-  if (!current || current.tagName === 'INPUT' || !container.contains(current)) return;
-
+export function nearestInDirection(
+  current: Element,
+  candidates: Iterable<HTMLElement>,
+  direction: readonly [number, number]
+): HTMLElement | null {
   const from = current.getBoundingClientRect();
   const fromX = from.left + from.width / 2;
   const fromY = from.top + from.height / 2;
   let best: HTMLElement | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
-  container.querySelectorAll<HTMLElement>('button:not(:disabled)').forEach((candidate) => {
+  Array.from(candidates).forEach((candidate) => {
     if (candidate === current) return;
     const rect = candidate.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return;
@@ -39,8 +36,28 @@ export function moveFocusWithArrows(event: React.KeyboardEvent<HTMLElement>): vo
       bestScore = score;
     }
   });
+  return best;
+}
+
+/**
+ * Lets the arrow keys move focus to the nearest enabled button in that
+ * direction, like a console menu. Tab order is unchanged. Text inputs (the key
+ * rebinding tiles) keep the arrow keys for themselves.
+ */
+export function moveFocusWithArrows(event: React.KeyboardEvent<HTMLElement>): void {
+  const direction = DIRECTIONS[event.key];
+  if (!direction || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  const current = document.activeElement as HTMLElement | null;
+  const container = event.currentTarget;
+  if (!current || current.tagName === 'INPUT' || !container.contains(current)) return;
+
+  const best = nearestInDirection(
+    current,
+    container.querySelectorAll<HTMLElement>('button:not(:disabled)'),
+    direction
+  );
   if (best) {
     event.preventDefault();
-    (best as HTMLElement).focus();
+    best.focus();
   }
 }

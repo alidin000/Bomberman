@@ -2,6 +2,7 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -16,6 +17,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { Tooltip } from '@mui/material';
+import FocusTrap from '@mui/material/Unstable_TrapFocus';
 import { useNavigate, useParams } from 'react-router-dom';
 import { StyledBackground } from '../WelcomeScreen/WelcomeScreen.styles';
 import {
@@ -28,6 +30,7 @@ import { RoundResultDialog } from './RoundResultDialog';
 import { ResultTone } from './RoundResultDialog.styles';
 import SettingsScreen from './SettingsScreen/SettingsScreen';
 import ModifyControlsDialog from './SettingsScreen/ModifyControlsDialog';
+import { MatchConfirmDialog, MatchConfirmKind } from './SettingsScreen/MatchConfirmDialog';
 import { GameScene3D } from './GameScene3D';
 import { GameHUD } from './GameHUD';
 import { useGameEngine } from '../../hooks/useGameEngine';
@@ -68,6 +71,8 @@ import { useGameFeedback } from './useGameFeedback';
 import { playerSlotColor, playerSlotLabel, playerSlotTextColor } from './playerSlots';
 import { loadCampaignDifficulty } from '../ConfigScreen/campaignDifficulty';
 import { isCpuSlot, normalizeControllers } from '../../ai/controllers';
+import { usePadGameSurface } from '../../input/MenuPad';
+import { PAD_START_EVENT } from '../../input/padNavigator';
 
 const CONTROLS_GUIDE_SEEN_KEY = 'shinobiControlsGuideSeen';
 
@@ -179,67 +184,72 @@ function useRoundStartBeat(state: GameEngineState | null): { countdown: string; 
 
 type GameTopControlsProps = {
   isPaused: boolean;
+  /** A menu is up: the bar is inert, so only that menu takes input. */
+  locked: boolean;
   showHud: boolean;
   onPauseToggle: () => void;
-  onRestart: () => void;
   onOpenSettings: () => void;
   onShowControls: () => void;
   onToggleHud: () => void;
 };
 
-// Memoised so the five tooltips and icon buttons do not re-render on every
+// Memoised so the tooltips and icon buttons do not re-render on every
 // engine tick. An open MUI Tooltip rebuilds its popper.js instance on each
 // render (its default PopperProps object is new every time), which forces a
 // style recalc and layout per tick while the pointer rests on a button.
+// Restart is not here: it wipes the match, so it lives behind the pause
+// menu's confirm instead of one stray click away from Pause.
 const GameTopControls = React.memo(({
   isPaused,
+  locked,
   showHud,
   onPauseToggle,
-  onRestart,
   onOpenSettings,
   onShowControls,
   onToggleHud,
-}: GameTopControlsProps) => (
-  <TopControls>
-    <Tooltip title={isPaused ? 'Resume' : 'Pause'}>
-      <ControlButton
-        aria-label={isPaused ? 'resume game' : 'pause game'}
-        onClick={onPauseToggle}
-      >
-        {isPaused ? <PlayArrowIcon /> : <PauseIcon />}
-      </ControlButton>
-    </Tooltip>
-    <Tooltip title="Restart same setup">
-      <ControlButton aria-label="restart same setup" onClick={onRestart}>
-        <RestartAltIcon />
-      </ControlButton>
-    </Tooltip>
-    <Tooltip title="Settings">
-      <ControlButton
-        aria-label="open settings"
-        onClick={onOpenSettings}
-      >
-        <SettingsIcon />
-      </ControlButton>
-    </Tooltip>
-    <Tooltip title="Controls">
-      <ControlButton
-        aria-label="show controls"
-        onClick={onShowControls}
-      >
-        <KeyboardIcon />
-      </ControlButton>
-    </Tooltip>
-    <Tooltip title={showHud ? 'Hide HUD' : 'Show HUD'}>
-      <ControlButton
-        aria-label={showHud ? 'hide HUD' : 'show HUD'}
-        onClick={onToggleHud}
-      >
-        {showHud ? <VisibilityOffIcon /> : <VisibilityIcon />}
-      </ControlButton>
-    </Tooltip>
-  </TopControls>
-));
+}: GameTopControlsProps) => {
+  const barRef = useRef<HTMLDivElement>(null);
+  // React 18 has no `inert` prop; the attribute is what browsers honour.
+  useLayoutEffect(() => {
+    barRef.current?.toggleAttribute('inert', locked);
+  }, [locked]);
+  return (
+    <TopControls ref={barRef}>
+      <Tooltip title={isPaused ? 'Resume' : 'Pause'}>
+        <ControlButton
+          aria-label={isPaused ? 'resume game' : 'pause game'}
+          onClick={onPauseToggle}
+        >
+          {isPaused ? <PlayArrowIcon /> : <PauseIcon />}
+        </ControlButton>
+      </Tooltip>
+      <Tooltip title="Settings">
+        <ControlButton
+          aria-label="open settings"
+          onClick={onOpenSettings}
+        >
+          <SettingsIcon />
+        </ControlButton>
+      </Tooltip>
+      <Tooltip title="Controls">
+        <ControlButton
+          aria-label="show controls"
+          onClick={onShowControls}
+        >
+          <KeyboardIcon />
+        </ControlButton>
+      </Tooltip>
+      <Tooltip title={showHud ? 'Hide HUD' : 'Show HUD'}>
+        <ControlButton
+          aria-label={showHud ? 'hide HUD' : 'show HUD'}
+          onClick={onToggleHud}
+        >
+          {showHud ? <VisibilityOffIcon /> : <VisibilityIcon />}
+        </ControlButton>
+      </Tooltip>
+    </TopControls>
+  );
+});
 GameTopControls.displayName = 'GameTopControls';
 
 // Closed dialogs still ran their render (and the result dialog its match
@@ -256,6 +266,10 @@ const MemoSettingsScreen = React.memo(
 const MemoModifyControlsDialog = React.memo(
   ModifyControlsDialog,
   (prev, next) => !prev.isOpen && !next.isOpen
+);
+const MemoMatchConfirmDialog = React.memo(
+  MatchConfirmDialog,
+  (prev, next) => prev.kind === null && next.kind === null
 );
 // Fed the render state (see useRenderState), so a held-movement frame skips
 // the whole HUD and 3D scene re-render; the scene draws those steps itself.
@@ -276,6 +290,11 @@ export const GameScreen = () => {
   // when they were opened mid-play; opened from the pause menu, closing them
   // returns there instead of un-pausing under the player.
   const resumeAfterMenu = useRef(true);
+  // Restart or quit waiting for "Leave Match" / "Restart Match". The ref
+  // tells the pause menu's focus trap, during the same commit, to let focus
+  // go to the confirm dialog stacked on top of it.
+  const [pendingConfirm, setPendingConfirm] = useState<MatchConfirmKind | null>(null);
+  const confirmOpen = useRef(false);
 
   const config = useMemo<GameConfig | null>(() => {
     if (!numOfPlayers || !numOfRounds || !selectedMap) return null;
@@ -479,6 +498,24 @@ export const GameScreen = () => {
     navigate('/');
   }, [navigate]);
 
+  const requestConfirm = useCallback((kind: MatchConfirmKind) => {
+    confirmOpen.current = true;
+    setPendingConfirm(kind);
+  }, []);
+
+  const handleCancelConfirm = useCallback(() => {
+    confirmOpen.current = false;
+    setPendingConfirm(null);
+  }, []);
+
+  const handleConfirm = useCallback((kind: MatchConfirmKind) => {
+    handleCancelConfirm();
+    if (kind === 'quit') handleQuitGame();
+    else restart();
+  }, [handleCancelConfirm, handleQuitGame, restart]);
+
+  const pauseTrapEnabled = useCallback(() => !confirmOpen.current, []);
+
   const handleCloseDialog = () => {
     dismissDialog();
   };
@@ -486,8 +523,16 @@ export const GameScreen = () => {
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      // A held Escape repeats: one press closes Settings back to the pause
+      // menu, and the repeats must not then resume live play.
+      if (event.repeat) return;
       if (dialogOpen) return;
       event.preventDefault();
+
+      if (pendingConfirm) {
+        handleCancelConfirm();
+        return;
+      }
 
       if (showControlsGuide) {
         handleDismissControlsGuide();
@@ -506,13 +551,38 @@ export const GameScreen = () => {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [
     dialogOpen,
+    handleCancelConfirm,
     handleCloseMenus,
     handleTogglePause,
     handleDismissControlsGuide,
     isModifyingControls,
     isSettingsOpen,
+    pendingConfirm,
     showControlsGuide,
   ]);
+
+  // Pads steer menus whenever no round is live, and play it otherwise.
+  const padMenuActive = !state
+    || state.phase !== 'playing'
+    || isPaused
+    || showControlsGuide
+    || isSettingsOpen
+    || isModifyingControls
+    || pendingConfirm !== null;
+  usePadGameSurface(padMenuActive);
+
+  // Start on the round result continues, like its focused main button.
+  const isGameOver = state?.phase === 'game_over';
+  useEffect(() => {
+    if (!dialogOpen) return undefined;
+    const handlePadStart = (event: Event) => {
+      event.preventDefault();
+      if (isGameOver) restart();
+      else dismissDialog();
+    };
+    window.addEventListener(PAD_START_EVENT, handlePadStart);
+    return () => window.removeEventListener(PAD_START_EVENT, handlePadStart);
+  }, [dialogOpen, dismissDialog, isGameOver, restart]);
 
   // The countdown overlay is visual only; the live region reads "3, 2, 1,
   // Go!" (nothing else happens while the arena is frozen) and then captions.
@@ -535,9 +605,9 @@ export const GameScreen = () => {
       {showHud && <MemoGameHUD state={renderState} scale={preferences.hudScale} />}
       <GameTopControls
         isPaused={isPaused}
+        locked={isPaused && !showControlsGuide}
         showHud={showHud}
         onPauseToggle={showControlsGuide ? handleDismissControlsGuide : handleTogglePause}
-        onRestart={restart}
         onOpenSettings={handleOpenSettings}
         onShowControls={handleShowControlsGuide}
         onToggleHud={handleToggleHud}
@@ -570,7 +640,7 @@ export const GameScreen = () => {
         </GoOverlay>
       )}
       {showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
-        <ControlsGuide aria-label="controls guide">
+        <ControlsGuide aria-label="controls guide" data-pad-layer="">
           <ControlsGuideHeader>
             <strong>Controls</strong>
             <ControlsDismissButton
@@ -584,68 +654,78 @@ export const GameScreen = () => {
         </ControlsGuide>
       )}
       {isPaused && !showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
-        <PauseOverlay
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="pause-menu-title"
-        >
-          <PauseMenuCard>
-            <PauseMenuTitle id="pause-menu-title">
-              <strong>Paused</strong>
-              <span>Esc resumes</span>
-            </PauseMenuTitle>
-            <PauseMenuActions>
-              <PauseMenuButton
-                autoFocus
-                variant="contained"
-                startIcon={<PlayArrowIcon />}
-                onClick={resume}
-              >
-                Resume
-              </PauseMenuButton>
-              <PauseMenuButton
-                variant="outlined"
-                startIcon={<RestartAltIcon />}
-                onClick={restart}
-              >
-                Restart
-              </PauseMenuButton>
-              <PauseMenuButton
-                variant="outlined"
-                startIcon={<SettingsIcon />}
-                onClick={handleOpenSettings}
-              >
-                Settings
-              </PauseMenuButton>
-              <PauseMenuButton
-                variant="outlined"
-                color="warning"
-                startIcon={<ExitToAppIcon />}
-                onClick={handleQuitGame}
-              >
-                Quit Game
-              </PauseMenuButton>
-            </PauseMenuActions>
-            <ControlsTable rows={controlRows} label="controls" />
-            <PlayerKits aria-label="shinobi kits">
-              {playerKits.map((kit) => (
-                <li key={kit.slot}>
-                  <ControlSlot
-                    slotColor={playerSlotColor(kit.slot)}
-                    textColor={playerSlotTextColor(kit.slot)}
-                  >
-                    {playerSlotLabel(kit.slot)}
-                  </ControlSlot>
-                  <span>
-                    <strong>{`${kit.name} · ${kit.title}`}</strong>
-                    {kit.detail}
-                  </span>
-                </li>
-              ))}
-            </PlayerKits>
-          </PauseMenuCard>
-        </PauseOverlay>
+        // Tab stays inside the menu; pads treat it as their menu.
+        <FocusTrap open disableRestoreFocus isEnabled={pauseTrapEnabled}>
+          <PauseOverlay
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pause-menu-title"
+            tabIndex={-1}
+            data-pad-layer=""
+          >
+            <PauseMenuCard>
+              <PauseMenuTitle id="pause-menu-title">
+                <strong>Paused</strong>
+                <span>Esc or Start resumes</span>
+              </PauseMenuTitle>
+              <PauseMenuActions>
+                <PauseMenuButton
+                  autoFocus
+                  variant="contained"
+                  startIcon={<PlayArrowIcon />}
+                  onClick={resume}
+                >
+                  Resume
+                </PauseMenuButton>
+                <PauseMenuButton
+                  variant="outlined"
+                  startIcon={<RestartAltIcon />}
+                  onClick={() => requestConfirm('restart')}
+                >
+                  Restart
+                </PauseMenuButton>
+                <PauseMenuButton
+                  variant="outlined"
+                  startIcon={<SettingsIcon />}
+                  onClick={handleOpenSettings}
+                >
+                  Settings
+                </PauseMenuButton>
+                <PauseMenuButton
+                  variant="outlined"
+                  color="warning"
+                  startIcon={<ExitToAppIcon />}
+                  onClick={() => requestConfirm('quit')}
+                >
+                  Quit Game
+                </PauseMenuButton>
+              </PauseMenuActions>
+              <ControlsTable rows={controlRows} label="controls" />
+              <PlayerKits aria-label="shinobi kits">
+                {playerKits.map((kit) => (
+                  <li key={kit.slot}>
+                    <ControlSlot
+                      slotColor={playerSlotColor(kit.slot)}
+                      textColor={playerSlotTextColor(kit.slot)}
+                    >
+                      {playerSlotLabel(kit.slot)}
+                    </ControlSlot>
+                    <span>
+                      <strong>{`${kit.name} · ${kit.title}`}</strong>
+                      {kit.detail}
+                    </span>
+                  </li>
+                ))}
+              </PlayerKits>
+            </PauseMenuCard>
+          </PauseOverlay>
+        </FocusTrap>
       )}
+      <MemoMatchConfirmDialog
+        kind={pendingConfirm}
+        onCancel={handleCancelConfirm}
+        onConfirm={handleConfirm}
+      />
       <MemoRoundResultDialog
         open={dialogOpen}
         onClose={handleCloseDialog}
