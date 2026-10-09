@@ -10,7 +10,8 @@ import { ThemeProvider } from '@mui/material/styles';
 import theme from '../../theme/InstructionsTheme';
 import { ConfigScreen } from '../ConfigScreen/ConfigScreen';
 import { HubScreen } from './HubScreen';
-import { GameScreen, RESULT_HOLD_MS } from '../GameScreen/GameScreen';
+import { GameScreen } from '../GameScreen/GameScreen';
+import { BOSS_SEAL_HOLD_MS } from '../GameScreen/bossBeats';
 import { RESULT_INPUT_LOCK_MS } from '../GameScreen/RoundResultDialog';
 import { createBossForConfig, createInitialState } from '../../engine/initialState';
 import type { GameConfig, GameEngineState } from '../../engine/types';
@@ -133,7 +134,8 @@ describe('campaign hub flow', () => {
       expect(JSON.parse(localStorage.getItem('gameSetup') as string).loadout.consumables)
         .toEqual([]);
 
-      act(() => { vi.advanceTimersByTime(RESULT_HOLD_MS); });
+      // A sealed boss holds its collapse longer than a round's deciding moment.
+      act(() => { vi.advanceTimersByTime(BOSS_SEAL_HOLD_MS); });
       // A first clear on Normal: 50 + 4 objectives (rescue, defense, route
       // puzzle, mini-boss gate) x 6 + one scroll cache 10.
       expect(await screen.findByText('+84 Embers')).toBeInTheDocument();

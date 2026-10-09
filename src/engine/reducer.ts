@@ -27,6 +27,7 @@ import { tickSuddenDeath } from './suddenDeath';
 import { regroupFallenPlayers } from './campaignLives';
 import { checkTrainingRoundEnd, isTrainingConfig } from './training';
 import { withoutConsumables } from './campaignLoadout';
+import { BOSS_INTRO_MS, BOSS_INTRO_SKIP_LOCK_MS } from './constants';
 
 function getWinnerName(state: GameEngineState, winnerId: string): string {
   return state.players.find((player) => player.id === winnerId)?.name ?? winnerId;
@@ -78,6 +79,10 @@ function spawnUnlockedCampaignBoss(state: GameEngineState): GameEngineState {
   return {
     ...state,
     boss,
+    // The arena freezes for the boss's entrance. The boss appears once per
+    // attempt (it stays in the state until the mission ends), so the intro
+    // can never play twice in one attempt.
+    bossIntroMsRemaining: boss ? BOSS_INTRO_MS : 0,
     campaign: {
       ...state.campaign,
       missionStep: 'boss',
@@ -184,13 +189,19 @@ function checkRoundEnd(state: GameEngineState): GameEngineState {
   };
 }
 
+export function isBossIntroRunning(state: GameEngineState | null): boolean {
+  return !!state && (state.bossIntroMsRemaining ?? 0) > 0;
+}
+
 // "Ready... GO": the whole arena is frozen until the countdown ends, so no one
-// can clear crates, set traps or be hit before the round actually starts.
+// can clear crates, set traps or be hit before the round actually starts. The
+// boss intro freezes it the same way.
 function isRoundLive(state: GameEngineState | null): state is GameEngineState {
   return !!state
     && state.phase === 'playing'
     && !state.paused
-    && state.roundStartTicksRemaining <= 0;
+    && state.roundStartTicksRemaining <= 0
+    && !isBossIntroRunning(state);
 }
 
 function processTick(state: GameEngineState, deltaMs: number): GameEngineState {
@@ -200,6 +211,13 @@ function processTick(state: GameEngineState, deltaMs: number): GameEngineState {
     return {
       ...state,
       roundStartTicksRemaining: Math.max(0, state.roundStartTicksRemaining - deltaMs),
+    };
+  }
+
+  if (isBossIntroRunning(state)) {
+    return {
+      ...state,
+      bossIntroMsRemaining: Math.max(0, (state.bossIntroMsRemaining ?? 0) - deltaMs),
     };
   }
 
@@ -307,6 +325,18 @@ export function gameReducer(
 
     case 'RESUME':
       return state ? { ...state, paused: false } : state;
+
+    case 'SKIP_BOSS_INTRO':
+      if (
+        !state
+        || state.paused
+        || state.phase !== 'playing'
+        || !isBossIntroRunning(state)
+        || (state.bossIntroMsRemaining ?? 0) > BOSS_INTRO_MS - BOSS_INTRO_SKIP_LOCK_MS
+      ) {
+        return state;
+      }
+      return { ...state, bossIntroMsRemaining: 0 };
 
     case 'DISMISS_DIALOG':
       if (!state) return state;

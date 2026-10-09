@@ -87,6 +87,8 @@ import {
 } from './matchCopy';
 import { clearDeployedConsumables } from '../ConfigScreen/launchGame';
 import { getHubReturn, getMissionSettlement, hubPath } from '../HubScreen/missionSettlement';
+import { BOSS_SEAL_HOLD_MS, bossSealOf } from './bossBeats';
+import { BossTitleCard } from './BossBeats';
 
 const CONTROLS_GUIDE_SEEN_KEY = 'shinobiControlsGuideSeen';
 
@@ -177,7 +179,8 @@ const ControlsTable = ({ rows, label }: { rows: ControlsRow[]; label: string }) 
 );
 
 // The arena holds on the deciding moment (the engine already froze it) this
-// long before the result dialog covers it.
+// long before the result dialog covers it. A sealed boss holds longer
+// (BOSS_SEAL_HOLD_MS) for its collapse and the reward card.
 export const RESULT_HOLD_MS = 1200;
 
 type GameTopControlsProps = {
@@ -366,6 +369,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
     motion,
     getState,
     advanceFrame,
+    dispatch,
     pause,
     resume,
     restart,
@@ -458,6 +462,8 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
     ? `${menuState.phase}:${menuState.round}:${menuState.roundWinners.length}:${menuState.tick}`
     : '';
   const [heldRoundOverKey, setHeldRoundOverKey] = useState('');
+  const bossSeal = useMemo(() => bossSealOf(menuState), [menuState]);
+  const holdMs = bossSeal ? BOSS_SEAL_HOLD_MS : RESULT_HOLD_MS;
   useEffect(() => {
     // Back in play: forget the last hold, so a later round end with the same
     // key (a rematch decided on the same tick) is held again.
@@ -465,9 +471,9 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
       setHeldRoundOverKey('');
       return undefined;
     }
-    const timer = window.setTimeout(() => setHeldRoundOverKey(roundOverKey), RESULT_HOLD_MS);
+    const timer = window.setTimeout(() => setHeldRoundOverKey(roundOverKey), holdMs);
     return () => window.clearTimeout(timer);
-  }, [roundOverKey]);
+  }, [holdMs, roundOverKey]);
   const resultVisible = dialogOpen && heldRoundOverKey === roundOverKey;
   const resultTone = useMemo<ResultTone>(() => {
     if (!menuState || menuState.phase !== 'game_over' || menuState.config.mode !== 'solo') {
@@ -611,6 +617,9 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
     dismissDialog();
   };
 
+  const skipBossIntro = useCallback(() => dispatch({ type: 'SKIP_BOSS_INTRO' }), [dispatch]);
+  const { bossIntro } = view;
+
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
@@ -635,21 +644,31 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
         return;
       }
 
+      // Start (a pad's Start arrives as Escape) skips the boss's entrance
+      // instead of pausing over it.
+      if (bossIntro && !isPaused) {
+        skipBossIntro();
+        return;
+      }
+
       handleTogglePause();
     };
 
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
   }, [
+    bossIntro,
     dialogOpen,
     handleCancelConfirm,
     handleCloseMenus,
     handleTogglePause,
     handleDismissControlsGuide,
     isModifyingControls,
+    isPaused,
     isSettingsOpen,
     pendingConfirm,
     showControlsGuide,
+    skipBossIntro,
   ]);
 
   // Pads steer menus whenever no round is live, and play it otherwise.
@@ -687,6 +706,14 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
   // The banner over the deciding moment, until the result dialog covers it.
   const roundOver = useMemo(() => {
     if (!menuState || !dialogOpen || resultVisible) return null;
+    // A sealed boss: its reward card, over the collapse.
+    if (bossSeal) {
+      return {
+        text: `${bossSeal.name} sealed`,
+        accent: 'var(--anime-mustard)',
+        detail: `Reward · ${bossSeal.reward}`,
+      };
+    }
     let winner: number | null = null;
     if (isVersus(menuState)) {
       winner = menuState.phase === 'game_over'
@@ -697,7 +724,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
       text: roundOverBanner(menuState),
       accent: winner !== null ? playerSlotColor(winner) : 'var(--anime-mustard)',
     };
-  }, [dialogOpen, menuState, resultVisible]);
+  }, [bossSeal, dialogOpen, menuState, resultVisible]);
 
   if (!view.loaded) {
     return (
@@ -742,10 +769,12 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
         caption={feedback.caption}
         eventId={feedback.eventId}
         roundOver={roundOver}
-        held={isPaused || dialogOpen}
+        // The boss's entrance freezes the tick that times "GO!": no beat over it.
+        held={isPaused || dialogOpen || bossIntro}
         hudScale={preferences.hudScale}
         campaign={view.campaign}
       />
+      {bossIntro && !isPaused && <BossTitleCard store={store} hudScale={preferences.hudScale} />}
       {showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
         <ControlsGuide aria-label="controls guide" data-pad-layer="">
           <ControlsGuideHeader>

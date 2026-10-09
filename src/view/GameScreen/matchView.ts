@@ -1,4 +1,4 @@
-import { GameEngineState } from '../../engine';
+import { GameEngineState, isBossIntroRunning } from '../../engine';
 import { CharacterId, StageId } from '../../content/types';
 import type { EngineSelector } from '../../hooks/engineStore';
 import { roundStartLine } from './matchCopy';
@@ -13,6 +13,8 @@ export type MatchView = {
   paused: boolean;
   phase: GameEngineState['phase'] | null;
   campaign: boolean;
+  /** The boss's entrance is playing: the arena is frozen until it ends or is skipped. */
+  bossIntro: boolean;
   characterIds: readonly CharacterId[];
   /** Solo only: the campaign's discoveries so far, for the story record. */
   discoveries: {
@@ -35,6 +37,7 @@ const NOT_LOADED: MatchView = {
   paused: false,
   phase: null,
   campaign: false,
+  bossIntro: false,
   characterIds: NO_CHARACTERS,
   discoveries: null,
   menuState: null,
@@ -77,6 +80,7 @@ export const selectMatchView: EngineSelector<MatchView> = (state, previous) => {
   const frozen = state.paused || state.phase !== 'playing';
   const menuState = frozen ? state : before.menuState;
   const campaign = !!state.campaign;
+  const bossIntro = isBossIntroRunning(state);
   const characterIds = characterIdsOf(state, before.characterIds);
   const discoveries = discoveriesOf(state, before.discoveries);
   if (
@@ -84,6 +88,7 @@ export const selectMatchView: EngineSelector<MatchView> = (state, previous) => {
     && before.paused === state.paused
     && before.phase === state.phase
     && before.campaign === campaign
+    && before.bossIntro === bossIntro
     && before.characterIds === characterIds
     && before.discoveries === discoveries
     && before.menuState === menuState
@@ -93,6 +98,7 @@ export const selectMatchView: EngineSelector<MatchView> = (state, previous) => {
     paused: state.paused,
     phase: state.phase,
     campaign,
+    bossIntro,
     characterIds,
     discoveries,
     menuState,

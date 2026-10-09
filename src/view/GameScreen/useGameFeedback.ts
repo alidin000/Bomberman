@@ -24,6 +24,8 @@ type FeedbackSnapshot = {
   alivePlayers: Set<string>;
   pickupIds: Set<string>;
   bossHealth: number | null;
+  bossPhase: number | null;
+  bossName: string;
   // Versus only: time left on the round clock; null in the campaign.
   clockMs: number | null;
 };
@@ -45,6 +47,8 @@ function snapshot(state: GameEngineState): FeedbackSnapshot {
     ),
     pickupIds: new Set(state.pickupMessages.map((message) => message.id)),
     bossHealth: state.boss?.health ?? null,
+    bossPhase: state.boss?.phase ?? null,
+    bossName: state.boss?.name ?? '',
     clockMs: isSuddenDeathMode(state) ? getRoundTimeRemainingMs(state) : null,
   };
 }
@@ -130,6 +134,12 @@ function useFeedbackCore(
     const bossHit = previous.bossHealth !== null
       && current.bossHealth !== null
       && current.bossHealth < previous.bossHealth;
+    // The arena opened: the boss's entrance (the scene plays its roar pose).
+    const bossAppeared = previous.bossHealth === null && current.bossHealth !== null;
+    const bossEnraged = previous.bossPhase !== null
+      && current.bossPhase !== null
+      && current.bossPhase > previous.bossPhase
+      && (current.bossHealth ?? 0) > 0;
     // By id: a repeat pickup replaces its old message, so the count can stay flat.
     const newPickups = state.pickupMessages
       .filter((message) => !previous.pickupIds.has(message.id));
@@ -171,6 +181,15 @@ function useFeedbackCore(
     } else if (clockMilestone !== undefined) {
       captions.push(`${clockMilestone / 1000} seconds left`);
       if (audio && newExplosions === 0) playTone(audio, 440, 0.12, volume * 0.6, 'triangle');
+    }
+    if (bossAppeared) {
+      captions.push(`${current.bossName} enters the arena`);
+      // A low growl: the roar, as sound (the screen does not shake for it).
+      if (audio) playTone(audio, 72, 0.7, volume * 1.2, 'sawtooth');
+    }
+    if (bossEnraged) {
+      captions.push(`${current.bossName} enrages · phase ${current.bossPhase}`);
+      if (audio && newExplosions === 0) playTone(audio, 64, 0.5, volume, 'sawtooth');
     }
     if (bossHit) {
       captions.push('Boss hit');

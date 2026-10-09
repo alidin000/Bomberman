@@ -11,6 +11,23 @@ function instancedWarmup(material: THREE.Material): THREE.Material {
 }
 
 /**
+ * The campaign boss's looks (scene/BossFigure): its tails are an instanced
+ * flat-shaded figure mesh, and the whole figure turns see-through (flat,
+ * transparent) while it would hide a player or a telegraph and as it
+ * dissolves at the seal. The boss only appears mid-mission, so these compile
+ * during the countdown of every campaign match.
+ */
+export function createBossWarmupMaterials(): THREE.Material[] {
+  return [
+    new THREE.MeshStandardMaterial({ flatShading: true, transparent: true, depthWrite: false }),
+    instancedWarmup(new THREE.MeshStandardMaterial({ flatShading: true })),
+    instancedWarmup(new THREE.MeshStandardMaterial({
+      flatShading: true, transparent: true, depthWrite: false,
+    })),
+  ];
+}
+
+/**
  * One material per shader variant that entities mount and unmount mid-match:
  * bombs, pickups, hazards, objective markers, warnings and text labels. three.js deletes
  * a program when the last material using it is disposed, so without a
@@ -21,9 +38,10 @@ function instancedWarmup(material: THREE.Material): THREE.Material {
  * Ghost look (see-through toon) only shows mid-match, so the fighter looks,
  * ink line included, are compiled here too.
  */
-export function createWarmupMaterials(): THREE.Material[] {
+export function createWarmupMaterials(withBoss = false): THREE.Material[] {
   const labelMap = new THREE.Texture();
   return [
+    ...(withBoss ? createBossWarmupMaterials() : []),
     new THREE.MeshStandardMaterial(),
     // Flat-shaded standard: monster and boss figures and the route puzzle
     // pieces (PuzzleMarkers), which mount as fog of war lifts.
@@ -65,13 +83,14 @@ function disposeWarmupMaterials(materials: THREE.Material[]) {
  * the scene unmounts. Mount it inside the LightPool, next to the scene lights,
  * so the light count it compiles against matches the one used to render.
  */
-export function ShaderWarmup() {
+// eslint-disable-next-line react/require-default-props -- defaulted in the signature
+export function ShaderWarmup({ withBoss = false }: { withBoss?: boolean }) {
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
   const camera = useThree((state) => state.camera);
 
   useEffect(() => {
-    const materials = createWarmupMaterials();
+    const materials = createWarmupMaterials(withBoss);
     const warmScene = new THREE.Scene();
     const geometry = new THREE.BoxGeometry(0.01, 0.01, 0.01);
     materials.forEach((material) => warmScene.add(warmObject(material, geometry)));
@@ -93,7 +112,7 @@ export function ShaderWarmup() {
       disposeWarmupMaterials(materials);
       geometry.dispose();
     };
-  }, [camera, gl, scene]);
+  }, [camera, gl, scene, withBoss]);
 
   return null;
 }

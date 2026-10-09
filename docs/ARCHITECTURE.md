@@ -54,7 +54,7 @@ flowchart TD
    - The Mission Deck (`ConfigScreen`) stores mode, stage, characters, CPU seats, round count, upgrade, and key bindings.
    - `GameScreen` builds a `GameConfig` and dispatches `INIT` with a seed.
    - The match code is a lazy chunk that the menus prefetch.
-2. **Countdown.** The 3-2-1 countdown freezes the simulation: the reducer rejects actions until the round is live. Every material variant compiles during this window.
+2. **Countdown.** The 3-2-1 countdown freezes the simulation: the reducer rejects actions until the round is live. Every material variant compiles during this window. When a campaign boss appears, its entrance (`bossIntroMsRemaining`, 2.5 s) freezes the arena the same way until it runs out or a player sends `SKIP_BOSS_INTRO`.
 3. **Input.**
    - A key press sends `MOVE` at once. Holding the key repeats it from the engine loop every 28 ms (18 ms for Minato or with a speed boost), in 0.1-cell steps, with buffered turns at intersections.
    - Bombs, detonations, ultimates, and cover are single actions.
@@ -71,7 +71,7 @@ flowchart TD
    - It reads the live engine state for fuses and flames.
 7. **Round end.**
    - The engine sets `phase` to `round_end` or `game_over` and pauses.
-   - The screen holds the deciding moment for 1.2 s, then shows the result. The result ignores input for its first 600 ms.
+   - The screen holds the deciding moment for 1.2 s, then shows the result. A sealed boss holds for 2.2 s while it collapses and its reward card shows. The scene keeps drawing through the hold. The result ignores input for its first 600 ms.
    - `DISMISS_DIALOG` starts the next round, and `RESTART` rematches with a fresh seed.
 
 ## Render Pipeline

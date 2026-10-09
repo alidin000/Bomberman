@@ -76,3 +76,12 @@ export const RoundOverPlate = styled('strong', {
   lineHeight: 1.2,
   textAlign: 'center',
 }));
+
+// A sealed boss's reward, under its name on the round-over plate.
+export const RoundOverDetail = styled.span({
+  display: 'block',
+  marginTop: 4,
+  fontSize: '0.95rem',
+  fontWeight: 800,
+  color: 'var(--anime-vermilion)',
+});

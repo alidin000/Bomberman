@@ -237,6 +237,15 @@ const sceneObjective = record<CampaignObjectiveState>({
   ticksRemaining: IGNORE,
   structureDamageCooldownMs: IGNORE,
 });
+// The boss's cooldowns tick every 50 ms; the scene draws its place, health
+// and phase.
+const sceneBoss = nullable(record<BossState>({
+  attackCooldown: IGNORE,
+  moveCooldown: IGNORE,
+}));
+// The boss intro's clock runs on the live state; the scene only needs to
+// know when it starts and ends (the boss shows through fog meanwhile).
+const introRunning = (ms: number | undefined) => (ms ?? 0) > 0;
 const sceneCampaign = nullable(record<CampaignRuntimeState>({
   spawnPoints: list(spawnPoint),
   objectives: list(sceneObjective),
@@ -259,6 +268,8 @@ function createSceneShare(motion: MotionStore | null | undefined): Share<GameEng
     rngSeed: IGNORE,
     roundStartTicksRemaining: IGNORE,
     roundElapsedMs: IGNORE,
+    bossIntroMsRemaining: { matters: (a, b) => introRunning(a) !== introRunning(b) },
+    boss: sceneBoss,
     players: list(scenePlayer),
     monsters: list(sceneMonster),
     bombs: list(sceneBomb),
@@ -315,6 +326,7 @@ const shareHudState = record<GameEngineState>({
   rngSeed: IGNORE,
   roundStartTicksRemaining: IGNORE,
   roundElapsedMs: IGNORE,
+  bossIntroMsRemaining: IGNORE,
   map: IGNORE,
   fogOfWar: IGNORE,
   players: list(hudPlayer),

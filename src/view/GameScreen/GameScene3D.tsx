@@ -26,8 +26,8 @@ import {
   GameMap, isBomb, isObstacle, isPower, Power,
 } from '../../model/gameItem';
 import { isPowerUpActive } from '../../engine/players';
-import { getUpcomingPressureCells } from '../../engine';
-import { EXPLOSION_MS } from '../../engine/constants';
+import { getUpcomingPressureCells, isBossIntroRunning } from '../../engine';
+import { BOSS_INTRO_MS, EXPLOSION_MS } from '../../engine/constants';
 import { hazardIsActive } from '../../engine/bosses';
 import { cellKey } from '../../engine/fogOfWar';
 import { getStageDefinition } from '../../content';
@@ -81,6 +81,7 @@ import {
   monsterMotionId,
   playerMotionId,
   samplePosition,
+  sampleTrack,
   trackProgress,
 } from '../../hooks/motionStore';
 import { PICKUP_CUE_MS, bodyCueAt, pickupCueAt } from '../../hooks/cueStore';
@@ -100,12 +101,28 @@ import {
   OBJECTIVE_HIGH_CONTRAST, arenaModel, gateModel, gateStateFor, rescueModel, structureDamageFor,
   structureFlagFor, structureModel,
 } from './scene/objectiveModels';
-import { BossFigure } from './scene/BossFigure';
+import { BossFigure, BossFigureHandle, BossFigurePose } from './scene/BossFigure';
+import {
+  INTRO_AIM_TOWARD_CAMERA,
+  INTRO_CATCH_UP_MS,
+  introCuts,
+  INTRO_FOLLOW_RATE,
+  SEE_THROUGH_RATE,
+  behindScreenBox,
+  bossScreenBox,
+  createScreenBox,
+  introCameraWeight,
+  introFraming,
+  phaseCue,
+  roarAmount,
+  sealPose,
+} from './scene/bossPresentation';
 import { BombClockState, createBombClock, refreshBombClock } from './scene/bombClock';
 import { ARENA_FRAME_PX, canvasHudInsets } from './scene/canvasInsets';
 import { PuzzleMarkers } from './scene/PuzzleMarkers';
 import { DojoMarkers } from './scene/DojoMarkers';
 import { useHudDevice } from '../../input/touchMode';
+import { PULSE_HZ, pulseRate } from './scene/flashSafety';
 import {
   HighContrastOverride, highContrastPalette, useHighContrastMaterials,
 } from './scene/highContrast';
@@ -614,11 +631,14 @@ const PRESSURE_BLOCK_MATERIAL = new THREE.MeshStandardMaterial({
 
 function PressureBlockWarning({ x, y, order }: { x: number; y: number; order: number }) {
   const ringRef = useRef<THREE.Mesh>(null);
+  const reducedMotion = React.useContext(ReducedMotionContext);
   const [wx, , wz] = toWorld(x, y);
 
   useFrame(({ clock }) => {
     if (!ringRef.current) return;
-    ringRef.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 12 - order) * 0.1);
+    ringRef.current.scale.setScalar(reducedMotion
+      ? 1
+      : 1 + Math.sin(clock.elapsedTime * pulseRate(PULSE_HZ.pressureRing) - order) * 0.1);
   });
 
   return (
@@ -690,7 +710,7 @@ function BombMesh({ x, y, kind }: { x: number; y: number; kind: BombKind }) {
   useFrame(({ clock }) => {
     const remaining = bombRemainingMs(bombClock?.current, x, y, countdownRef.current, motion?.simTimeMs);
     const urgent = remaining <= FUSE_URGENT_MS;
-    const pulse = 1 + Math.sin(clock.elapsedTime * 10) * 0.08;
+    const pulse = reducedMotion ? 1 : 1 + Math.sin(clock.elapsedTime * pulseRate(PULSE_HZ.bombCore)) * 0.08;
     if (coreRef.current) {
       coreRef.current.scale.setScalar(pulse);
     }
@@ -701,7 +721,9 @@ function BombMesh({ x, y, kind }: { x: number; y: number; kind: BombKind }) {
       groupRef.current.scale.setScalar(scale);
     }
     if (lightRef.current) {
-      lightRef.current.intensity = 0.7 + Math.sin(clock.elapsedTime * 12) * 0.35;
+      lightRef.current.intensity = reducedMotion
+        ? 0.7
+        : 0.7 + Math.sin(clock.elapsedTime * pulseRate(PULSE_HZ.bombLight)) * 0.35;
     }
     const ring = ringRef.current;
     if (ring) {
@@ -1810,8 +1832,10 @@ function PlayerMesh({
       1 - Math.exp(-delta * 15),
     );
 
-    if (invincible) {
-      body.visible = Math.sin(clock.elapsedTime * 10) > 0;
+    // Shielded: the body blinks (steady under reduced motion; the shield
+    // bubble and rings say it as well).
+    if (invincible && !reducedMotion) {
+      body.visible = Math.sin(clock.elapsedTime * pulseRate(PULSE_HZ.invincibleBlink)) > 0;
     } else {
       body.visible = true;
     }
@@ -2149,42 +2173,208 @@ function SensedEnemyMarker({
   );
 }
 
+const BOSS_FLOAT_Y = 0.92;
+const BOSS_LIGHT_INTENSITY = 1.25;
+const BOSS_RING_OPACITY = 0.38;
+// One boss at a time: scratch for its per-frame screen box.
+const BOSS_SCREEN_BOX = createScreenBox();
+
+/**
+ * Milliseconds into the boss's entrance, smoothed between engine ticks on the
+ * simulation clock (which runs while the intro freezes the arena); null when
+ * no intro is playing.
+ */
+function bossIntroMs(
+  live: GameEngineState | null,
+  countdown: ReturnType<typeof createCountdown>,
+  motion: MotionStore | null,
+): number | null {
+  const remaining = live?.boss ? live.bossIntroMsRemaining ?? 0 : 0;
+  if (remaining <= 0) return null;
+  const smoothed = motion ? countdownNow(countdown, remaining, motion.simTimeMs) : remaining;
+  return BOSS_INTRO_MS - smoothed;
+}
+
+/** Cell (x, y), `height` above the floor, drawn behind the boss's screen box. */
+function behindBoss(camera: THREE.Camera, x: number, y: number, height: number): boolean {
+  return behindScreenBox(
+    BOSS_SCREEN_BOX,
+    camera,
+    (x + MAP_OFFSET_X) * TILE_SIZE,
+    height,
+    (y + MAP_OFFSET_Z) * TILE_SIZE,
+  );
+}
+
+/**
+ * Something the boss must not hide: a player (feet or head), a boss strike,
+ * a flame, a bomb, or an enemy's warned cell, drawn inside the boss's screen
+ * box and further from the camera than it. Runs every frame over a handful
+ * of points, projecting into module scratch vectors.
+ */
+function bossHidesSomething(
+  live: GameEngineState,
+  motion: MotionStore | null,
+  camera: THREE.Camera,
+): boolean {
+  for (let index = 0; index < live.players.length; index += 1) {
+    const player = live.players[index];
+    if (player.alive) {
+      const track = motion?.tracks.get(playerMotionId(player.id));
+      const drawn = track && motion ? sampleTrack(track, motion.simTimeMs) : player;
+      if (behindBoss(camera, drawn.x, drawn.y, 0.1) || behindBoss(camera, drawn.x, drawn.y, 1.3)) {
+        return true;
+      }
+    }
+  }
+  for (let index = 0; index < live.hazards.length; index += 1) {
+    if (behindBoss(camera, live.hazards[index].x, live.hazards[index].y, 0.05)) return true;
+  }
+  for (let index = 0; index < live.bombs.length; index += 1) {
+    if (behindBoss(camera, live.bombs[index].x, live.bombs[index].y, 0.05)) return true;
+  }
+  for (let index = 0; index < live.explosions.length; index += 1) {
+    if (behindBoss(camera, live.explosions[index].x, live.explosions[index].y, 0.05)) return true;
+  }
+  for (let index = 0; index < live.monsters.length; index += 1) {
+    const target = live.monsters[index].abilityTarget;
+    if (target && behindBoss(camera, target.x, target.y, 0.05)) return true;
+  }
+  return false;
+}
+
+/**
+ * The boss: its creature figure (scene/BossFigure) floating over its cell,
+ * plus how it enters, changes phase and falls (scene/bossPresentation). It
+ * always faces the camera, so its glowing face reads and its tails stay
+ * behind it, and it turns see-through while it would hide a player or a
+ * telegraph. Sealed, it stays drawn while it collapses and dissolves through
+ * the boss-seal hold, then disappears.
+ */
 function BossMesh({ state }: { state: GameEngineState }) {
   const { boss } = state;
   const ref = useRef<THREE.Group>(null);
+  const poseRef = useRef<THREE.Group>(null);
+  const figureRef = useRef<BossFigureHandle>(null);
+  const lightRef = useRef<PooledLightHandle>(null);
+  const ringRef = useRef<THREE.MeshStandardMaterial>(null);
+  const reducedMotion = React.useContext(ReducedMotionContext);
+  const motion = React.useContext(MotionContext);
+  const readState = React.useContext(LiveStateContext);
+  const camera = useThree((three) => three.camera);
+  const trackRef = useRef({
+    swayTime: 0,
+    bobTime: 0,
+    phase: boss?.phase ?? 1,
+    phaseAt: null as number | null,
+    sealedAt: null as number | null,
+    seeThrough: 0,
+    intro: createCountdown(),
+  });
+  const pose = useRef<BossFigurePose>({
+    swayTime: 0, swayAmount: 1, flare: 0, droop: 0, enrage: 0, seeThrough: 0, dissolve: 0,
+  });
+  // Written in place each frame.
+  const cueRef = useRef(phaseCue(1, null, false));
+  const sealRef = useRef(sealPose(0, false));
   const bossModelConfig = boss && USE_ARCHIVE_MODELS ? BOSS_MODEL_CONFIGS[boss.id] : undefined;
   const bossModel = useSceneModel(
     boss && bossModelConfig ? `boss:${boss.id}` : null,
     bossModelConfig,
   );
-  useSmoothWorldPosition(ref, boss?.x ?? 0, boss?.y ?? 0, 0.92, undefined, BOSS_MOTION_ID);
+  // Always faces the camera ('down'): its face is its weak point.
+  useSmoothWorldPosition(ref, boss?.x ?? 0, boss?.y ?? 0, BOSS_FLOAT_Y, undefined, BOSS_MOTION_ID, FACING_HEADING.down);
 
-  useFrame(({ clock }) => {
-    if (ref.current) {
-      ref.current.position.y = 0.92 + Math.sin(clock.elapsedTime * 2.2) * 0.05;
-      ref.current.rotation.z = Math.sin(clock.elapsedTime * 1.8) * 0.025;
+  useFrame(({ clock }, delta) => {
+    const group = ref.current;
+    const inner = poseRef.current;
+    if (!group || !inner || !boss) return;
+    const track = trackRef.current;
+    const now = clock.elapsedTime * 1000;
+    const live = readState() ?? state;
+    // A phase change starts its cue; a boss mounted already in phase 2 shows it fully.
+    if (boss.phase !== track.phase) {
+      track.phaseAt = boss.phase > track.phase ? now : null;
+      track.phase = boss.phase;
     }
+    const cue = phaseCue(
+      boss.phase,
+      track.phaseAt === null ? null : now - track.phaseAt,
+      reducedMotion,
+      cueRef.current,
+    );
+    if (boss.health <= 0) {
+      if (track.sealedAt === null) track.sealedAt = now;
+    } else {
+      track.sealedAt = null;
+    }
+    const seal = track.sealedAt === null
+      ? null
+      : sealPose(now - track.sealedAt, reducedMotion, sealRef.current);
+    const introMs = bossIntroMs(live, track.intro, motion);
+    const roar = introMs === null ? 0 : roarAmount(introMs, reducedMotion);
+    // The hit-stop beat and the seal hold the figure still.
+    const still = cue.hold || seal !== null;
+    if (!still) {
+      track.swayTime += delta;
+      track.bobTime += delta;
+    }
+    group.position.y = BOSS_FLOAT_Y + (reducedMotion ? 0 : Math.sin(track.bobTime * 2.2) * 0.05);
+    group.rotation.z = reducedMotion ? 0 : Math.sin(track.bobTime * 1.8) * 0.025;
+
+    const size = 1 + 0.08 * cue.swell + 0.1 * roar;
+    inner.scale.set(size, size * (seal?.squash ?? 1), size);
+    inner.position.y = -(seal?.sink ?? 0);
+    // Rears back on the roar, topples forward as it falls.
+    inner.rotation.x = (seal?.tilt ?? 0) - 0.2 * roar;
+    inner.visible = !seal?.gone;
+
+    let hides = false;
+    if (!seal) {
+      inner.updateWorldMatrix(true, false);
+      bossScreenBox(inner.matrixWorld, camera, BOSS_SCREEN_BOX);
+      hides = bossHidesSomething(live, motion, camera);
+    }
+    const want = hides ? 1 : 0;
+    track.seeThrough = reducedMotion
+      ? want
+      : THREE.MathUtils.lerp(track.seeThrough, want, 1 - Math.exp(-delta * SEE_THROUGH_RATE));
+    if (Math.abs(track.seeThrough - want) < 0.01) track.seeThrough = want;
+
+    const next = pose.current;
+    next.swayTime = track.swayTime;
+    next.swayAmount = reducedMotion || seal ? 0 : 1;
+    next.flare = roar;
+    next.droop = seal?.droop ?? 0;
+    next.enrage = cue.enrage;
+    next.seeThrough = track.seeThrough;
+    next.dissolve = seal?.dissolve ?? 0;
+    figureRef.current?.apply(next);
+    const fade = 1 - next.dissolve;
+    if (lightRef.current) lightRef.current.intensity = BOSS_LIGHT_INTENSITY * fade;
+    if (ringRef.current) ringRef.current.opacity = BOSS_RING_OPACITY * fade;
   });
 
-  if (!boss || boss.health <= 0) return null;
+  if (!boss) return null;
 
   const visual = BOSS_VISUALS[boss.id];
-  const phasePulse = boss.phase > 1 ? 1.08 : 1;
 
   return (
-    <group ref={ref} scale={visual.scale * phasePulse}>
-      <PooledPointLight priority={LIGHT_PRIORITY.player} color={visual.glow} distance={5.2} intensity={1.25} />
-      <ShadowBlob />
+    <group ref={ref} scale={visual.scale}>
+      <PooledPointLight ref={lightRef} priority={LIGHT_PRIORITY.player} color={visual.glow} distance={5.2} intensity={BOSS_LIGHT_INTENSITY} />
+      {boss.health > 0 && <ShadowBlob />}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.56, 0]}>
         <torusGeometry args={[0.62, 0.025, 8, 42]} />
-        <meshStandardMaterial color={visual.glow} emissive={visual.glow} emissiveIntensity={1.05} transparent opacity={0.38} />
+        <meshStandardMaterial ref={ringRef} color={visual.glow} emissive={visual.glow} emissiveIntensity={1.05} transparent opacity={BOSS_RING_OPACITY} />
       </mesh>
-      {bossModel ? (
-        <LoadedSceneModel asset={bossModel} ghost={false} />
-      ) : (
-        <BossFigure bossId={boss.id} />
-      )}
-      {boss.phase > 1 && (
+      <group ref={poseRef}>
+        {bossModel ? (
+          <LoadedSceneModel asset={bossModel} ghost={false} />
+        ) : (
+          <BossFigure ref={figureRef} bossId={boss.id} />
+        )}
+      </group>
+      {boss.phase > 1 && boss.health > 0 && (
         <>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.49, 0]}>
             <ringGeometry args={[0.68, 0.86, 36]} />
@@ -2228,7 +2418,7 @@ function HazardMesh({ hazard }: { hazard: BossHazard }) {
     if (ref.current) {
       let scale = 1;
       if (!reducedMotion && active) scale = 1.15;
-      if (!reducedMotion && !active) scale = 0.85 + Math.sin(clock.elapsedTime * 8) * 0.08;
+      if (!reducedMotion && !active) scale = 0.85 + Math.sin(clock.elapsedTime * pulseRate(PULSE_HZ.hazardPulse)) * 0.08;
       ref.current.rotation.y = reducedMotion ? 0 : clock.elapsedTime * (active ? 2.6 : 1.5);
       ref.current.scale.setScalar(scale);
     }
@@ -2747,12 +2937,19 @@ function CameraRig({
 }) {
   const { camera, size } = useThree();
   const motion = React.useContext(MotionContext);
+  const readState = React.useContext(LiveStateContext);
   const lookAtRef = useRef(new THREE.Vector3());
   const lookTargetRef = useRef(new THREE.Vector3());
   const framingRef = useRef<number | null>(null);
   const shakeRef = useRef(0);
   // The touch controls and the safe area widen the HUD bands.
   const device = useHudDevice();
+  const shakeStartRef = useRef(0);
+  // The boss's entrance steers the camera: its smoothed clock, and when it
+  // last did (the camera then catches up with the players quickly).
+  const introRef = useRef({
+    countdown: createCountdown(), lastMs: -Infinity, cut: false, onBoss: false,
+  });
   // The HUD bands for this layout, and how far out this screen's shape
   // needs to zoom for the widest spread players can reach. The HUD is laid
   // out on the viewport; the canvas sits inside the arena frame.
@@ -2819,21 +3016,64 @@ function CameraRig({
     const halfWidth = count > 1 ? (maxX - minX) / 2 : 0;
     const halfDepth = count > 1 ? (maxY - minY) / 2 : 0;
     const { insets, aspect, maxFraming } = frame;
-    const framingScale = framingScaleFor(halfWidth, halfDepth, aspect, insets, maxFraming);
+    let framingScale = framingScaleFor(halfWidth, halfDepth, aspect, insets, maxFraming);
     // Aim a little off the box centre when its edge would sit under a HUD band.
     const shiftZ = groupShift(framingScale, halfWidth, halfDepth, insets) * TILE_SIZE;
+    let aimX = targetX;
+    let aimZ = targetZ + shiftZ;
+    // The boss's entrance: go to it, push in, and come back to the players
+    // before the arena unfreezes. A nearby boss is glided to; a far one is
+    // cut to and from, since sweeping the camera across the board would
+    // stream the grid's lines past every pixel (a flicker); reduced motion
+    // always cuts.
+    const live = readState();
+    const intro = introRef.current;
+    const nowMs = clock.elapsedTime * 1000;
+    const introMs = bossIntroMs(live, intro.countdown, motion);
+    let followRate: number | null = null;
+    let snap = false;
+    if (introMs !== null && live?.boss) {
+      const bossAt = samplePosition(motion, BOSS_MOTION_ID, live.boss.x, live.boss.y);
+      const cut = preferences.reducedMotion || introCuts(bossAt, targetXCell, targetYCell);
+      const weight = introCameraWeight(introMs, cut);
+      const [bossX, , bossZ] = toWorld(bossAt.x, bossAt.y);
+      aimX = THREE.MathUtils.lerp(aimX, bossX, weight);
+      aimZ = THREE.MathUtils.lerp(aimZ, bossZ + INTRO_AIM_TOWARD_CAMERA, weight);
+      framingScale = THREE.MathUtils.lerp(
+        framingScale,
+        introFraming(introMs, preferences.reducedMotion),
+        weight,
+      );
+      intro.lastMs = nowMs;
+      intro.cut = cut;
+      snap = cut && (weight === 0 || !intro.onBoss);
+      intro.onBoss = weight > 0;
+      followRate = INTRO_FOLLOW_RATE;
+    } else if (intro.onBoss) {
+      // The entrance ended (or was skipped) with the camera on the boss.
+      snap = intro.cut;
+      intro.onBoss = false;
+    } else if (nowMs - intro.lastMs < INTRO_CATCH_UP_MS) {
+      followRate = INTRO_FOLLOW_RATE;
+    }
     // `impact` holds for a moment and then drops to 0; fade out from it
     // instead of cutting off mid-swing.
+    const shakeBefore = shakeRef.current;
     shakeRef.current = preferences.reducedMotion ? 0 : decayShake(shakeRef.current, impact, delta);
+    // A jolt out of a still view starts its swing from the centre.
+    if (shakeBefore === 0 && shakeRef.current > 0) shakeStartRef.current = clock.elapsedTime;
     const shakeStrength = shakeRef.current * (preferences.screenShake / 100) * 0.18;
-    const shakeX = Math.sin(clock.elapsedTime * 83) * shakeStrength;
-    const shakeZ = Math.cos(clock.elapsedTime * 71) * shakeStrength;
+    // One slow beat on both axes (PULSE_HZ.cameraShake): the old 13 Hz
+    // shake flickered every high-contrast edge on screen.
+    const shakePhase = (clock.elapsedTime - shakeStartRef.current) * pulseRate(PULSE_HZ.cameraShake);
+    const shakeX = Math.sin(shakePhase) * shakeStrength;
+    const shakeZ = Math.sin(shakePhase) * shakeStrength * 0.6;
 
     // Smooth one follow point and hang the camera off it, so position and aim
     // move together. Aiming at the raw target while easing only the position
     // turned every 0.1-cell step into a ~7 px whole-screen jump.
     const lookAt = lookAtRef.current;
-    const lookTarget = lookTargetRef.current.set(targetX, 0, targetZ + shiftZ);
+    const lookTarget = lookTargetRef.current.set(aimX, 0, aimZ);
     if (framingRef.current === null) {
       // Start from wherever the camera is aimed so the opening glide is kept.
       framingRef.current = camera.position.y / 13.2;
@@ -2841,9 +3081,9 @@ function CameraRig({
     }
     // The rate follows the smoothed zoom: switching it on the target framing
     // changed the camera's speed by 40% in a single frame.
-    const followAlpha = preferences.reducedMotion
+    const followAlpha = preferences.reducedMotion || snap
       ? 1
-      : 1 - Math.exp(-delta * cameraFollowRate(framingRef.current));
+      : 1 - Math.exp(-delta * Math.max(followRate ?? 0, cameraFollowRate(framingRef.current)));
     lookAt.lerp(lookTarget, followAlpha);
     framingRef.current = THREE.MathUtils.lerp(framingRef.current, framingScale, followAlpha);
     const framing = framingRef.current;
@@ -2876,7 +3116,7 @@ function TargetCellWarning({ monster }: { monster: MonsterState }) {
       closeRef.current.scale.setScalar(1 + 0.9 * Math.min(1, remaining / lead));
     }
     if (pinRef.current) {
-      pinRef.current.position.y = 1.95 + (reducedMotion ? 0 : Math.sin(clock.elapsedTime * 7) * 0.07);
+      pinRef.current.position.y = 1.95 + (reducedMotion ? 0 : Math.sin(clock.elapsedTime * pulseRate(PULSE_HZ.warningPin)) * 0.07);
     }
   });
   const target = monster.abilityTarget;
@@ -3012,7 +3252,9 @@ function BombBlastPreviews({ visibleCells }: { visibleCells: Set<string> }) {
 // Fields a shared scene state refreshes on any rebuild (clocks) or that
 // change whenever some other entity does. A layer that skips them must not
 // read them during render.
-const SCENE_CLOCK_KEYS = ['tick', 'rngSeed', 'roundElapsedMs', 'roundStartTicksRemaining'];
+const SCENE_CLOCK_KEYS = [
+  'tick', 'rngSeed', 'roundElapsedMs', 'roundStartTicksRemaining', 'bossIntroMsRemaining',
+];
 
 function sameStateExcept(
   previous: GameEngineState,
@@ -3143,9 +3385,11 @@ function SceneContentBase({
   const bossCellKey = state.boss
     ? cellKey(Math.round(state.boss.x), Math.round(state.boss.y))
     : null;
+  // The boss's entrance shows it wherever it stands, fog or not.
+  const bossIntro = isBossIntroRunning(state);
   const bossVisible = !!state.boss
     && !!bossCellKey
-    && visibleCellSet.has(bossCellKey);
+    && (bossIntro || visibleCellSet.has(bossCellKey));
   const bossSensed = !!state.boss
     && !bossVisible
     && !!bossCellKey
@@ -3165,7 +3409,7 @@ function SceneContentBase({
 
   return (
     <LightPool>
-      <ShaderWarmupMemo />
+      <ShaderWarmupMemo withBoss={state.config.mode === 'solo'} />
       <CameraRigMemo state={state} preferences={preferences} impact={impact} />
       <StageAtmosphere look={look} farEdgeZ={toWorld(0, -BOARD_LIP)[2]} />
       <FloorMemo

@@ -155,6 +155,10 @@ Implemented today:
   - Per-stage looks: sky gradient, fog, light colours, and instanced landmark silhouettes outside the playable grid.
   - The menus, the 3D match, and the vendor code load as separate chunks.
 - **Bosses:** solo boss encounters on the tailed-beast boss engine.
+  - Each of the nine bosses is its own procedural creature: its base silhouette, its own head features, and a fan of tails, one per tail, in its own shape. It always faces the camera, so its glowing eyes (its weak point) read, and it turns see-through while it would hide a ninja or a telegraph.
+  - The arena opens on a 2.5 s entrance that freezes play like the countdown: the camera cuts or glides to the boss and pushes in, the boss rears up with a growl, and a title card names it and its attacks. After its first 0.4 s, any action key, A or Start skips it. It plays once per attempt.
+  - A phase change holds the boss still for a beat, then its body glows toward its core colour, with a caption.
+  - The sealing blast holds while the boss collapses and dissolves, and a reward card shows before the result.
 - **Vision and fog of war:** character vision radii, Deidara explosion reveal, Sasuke/Itachi/Minato enemy sensing, and Gaara wall sensing.
 - **Characters:**
   - Character-themed bomb behaviour, ultimate effects, passives, power-up labels, and HUD/manual presentation.
@@ -187,7 +191,7 @@ Not implemented yet:
 - Lore collectible screens beyond persisted rare scroll and fragment counters.
 - Fully bespoke `.glb` pickup and enemy models beyond the current procedural fallbacks.
 - Touch controls for phones. Phones render the arena but need a keyboard or gamepad today.
-- Boss intro/death cinematics, custom boss models for every beast, and online multiplayer.
+- Online multiplayer.
 
 ## Implementation Plan
 
@@ -303,7 +307,8 @@ The next engineering slice should be **bespoke Phase 4 polish before Phase 5**:
 
 - **Fighters** are procedural chibi figures: toon-shaded, with a dark ink outline and slot-coloured floor rings and tags. Short render-only poses show moving, planting, getting hit, using an ultimate, and falling. A KO marker stays where a ninja fell.
 - **Stages** each have their own sky, fog, light colours, and a few landmark silhouettes outside the grid. The playable grid itself stays quiet and readable.
-- **Enemies and bosses** read by silhouette first: each archetype has its own head shape, carried shape, and motion, and each boss its own base. Overhead nameplates carry name and threat.
+- **Enemies and bosses** read by silhouette first: each archetype has its own head shape, carried shape, and motion, and each boss its own creature shape and tails. Overhead nameplates carry name and threat.
+- **Flash safety.** Nothing in the arena beats faster than 3 Hz (WCAG 2.3.1), measured frame by frame on production builds at 1366x768 and 390x844: the urgent bomb swells at 2.5 Hz and the blast's screen shake is one 2 Hz jolt. Reduced motion holds every pulse steady.
 - **Hazards** use a stable floor shape per family (line, cross, ring, or diamond). The outline closes as the hazard turns lethal, so danger reads by shape as well as colour.
 - **Optional `.glb` models.** The renderer can load character and boss models from `public/models/characters/`. That path is switched off (`USE_ARCHIVE_MODELS = false` in `GameScene3D.tsx`), so the game ships with procedural figures only.
 - **Original art only.** The visual language borrows shinobi grammar (silhouette, ink, paper, smoke) and avoids copying franchise emblems, costumes, or signature poses.

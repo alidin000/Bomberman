@@ -19,6 +19,9 @@ export type GameAction =
   | { type: 'PAUSE' }
   | { type: 'RESUME' }
   | { type: 'DISMISS_DIALOG' }
+  // Any action key, A or Start during the boss intro: start the fight now
+  // (ignored for its first BOSS_INTRO_SKIP_LOCK_MS).
+  | { type: 'SKIP_BOSS_INTRO' }
   | { type: 'RESTART' };
 
 export type NetworkMessage =

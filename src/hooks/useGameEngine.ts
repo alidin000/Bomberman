@@ -8,6 +8,7 @@ import {
   GameConfig,
   Direction,
   createMatchSeed,
+  isBossIntroRunning,
 } from '../engine';
 import { KeyBindings } from '../constants/props';
 import {
@@ -166,6 +167,17 @@ export function useGameEngineStore(config: GameConfig | null, keyBindings: KeyBi
     });
   }, [keyBindings]);
 
+  // Bomb, detonate, ultimate or cover for any human seat (pads press these).
+  const isActionKey = useCallback((current: GameEngineState, key: string) => (
+    current.players.some((_, index) => {
+      if (isCpuSlot(current.config, index)) return false;
+      const bindings = getPlayerBindings(keyBindings, index);
+      if (!bindings) return false;
+      const input = getInputStateForKey(key, bindings);
+      return input.bomb || input.detonate || input.special || input.cover;
+    })
+  ), [keyBindings]);
+
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     const current = loop.state;
     if (!current) return;
@@ -173,6 +185,16 @@ export function useGameEngineStore(config: GameConfig | null, keyBindings: KeyBi
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
     if (current.paused || current.phase !== 'playing') {
       holdWhileIdle(current, key);
+      return;
+    }
+    // The boss's entrance: any action key (A on a pad) starts the fight.
+    // Directions are kept, so a held key moves as soon as play is live.
+    if (isBossIntroRunning(current)) {
+      holdWhileIdle(current, key);
+      if (isActionKey(current, key)) {
+        event.preventDefault();
+        if (!event.repeat) dispatch({ type: 'SKIP_BOSS_INTRO' });
+      }
       return;
     }
     let handledDirectionalInput = false;
@@ -221,7 +243,7 @@ export function useGameEngineStore(config: GameConfig | null, keyBindings: KeyBi
     }
 
     if (handledDirectionalInput) event.preventDefault();
-  }, [keyBindings, dispatch, getFallback, holdWhileIdle, loop]);
+  }, [keyBindings, dispatch, getFallback, holdWhileIdle, isActionKey, loop]);
 
   const handleKeyUp = useCallback((event: KeyboardEvent) => {
     const current = loop.state;

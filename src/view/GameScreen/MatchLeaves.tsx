@@ -60,8 +60,8 @@ type MatchAnnouncerProps = {
   store: EngineStore;
   caption: string;
   eventId: number;
-  /** The banner held over the end of a round, or null. */
-  roundOver: { text: string; accent: string } | null;
+  /** The banner held over the end of a round (a sealed boss's reward card), or null. */
+  roundOver: { text: string; accent: string; detail?: string } | null;
   /** Paused or a round over: no countdown or GO then. */
   held: boolean;
   hudScale: number;
@@ -87,7 +87,8 @@ export function MatchAnnouncer({
   else if (go) announcement = 'Go!';
   else if (roundOver) {
     // The knockout that decided it, then who took the round.
-    announcement = caption ? `${caption}. ${roundOver.text}` : roundOver.text;
+    const banner = roundOver.detail ? `${roundOver.text}. ${roundOver.detail}` : roundOver.text;
+    announcement = caption ? `${caption}. ${banner}` : banner;
   }
   return (
     <>

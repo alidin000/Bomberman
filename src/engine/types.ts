@@ -456,6 +456,9 @@ export interface GameEngineState {
   paused: boolean;
   tick: number;
   roundStartTicksRemaining: number;
+  // Campaign boss intro (BOSS_INTRO_MS) still to run: the arena is frozen
+  // while it is above 0. Set once, when the boss appears; missing means 0.
+  bossIntroMsRemaining?: number;
   rngSeed: number;
   // Live round time, used by versus sudden death.
   roundElapsedMs: number;

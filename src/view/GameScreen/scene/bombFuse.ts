@@ -1,5 +1,6 @@
 import { BombState, GameEngineState, TICK_MS } from '../../../engine';
 import { getExplosionPositions } from '../../../engine/bombs';
+import { PULSE_HZ, pulseRate } from './flashSafety';
 
 // Read-only view helpers for bomb timing: when each bomb will really go off
 // (chain reactions included) and how to draw that on the field.
@@ -85,10 +86,13 @@ export function fuseRingRadius(remainingMs: number): number {
 }
 
 /**
- * Whole-bomb swell for the last FUSE_URGENT_MS: a fast, deep beat that says
- * "about to blow" by shape and motion, not only by colour. Under 4 beats a
- * second (no flashing); a steady, larger bomb with reduced motion.
+ * Whole-bomb swell for the last FUSE_URGENT_MS: a quick, deep beat that says
+ * "about to blow" by shape and motion, not only by colour. It beats at
+ * PULSE_HZ.urgentBomb, under the 3-a-second flash limit (it was 3.8 a
+ * second); a steady, larger bomb with reduced motion.
  */
+const URGENT_BEAT = pulseRate(PULSE_HZ.urgentBomb);
+
 export function bombPulseScale(
   remainingMs: number,
   seconds: number,
@@ -96,7 +100,7 @@ export function bombPulseScale(
 ): number {
   if (!(remainingMs <= FUSE_URGENT_MS)) return 1;
   if (reducedMotion) return 1.15;
-  return 1.12 + Math.sin(seconds * 24) * 0.12;
+  return 1.12 + Math.sin(seconds * URGENT_BEAT) * 0.12;
 }
 
 export type BlastPreviewCell = { x: number; y: number; imminent: boolean };

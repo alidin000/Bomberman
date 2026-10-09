@@ -16,7 +16,9 @@ import { GameEngineState } from '../engine/types';
 // and the mini boss gate; training mode (Training Dojo rooms): room goals end
 // the round, preset charges, scripted patrol sentries, no crate drops and no
 // sudden death; campaign loadouts from the village hub (config.loadout) apply
-// at INIT, and a retry or restart drops the one-mission consumables.
+// at INIT, and a retry or restart drops the one-mission consumables; the
+// campaign boss's entrance freezes the arena for BOSS_INTRO_MS
+// (SKIP_BOSS_INTRO ends it early).
 export const REPLAY_VERSION = 7;
 
 export interface ReplayFrame {
@@ -88,6 +90,7 @@ function isGameAction(value: unknown): value is GameAction {
     case 'RESUME':
     case 'DISMISS_DIALOG':
     case 'RESTART':
+    case 'SKIP_BOSS_INTRO':
       return true;
     default:
       return false;

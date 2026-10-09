@@ -7,6 +7,12 @@ export const INVINCIBILITY_POWER_MS = 15000;
 export const POWER_FLASH_MS = 3000;
 // After Gaara's or Itachi's passive save, the same hit cannot land again.
 export const SURVIVAL_GRACE_MS = 1000;
+// The boss arena's intro: the whole arena stays frozen this long once the
+// boss appears, like the round countdown, unless a player skips it.
+export const BOSS_INTRO_MS = 2500;
+// Its first stretch cannot be skipped, so a bomb mashed as the arena opens
+// does not skip an entrance nobody has seen yet.
+export const BOSS_INTRO_SKIP_LOCK_MS = 400;
 
 export const MONSTER_MOVE_MS: Record<string, number> = {
   smart: 600,
