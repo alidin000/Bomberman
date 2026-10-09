@@ -317,6 +317,10 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     };
   }, [advanceFrame]);
 
+  // The newest simulation state, ahead of what React last rendered: the 3D
+  // scene reads it before every frame for what it draws without re-rendering.
+  const getState = useCallback(() => loop.state, [loop]);
+
   // Stable identities let memoised overlay UI skip the per-tick re-render.
   const pause = useCallback(() => dispatch({ type: 'PAUSE' }), [dispatch]);
   const resume = useCallback(() => dispatch({ type: 'RESUME' }), [dispatch]);
@@ -326,6 +330,7 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
   return {
     state,
     motion: loop.motion,
+    getState,
     advanceFrame,
     dispatch,
     pause,

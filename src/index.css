@@ -43,6 +43,34 @@
   --ink-3: rgba(33, 29, 26, 0.82); /* labels: 7.9:1 or better on paper */
 }
 
+/*
+ * High contrast and reduced motion, as chosen in the game's Settings (the
+ * system setting is the default). gamePreferences.applyDocumentPreferences
+ * mirrors them onto <html> as data-contrast / data-motion, so the page
+ * follows the same switches as the 3D scene.
+ */
+:root[data-contrast="more"] {
+  --anime-ink: #000000;
+  --anime-paper: #f7f0dd;
+  --anime-paper-light: #ffffff;
+  /* 7.3:1 under white text, 6.4:1 as text on paper. */
+  --anime-vermilion: #a3271c;
+  --anime-vermilion-deep: #7f1d15;
+  --anime-teal: #1f4f4b;
+  --anime-olive: #464f3b;
+  --anime-line: #000000;
+  --anime-shadow: 4px 4px 0 #000000;
+}
+
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+}
+
 * {
   box-sizing: border-box;
 }

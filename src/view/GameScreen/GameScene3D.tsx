@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unknown-property, react/no-array-index-key */
 /* eslint-disable react/require-default-props, comma-dangle, max-len */
 import React, {
-  useEffect, useLayoutEffect, useMemo, useRef, useState,
+  useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
 } from 'react';
 import {
   Canvas, addEffect, useFrame, useThree,
@@ -45,14 +45,12 @@ import { StaticTiles } from './scene/StaticTiles';
 import {
   framingScaleFor,
   groupShift,
-  hudInsets,
   maxFramingFor,
 } from './scene/cameraFraming';
 import { getVisibleAbilityWarnings } from './scene/abilityWarnings';
 import {
   FUSE_URGENT_MS,
   blastPreviewCells,
-  bombDetonationTimes,
   bombPulseScale,
   countdownNow,
   createCountdown,
@@ -72,6 +70,7 @@ import { LIGHT_PRIORITY, PooledLightHandle } from './scene/lightPoolSlots';
 import { LABEL_SPRITES, labelSpriteKey } from './scene/labelSprites';
 import { ShaderWarmup, useTransparencyVariantWarmup } from './scene/ShaderWarmup';
 import { shareSkeletons } from './scene/sharedSkeletons';
+import { MAX_FRAME_DELTA_MS } from '../../hooks/engineLoop';
 import {
   BOSS_MOTION_ID,
   MotionStore,
@@ -90,17 +89,27 @@ import { StageLandmarks } from './scene/StageLandmarks';
 import { BOARD_LIP } from './scene/landmarkPlacement';
 import { MonsterFigure, monsterIsTranslucent } from './scene/MonsterFigure';
 import { BossFigure } from './scene/BossFigure';
+import { BombClockState, createBombClock, refreshBombClock } from './scene/bombClock';
+import { canvasHudInsets } from './scene/canvasInsets';
+import {
+  HighContrastOverride, highContrastPalette, useHighContrastMaterials,
+} from './scene/highContrast';
 
 const ENTITY_LERP_SPEED = 7.2;
 const ENTITY_SNAP_EPSILON = 0.0016;
 const ReducedMotionContext = React.createContext(false);
 // Interpolated entity positions published by the engine loop (see motionStore).
 const MotionContext = React.createContext<MotionStore | null>(null);
-// The latest bombs and when each really goes off, written by SceneContent on
-// every tick it renders and read by bombs in useFrame. Bombs sit in the
-// memoised MapTiles, which must not re-render each tick just for their fuse.
-type BombClock = { bombs: GameEngineState['bombs']; detonationMs: Map<string, number> };
+// The latest bombs and when each really goes off, refreshed from the live
+// engine state before every frame (see refreshBombClock) and read by bombs and
+// blast previews in useFrame. The scene does not re-render for a fuse tick.
+type BombClock = BombClockState;
 const BombClockContext = React.createContext<React.MutableRefObject<BombClock> | null>(null);
+// The engine's newest state, for useFrame code. Render-time props come from
+// the shared scene state (hooks/useRenderState), which skips ticks that only
+// move clocks: a mesh that animates a timer, a cooldown or the exact ultimate
+// charge must read it here, per frame, not from its props.
+const LiveStateContext = React.createContext<() => GameEngineState | null>(() => null);
 
 function lerpAngle(from: number, to: number, alpha: number): number {
   const turn = Math.PI * 2;
@@ -1017,6 +1026,8 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
   const lightRef = useRef<PooledLightHandle>(null);
   const agesRef = useRef(new Map<string, number>());
   const ticksRef = useRef(new Map<string, number>());
+  const motion = React.useContext(MotionContext);
+  const simTimeRef = useRef<number | null>(null);
 
   // Allocate instance colours up front: setColorAt would otherwise create them
   // on the first explosion, which changes the shader variant and compiles a
@@ -1036,6 +1047,16 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
   }, []);
 
   useFrame((_, delta) => {
+    // Flames age with the simulation while it runs, so they burn out with
+    // the engine's own flame. When it is stopped (paused, round over) they
+    // age by frame time, capped like the engine's frame step: a frame drawn
+    // on demand after a long pause must not burn them out all at once.
+    const simTimeMs = motion?.simTimeMs ?? null;
+    const simStepMs = simTimeMs !== null && simTimeRef.current !== null
+      ? simTimeMs - simTimeRef.current
+      : 0;
+    simTimeRef.current = simTimeMs;
+    const stepMs = simStepMs > 0 ? simStepMs : Math.min(delta * 1000, MAX_FRAME_DELTA_MS);
     const activeKeys = new Set<string>();
     const count = Math.min(explosions.length, EXPLOSION_INSTANCE_CAPACITY);
     let strongestLight = 0;
@@ -1051,7 +1072,7 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
         agesRef.current.get(key),
         ticksRef.current.get(key),
         explosion.ticksRemaining,
-        delta * 1000
+        stepMs
       );
       agesRef.current.set(key, ageMs);
       ticksRef.current.set(key, explosion.ticksRemaining);
@@ -2946,11 +2967,17 @@ type MapTilesProps = {
   map: GameMap;
   bombs: GameEngineState['bombs'];
   destroyedBoxes: GameEngineState['destroyedBoxes'];
-  hazards: GameEngineState['hazards'];
   palette: StageDefinition['palette'];
   fogOfWar: GameEngineState['fogOfWar'];
   powerTheme?: CharacterId;
 };
+
+// Per-cell objects re-render only when their own props change: a bomb placed
+// next to them rebuilds the cell list, not every bomb and pickup on the map.
+const BombMeshMemo = React.memo(BombMesh);
+const PowerUpMeshMemo = React.memo(PowerUpMesh);
+const SensedWallMarkerMemo = React.memo(SensedWallMarker);
+const StaticTilesMemo = React.memo(StaticTiles);
 
 function sameBombCells(
   prev: GameEngineState['bombs'],
@@ -2998,7 +3025,6 @@ function MapTilesBase({
   map,
   bombs,
   destroyedBoxes,
-  hazards,
   palette,
   fogOfWar,
   powerTheme,
@@ -3026,10 +3052,6 @@ function MapTilesBase({
     () => new Set(fogOfWar.explored ?? []),
     [fogOfWar.explored],
   );
-  const visibleHazards = useMemo(
-    () => hazards.filter((hazard) => cellVisibleInSet(visibleCellSet, hazard.x, hazard.y)),
-    [hazards, visibleCellSet],
-  );
 
   // Walls, crates and ground are instanced in StaticTiles; only animated
   // per-cell objects stay as their own React elements.
@@ -3041,26 +3063,26 @@ function MapTilesBase({
         sensedWallSet.has(cellKey(x, y))
         && (cell === 'Wall' || cell === 'Box' || isObstacle(cell))
       ) {
-        cellObjects.push(<SensedWallMarker key={`sensed-wall-${x}-${y}`} x={x} y={y} />);
+        cellObjects.push(<SensedWallMarkerMemo key={`sensed-wall-${x}-${y}`} x={x} y={y} />);
       }
       return;
     }
     if (visibility !== 'visible') return;
     if (isPower(cell)) {
       cellObjects.push(
-        <PowerUpMesh key={`power-${x}-${y}`} x={x} y={y} power={cell} characterId={powerTheme} />
+        <PowerUpMeshMemo key={`power-${x}-${y}`} x={x} y={y} power={cell} characterId={powerTheme} />
       );
     } else if (isBomb(cell)) {
       const bomb = bombByCell.get(`${x},${y}`);
       cellObjects.push(
-        <BombMesh key={`bomb-${x}-${y}`} x={x} y={y} kind={bomb?.kind ?? 'standard'} />
+        <BombMeshMemo key={`bomb-${x}-${y}`} x={x} y={y} kind={bomb?.kind ?? 'standard'} />
       );
     }
   }));
 
   return (
     <>
-      <StaticTiles
+      <StaticTilesMemo
         map={map}
         palette={palette}
         visibleCells={visibleCellSet}
@@ -3068,9 +3090,6 @@ function MapTilesBase({
         destroyedCells={destroyedSet}
       />
       {cellObjects}
-      {visibleHazards.map((hazard) => (
-        <HazardMesh key={hazard.id} hazard={hazard} />
-      ))}
     </>
   );
 }
@@ -3080,10 +3099,31 @@ const MapTiles = React.memo(MapTilesBase, (prev, next) => (
   && prev.palette === next.palette
   && sameBombCells(prev.bombs, next.bombs)
   && sameTimedCells(prev.destroyedBoxes, next.destroyedBoxes)
-  && prev.hazards === next.hazards
   && sameFogCells(prev.fogOfWar, next.fogOfWar)
   && prev.powerTheme === next.powerTheme
 ));
+
+const HazardMeshMemo = React.memo(HazardMesh);
+
+// Hazards change every tick they exist (their warning closes on the engine's
+// timer), so they render apart from the tiles and cell objects.
+function HazardLayerBase({
+  hazards,
+  visibleCells,
+}: {
+  hazards: GameEngineState['hazards'];
+  visibleCells: Set<string>;
+}) {
+  return (
+    <>
+      {hazards
+        .filter((hazard) => cellVisibleInSet(visibleCells, hazard.x, hazard.y))
+        .map((hazard) => <HazardMeshMemo key={hazard.id} hazard={hazard} />)}
+    </>
+  );
+}
+
+const HazardLayer = React.memo(HazardLayerBase);
 
 function CameraRig({
   state,
@@ -3101,9 +3141,10 @@ function CameraRig({
   const framingRef = useRef<number | null>(null);
   const shakeRef = useRef(0);
   // The HUD bands for this layout, and how far out this screen's shape
-  // needs to zoom for the widest spread players can reach.
+  // needs to zoom for the widest spread players can reach. The HUD is laid
+  // out on the viewport; the canvas sits inside the arena frame.
   const frame = useMemo(() => {
-    const insets = hudInsets(preferences.hudScale, size.width, size.height);
+    const insets = canvasHudInsets(preferences.hudScale, size.width, size.height);
     const aspect = size.width > 0 && size.height > 0 ? size.width / size.height : 16 / 9;
     return { insets, aspect, maxFraming: maxFramingFor(aspect, insets) };
   }, [preferences.hudScale, size.width, size.height]);
@@ -3283,33 +3324,44 @@ function writePreviewInstances(
   target.instanceMatrix.needsUpdate = true;
 }
 
-function BombBlastPreviews({
-  state,
-  visibleCells,
-  detonationMs,
-}: {
-  state: GameEngineState;
-  visibleCells: Set<string>;
-  detonationMs: Map<string, number>;
-}) {
+function previewSignature(cells: { x: number; y: number; imminent: boolean }[]): string {
+  return cells.map((cell) => `${cell.x},${cell.y},${cell.imminent ? 1 : 0}`).join(';');
+}
+
+function BombBlastPreviews({ visibleCells }: { visibleCells: Set<string> }) {
   const edgeRef = useRef<THREE.InstancedMesh>(null);
   const fillRef = useRef<THREE.InstancedMesh>(null);
-  const cells = useMemo(
-    () => blastPreviewCells(
-      state.bombs,
-      state.map,
-      detonationMs,
+  const bombClock = React.useContext(BombClockContext);
+  const drawnRef = useRef<{
+    detonationMs: Map<string, number> | null;
+    visibleCells: Set<string> | null;
+    signature: string;
+  }>({ detonationMs: null, visibleCells: null, signature: '' });
+
+  // Reads the bomb clock, which follows every tick: the tier turns red when a
+  // cell's blast is FUSE_URGENT_MS away without the scene re-rendering. The
+  // clock gets new detonation times only when a tick changed the bombs, so
+  // this rebuilds the cells at most once per tick and rewrites the instances
+  // only when a cell or tier changed.
+  useFrame(() => {
+    const clock = bombClock?.current;
+    if (!clock) return;
+    const drawn = drawnRef.current;
+    if (drawn.detonationMs === clock.detonationMs && drawn.visibleCells === visibleCells) return;
+    drawn.detonationMs = clock.detonationMs;
+    drawn.visibleCells = visibleCells;
+    const cells = blastPreviewCells(
+      clock.bombs,
+      clock.map,
+      clock.detonationMs,
       (x, y) => cellVisibleInSet(visibleCells, x, y),
-    ),
-    [state.bombs, state.map, detonationMs, visibleCells],
-  );
-  // Bombs tick every 50 ms; only rewrite instances when a cell or tier changes.
-  const signature = cells.map((cell) => `${cell.x},${cell.y},${cell.imminent ? 1 : 0}`).join(';');
-  useLayoutEffect(() => {
+    );
+    const signature = previewSignature(cells);
+    if (signature === drawn.signature) return;
+    drawn.signature = signature;
     writePreviewInstances(edgeRef.current, cells, 0.03);
     writePreviewInstances(fillRef.current, cells.filter((cell) => cell.imminent), 0.026);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature]);
+  });
 
   return (
     <>
@@ -3329,7 +3381,91 @@ function BombBlastPreviews({
   );
 }
 
-function SceneContent({
+// ---------------------------------------------------------------------------
+// Memo boundaries for SceneContent.
+//
+// The scene state (hooks/useRenderState: useSceneState) keeps the identity of
+// every entity and list that did not change, so most layers skip with a
+// shallow compare and a monster step re-renders that monster, not the arena.
+// Layers handed the whole `state` compare only the parts they draw from it.
+// ---------------------------------------------------------------------------
+
+// Fields a shared scene state refreshes on any rebuild (clocks) or that
+// change whenever some other entity does. A layer that skips them must not
+// read them during render.
+const SCENE_CLOCK_KEYS = ['tick', 'rngSeed', 'roundElapsedMs', 'roundStartTicksRemaining'];
+
+function sameStateExcept(
+  previous: GameEngineState,
+  next: GameEngineState,
+  skipped: ReadonlySet<string>,
+): boolean {
+  if (previous === next) return true;
+  return (Object.keys(next) as (keyof GameEngineState)[])
+    .every((key) => skipped.has(key) || previous[key] === next[key]);
+}
+
+// PlayerMesh draws its own player (compared by identity) and reads `state`
+// for that player's timed power-ups. If it ever draws one of these skipped
+// fields during render, remove it from this list.
+const PLAYER_MESH_SKIPPED_STATE = new Set([
+  ...SCENE_CLOCK_KEYS,
+  'players', 'monsters', 'bombs', 'explosions', 'destroyedBoxes', 'hazards',
+  'fogOfWar', 'map', 'boss', 'campaign', 'pressureBlocksPlaced',
+]);
+const PlayerMeshMemo = React.memo(PlayerMesh, (previous, next) => (
+  previous.player === next.player
+  && previous.slot === next.slot
+  && previous.cpu === next.cpu
+  && previous.pickupChips === next.pickupChips
+  && sameStateExcept(previous.state, next.state, PLAYER_MESH_SKIPPED_STATE)
+));
+
+// BossMesh draws `state.boss` (and may read its hazards).
+const BOSS_MESH_SKIPPED_STATE = new Set([
+  ...SCENE_CLOCK_KEYS,
+  'players', 'monsters', 'bombs', 'explosions', 'destroyedBoxes', 'fogOfWar',
+  'map', 'timedPowerUps', 'pickupMessages', 'pressureBlocksPlaced',
+]);
+const BossMeshMemo = React.memo(BossMesh, (previous, next) => (
+  sameStateExcept(previous.state, next.state, BOSS_MESH_SKIPPED_STATE)
+));
+
+// The camera reads players and map in useFrame; the rest comes in props.
+const CameraRigMemo = React.memo(CameraRig, (previous, next) => (
+  previous.state.players === next.state.players
+  && previous.state.map === next.state.map
+  && previous.preferences === next.preferences
+  && previous.impact === next.impact
+));
+
+const MissionObjectiveMarkersMemo = React.memo(MissionObjectiveMarkers, (previous, next) => (
+  previous.state.campaign === next.state.campaign
+  && previous.state.boss?.name === next.state.boss?.name
+  && previous.visibleCells === next.visibleCells
+));
+
+const ShaderWarmupMemo = React.memo(ShaderWarmup);
+const FloorMemo = React.memo(Floor);
+const BombBlastPreviewsMemo = React.memo(BombBlastPreviews);
+const PressureBlockWarningMemo = React.memo(PressureBlockWarning);
+const TargetCellWarningMemo = React.memo(TargetCellWarning);
+const SensedEnemyMarkerMemo = React.memo(SensedEnemyMarker);
+
+// High contrast: the danger cues drawn with shared materials get bolder.
+// Opacity is a uniform (all of these are already transparent), so this never
+// compiles a program. The stage palette is retoned in SceneContent.
+const HIGH_CONTRAST_MATERIALS: readonly HighContrastOverride[] = [
+  { material: BLAST_PREVIEW_EDGE_MATERIAL, opacity: 0.85 },
+  { material: BLAST_PREVIEW_FILL_MATERIAL, opacity: 0.6 },
+  { material: FUSE_RING_MATERIAL, opacity: 0.95 },
+  { material: FUSE_RING_URGENT_MATERIAL, opacity: 1 },
+  { material: PRESSURE_RING_MATERIAL, opacity: 1 },
+  { material: PRESSURE_BLOCK_MATERIAL, opacity: 0.72 },
+  { material: SHADOW_BLOB_MATERIAL, opacity: 0.42 },
+];
+
+function SceneContentBase({
   state,
   preferences,
   impact,
@@ -3343,6 +3479,12 @@ function SceneContent({
     [state.config.stageId]
   );
   const look = useMemo(() => getStageLook(state.config.stageId), [state.config.stageId]);
+  const { highContrast } = preferences;
+  const palette = useMemo(
+    () => (highContrast ? highContrastPalette(stage.palette) : stage.palette),
+    [highContrast, stage.palette],
+  );
+  useHighContrastMaterials(highContrast, HIGH_CONTRAST_MATERIALS);
   const mapDimensions = useMemo(() => getMapDimensions(state.map), [state.map]);
   const visibleCellSet = useMemo(
     () => new Set(state.fogOfWar.visible ?? []),
@@ -3384,26 +3526,17 @@ function SceneContent({
     && !bossVisible
     && !!bossCellKey
     && sensedEnemyCells.has(bossCellKey);
-  const detonationMs = useMemo(
-    () => bombDetonationTimes(state.bombs, state.map, state.players),
-    [state.bombs, state.map, state.players],
-  );
-  const bombClock = React.useContext(BombClockContext);
-  if (bombClock) {
-    bombClock.current.bombs = state.bombs;
-    bombClock.current.detonationMs = detonationMs;
-  }
   const multiplayer = state.players.length > 1;
   const motion = React.useContext(MotionContext);
   const cueChips = useCueChips(multiplayer ? state.players.length : 0);
 
   return (
     <LightPool>
-      <ShaderWarmup />
-      <CameraRig state={state} preferences={preferences} impact={impact} />
+      <ShaderWarmupMemo />
+      <CameraRigMemo state={state} preferences={preferences} impact={impact} />
       <StageAtmosphere look={look} farEdgeZ={toWorld(0, -BOARD_LIP)[2]} />
-      <Floor
-        palette={stage.palette}
+      <FloorMemo
+        palette={palette}
         width={mapDimensions.width}
         height={mapDimensions.height}
       />
@@ -3417,22 +3550,22 @@ function SceneContent({
         map={state.map}
         bombs={state.bombs}
         destroyedBoxes={state.destroyedBoxes}
-        hazards={state.hazards}
-        palette={stage.palette}
+        palette={palette}
         fogOfWar={state.fogOfWar}
         powerTheme={state.players[0]?.characterId}
       />
+      <HazardLayer hazards={state.hazards} visibleCells={visibleCellSet} />
       <ExplosionFieldMemo explosions={visibleExplosions} />
-      <BombBlastPreviews state={state} visibleCells={visibleCellSet} detonationMs={detonationMs} />
+      <BombBlastPreviewsMemo visibleCells={visibleCellSet} />
       <HazardTelegraphs
         hazards={state.hazards}
         boss={state.boss}
         visibleCells={visibleCellSet}
         motion={motion}
       />
-      <MissionObjectiveMarkers state={state} visibleCells={visibleCellSet} />
+      <MissionObjectiveMarkersMemo state={state} visibleCells={visibleCellSet} />
       {getUpcomingPressureCells(state).map((cell, order) => (
-        <PressureBlockWarning
+        <PressureBlockWarningMemo
           key={`pressure-${cell.x}-${cell.y}`}
           x={cell.x}
           y={cell.y}
@@ -3440,7 +3573,7 @@ function SceneContent({
         />
       ))}
       {state.players.map((p, index) => (
-        <PlayerMesh
+        <PlayerMeshMemo
           key={p.id}
           player={p}
           state={state}
@@ -3454,10 +3587,10 @@ function SceneContent({
         <MonsterMesh key={m.id} monster={m} />
       ))}
       {warnedMonsters.map((m) => (
-        <TargetCellWarning key={`target-warning-${m.id}`} monster={m} />
+        <TargetCellWarningMemo key={`target-warning-${m.id}`} monster={m} />
       ))}
       {sensedMonsters.map((m) => (
-        <SensedEnemyMarker
+        <SensedEnemyMarkerMemo
           key={`sensed-${m.id}`}
           x={Math.round(m.x)}
           y={Math.round(m.y)}
@@ -3466,10 +3599,10 @@ function SceneContent({
         />
       ))}
       {state.boss && bossVisible && (
-        <BossMesh state={state} />
+        <BossMeshMemo state={state} />
       )}
       {state.boss && bossSensed && (
-        <SensedEnemyMarker
+        <SensedEnemyMarkerMemo
           x={Math.round(state.boss.x)}
           y={Math.round(state.boss.y)}
           label={state.boss.name}
@@ -3481,7 +3614,13 @@ function SceneContent({
   );
 }
 
+const SceneContent = React.memo(SceneContentBase);
+
 type GameScene3DProps = {
+  /**
+   * What the scene renders from. GameScreen passes useSceneState's output,
+   * whose identity changes only when something the scene draws changed.
+   */
   state: GameEngineState;
   preferences: GamePreferences;
   impact?: number;
@@ -3489,50 +3628,165 @@ type GameScene3DProps = {
   motion?: MotionStore | null;
   /** Advances the simulation to this frame's timestamp before the scene renders. */
   advanceFrame?: (timestamp: number) => void;
+  /**
+   * The engine's newest state, read before every frame for what changes each
+   * tick but is drawn without a re-render (bomb fuses). Defaults to `state`.
+   */
+  liveState?: () => GameEngineState | null;
+  /**
+   * Nothing on screen moves (pause menu, Settings, result dialog): draw only
+   * on change. Defaults to "paused or the round is over".
+   */
+  idle?: boolean;
 };
 
-function useAdvanceBeforeRender(advanceFrame?: (timestamp: number) => void) {
+/**
+ * Before each frame: advance the simulation, then point the bomb clock at the
+ * newest bombs. Runs ahead of every useFrame (R3F global effect).
+ */
+function useBeforeEachFrame(
+  advanceFrame: ((timestamp: number) => void) | undefined,
+  readState: () => GameEngineState | null,
+  bombClock: React.MutableRefObject<BombClock>,
+) {
   const advanceRef = useRef(advanceFrame);
   advanceRef.current = advanceFrame;
-  useEffect(() => addEffect((timestamp) => advanceRef.current?.(timestamp)), []);
+  const readRef = useRef(readState);
+  readRef.current = readState;
+  useEffect(() => addEffect((timestamp) => {
+    advanceRef.current?.(timestamp);
+    refreshBombClock(bombClock.current, readRef.current());
+  }), [bombClock]);
 }
 
+/**
+ * Nothing moves while the game is paused or a round result is up, so the
+ * canvas draws on demand then: one frame per change instead of 60 a second.
+ * R3F starts its loop again when the frameloop turns back to 'always'.
+ */
+function isSceneIdle(state: GameEngineState): boolean {
+  return state.paused || state.phase !== 'playing';
+}
+
+// The scene state reaches the canvas through this store, not through props:
+// a new state then re-renders only the scene inside the canvas. Re-rendering
+// <Canvas> itself re-renders r3f's root and its context bridge (about a dozen
+// components per commit) and the canvas wrapper on the page side.
+type SceneStore = {
+  get: () => GameEngineState;
+  set: (state: GameEngineState) => void;
+  subscribe: (listener: () => void) => () => void;
+};
+
+function createSceneStore(initial: GameEngineState): SceneStore {
+  let current = initial;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => current,
+    set: (next) => {
+      if (next === current) return;
+      current = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+  };
+}
+
+function SceneFromStore({
+  store,
+  preferences,
+  impact,
+}: {
+  store: SceneStore;
+  preferences: GamePreferences;
+  impact: number;
+}) {
+  const state = useSyncExternalStore(store.subscribe, store.get);
+  // Request a frame whenever the scene's inputs change. In 'always' mode the
+  // loop is running anyway; on demand it draws the change (a setting toggled
+  // under the pause menu) exactly once.
+  const invalidate = useThree((three) => three.invalidate);
+  useEffect(() => { invalidate(); }, [invalidate, state, preferences, impact]);
+  return <SceneContent state={state} preferences={preferences} impact={impact} />;
+}
+
+type SceneCanvasProps = {
+  store: SceneStore;
+  readState: () => GameEngineState | null;
+  preferences: GamePreferences;
+  impact: number;
+  motion: MotionStore | null;
+  idle: boolean;
+  bombClock: React.MutableRefObject<BombClock>;
+  // The stage's sky gradient, drawn behind the transparent canvas.
+  sky: string;
+};
+
+const SceneCanvas = React.memo(({
+  store, readState, preferences, impact, motion, idle, bombClock, sky,
+}: SceneCanvasProps) => (
+  <Canvas
+    shadows
+    dpr={[1, 1.35]}
+    frameloop={idle ? 'demand' : 'always'}
+    style={{
+      width: '100%',
+      height: '100%',
+      background: sky,
+    }}
+    gl={{ antialias: false, powerPreference: 'high-performance' }}
+    flat
+    camera={{ position: [0, 13.2, 9.6], fov: 48 }}
+  >
+    <ReducedMotionContext.Provider value={preferences.reducedMotion}>
+      <MotionContext.Provider value={motion}>
+        <BombClockContext.Provider value={bombClock}>
+          <LiveStateContext.Provider value={readState}>
+            <SceneFromStore store={store} preferences={preferences} impact={impact} />
+          </LiveStateContext.Provider>
+        </BombClockContext.Provider>
+      </MotionContext.Provider>
+    </ReducedMotionContext.Provider>
+    {PERF_PROBE_ENABLED && <PerfProbe />}
+  </Canvas>
+));
+SceneCanvas.displayName = 'SceneCanvas';
+
 export function GameScene3D({
-  state, preferences, impact = 0, motion = null, advanceFrame,
+  state, preferences, impact = 0, motion = null, advanceFrame, liveState, idle,
 }: GameScene3DProps) {
-  useAdvanceBeforeRender(advanceFrame);
   const sky = useMemo(
     () => stageSkyBackground(getStageLook(state.config.stageId)),
     [state.config.stageId],
   );
-  const bombClockRef = useRef<BombClock>({ bombs: [], detonationMs: new Map() });
+  const storeRef = useRef<SceneStore>();
+  if (!storeRef.current) storeRef.current = createSceneStore(state);
+  const store = storeRef.current;
+  useLayoutEffect(() => { store.set(state); }, [store, state]);
+  const readState = React.useCallback(
+    () => liveState?.() ?? store.get(),
+    [liveState, store],
+  );
+  const bombClockRef = useRef<BombClock>(createBombClock());
+  useBeforeEachFrame(advanceFrame, readState, bombClockRef);
   // Free cached label canvases nothing shows any more once the arena closes.
   useEffect(() => () => {
     LABEL_SPRITES.disposeIdle();
     PLAYER_TAG_SPRITES.disposeIdle();
   }, []);
   return (
-    <Canvas
-      shadows
-      dpr={[1, 1.35]}
-      style={{
-        width: '100%',
-        height: '100%',
-        background: sky,
-        filter: preferences.highContrast ? 'contrast(1.28) saturate(1.14)' : 'none',
-      }}
-      gl={{ antialias: false, powerPreference: 'high-performance' }}
-      flat
-      camera={{ position: [0, 13.2, 9.6], fov: 48 }}
-    >
-      <ReducedMotionContext.Provider value={preferences.reducedMotion}>
-        <MotionContext.Provider value={motion}>
-          <BombClockContext.Provider value={bombClockRef}>
-            <SceneContent state={state} preferences={preferences} impact={impact} />
-          </BombClockContext.Provider>
-        </MotionContext.Provider>
-      </ReducedMotionContext.Provider>
-      {PERF_PROBE_ENABLED && <PerfProbe />}
-    </Canvas>
+    <SceneCanvas
+      store={store}
+      readState={readState}
+      preferences={preferences}
+      impact={impact}
+      motion={motion}
+      idle={idle ?? isSceneIdle(state)}
+      bombClock={bombClockRef}
+      sky={sky}
+    />
   );
 }

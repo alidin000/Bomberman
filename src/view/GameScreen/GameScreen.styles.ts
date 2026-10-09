@@ -3,6 +3,7 @@ import {
   Button, Dialog, DialogContent, IconButton
 } from '@mui/material';
 import { StyledBackground } from '../WelcomeScreen/WelcomeScreen.styles';
+import { ARENA_FRAME_PX } from './scene/canvasInsets';
 
 type GridCellProps = {
   isWall: boolean;
@@ -79,10 +80,12 @@ export const StyledSettingsButton = styled(IconButton)({
   color: 'var(--anime-vermilion)',
 });
 
+// The arena sits inside the paper frame (ARENA_FRAME_PX on every side), so
+// no DOM layer covers the canvas; the camera converts the HUD's viewport
+// bands to the smaller canvas (scene/canvasInsets.ts).
 export const GameSceneContainer = styled.div({
-  width: '100%',
-  height: '100dvh',
-  position: 'relative',
+  position: 'absolute',
+  inset: ARENA_FRAME_PX,
 });
 
 export const TopControls = styled.div({
@@ -110,20 +113,14 @@ export const LoadingMessage = styled.div({
   fontSize: '1.1rem',
 });
 
-// No full-screen scanline layer here: a `mix-blend-mode` overlay above the
-// WebGL canvas forces the compositor to redraw an extra offscreen pass every
-// frame, and at 0.035 x 0.25 alpha it only changed pixels by 1-2/255.
+// No full-screen layer over the canvas: a `mix-blend-mode` scanline overlay
+// forced an extra offscreen pass every frame. The 8 px paper ring used to be
+// drawn over the canvas edge too; it is now this element's own inset shadow,
+// around the canvas, so nothing on the page overlaps the arena's edges.
 export const GameBackground = styled(StyledBackground)({
   overflow: 'hidden',
   background: 'var(--anime-night)',
-  '&::after': {
-    content: '""',
-    position: 'absolute',
-    inset: 0,
-    zIndex: 1,
-    pointerEvents: 'none',
-    boxShadow: 'inset 0 0 0 8px rgba(239,227,196,0.4)',
-  },
+  boxShadow: `inset 0 0 0 ${ARENA_FRAME_PX}px rgba(239,227,196,0.4)`,
 });
 
 export const ControlButton = styled(IconButton)({

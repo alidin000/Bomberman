@@ -35,7 +35,7 @@ import { GameScene3D } from './GameScene3D';
 import { GameHUD, PauseMissionDetails } from './GameHUD';
 import { MatchBeatOverlay } from './MatchBeatOverlay';
 import { useGameEngine } from '../../hooks/useGameEngine';
-import { useRenderState } from '../../hooks/useRenderState';
+import { useHudState, useRenderState, useSceneState } from '../../hooks/useRenderState';
 import { GameConfig, GameEngineState, loadMapFromStorage } from '../../engine';
 import {
   DEFAULT_CHARACTER_ID, DEFAULT_STAGE_ID, GameMode, getCharacterDefinition,
@@ -63,6 +63,7 @@ import {
   CaptionLiveRegion,
 } from './GameScreen.styles';
 import {
+  applyDocumentPreferences,
   loadGamePreferences,
   saveGamePreferences,
 } from './gamePreferences';
@@ -277,8 +278,10 @@ const MemoMatchConfirmDialog = React.memo(
   MatchConfirmDialog,
   (prev, next) => prev.kind === null && next.kind === null
 );
-// Fed the render state (see useRenderState), so a held-movement frame skips
-// the whole HUD and 3D scene re-render; the scene draws those steps itself.
+// Fed shared states (see useRenderState) that keep their identity until
+// something each one draws changes, so a held-movement frame or a tick that
+// only moves clocks skips the HUD and the whole 3D scene; the scene animates
+// those itself from the motion store and the live state.
 const MemoGameHUD = React.memo(GameHUD);
 const MemoGameScene3D = React.memo(GameScene3D);
 
@@ -325,6 +328,7 @@ export const GameScreen = () => {
   const {
     state,
     motion,
+    getState,
     advanceFrame,
     pause,
     resume,
@@ -332,7 +336,14 @@ export const GameScreen = () => {
     dismissDialog,
   } = useGameEngine(config, keyBindings);
   const renderState = useRenderState(state);
+  const sceneState = useSceneState(state, motion);
+  const hudState = useHudState(state);
   const feedback = useGameFeedback(renderState, preferences);
+
+  // High contrast and reduced motion reach the page as well as the canvas.
+  useEffect(() => {
+    applyDocumentPreferences(preferences);
+  }, [preferences]);
 
   const handlePreferencesChange = useCallback((nextPreferences: typeof preferences) => {
     setPreferences(nextPreferences);
@@ -634,7 +645,7 @@ export const GameScreen = () => {
     liveAnnouncement = feedback.caption ? `${feedback.caption}. ${roundOver.text}` : roundOver.text;
   }
 
-  if (!state || !renderState) {
+  if (!state || !renderState || !sceneState || !hudState) {
     return (
       <StyledBackground>
         <LoadingMessage>Loading game...</LoadingMessage>
@@ -644,7 +655,7 @@ export const GameScreen = () => {
 
   return (
     <GameBackground>
-      {showHud && <MemoGameHUD state={renderState} scale={preferences.hudScale} />}
+      {showHud && <MemoGameHUD state={hudState} scale={preferences.hudScale} />}
       <GameTopControls
         isPaused={isPaused}
         locked={isPaused && !showControlsGuide}
@@ -656,11 +667,16 @@ export const GameScreen = () => {
       />
       <GameSceneContainer>
         <MemoGameScene3D
-          state={renderState}
+          state={sceneState}
           preferences={preferences}
           impact={feedback.impact}
           motion={motion}
           advanceFrame={advanceFrame}
+          liveState={getState}
+          // A round end also sets `paused`, but the hold before the result
+          // still draws (the deciding blast and the KO pose play out); the
+          // scene idles under a real pause or once the dialog covers it.
+          idle={(isPaused && !dialogOpen) || resultVisible}
         />
       </GameSceneContainer>
       <CaptionLiveRegion role="status" aria-atomic="true">

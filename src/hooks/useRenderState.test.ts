@@ -2,8 +2,10 @@
 import { renderHook } from '@testing-library/react-hooks';
 import { parseMapRows } from '../engine/mapLoader';
 import { GameConfig, GameEngineState } from '../engine/types';
+import { gameReducer } from '../engine/reducer';
 import { advanceEngineFrame, applyEngineAction, createEngineLoop } from './engineLoop';
-import { differsOnlyInPlayerMotion, useRenderState } from './useRenderState';
+import { createMotionStore, playerMotionId } from './motionStore';
+import { differsOnlyInPlayerMotion, shareRenderState, useRenderState } from './useRenderState';
 
 const openArena = parseMapRows([
   'WWWWWWWWWWWWWWW',
@@ -127,5 +129,107 @@ describe('useRenderState', () => {
     expect(differsOnlyInPlayerMotion(state, { ...moved, tick: state.tick + 1 })).toBe(false);
     expect(differsOnlyInPlayerMotion(state, { ...state })).toBe(true);
     expect(differsOnlyInPlayerMotion(null, state)).toBe(false);
+  });
+});
+
+describe('scene and HUD shared states', () => {
+  const tick = (state: GameEngineState) => (
+    gameReducer(state, { type: 'TICK', deltaMs: 50 }) as GameEngineState
+  );
+
+  // A live round with a burning bomb, ultimates recharging and players that
+  // have moved (so the motion store draws them).
+  function liveRound() {
+    const loop = startedLoop();
+    const [p1] = loop.state!.players;
+    applyEngineAction(loop, { type: 'MOVE', playerId: p1.id, direction: 'right' });
+    applyEngineAction(loop, { type: 'DROP_BOMB', playerId: p1.id });
+    for (let t = 0; t < 200; t += FRAME_MS) advanceEngineFrame(loop, FRAME_MS);
+    // No monsters: their steps are real scene changes.
+    loop.state = { ...loop.state!, monsters: [] };
+    return loop;
+  }
+
+  it('keeps the scene state across ticks that only move clocks', () => {
+    const loop = liveRound();
+    const share = shareRenderState.scene(loop.motion);
+    const before = loop.state!;
+    let shared = before;
+    let state = before;
+    for (let i = 0; i < 10; i += 1) {
+      state = tick(state);
+      shared = share(shared, state);
+    }
+    expect(state.tick).toBe(before.tick + 10);
+    expect(state.bombs[0].ticksRemaining).toBeLessThan(before.bombs[0].ticksRemaining);
+    expect(shared).toBe(before);
+  });
+
+  it('rebuilds only the changed parts when the scene does change', () => {
+    const loop = liveRound();
+    const share = shareRenderState.scene(loop.motion);
+    const before = loop.state!;
+    const ticked = tick(before);
+    const turned = {
+      ...ticked,
+      players: ticked.players.map((p, i) => (i === 1 ? { ...p, facing: 'up' as const } : p)),
+    };
+    const shared = share(before, turned);
+    expect(shared).not.toBe(before);
+    expect(shared.players[1].facing).toBe('up');
+    // Player 1 changed only its recharge timer: the same object, so its mesh skips.
+    expect(shared.players[0]).toBe(before.players[0]);
+    expect(shared.bombs).toBe(before.bombs);
+    expect(shared.map).toBe(before.map);
+    // Fields it rebuilt are current.
+    expect(shared.tick).toBe(turned.tick);
+  });
+
+  it('re-renders the scene when an ultimate becomes ready, not for each percent', () => {
+    const loop = liveRound();
+    const share = shareRenderState.scene(loop.motion);
+    const before = loop.state!;
+    const withCharge = (charge: number) => ({
+      ...before,
+      players: before.players.map((p, i) => (i === 0 ? { ...p, ultimateCharge: charge } : p)),
+    });
+    const at40 = share(before, withCharge(40));
+    expect(share(at40, withCharge(41))).toBe(at40);
+    expect(share(at40, withCharge(100))).not.toBe(at40);
+  });
+
+  it('draws a player from state again once the motion store forgets it', () => {
+    const motion = createMotionStore();
+    const loop = liveRound();
+    const share = shareRenderState.scene(motion);
+    const before = loop.state!;
+    const moved = {
+      ...before,
+      players: before.players.map((p, i) => (i === 0 ? { ...p, x: p.x + 1 } : p)),
+    };
+    // No track (a new round cleared them): x is drawn directly, so it matters.
+    expect(share(before, moved)).not.toBe(before);
+    motion.tracks.set(playerMotionId(before.players[0].id), {
+      fromX: 0, fromY: 0, toX: 0, toY: 0, startMs: 0, durationMs: 0, easing: 'linear',
+    });
+    expect(share(before, moved)).toBe(before);
+  });
+
+  it('keeps the HUD state until a printed value changes', () => {
+    const loop = liveRound();
+    const before = { ...loop.state!, roundElapsedMs: 10000 };
+    const later = (ms: number, charge?: number) => ({
+      ...before,
+      tick: before.tick + ms / 50,
+      roundElapsedMs: before.roundElapsedMs + ms,
+      players: before.players.map((p) => ({
+        ...p, x: p.x + 0.1, ultimateCharge: charge ?? p.ultimateCharge,
+      })),
+    });
+    // 80 s left for the next 950 ms; positions are not on the HUD.
+    expect(shareRenderState.hud(before, later(950))).toBe(before);
+    expect(shareRenderState.hud(before, later(1050))).not.toBe(before);
+    expect(shareRenderState.hud(before, later(50, before.players[0].ultimateCharge + 1)))
+      .not.toBe(before);
   });
 });

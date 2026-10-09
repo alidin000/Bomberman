@@ -70,3 +70,18 @@ export function saveGamePreferences(preferences: GamePreferences): void {
     // Keep the in-memory settings usable when browser storage is unavailable.
   }
 }
+
+/**
+ * Mirrors high contrast and reduced motion onto <html> as `data-contrast`
+ * ("more" | "normal") and `data-motion` ("reduce" | "full"), so the page's
+ * CSS (index.css) follows the in-game switches and not only the system
+ * settings. The attributes stay after a match, so menus follow them too.
+ */
+export function applyDocumentPreferences(
+  preferences: Pick<GamePreferences, 'highContrast' | 'reducedMotion'>,
+  root: HTMLElement | undefined = typeof document === 'undefined' ? undefined : document.documentElement
+): void {
+  if (!root) return;
+  root.setAttribute('data-contrast', preferences.highContrast ? 'more' : 'normal');
+  root.setAttribute('data-motion', preferences.reducedMotion ? 'reduce' : 'full');
+}

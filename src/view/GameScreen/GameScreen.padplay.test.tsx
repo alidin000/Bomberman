@@ -16,15 +16,16 @@ vi.mock('../routeChunks', async (importOriginal) => {
   return { ...actual, lazyScreen: () => GameScreen };
 });
 
+// The scene's `state` prop skips movement-only frames (the real scene draws
+// those from the motion store), so the stand-in reads the live engine state.
+const sceneProps = vi.hoisted(() => ({
+  liveState: null as null | (() => GameEngineState | null),
+}));
 vi.mock('./GameScene3D', () => ({
-  GameScene3D: ({ state }: { state: GameEngineState }) => (
-    <div
-      data-testid="scene"
-      data-bombs={state.bombs.length}
-      data-p1x={state.players[0].x}
-      data-p1y={state.players[0].y}
-    />
-  ),
+  GameScene3D: ({ liveState }: { liveState: () => GameEngineState | null }) => {
+    sceneProps.liveState = liveState;
+    return <div data-testid="scene" />;
+  },
 }));
 
 type TestPad = {
@@ -58,12 +59,10 @@ function tap(button: number) {
 }
 
 function scene() {
-  const node = screen.getByTestId('scene');
-  return {
-    bombs: Number(node.dataset.bombs),
-    x: Number(node.dataset.p1x),
-    y: Number(node.dataset.p1y),
-  };
+  screen.getByTestId('scene');
+  const state = sceneProps.liveState?.();
+  if (!state) throw new Error('the match has not started');
+  return { bombs: state.bombs.length, x: state.players[0].x, y: state.players[0].y };
 }
 
 function startMatch() {

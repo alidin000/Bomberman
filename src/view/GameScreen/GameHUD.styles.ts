@@ -45,14 +45,7 @@ export const HudRoot = styled(Box, {
     clip: 'rect(0 0 0 0)',
     whiteSpace: 'nowrap',
   },
-  '&::before': {
-    content: '""',
-    position: 'absolute',
-    inset: 0,
-    pointerEvents: 'none',
-    background: 'linear-gradient(180deg, rgba(33,29,26,0.28), transparent 18%, transparent 82%, rgba(33,29,26,0.18))',
-    opacity: 0.7,
-  },
+  // No full-screen vignette: nothing but the panels is drawn over the canvas.
 }));
 
 export const MissionStrip = styled(Box)({
@@ -560,6 +553,9 @@ export const UltimateProgress = styled(LinearProgress)({
   backgroundColor: 'rgba(33, 29, 26, 0.2)',
   '& .MuiLinearProgress-bar': {
     background: 'var(--anime-vermilion)',
+    // MUI eases every value change over 0.4 s; a charging ultimate changes
+    // a few times a second, so the bar was animating almost all match.
+    transition: 'none',
   },
 });
 
