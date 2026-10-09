@@ -41,7 +41,12 @@ import { GameConfig, GameEngineState, loadMapFromStorage } from '../../engine';
 import {
   DEFAULT_CHARACTER_ID, DEFAULT_STAGE_ID, GameMode, getCharacterDefinition,
 } from '../../content';
-import { completeCampaignStage, recordCampaignDiscoveries } from '../../story/progress';
+import {
+  LastMissionReport,
+  completeCampaignStage,
+  recordCampaignDiscoveries,
+} from '../../story/progress';
+import { settleCampaignMission } from '../../story/hubEconomy';
 import {
   GameSceneContainer,
   TopControls,
@@ -74,6 +79,8 @@ import { PAD_START_EVENT } from '../../input/padNavigator';
 import {
   isVersus, lastRoundWinnerSlot, matchWinnerSlot, roundOverBanner,
 } from './matchCopy';
+import { clearDeployedConsumables } from '../ConfigScreen/launchGame';
+import { getHubReturn, getMissionSettlement, hubPath } from '../HubScreen/missionSettlement';
 
 const CONTROLS_GUIDE_SEEN_KEY = 'shinobiControlsGuideSeen';
 
@@ -335,8 +342,15 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
       selectedUpgrade: setup.selectedUpgrade,
       difficulty: loadCampaignDifficulty(),
       controllers: mode === 'local' ? normalizeControllers(setup.controllers, players) : undefined,
+      // The hub pack and upgrades this campaign mission deployed with.
+      loadout: mode === 'solo' ? setup.loadout : undefined,
     };
   }, [matchConfig, numOfPlayers, numOfRounds, selectedMap]);
+
+  // The pack is spent on this mission: a reload must not bring it back.
+  useEffect(() => {
+    clearDeployedConsumables();
+  }, []);
 
   const {
     store,
@@ -386,6 +400,24 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
       }
     }
   }, [menuState]);
+
+  // A finished campaign mission pays out once (win or loss), and its result
+  // offers the way back to the village hub.
+  const [missionReport, setMissionReport] = useState<LastMissionReport | null>(null);
+  useEffect(() => {
+    const settlement = menuState ? getMissionSettlement(menuState) : null;
+    if (!settlement) {
+      setMissionReport(null);
+      return;
+    }
+    setMissionReport(settleCampaignMission(settlement).report);
+    // The hub is the next screen: fetch its chunk while the result shows.
+    import('../HubScreen/HubScreen').catch(() => undefined);
+  }, [menuState]);
+  const hubReturn = useMemo(() => (menuState ? getHubReturn(menuState) : null), [menuState]);
+  const goToHub = useMemo(() => (
+    hubReturn ? () => navigate(hubPath(hubReturn.stageId)) : undefined
+  ), [hubReturn, navigate]);
 
   const { discoveries } = view;
   useEffect(() => {
@@ -621,12 +653,14 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
     const handlePadStart = (event: Event) => {
       event.preventDefault();
       if (shownAt === null || Date.now() - shownAt < RESULT_INPUT_LOCK_MS) return;
-      if (isGameOver) restart();
+      // A won mission's main button heads on to the village hub.
+      if (isGameOver && resultTone === 'victory' && goToHub) goToHub();
+      else if (isGameOver) restart();
       else dismissDialog();
     };
     window.addEventListener(PAD_START_EVENT, handlePadStart);
     return () => window.removeEventListener(PAD_START_EVENT, handlePadStart);
-  }, [customResult, dialogOpen, resultVisible, dismissDialog, isGameOver, restart]);
+  }, [customResult, dialogOpen, resultVisible, dismissDialog, isGameOver, restart, resultTone, goToHub]);
 
   // The banner over the deciding moment, until the result dialog covers it.
   const roundOver = useMemo(() => {
@@ -799,6 +833,9 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
           isGameOver={menuState.phase === 'game_over'}
           tone={resultTone}
           state={menuState}
+          earnings={missionReport?.earnings}
+          hubLabel={hubReturn?.label}
+          onVillageHub={goToHub}
         />
       )}
       <MemoSettingsScreen

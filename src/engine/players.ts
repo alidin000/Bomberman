@@ -20,6 +20,7 @@ import {
   positionsTouch,
   roundToMovementStep,
 } from './grid';
+import { getLoadoutEffects } from './campaignLoadout';
 
 const MUTUALLY_EXCLUSIVE: Partial<Record<Power, Power | null>> = {
   Ghost: 'Invincibility',
@@ -29,6 +30,14 @@ const MUTUALLY_EXCLUSIVE: Partial<Record<Power, Power | null>> = {
 };
 
 const PICKUP_MESSAGE_MS = 3600;
+const SELF_REACH = [{ x: 0, y: 0 }];
+const MAGNET_REACH = [
+  { x: 0, y: 0 },
+  { x: 0, y: -1 },
+  { x: 1, y: 0 },
+  { x: 0, y: 1 },
+  { x: -1, y: 0 },
+];
 export const SHARED_SCREEN_MAX_DELTA_X = 12;
 export const SHARED_SCREEN_MAX_DELTA_Y = 8;
 // A ninja running from danger may stretch the shared screen to this multiple,
@@ -256,20 +265,30 @@ export function movePlayer(
   y = ny;
 
   const playerCell = getPlayerCell({ x, y });
-  const cell = getCell(map, playerCell);
-  if (cell && isPower(cell)) {
-    const result = applyPowerUp(
-      { ...state, map, players },
-      playerId,
-      cell as Power,
-    );
-    map = result.map;
-    players = result.players;
-    // Keep the pickup's timer (Ghost and Shield wear off) and its message.
-    ({ timedPowerUps, pickupMessages } = result);
-    const newMap = map.map((row) => [...row]);
-    newMap[playerCell.y][playerCell.x] = 'Empty';
-    map = newMap;
+  // The Lodestone Charm (a hub consumable) also pulls in the four cells beside.
+  const reach = getLoadoutEffects(state.config).magnet ? MAGNET_REACH : SELF_REACH;
+  for (let index = 0; index < reach.length; index += 1) {
+    const point = { x: playerCell.x + reach[index].x, y: playerCell.y + reach[index].y };
+    const cell = getCell(map, point);
+    // Not out of a burning cell: the charm is no flame shield.
+    const burning = index > 0
+      && state.explosions.some((e) => e.x === point.x && e.y === point.y);
+    if (cell && isPower(cell) && !burning) {
+      const result = applyPowerUp(
+        {
+          ...state, map, players, timedPowerUps, pickupMessages,
+        },
+        playerId,
+        cell as Power,
+      );
+      map = result.map;
+      players = result.players;
+      // Keep the pickup's timer (Ghost and Shield wear off) and its message.
+      ({ timedPowerUps, pickupMessages } = result);
+      const newMap = map.map((row) => [...row]);
+      newMap[point.y][point.x] = 'Empty';
+      map = newMap;
+    }
   }
 
   players[playerIndex] = {

@@ -8,6 +8,7 @@ import {
 } from './types';
 import { getPlayerCell } from './grid';
 import { getMatchDifficulty } from './difficulty';
+import { getLoadoutEffects } from './campaignLoadout';
 
 const DEFAULT_VISION_RADIUS = 3;
 const DEIDARA_EXPLOSION_REVEAL_RADIUS = 3;
@@ -133,7 +134,8 @@ export function getVisionRadius(characterId: CharacterId): number {
 // Sight in this match: a stage event (sandstorm, fog) shortens it, but never
 // below the difficulty's floor (2 on Hard), nor above the character's own.
 function getMatchVisionRadius(state: GameEngineState, characterId: CharacterId): number {
-  const base = getVisionRadius(characterId);
+  // Lantern Oil (a hub upgrade) adds to the character's own sight.
+  const base = getVisionRadius(characterId) + getLoadoutEffects(state.config).visionBonus;
   const modifier = state.campaign?.event?.visionModifier ?? 0;
   if (modifier >= 0) return Math.max(2, base + modifier);
   const floor = Math.min(base, getMatchDifficulty(state.config).eventVisionFloor);

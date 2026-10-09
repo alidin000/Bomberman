@@ -62,6 +62,16 @@ export const gameScreenChunk = createRouteChunk(() => import('./GameScreen/GameS
 // A Training Dojo room runs the match screen, so it shares the match chunk.
 export const dojoRoomChunk = createRouteChunk(() => import('./DojoScreen/DojoRoomScreen'));
 
+/** The village hub: only campaign players open it, from the deck or a result. */
+export const hubScreenChunk = createRouteChunk(() => import('./HubScreen/HubScreen'));
+
+/** Starts the hub chunk download when the calling screen mounts. */
+export function usePrefetchHubScreen(): void {
+  useEffect(() => {
+    hubScreenChunk.prefetch();
+  }, []);
+}
+
 /** Starts the game chunk download when the calling screen mounts. */
 export function usePrefetchGameScreen(): void {
   useEffect(() => {

@@ -2,10 +2,24 @@ import {
   BossId,
   CampaignFlowStepId,
   CharacterId,
+  STAGE_DEFINITIONS,
   StageId,
+  getCampaignMission,
   getCampaignVillage,
   getNextCampaignStageId,
 } from '../content';
+import {
+  CampaignLoadout,
+  HubConsumableId,
+  HubUpgradeId,
+  MISSION_REWARDS,
+  MissionEarnings,
+  computeMissionEarnings,
+  isFragmentSecret,
+  normalizePack,
+  normalizeUpgradeRanks,
+} from '../content/hubShop';
+import { DifficultyId, isDifficultyId } from '../engine/difficulty';
 
 export type StoryUpgradeId =
   | 'extraClay'
@@ -13,8 +27,20 @@ export type StoryUpgradeId =
   | 'quickUltimate'
   | 'sandGuard';
 
+/** What the last finished campaign mission paid, for the result and the hub. */
+export interface LastMissionReport {
+  // The finished attempt (seed and tick): a mission is never paid twice.
+  key: string;
+  stageId: StageId;
+  difficulty: DifficultyId;
+  success: boolean;
+  earnings: MissionEarnings;
+}
+
+export const STORY_PROGRESS_VERSION = 4;
+
 export interface StoryProgress {
-  version: 3;
+  version: 4;
   completedBosses: BossId[];
   completedStages: StageId[];
   unlockedCharacters: CharacterId[];
@@ -35,6 +61,15 @@ export interface StoryProgress {
   discoveredSecrets: string[];
   rareScrolls: string[];
   storyCompleted: boolean;
+  // v4: the village hub economy.
+  currency: number;
+  // Consumables packed for the next mission; spent when it deploys.
+  pack: HubConsumableId[];
+  upgradeRanks: Partial<Record<HubUpgradeId, number>>;
+  // Clears and secrets already paid, so replays pay the repeat rate.
+  paidClears: StageId[];
+  paidSecrets: string[];
+  lastMission: LastMissionReport | null;
 }
 
 export interface StoryUpgradeDefinition {
@@ -74,7 +109,7 @@ export const STORY_UPGRADES: StoryUpgradeDefinition[] = [
 export const STORY_PROGRESS_KEY = 'shinobiArenaStoryProgress';
 
 export const DEFAULT_STORY_PROGRESS: StoryProgress = {
-  version: 3,
+  version: 4,
   completedBosses: [],
   completedStages: [],
   unlockedCharacters: ['deidara'],
@@ -91,13 +126,110 @@ export const DEFAULT_STORY_PROGRESS: StoryProgress = {
   discoveredSecrets: [],
   rareScrolls: [],
   storyCompleted: false,
+  currency: 0,
+  pack: [],
+  upgradeRanks: {},
+  paidClears: [],
+  paidSecrets: [],
+  lastMission: null,
 };
 
-function migrateStoryProgress(stored: Partial<StoryProgress>): StoryProgress {
+const STAGE_IDS = new Set<string>(STAGE_DEFINITIONS.map((stage) => stage.id));
+
+function stageList(value: unknown): StageId[] {
+  return Array.isArray(value)
+    ? Array.from(new Set(value.filter((id): id is StageId => STAGE_IDS.has(id))))
+    : [];
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? Array.from(new Set(value.filter((id): id is string => typeof id === 'string')))
+    : [];
+}
+
+function wholeAmount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+/**
+ * A save from before the hub (v3 or older) starts with what its finished
+ * villages and found secrets would have paid on Normal, so returning players
+ * can use the shop at once. Those clears and secrets then count as paid.
+ */
+export function getHubBackPay(completedStages: StageId[], discoveredSecrets: string[]): number {
+  const clears = completedStages.reduce((total, stageId) => (
+    total
+      + MISSION_REWARDS.firstClear
+      + (getCampaignMission(stageId)?.objectives.length ?? 0) * MISSION_REWARDS.objective
+  ), 0);
+  const secrets = computeMissionEarnings({
+    difficulty: 'normal',
+    success: false,
+    firstClear: false,
+    objectivesCompleted: 0,
+    newSecrets: discoveredSecrets.length,
+    newFragments: discoveredSecrets.filter(isFragmentSecret).length,
+  }).total;
+  return clears + secrets;
+}
+
+function readLastMission(value: unknown): LastMissionReport | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const report = value as Partial<LastMissionReport>;
+  if (typeof report.key !== 'string' || !report.stageId || !STAGE_IDS.has(report.stageId)) {
+    return null;
+  }
+  const earnings = report.earnings ?? {
+    clear: 0, objectives: 0, secrets: 0, total: 0
+  };
   return {
+    key: report.key,
+    stageId: report.stageId,
+    difficulty: isDifficultyId(report.difficulty) ? report.difficulty : 'normal',
+    success: report.success === true,
+    earnings: {
+      clear: wholeAmount(earnings.clear),
+      objectives: wholeAmount(earnings.objectives),
+      secrets: wholeAmount(earnings.secrets),
+      total: wholeAmount(earnings.total),
+    },
+  };
+}
+
+function migrateHub(
+  stored: Partial<StoryProgress>,
+  base: Pick<StoryProgress, 'completedStages' | 'discoveredSecrets'>
+): Pick<StoryProgress, 'currency' | 'pack' | 'upgradeRanks' | 'paidClears' | 'paidSecrets' | 'lastMission'> {
+  const hubSave = typeof stored.version === 'number' && stored.version >= STORY_PROGRESS_VERSION;
+  if (!hubSave) {
+    const completed = stageList(base.completedStages);
+    const secrets = stringList(base.discoveredSecrets);
+    return {
+      currency: getHubBackPay(completed, secrets),
+      pack: [],
+      upgradeRanks: {},
+      paidClears: completed,
+      paidSecrets: secrets,
+      lastMission: null,
+    };
+  }
+  const upgradeRanks = normalizeUpgradeRanks(stored.upgradeRanks);
+  return {
+    currency: wholeAmount(stored.currency),
+    pack: normalizePack(stored.pack, upgradeRanks),
+    upgradeRanks,
+    paidClears: stageList(stored.paidClears),
+    paidSecrets: stringList(stored.paidSecrets),
+    lastMission: readLastMission(stored.lastMission),
+  };
+}
+
+function migrateStoryProgress(stored: Partial<StoryProgress>): StoryProgress {
+  const migrated: StoryProgress = {
     ...DEFAULT_STORY_PROGRESS,
     ...stored,
-    version: 3,
+    version: 4,
     completedBosses: stored.completedBosses ?? DEFAULT_STORY_PROGRESS.completedBosses,
     completedStages: stored.completedStages ?? DEFAULT_STORY_PROGRESS.completedStages,
     unlockedCharacters: stored.unlockedCharacters
@@ -111,6 +243,11 @@ function migrateStoryProgress(stored: Partial<StoryProgress>): StoryProgress {
     discoveredSecrets: stored.discoveredSecrets ?? [],
     rareScrolls: stored.rareScrolls ?? [],
     storyCompleted: stored.storyCompleted ?? false,
+  };
+  return {
+    ...migrated,
+    version: 4,
+    ...migrateHub(stored, migrated),
   };
 }
 
@@ -248,4 +385,20 @@ export function recordCampaignDiscoveries(
 
 export function getStoryUpgrade(id: StoryUpgradeId): StoryUpgradeDefinition {
   return STORY_UPGRADES.find((upgrade) => upgrade.id === id) ?? STORY_UPGRADES[0];
+}
+
+/**
+ * What a mission deploys with: the packed consumables (now spent, so the pack
+ * is empty afterwards) and the permanent upgrade ranks.
+ */
+export function takeMissionLoadout(): { progress: StoryProgress; loadout: CampaignLoadout } {
+  const progress = loadStoryProgress();
+  const loadout: CampaignLoadout = {
+    consumables: [...progress.pack],
+    upgrades: { ...progress.upgradeRanks },
+  };
+  if (progress.pack.length === 0) return { progress, loadout };
+  const next: StoryProgress = { ...progress, pack: [] };
+  saveStoryProgress(next);
+  return { progress: next, loadout };
 }

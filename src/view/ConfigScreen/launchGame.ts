@@ -15,7 +15,9 @@ import {
   StoryProgress,
   StoryUpgradeId,
   selectStoryLoadout,
+  takeMissionLoadout,
 } from '../../story/progress';
+import type { CampaignLoadout } from '../../content/hubShop';
 import { PlayerSlotController, loadStageMapRows } from '../../engine';
 import { getControllerLabel, normalizeControllers } from '../../ai/controllers';
 
@@ -78,9 +80,14 @@ export async function launchGame(
   const stageDefinition = getStageDefinition(safeStageId);
   const mapData = loadStageMapRows(stageDefinition.mapId);
   const characterId = safeCharacters[0] ?? DEFAULT_CHARACTER_ID;
-  const progress = mode === 'solo'
+  let progress = mode === 'solo'
     ? selectStoryLoadout(characterId, stageDefinition.id, upgrade)
     : null;
+  // A campaign mission deploys with the hub pack (spent now) and upgrades.
+  let loadout: CampaignLoadout | undefined;
+  if (mode === 'solo') {
+    ({ progress, loadout } = takeMissionLoadout());
+  }
   localStorage.setItem('selectedMap', JSON.stringify(mapData));
   localStorage.setItem('playerKeyBindings', JSON.stringify(normalizeKeyBindings(keyBindings)));
   localStorage.setItem(GAME_SETUP_KEY, JSON.stringify({
@@ -92,9 +99,27 @@ export async function launchGame(
     controllers: mode === 'local'
       ? normalizeControllers(controllers, safeCharacters.length)
       : undefined,
+    loadout,
   }));
   navigate(`/game/${players}/${rounds}/${stageDefinition.mapId}`);
   return progress;
+}
+
+/**
+ * The match screen read this mission's loadout: drop the spent consumables
+ * from the stored setup, so a page reload cannot pack them a second time.
+ */
+export function clearDeployedConsumables(): void {
+  try {
+    const stored = JSON.parse(localStorage.getItem(GAME_SETUP_KEY) ?? 'null');
+    if (!stored?.loadout?.consumables?.length) return;
+    localStorage.setItem(GAME_SETUP_KEY, JSON.stringify({
+      ...stored,
+      loadout: { ...stored.loadout, consumables: [] },
+    }));
+  } catch {
+    // Without storage there is no setup to reload either.
+  }
 }
 
 export interface QuickPlayPlan {

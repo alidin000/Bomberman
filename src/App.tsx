@@ -12,15 +12,18 @@ import { MenuPad } from './input/MenuPad';
 import {
   dojoRoomChunk,
   gameScreenChunk,
+  hubScreenChunk,
   lazyScreen,
   usePrefetchGameScreen,
   usePrefetchGameScreenWhenIdle,
+  usePrefetchHubScreen,
 } from './view/routeChunks';
 
 // The match (three.js, the scene, the HUD) is about 255 KB gzip that the menus
 // never run, so it loads on demand. The menus start the download early.
 const GameScreen = lazyScreen(gameScreenChunk, 'GameScreen');
 const DojoRoomScreen = lazyScreen(dojoRoomChunk, 'DojoRoomScreen');
+const HubScreen = lazyScreen(hubScreenChunk, 'HubScreen');
 
 // Quick Play skips the Mission Deck, so the title screen fetches the match
 // once it is idle; the Mission Deck fetches it as soon as it opens.
@@ -37,6 +40,10 @@ const PrefetchDojoRoom = () => {
   useEffect(() => {
     dojoRoomChunk.prefetch();
   }, []);
+  return null;
+};
+const PrefetchHub = () => {
+  usePrefetchHubScreen();
   return null;
 };
 
@@ -77,6 +84,7 @@ export function App() {
             element={(
               <>
                 <PrefetchGame />
+                <PrefetchHub />
                 <ConfigScreen />
               </>
             )}
@@ -94,6 +102,15 @@ export function App() {
           <Route
             path="/dojo/:roomId"
             element={<Suspense fallback={gameLoading}><DojoRoomScreen /></Suspense>}
+          />
+          <Route
+            path="/hub/:stageId"
+            element={(
+              <>
+                <PrefetchGame />
+                <Suspense fallback={gameLoading}><HubScreen /></Suspense>
+              </>
+            )}
           />
           <Route
             path="/game/:numOfPlayers/:numOfRounds/:selectedMap"

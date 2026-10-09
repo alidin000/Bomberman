@@ -15,7 +15,8 @@ import { GameEngineState } from '../engine/types';
 // v7: this round's rule changes: a route puzzle objective between the defense
 // and the mini boss gate; training mode (Training Dojo rooms): room goals end
 // the round, preset charges, scripted patrol sentries, no crate drops and no
-// sudden death.
+// sudden death; campaign loadouts from the village hub (config.loadout) apply
+// at INIT, and a retry or restart drops the one-mission consumables.
 export const REPLAY_VERSION = 7;
 
 export interface ReplayFrame {

@@ -2,6 +2,7 @@ import { isPower } from '../model/gameItem';
 import { PLAYER_SPAWNS } from './constants';
 import { createDangerMap } from './monsters';
 import { CampaignRuntimeState, GameEngineState, Point } from './types';
+import { getLoadoutEffects } from './campaignLoadout';
 
 // After a fall the player is shielded this long at the checkpoint.
 export const REGROUP_GRACE_MS = 2000;
@@ -86,6 +87,7 @@ export function regroupFallenPlayers(state: GameEngineState): GameEngineState {
   if (lives <= 1 || state.players.every((player) => player.alive)) return state;
 
   const anchor = getCheckpointAnchor(campaign);
+  const graceMs = REGROUP_GRACE_MS + getLoadoutEffects(state.config).regroupGraceBonusMs;
   let notice = '';
   const players = state.players.map((player) => {
     if (player.alive || lives <= 1) return player;
@@ -99,7 +101,7 @@ export function regroupFallenPlayers(state: GameEngineState): GameEngineState {
       alive: true,
       deathReason: undefined,
       deathCause: undefined,
-      survivalGraceMs: REGROUP_GRACE_MS,
+      survivalGraceMs: graceMs,
     };
   });
 

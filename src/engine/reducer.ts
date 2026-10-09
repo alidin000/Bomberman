@@ -26,6 +26,7 @@ import { deriveMatchSeed } from './random';
 import { tickSuddenDeath } from './suddenDeath';
 import { regroupFallenPlayers } from './campaignLives';
 import { checkTrainingRoundEnd, isTrainingConfig } from './training';
+import { withoutConsumables } from './campaignLoadout';
 
 function getWinnerName(state: GameEngineState, winnerId: string): string {
   return state.players.find((player) => player.id === winnerId)?.name ?? winnerId;
@@ -240,8 +241,10 @@ function isPlayerInDanger(state: GameEngineState, playerId: string): boolean {
   return getOverlappedCells(player.x, player.y).some(({ x, y }) => danger.has(`${x},${y}`));
 }
 
+// A retry or restart is a new attempt: fresh seed, and the one-mission
+// consumables were spent on the attempt that just ended.
 function withFreshMatchSeed(state: GameEngineState): GameEngineState['config'] {
-  return { ...state.config, seed: deriveMatchSeed(state.rngSeed) };
+  return withoutConsumables({ ...state.config, seed: deriveMatchSeed(state.rngSeed) });
 }
 
 export function gameReducer(

@@ -98,9 +98,11 @@ import {
 import { DOJO_PATH } from '../../content/dojo';
 import {
   loadStoryProgress,
+  selectStoryLoadout,
   STORY_UPGRADES,
   StoryUpgradeId,
 } from '../../story/progress';
+import { hubPath } from '../HubScreen/missionSettlement';
 import { DifficultySelector } from './DifficultySelector';
 import {
   MAX_LOCAL_PLAYERS,
@@ -372,6 +374,20 @@ export const ConfigScreen = () => {
       upgrade: selectedUpgrade,
       players: '1',
     });
+  };
+
+  // The village hub (people, shop, codex) before deploying: it deploys with
+  // the shinobi and upgrade chosen here.
+  const handleVisitVillage = () => {
+    const characterId = selectedCharacters[0] ?? DEFAULT_CHARACTER_ID;
+    setStoryProgress(selectStoryLoadout(
+      storyProgress.unlockedCharacters.includes(characterId)
+        ? characterId
+        : storyProgress.lastCharacter,
+      selectedStage,
+      selectedUpgrade
+    ));
+    navigate(hubPath(selectedStage));
   };
 
   const handleKeyDown = (
@@ -736,6 +752,13 @@ export const ConfigScreen = () => {
                       ))}
                     </MissionObjectiveList>
                     <MissionActionRow>
+                      <Button
+                        variant="outlined"
+                        onClick={handleVisitVillage}
+                        aria-label={`Visit ${selectedMission.villageName} hub`}
+                      >
+                        Visit Village
+                      </Button>
                       {showContinueCampaign && (
                         <Button variant="outlined" onClick={handleContinueCampaign}>
                           Continue Campaign

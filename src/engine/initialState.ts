@@ -21,6 +21,7 @@ import { initializeCampaignEnemies } from './campaignEnemies';
 import { normalizeSeed } from './random';
 import { getMatchDifficulty } from './difficulty';
 import { createTrainingSentries, isTrainingConfig, placeTrainingCharges } from './training';
+import { applyLoadoutAtInit } from './campaignLoadout';
 
 const PLAYER_NAMES = ['player1', 'player2', 'player3'];
 const ULTIMATE_COOLDOWN_MS = 12000;
@@ -256,7 +257,7 @@ export function createInitialState(config: GameConfig): GameEngineState {
     roundProcessed: false,
   };
 
-  return withUpdatedFogOfWar(state);
+  return withUpdatedFogOfWar(applyLoadoutAtInit(state));
 }
 
 export function resetRoundState(state: GameEngineState): GameEngineState {
@@ -307,5 +308,5 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     pressureBlocksPlaced: 0,
   };
 
-  return withUpdatedFogOfWar(next);
+  return withUpdatedFogOfWar(applyLoadoutAtInit(next));
 }

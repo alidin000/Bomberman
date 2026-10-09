@@ -28,6 +28,8 @@ import {
   winsBySlot,
   winsNeeded,
 } from './matchCopy';
+import type { MissionEarnings } from '../../content/hubShop';
+import { MissionEarningsLine } from '../HubScreen/MissionEarnings';
 
 /** Clicks and key presses are ignored this long after the dialog opens. */
 export const RESULT_INPUT_LOCK_MS = 600;
@@ -40,6 +42,10 @@ type RoundResultDialogProps = {
   isGameOver: boolean;
   tone?: ResultTone;
   state: GameEngineState;
+  // Campaign only: what the mission paid, and the way back to the village hub.
+  earnings?: MissionEarnings;
+  hubLabel?: string;
+  onVillageHub?: () => void;
 }
 
 function getResultTitle(isGameOver: boolean, tone: ResultTone): string {
@@ -73,6 +79,9 @@ export const RoundResultDialog = (
     isGameOver,
     tone = 'neutral',
     state,
+    earnings,
+    hubLabel,
+    onVillageHub,
   }: RoundResultDialogProps
 ) => {
   const navigate = useNavigate();
@@ -90,6 +99,17 @@ export const RoundResultDialog = (
   ).length ?? 0;
   // Same count as the HUD's Threats node: a boss still standing is a threat.
   const threatsLeft = state.monsters.length + (state.boss && state.boss.health > 0 ? 1 : 0);
+  const won = !versus && tone === 'victory' && Boolean(onVillageHub);
+  const hubButton = onVillageHub && hubLabel ? (
+    <Button
+      autoFocus={won}
+      onClick={onVillageHub}
+      variant={won ? 'contained' : 'outlined'}
+      size={won ? 'large' : 'medium'}
+    >
+      {hubLabel}
+    </Button>
+  ) : null;
   const handleClose = (event: object, reason: string) => {
     if (reason === 'backdropClick' || reason === 'escapeKeyDown') {
       return;
@@ -199,15 +219,21 @@ export const RoundResultDialog = (
               Secrets
             </span>
           </ResultIntel>
+          {earnings && (
+            <MissionEarningsLine earnings={earnings} loadout={state.config.loadout} />
+          )}
         </ResultBreakdown>
       )}
       <ResultActions>
         {isGameOver
           ? (
             <>
-              <Button autoFocus onClick={onRestart} variant="contained" size="large">
+              {/* A won mission goes on to the next village hub first. */}
+              {won && hubButton}
+              <Button autoFocus={!won} onClick={onRestart} variant={won ? 'outlined' : 'contained'} size={won ? 'medium' : 'large'}>
                 {versus ? 'Rematch' : 'Retry mission'}
               </Button>
+              {!won && hubButton}
               <Button onClick={() => navigate('/config')} variant="outlined">Change setup</Button>
               <Button onClick={() => navigate('/')} variant="outlined">Main menu</Button>
             </>

@@ -18,6 +18,7 @@ import {
 import { EnemyAbilityKind, EnemyArchetype } from '../content/enemies';
 import { CampaignEventDefinition } from '../content/campaignEvents';
 import { StoryUpgradeId } from '../story/progress';
+import type { CampaignLoadout } from '../content/hubShop';
 import type { DifficultyId } from './difficulty';
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
@@ -429,6 +430,9 @@ export interface GameConfig {
   controllers?: PlayerSlotController[];
   // Training mode only: the room's goals, charges and sentries.
   training?: TrainingSetup;
+  // Solo campaign only: hub consumables packed for this mission and the
+  // permanent upgrade ranks (campaignLoadout.ts). Missing means none.
+  loadout?: CampaignLoadout;
 }
 
 export interface GameEngineState {
