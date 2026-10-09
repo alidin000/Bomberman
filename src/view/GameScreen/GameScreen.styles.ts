@@ -102,8 +102,9 @@ export const TopControls = styled.div({
   boxShadow: '4px 4px 0 var(--anime-ink)',
 });
 
+// Sits on the paper background (StyledBackground), so ink, not paper-light.
 export const LoadingMessage = styled.div({
-  color: 'var(--anime-paper-light)',
+  color: 'var(--anime-ink)',
   marginTop: '32px',
   textAlign: 'center',
   fontSize: '1.1rem',
