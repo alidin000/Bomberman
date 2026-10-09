@@ -15,6 +15,7 @@ import {
   getMoveRepeatMs,
 } from '../hooks/engineLoop';
 import { replayActions } from '../network/replay';
+import { createShinobiEnemy } from '../engine/campaignEnemies';
 import { thinkCpuPlayer } from './cpuPlayer';
 
 // Every reducer call the loop makes, so a CPU match can be replayed from
@@ -121,6 +122,87 @@ describe('CPU players', () => {
     }
   );
 
+  it('does not seal itself in a pocket of its own blast (Naruto, CPU Normal)', () => {
+    // A bomb at the spawn puts Naruto's shadow clone on (2,1); what is left
+    // is the pocket below, all inside the blast. Its 2.8 s fuse outlasts
+    // Normal's 2.2 s look-ahead, so a refuge must outlast its own flames.
+    const map = arena([
+      'WWWWWWWWWWWWWWW',
+      'W             W',
+      'W  B          W',
+      'W B           W',
+      'WB            W',
+      'W             W',
+      'W             W',
+      'W             W',
+      'W             W',
+      'WWWWWWWWWWWWWWW',
+    ]);
+    const loop = startLoop(versus(map, ['cpu-normal', 'human'], ['naruto', 'sasuke']));
+    let ownBombs = 0;
+    const seen = new Set<string>();
+    run(loop, 8000, (state) => {
+      state.bombs.forEach((bomb) => {
+        if (bomb.ownerId === 'player1' && !seen.has(bomb.id)) {
+          seen.add(bomb.id);
+          ownBombs += 1;
+        }
+      });
+    });
+    expect(loop.state!.players[0]).toMatchObject({ alive: true });
+    // It still bombed crates, just not from inside the pocket.
+    expect(ownBombs).toBeGreaterThan(0);
+  });
+
+  it.each(['cpu-normal', 'cpu-hard'] as PlayerSlotController[])(
+    'as %s steps off a tile marked for a Zetsu Ambush',
+    (level) => {
+      // Two open cells; the CPU waits on the one nearer the human. A Zetsu
+      // walled in elsewhere marks that tile: the ambush leaves no hazard,
+      // only the on-screen marker.
+      const map = arena([
+        'WWWWWWWWWWWWWWW',
+        'W  WWWWWWWWWWWW',
+        'WWWWWWWWWWWWWWW',
+        'WWWWWWWWWWWWWWW',
+        'WWWWWWWWWWWWWWW',
+        'WWWWW WWWWWWWWW',
+        'WWWWWWWWWWWWWWW',
+        'WWWWWWWWWWWWWWW',
+        'WWWWWWWWWWWWW W',
+        'WWWWWWWWWWWWWWW',
+      ]);
+      const loop = startLoop(versus(map, [level, 'human'], ['sasuke', 'naruto']));
+      run(loop, 1500);
+      const cpu = loop.state!.players[0];
+      const target = { x: Math.round(cpu.x), y: Math.round(cpu.y) };
+      expect(target).toEqual({ x: 2, y: 1 });
+      const zetsu = createShinobiEnemy({
+        archetype: 'whiteZetsu', x: 5, y: 5, id: 'zetsu',
+      });
+      loop.state = {
+        ...loop.state!,
+        monsters: [{
+          ...zetsu,
+          moveCooldown: 60000,
+          abilityCooldown: 60000,
+          abilityWarningTicks: 900,
+          abilityTarget: target,
+        }],
+      };
+      run(loop, 2000);
+      expect(loop.state!.players[0]).toMatchObject({ alive: true });
+    }
+  );
+
+  it('survives the Hidden Cloud opening as Deidara (CPU Hard), not sheltering in a pocket', () => {
+    // From the spawn the nearest cell out of its own blast is a one-cell
+    // pocket; a Lightning Ninja strikes whoever stands still there.
+    const loop = startLoop(versus(stageMap('hiddenCloud'), ['cpu-hard', 'human'], ['deidara', 'sasuke'], 5444, 'hiddenCloud'));
+    run(loop, 8000);
+    expect(loop.state!.players[0]).toMatchObject({ alive: true });
+  });
+
   it('waits for a blast ray to burn out instead of walking into it', () => {
     // A corridor along row 1; the only way to the human (bottom right)
     // crosses (5,1), which a bomb in the niche below is about to burn.
@@ -206,6 +288,49 @@ describe('CPU players', () => {
     expect(hardWins).toBeGreaterThan(easyWins);
     expect(easyDeaths).toBeGreaterThan(hardDeaths);
   });
+
+  it('rarely lets CPU Normal die to its own bomb on the stages', () => {
+    const maps = ['hiddenLeaf', 'hiddenSand', 'hiddenMist', 'hiddenCloud', 'hiddenStone', 'akatsukiHideout', 'greatShinobiWar'];
+    const pairs: CharacterId[][] = [['naruto', 'deidara'], ['naruto', 'itachi'], ['naruto', 'sasuke']];
+    let deaths = 0;
+    let ownBlasts = 0;
+    pairs.forEach((pair) => maps.forEach((mapId, index) => [0, 1].forEach((swap) => {
+      const characters = swap ? [...pair].reverse() : pair;
+      const loop = startLoop(versus(stageMap(mapId), ['cpu-normal', 'cpu-normal'], characters, 500 + index * 13 + swap, mapId));
+      run(loop, 90000);
+      loop.state!.players.forEach((player) => {
+        if (player.alive) return;
+        deaths += 1;
+        const cause = player.deathCause;
+        if ((cause?.kind === 'blast' || cause?.kind === 'flame') && cause.byPlayerId === player.id) {
+          ownBlasts += 1;
+        }
+      });
+    })));
+    // 42 matches of two Normals: they still fight and die, just hardly ever
+    // to their own bombs (before the fix, 15 of 36 deaths were).
+    expect(deaths).toBeGreaterThan(15);
+    expect(ownBlasts).toBeLessThanOrEqual(3);
+  }, 30000);
+
+  it('makes Hard clearly stronger than Normal', () => {
+    const maps = ['hiddenLeaf', 'hiddenSand', 'hiddenMist', 'hiddenCloud', 'hiddenStone', 'akatsukiHideout', 'greatShinobiWar'];
+    let hardWins = 0;
+    let normalWins = 0;
+    ([['naruto', 'deidara'], ['naruto', 'sasuke']] as CharacterId[][]).forEach((characters) => {
+      maps.forEach((mapId, index) => [0, 1].forEach((swap) => [0, 1].forEach((rep) => {
+        const controllers: PlayerSlotController[] = swap ? ['cpu-normal', 'cpu-hard'] : ['cpu-hard', 'cpu-normal'];
+        const seed = 700 + index * 11 + swap * 3 + rep * 101;
+        const loop = startLoop(versus(stageMap(mapId), controllers, characters, seed, mapId));
+        run(loop, 150000);
+        const alive = loop.state!.players.filter((player) => player.alive);
+        if (alive.length !== 1) return;
+        if (controllers[loop.state!.players.indexOf(alive[0])] === 'cpu-hard') hardWins += 1;
+        else normalWins += 1;
+      })));
+    });
+    expect(hardWins).toBeGreaterThanOrEqual(normalWins + 10);
+  }, 30000);
 
   it('keeps playing in the next round of a best-of match', () => {
     const loop = startLoop({ ...versus(arena(OPEN), ['human', 'cpu-normal']), totalRounds: 3 });

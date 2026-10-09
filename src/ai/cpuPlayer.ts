@@ -73,6 +73,9 @@ export interface CpuLevel {
   approachDistance: number;
   // Chance that it drops a bomb for crates without checking its way out.
   rashChance: number;
+  // Shelters only where it could still sidestep (see hasRoom), and only
+  // drops a bomb when its escape ends in such a cell.
+  roomy: boolean;
   // Runs once a monster could reach its cell this soon; stops only where
   // none could within `monsterRestMs` of arriving.
   monsterThreatMs: number;
@@ -101,13 +104,14 @@ export const CPU_LEVELS: Record<CpuLevelId, CpuLevel> = {
     slipMs: 700,
     approachDistance: 5,
     rashChance: 0.15,
+    roomy: false,
     monsterThreatMs: 500,
     monsterRestMs: 300,
   },
   normal: {
     id: 'normal',
     thinkTicks: 4,
-    reactionMs: 250,
+    reactionMs: 300,
     horizonMs: 2200,
     marginMs: 60,
     bombMarginMs: 100,
@@ -119,12 +123,13 @@ export const CPU_LEVELS: Record<CpuLevelId, CpuLevel> = {
     ultimates: true,
     traps: true,
     trapDelayMs: 0,
-    misjudgeChance: 0.15,
+    misjudgeChance: 0.35,
     chains: true,
-    slipChance: 0.06,
-    slipMs: 250,
+    slipChance: 0.15,
+    slipMs: 400,
     approachDistance: 3,
     rashChance: 0,
+    roomy: true,
     monsterThreatMs: 700,
     monsterRestMs: 700,
   },
@@ -149,6 +154,7 @@ export const CPU_LEVELS: Record<CpuLevelId, CpuLevel> = {
     slipMs: 0,
     approachDistance: 2,
     rashChance: 0,
+    roomy: true,
     monsterThreatMs: 900,
     monsterRestMs: 1000,
   },
@@ -202,8 +208,13 @@ export interface CpuSquad {
   readonly width: number;
   readonly height: number;
   readonly seed: number;
-  // Sudden-death drop order, as cell indices.
+  // Sudden-death drop order, as cell indices, and each cell's place in it
+  // (-1 for cells that never drop).
   readonly pressureOrder: Int32Array;
+  readonly pressureRank: Int32Array;
+  // No refuge needs to outlast the arena: once the last drop is this close
+  // (ms from now), a cell that falls last counts as safe until then.
+  restCapMs: number;
   readonly live: DangerField;
   readonly whatIf: DangerField;
   readonly stamp: Int32Array;
@@ -215,6 +226,11 @@ export interface CpuSquad {
   readonly arrive: Float64Array;
   // A late start for the current search (trap checks: a slow reaction).
   searchDelayMs: number;
+  // A searched cell must also stay safe until this many ms from now (its
+  // own bombs' flames are out), however short the level's horizon.
+  restUntilMs: number;
+  // Whether the last escape search ended in a cell with room (hasRoom).
+  roomyRefuge: boolean;
   // Cells from which a bomb reaches an enemy (stamped per decision).
   readonly huntMark: Int32Array;
   huntId: number;
@@ -245,6 +261,9 @@ const HURT_REACH = 0.8;
 // length in cells; a turn's first step comes early (a fresh key press).
 const ENTRY_SLACK = 0.1;
 const MAX_ESCAPE_DEPTH = 24;
+// How much further an escape search looks for a refuge with room once it
+// has found a pocket.
+const ROOM_SEARCH_DEPTH = 3;
 const MAX_GOAL_DEPTH = 30;
 const STEP_COST = 0.15;
 // A goal cell must stay safe this long after arrival; an escape this long or
@@ -332,12 +351,16 @@ export function createCpuSquad(state: GameEngineState | null): CpuSquad | null {
   const order = getPressureSpiral(baseMap)
     .filter(({ x, y }) => baseMap[y]?.[x] !== 'Wall')
     .map(({ x, y }) => y * width + x);
+  const pressureRank = new Int32Array(size).fill(-1);
+  order.forEach((cell, index) => { pressureRank[cell] = index; });
   return {
     brains,
     width,
     height,
     seed: normalizeSeed(state.config.seed),
     pressureOrder: Int32Array.from(order),
+    pressureRank,
+    restCapMs: Infinity,
     live: createField(size),
     whatIf: createField(size),
     stamp: new Int32Array(size),
@@ -347,6 +370,8 @@ export function createCpuSquad(state: GameEngineState | null): CpuSquad | null {
     queue: new Int32Array(size),
     arrive: new Float64Array(size),
     searchDelayMs: 0,
+    restUntilMs: 0,
+    roomyRefuge: false,
     huntMark: new Int32Array(size),
     huntId: 0,
     monsterAt: new Float64Array(size),
@@ -406,6 +431,23 @@ function ownerAlive(state: GameEngineState, ownerId: string): boolean {
   return false;
 }
 
+function bombFuseMs(state: GameEngineState, bomb: BombState): number {
+  return bomb.manualDetonation && ownerAlive(state, bomb.ownerId)
+    ? MANUAL_BOMB_MS
+    : Math.max(0, bomb.ticksRemaining);
+}
+
+// When the flames of these bombs (of one owner, if given) are out, in ms.
+function blastEndMs(state: GameEngineState, bombs: BombState[], ownerId: string | null): number {
+  let end = 0;
+  for (let i = 0; i < bombs.length; i += 1) {
+    if (ownerId === null || bombs[i].ownerId === ownerId) {
+      end = Math.max(end, bombFuseMs(state, bombs[i]) + EXPLOSION_MS);
+    }
+  }
+  return end;
+}
+
 // Lethal windows per cell, from what this CPU has noticed (plus `extra`
 // bombs it is thinking of dropping). Chain reactions follow the engine: a
 // bomb inside another bomb's blast goes off no later than it.
@@ -440,6 +482,18 @@ function buildDanger(
       }
     }
   }
+  // A Zetsu Ambush strikes the marked tile when its warning runs out; the
+  // marker is on screen for everyone, though it leaves no hazard behind.
+  for (let i = 0; i < state.monsters.length; i += 1) {
+    const monster = state.monsters[i];
+    const warning = monster.abilityWarningTicks ?? 0;
+    if (monster.abilityKind === 'zetsuMelee' && monster.abilityTarget && warning > 0) {
+      const cell = monster.abilityTarget.y * width + monster.abilityTarget.x;
+      const from = Math.max(0, warning - TICK_MS);
+      if (from < onset[cell]) onset[cell] = from;
+      if (warning + TICK_MS > clear[cell]) clear[cell] = warning + TICK_MS;
+    }
+  }
   // Sudden death: the closing spiral is shown and predictable.
   if (state.config.mode !== 'solo'
     && state.roundElapsedMs > VERSUS_ROUND_MS - SUDDEN_DEATH_LOOKAHEAD_MS) {
@@ -470,9 +524,7 @@ function buildDanger(
   const markId = squad.bombAtId;
   for (let k = 0; k < list.length; k += 1) {
     const bomb = list[k];
-    fuses[k] = bomb.manualDetonation && ownerAlive(state, bomb.ownerId)
-      ? MANUAL_BOMB_MS
-      : Math.max(0, bomb.ticksRemaining);
+    fuses[k] = bombFuseMs(state, bomb);
     blasts[k] = blastCells(squad, bomb, state.map, k < realCount);
     const cell = bomb.y * width + bomb.x;
     squad.bombAtMark[cell] = markId;
@@ -668,7 +720,13 @@ function canLeaveStart(state: GameEngineState, me: PlayerState, dir: number): bo
   return true;
 }
 
-function startSearch(squad: CpuSquad, me: PlayerState, cellMs: number, delayMs = 0): number {
+function startSearch(
+  squad: CpuSquad,
+  me: PlayerState,
+  cellMs: number,
+  delayMs = 0,
+  untilMs = 0
+): number {
   const { width } = squad;
   const start = Math.round(me.y) * width + Math.round(me.x);
   squad.stampId += 1;
@@ -678,6 +736,7 @@ function startSearch(squad: CpuSquad, me: PlayerState, cellMs: number, delayMs =
   squad.parent[start] = -1;
   squad.arrive[start] = delayMs + firstHopMs(me, start, width, cellMs);
   squad.searchDelayMs = delayMs;
+  squad.restUntilMs = untilMs;
   return start;
 }
 
@@ -715,14 +774,51 @@ function restSafe(
   const arrive = squad.arrive[cell];
   if (squad.monsterAt[cell] <= arrive + squad.monsterRestMs) return false;
   const from = cell === start ? 0 : entryMs(arrive, cellMs);
-  return !lethal(field, cell, Math.max(0, from), arrive + restMs, margin);
+  const to = Math.min(Math.max(arrive + restMs, squad.restUntilMs), squad.restCapMs);
+  return !lethal(field, cell, Math.max(0, from), to, margin);
+}
+
+// A refuge has room when a neighbour is just as safe a moment later: then a
+// monster's strike on its cell, or a bomb dropped beside it, still leaves
+// a way out. A one-cell pocket off a blast line does not.
+function hasRoom(
+  squad: CpuSquad,
+  state: GameEngineState,
+  field: DangerField,
+  cell: number,
+  cellMs: number,
+  margin: number,
+  restMs: number,
+  extra: BombState[] | null
+): boolean {
+  const { width } = squad;
+  const arrive = squad.arrive[cell] + cellMs;
+  const cx = cell % width;
+  const cy = (cell - cx) / width;
+  for (let dir = 0; dir < 4; dir += 1) {
+    const nx = cx + DX[dir];
+    const ny = cy + DY[dir];
+    const next = ny * width + nx;
+    if (isWalkableItem(state.map[ny]?.[nx]) && !isExtraBombCell(extra, next, width)
+      && squad.monsterAt[next] > arrive + squad.monsterRestMs
+      && !lethal(
+        field,
+        next,
+        Math.max(0, entryMs(arrive, cellMs)),
+        Math.min(Math.max(arrive + restMs, squad.restUntilMs), squad.restCapMs),
+        margin
+      )) return true;
+  }
+  return false;
 }
 
 /**
  * Breadth-first search for the nearest cell that stays safe for `restMs`
- * after the CPU gets there, never passing a cell while it is lethal. Writes
- * the route and returns true when one exists; otherwise heads for the cell
- * with the most time to spare and returns false.
+ * after the CPU gets there, never passing a cell while it is lethal. With
+ * `roomy` it looks a little further for one with room to sidestep (see
+ * hasRoom) and settles for a pocket only if there is none. Writes the route
+ * and returns true when a refuge exists; otherwise heads for the cell with
+ * the most time to spare and returns false.
  */
 function planEscape(
   squad: CpuSquad,
@@ -735,12 +831,16 @@ function planEscape(
   restMs: number,
   extra: BombState[] | null,
   write: boolean,
-  delayMs = 0
+  delayMs = 0,
+  untilMs = 0,
+  roomy = false
 ): boolean {
   const { width, height } = squad;
   setScreenBox(state, me, ESCAPE_SCREEN_SCALE);
   let weak = -1;
-  const start = startSearch(squad, me, cellMs, delayMs);
+  let pocket = -1;
+  let pocketDepth = 0;
+  const start = startSearch(squad, me, cellMs, delayMs, untilMs);
   const {
     stamp, depth, parent, queue, monsterAt, arrive,
   } = squad;
@@ -754,9 +854,16 @@ function planEscape(
     const cell = queue[head];
     head += 1;
     const d = depth[cell];
+    if (pocket >= 0 && d > pocketDepth + ROOM_SEARCH_DEPTH) break;
     if (restSafe(squad, field, start, cell, cellMs, margin, restMs)) {
-      found = cell;
-      break;
+      if (!roomy || hasRoom(squad, state, field, cell, cellMs, margin, restMs, extra)) {
+        found = cell;
+        break;
+      }
+      if (pocket < 0) {
+        pocket = cell;
+        pocketDepth = d;
+      }
     }
     // Second best: safe for a shorter while (it will move on from there).
     if (weak < 0 && restMs > MIN_REST_MS
@@ -792,6 +899,8 @@ function planEscape(
       tail += 1;
     }
   }
+  squad.roomyRefuge = found >= 0;
+  if (found < 0) found = pocket;
   if (write) {
     let target = fallback;
     if (found >= 0) target = found;
@@ -900,10 +1009,10 @@ function planGoal(
   if (hasBomb && level.hunt > 0) markHuntSpots(squad, state, me, range);
   const lateRound = state.config.mode !== 'solo'
     && state.roundElapsedMs > VERSUS_ROUND_MS - CENTRE_SEEK_MS;
-  const centreX = (width - 1) / 2;
-  const centreY = (height - 1) / 2;
+  const perDrop = lateRound ? getPressureBlocksPerDrop(state) : 1;
   setScreenBox(state, me, 1);
-  const start = startSearch(squad, me, cellMs);
+  // Never wander back into its own blast before it has gone off.
+  const start = startSearch(squad, me, cellMs, 0, blastEndMs(state, state.bombs, me.id));
   const {
     stamp, depth, parent, queue, arrive,
   } = squad;
@@ -938,8 +1047,9 @@ function planGoal(
           best = cell;
         }
       }
+      // Late in the round: the cell the closing spiral reaches last.
       const cost = lateRound
-        ? Math.abs(cx - centreX) + Math.abs(cy - centreY) + d * 0.1
+        ? (squad.pressureOrder.length - squad.pressureRank[cell]) / perDrop + d * 0.1
         : Math.max(level.approachDistance, nearestEnemyDistance(state, me, cx, cy)) + d * STEP_COST;
       if (cost < nearCost) {
         nearCost = cost;
@@ -1039,7 +1149,8 @@ function tryBomb(
   buildDanger(squad, state, brain, squad.whatIf, preview.bombs);
   if (!wanted) {
     // A trap: the blast (with every bomb already down) leaves a nearby
-    // enemy no escape even if it reacts at once.
+    // enemy no cell that outlasts it, even if it reacts at once.
+    const blastEnd = blastEndMs(state, preview.bombs, null);
     for (let p = 0; p < state.players.length && !wanted; p += 1) {
       const enemy = state.players[p];
       if (enemy.alive && enemy.id !== me.id
@@ -1055,7 +1166,8 @@ function tryBomb(
           TRAP_REST_MS,
           preview.bombs,
           false,
-          level.trapDelayMs
+          level.trapDelayMs,
+          blastEnd
         )) {
         wanted = true;
       }
@@ -1063,9 +1175,16 @@ function tryBomb(
     if (!wanted) return false;
   }
   const restMs = Math.max(level.horizonMs, MIN_REST_MS);
+  // It knows its own fuses, so the refuge must outlast its own flames (the
+  // new bombs' and any still down): a cell inside its own blast is no
+  // escape, however short the level's horizon for other bombs.
+  const ownEnd = Math.max(
+    blastEndMs(state, state.bombs, me.id),
+    blastEndMs(state, preview.bombs, null)
+  );
   const rash = hits.enemies === 0 && level.rashChance > 0
     && roll(squad.seed, state.tick, brain.slot, 3) < level.rashChance;
-  if (!rash && !planEscape(
+  if (!rash && (!planEscape(
     squad,
     brain,
     state,
@@ -1075,8 +1194,11 @@ function tryBomb(
     level.bombMarginMs,
     restMs,
     preview.bombs,
-    false
-  )) return false;
+    false,
+    0,
+    ownEnd,
+    level.roomy
+  ) || (level.roomy && !squad.roomyRefuge))) return false;
   planEscape(
     squad,
     brain,
@@ -1087,7 +1209,10 @@ function tryBomb(
     level.marginMs,
     restMs,
     preview.bombs,
-    true
+    true,
+    0,
+    ownEnd,
+    level.roomy
   );
   brain.fleeing = true;
   brain.lastBombTick = state.tick;
@@ -1130,7 +1255,8 @@ function pathStillSafe(
   me: PlayerState,
   cellMs: number,
   margin: number,
-  restMs: number
+  restMs: number,
+  untilMs: number
 ): boolean {
   if (brain.pathLen === 0) return false;
   let arrive = 0;
@@ -1141,7 +1267,10 @@ function pathStillSafe(
       : arrive + cellMs;
     const last = i === brain.pathLen - 1;
     const from = Math.max(0, entryMs(arrive, cellMs));
-    if (lethal(squad.live, cell, from, last ? arrive + restMs : exitMs(arrive, cellMs), margin)) {
+    const to = last
+      ? Math.min(Math.max(arrive + restMs, untilMs), squad.restCapMs)
+      : exitMs(arrive, cellMs);
+    if (lethal(squad.live, cell, from, to, margin)) {
       return false;
     }
     if (squad.monsterAt[cell] <= (last ? arrive + squad.monsterRestMs : exitMs(arrive, cellMs))) {
@@ -1172,6 +1301,15 @@ function ownManualBombsClear(
     }
   }
   return any ? true : null;
+}
+
+// Ms from now until the sudden-death spiral drops its last batch (Infinity
+// while that is further off than any plan looks).
+function lastDropInMs(squad: CpuSquad, state: GameEngineState): number {
+  if (state.config.mode === 'solo' || squad.pressureOrder.length === 0
+    || state.roundElapsedMs < VERSUS_ROUND_MS - SUDDEN_DEATH_LOOKAHEAD_MS) return Infinity;
+  const lastDrop = Math.floor((squad.pressureOrder.length - 1) / getPressureBlocksPerDrop(state));
+  return VERSUS_ROUND_MS + PRESSURE_BLOCK_INTERVAL_MS * lastDrop - state.roundElapsedMs - TICK_MS;
 }
 
 function noteBombs(brain: CpuBrain, state: GameEngineState): void {
@@ -1221,6 +1359,7 @@ export function thinkCpuPlayer(
   brain.rethink = false;
   const { level } = brain;
   const cellMs = moveRepeatMs(me) * 10;
+  squad.restCapMs = lastDropInMs(squad, state);
   buildDanger(squad, state, brain, squad.live, null);
   markMonsters(squad, state);
   squad.monsterRestMs = level.monsterRestMs;
@@ -1236,8 +1375,28 @@ export function thinkCpuPlayer(
     }
     if (state.tick < brain.slipUntilTick) return null;
     const restMs = Math.max(level.horizonMs, MIN_REST_MS);
-    if (!brain.fleeing || !pathStillSafe(squad, brain, me, cellMs, level.marginMs, restMs)) {
-      planEscape(squad, brain, state, me, squad.live, cellMs, level.marginMs, restMs, null, true);
+    const ownEnd = blastEndMs(state, state.bombs, me.id);
+    if (!brain.fleeing
+      || !pathStillSafe(squad, brain, me, cellMs, level.marginMs, restMs, ownEnd)) {
+      // No way out with its usual margin: a tight one beats standing still.
+      for (let pass = 0; pass < 2; pass += 1) {
+        const margin = pass === 0 ? level.marginMs : 0;
+        if (planEscape(
+          squad,
+          brain,
+          state,
+          me,
+          squad.live,
+          cellMs,
+          margin,
+          restMs,
+          null,
+          true,
+          0,
+          ownEnd,
+          level.roomy
+        ) || margin === 0) break;
+      }
       brain.fleeing = true;
     }
     return null;
