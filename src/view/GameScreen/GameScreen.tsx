@@ -31,16 +31,15 @@ import { ResultTone } from './RoundResultDialog.styles';
 import SettingsScreen from './SettingsScreen/SettingsScreen';
 import ModifyControlsDialog from './SettingsScreen/ModifyControlsDialog';
 import { MatchConfirmDialog, MatchConfirmKind } from './SettingsScreen/MatchConfirmDialog';
-import { GameScene3D } from './GameScene3D';
-import { GameHUD, PauseMissionDetails } from './GameHUD';
-import { MatchBeatOverlay } from './MatchBeatOverlay';
-import { useGameEngine } from '../../hooks/useGameEngine';
-import { useHudState, useRenderState, useSceneState } from '../../hooks/useRenderState';
-import { GameConfig, GameEngineState, loadMapFromStorage } from '../../engine';
+import { PauseMissionDetails } from './GameHUD';
+import { MatchAnnouncer, MatchHud, MatchScene } from './MatchLeaves';
+import { selectMatchView } from './matchView';
+import { useGameEngineStore } from '../../hooks/useGameEngine';
+import { useEngineSelector } from '../../hooks/engineStore';
+import { GameConfig, loadMapFromStorage } from '../../engine';
 import {
   DEFAULT_CHARACTER_ID, DEFAULT_STAGE_ID, GameMode, getCharacterDefinition,
 } from '../../content';
-import { CharacterId } from '../../content/types';
 import { completeCampaignStage, recordCampaignDiscoveries } from '../../story/progress';
 import {
   GameSceneContainer,
@@ -59,22 +58,20 @@ import {
   ControlTable,
   ControlSlot,
   PlayerKits,
-  FeedbackCaption,
-  CaptionLiveRegion,
 } from './GameScreen.styles';
 import {
   applyDocumentPreferences,
   loadGamePreferences,
   saveGamePreferences,
 } from './gamePreferences';
-import { useGameFeedback } from './useGameFeedback';
+import { useEngineFeedback } from './useGameFeedback';
 import { playerSlotColor, playerSlotLabel, playerSlotTextColor } from './playerSlots';
 import { loadCampaignDifficulty } from '../ConfigScreen/campaignDifficulty';
 import { isCpuSlot, normalizeControllers } from '../../ai/controllers';
 import { usePadGameSurface } from '../../input/MenuPad';
 import { PAD_START_EVENT } from '../../input/padNavigator';
 import {
-  isVersus, lastRoundWinnerSlot, matchWinnerSlot, roundOverBanner, roundStartLine,
+  isVersus, lastRoundWinnerSlot, matchWinnerSlot, roundOverBanner,
 } from './matchCopy';
 
 const CONTROLS_GUIDE_SEEN_KEY = 'shinobiControlsGuideSeen';
@@ -165,29 +162,9 @@ const ControlsTable = ({ rows, label }: { rows: ControlsRow[]; label: string }) 
   </ControlTable>
 );
 
-// "GO!" stays up for the first 700 ms of play. Counted in engine ticks, so
-// it pauses with the game and needs no timer or extra render: GameScreen
-// already renders on every engine publish.
-const GO_BEAT_TICKS = 14;
-
 // The arena holds on the deciding moment (the engine already froze it) this
 // long before the result dialog covers it.
 export const RESULT_HOLD_MS = 1200;
-
-function useRoundStartBeat(state: GameEngineState | null): { countdown: string; go: boolean } {
-  const beatRef = useRef<{ armed: boolean; liveTick: number | null }>({ armed: false, liveTick: null });
-  if (!state || state.phase !== 'playing') return { countdown: '', go: false };
-  const beat = beatRef.current;
-  if (state.roundStartTicksRemaining > 0) {
-    beat.armed = true;
-    beat.liveTick = null;
-    return { countdown: String(Math.ceil(state.roundStartTicksRemaining / 1000)), go: false };
-  }
-  if (beat.armed && beat.liveTick === null) beat.liveTick = state.tick;
-  const go = beat.liveTick !== null && state.tick - beat.liveTick < GO_BEAT_TICKS;
-  if (!go) beat.armed = false;
-  return { countdown: '', go };
-}
 
 type GameTopControlsProps = {
   isPaused: boolean;
@@ -200,10 +177,10 @@ type GameTopControlsProps = {
   onToggleHud: () => void;
 };
 
-// Memoised so the tooltips and icon buttons do not re-render on every
-// engine tick. An open MUI Tooltip rebuilds its popper.js instance on each
+// Memoised so the tooltips and icon buttons do not re-render with the rest
+// of the screen. An open MUI Tooltip rebuilds its popper.js instance on each
 // render (its default PopperProps object is new every time), which forces a
-// style recalc and layout per tick while the pointer rests on a button.
+// style recalc and layout per render while the pointer rests on a button.
 // Restart is not here: it wipes the match, so it lives behind the pause
 // menu's confirm instead of one stray click away from Pause.
 const GameTopControls = React.memo(({
@@ -260,8 +237,8 @@ const GameTopControls = React.memo(({
 GameTopControls.displayName = 'GameTopControls';
 
 // Closed dialogs still ran their render (and the result dialog its match
-// breakdown) on every tick. Skip parent re-renders while they stay closed;
-// opening one always re-renders it with fresh props.
+// breakdown) whenever the screen did. Skip parent re-renders while they stay
+// closed; opening one always re-renders it with fresh props.
 const MemoRoundResultDialog = React.memo(
   RoundResultDialog,
   (prev, next) => !prev.open && !next.open
@@ -278,12 +255,6 @@ const MemoMatchConfirmDialog = React.memo(
   MatchConfirmDialog,
   (prev, next) => prev.kind === null && next.kind === null
 );
-// Fed shared states (see useRenderState) that keep their identity until
-// something each one draws changes, so a held-movement frame or a tick that
-// only moves clocks skips the HUD and the whole 3D scene; the scene animates
-// those itself from the motion store and the live state.
-const MemoGameHUD = React.memo(GameHUD);
-const MemoGameScene3D = React.memo(GameScene3D);
 
 export const GameScreen = () => {
   const { numOfPlayers, numOfRounds, selectedMap } = useParams();
@@ -326,7 +297,7 @@ export const GameScreen = () => {
   }, [numOfPlayers, numOfRounds, selectedMap]);
 
   const {
-    state,
+    store,
     motion,
     getState,
     advanceFrame,
@@ -334,11 +305,12 @@ export const GameScreen = () => {
     resume,
     restart,
     dismissDialog,
-  } = useGameEngine(config, keyBindings);
-  const renderState = useRenderState(state);
-  const sceneState = useSceneState(state, motion);
-  const hudState = useHudState(state);
-  const feedback = useGameFeedback(renderState, preferences);
+  } = useGameEngineStore(config, keyBindings);
+  // Only what changes with menus, pauses and round ends: the HUD, the
+  // countdown and the scene subscribe to their own slices (MatchLeaves).
+  const view = useEngineSelector(store, selectMatchView);
+  const { menuState } = view;
+  const feedback = useEngineFeedback(store, preferences);
 
   // High contrast and reduced motion reach the page as well as the canvas.
   useEffect(() => {
@@ -350,54 +322,46 @@ export const GameScreen = () => {
     saveGamePreferences(nextPreferences);
   }, []);
 
-  const bossHealth = state?.boss?.health;
-  const bossId = state?.boss?.id;
-  const gamePhase = state?.phase;
-  const gameMode = state?.config.mode;
-  const stageId = state?.config.stageId;
-  const campaignStageId = state?.campaign?.stageId;
-  const campaignSecretsKey = state?.campaign?.discoveredSecrets.join('|') ?? '';
-  const leadCharacterId = state?.players[0]?.characterId;
   const rewardedStages = useRef<Set<string>>(new Set());
 
+  // A sealed boss ends the match, so the game-over state is the menu state.
   useEffect(() => {
+    const ended = menuState;
     if (
-      gameMode === 'solo'
-      && gamePhase === 'game_over'
-      && bossId
-      && stageId
-      && typeof bossHealth === 'number'
-      && bossHealth <= 0
+      ended
+      && ended.config.mode === 'solo'
+      && ended.phase === 'game_over'
+      && ended.boss
+      && ended.config.stageId
+      && ended.boss.health <= 0
     ) {
+      const { stageId } = ended.config;
+      const bossId = ended.boss.id;
       const rewardKey = `${stageId}:${bossId}`;
       if (!rewardedStages.current.has(rewardKey)) {
         rewardedStages.current.add(rewardKey);
         completeCampaignStage(stageId, bossId);
       }
     }
-  }, [bossHealth, bossId, gameMode, gamePhase, stageId]);
+  }, [menuState]);
 
+  const { discoveries } = view;
   useEffect(() => {
-    if (
-      gameMode === 'solo'
-      && campaignStageId
-      && leadCharacterId
-      && campaignSecretsKey.length > 0
-    ) {
+    if (discoveries && discoveries.secrets.length > 0) {
       recordCampaignDiscoveries(
-        campaignStageId,
-        leadCharacterId,
-        campaignSecretsKey.split('|')
+        discoveries.stageId,
+        discoveries.leadCharacterId,
+        [...discoveries.secrets]
       );
     }
-  }, [campaignSecretsKey, campaignStageId, gameMode, leadCharacterId]);
+  }, [discoveries]);
 
-  const isPaused = state?.paused ?? false;
+  const isPaused = view.paused;
   // The round is over (and the engine paused) from the deciding tick; the
   // result dialog itself opens RESULT_HOLD_MS later.
-  const dialogOpen = state?.phase === 'round_end' || state?.phase === 'game_over';
-  const roundOverKey = state && dialogOpen
-    ? `${state.phase}:${state.round}:${state.roundWinners.length}:${state.tick}`
+  const dialogOpen = view.phase === 'round_end' || view.phase === 'game_over';
+  const roundOverKey = menuState && dialogOpen
+    ? `${menuState.phase}:${menuState.round}:${menuState.roundWinners.length}:${menuState.tick}`
     : '';
   const [heldRoundOverKey, setHeldRoundOverKey] = useState('');
   useEffect(() => {
@@ -407,26 +371,24 @@ export const GameScreen = () => {
   }, [roundOverKey]);
   const resultVisible = dialogOpen && heldRoundOverKey === roundOverKey;
   const resultTone = useMemo<ResultTone>(() => {
-    if (!state || state.phase !== 'game_over' || state.config.mode !== 'solo') {
+    if (!menuState || menuState.phase !== 'game_over' || menuState.config.mode !== 'solo') {
       return 'neutral';
     }
-    const bossSealed = state.boss ? state.boss.health <= 0 : false;
-    if (bossSealed || state.campaign?.missionResult === 'success') {
+    const bossSealed = menuState.boss ? menuState.boss.health <= 0 : false;
+    if (bossSealed || menuState.campaign?.missionResult === 'success') {
       return 'victory';
     }
     return 'defeat';
-  }, [state]);
-  const roundStart = useRoundStartBeat(state);
+  }, [menuState]);
   const parsedPlayerCount = Number(numOfPlayers ?? 1);
   const activePlayerCount = Number.isFinite(parsedPlayerCount)
     ? Math.max(1, parsedPlayerCount)
     : 1;
-  const characterIdsKey = state?.players.map((player) => player.characterId).join('|') ?? '';
-  const controlRows = useMemo<ControlsRow[]>(() => {
-    const characterIds = characterIdsKey ? characterIdsKey.split('|') as CharacterId[] : [];
-    // The match's own roster when it is loaded; the route's count before that.
-    // CPU slots take no keys, so they get no row.
-    return Array.from({ length: characterIds.length || activePlayerCount }, (_, index) => {
+  const { characterIds } = view;
+  // The match's own roster when it is loaded; the route's count before that.
+  // CPU slots take no keys, so they get no row.
+  const controlRows = useMemo<ControlsRow[]>(() => (
+    Array.from({ length: characterIds.length || activePlayerCount }, (_, index) => {
       const playerNumber = String(index + 1);
       const bindings = keyBindings[playerNumber] ?? DEFAULT_KEY_BINDINGS[playerNumber];
       const characterId = characterIds[index];
@@ -441,11 +403,11 @@ export const GameScreen = () => {
           cover: formatKeyLabel(bindings[7]),
         },
       };
-    }).filter((row) => !isCpuSlot(config, row.slot));
-  }, [activePlayerCount, characterIdsKey, keyBindings, config]);
+    }).filter((row) => !isCpuSlot(config, row.slot))
+  ), [activePlayerCount, characterIds, keyBindings, config]);
   // The static kit text the old HUD cards carried, kept for the pause menu.
   const playerKits = useMemo(() => (
-    (characterIdsKey ? characterIdsKey.split('|') as CharacterId[] : []).map((characterId, index) => {
+    characterIds.map((characterId, index) => {
       const character = getCharacterDefinition(characterId);
       return {
         slot: index,
@@ -454,7 +416,7 @@ export const GameScreen = () => {
         detail: `Bomb: ${character.basicBomb} · Ult: ${character.ultimate} · Vision ${character.visionRadius}`,
       };
     })
-  ), [characterIdsKey]);
+  ), [characterIds]);
 
   const handleTogglePause = useCallback(() => {
     if (isPaused) resume();
@@ -591,8 +553,8 @@ export const GameScreen = () => {
   ]);
 
   // Pads steer menus whenever no round is live, and play it otherwise.
-  const padMenuActive = !state
-    || state.phase !== 'playing'
+  const padMenuActive = !view.loaded
+    || view.phase !== 'playing'
     || isPaused
     || showControlsGuide
     || isSettingsOpen
@@ -603,7 +565,7 @@ export const GameScreen = () => {
   // Start on the round result continues, like its focused main button. It
   // waits for the dialog itself (not the hold before it) and, like a click,
   // ignores the first RESULT_INPUT_LOCK_MS so a mashed button skips nothing.
-  const isGameOver = state?.phase === 'game_over';
+  const isGameOver = view.phase === 'game_over';
   useEffect(() => {
     if (!dialogOpen) return undefined;
     const shownAt = resultVisible ? Date.now() : null;
@@ -617,35 +579,22 @@ export const GameScreen = () => {
     return () => window.removeEventListener(PAD_START_EVENT, handlePadStart);
   }, [dialogOpen, resultVisible, dismissDialog, isGameOver, restart]);
 
-  // The countdown overlay is visual only; the live region reads the round
-  // line with the first number, then "2, 1, Go!" (nothing else happens while
-  // the arena is frozen), then captions.
-  const countdownVisible = !!roundStart.countdown && !isPaused && !dialogOpen;
-  const goVisible = roundStart.go && !isPaused && !dialogOpen;
-  const roundLine = countdownVisible && state ? roundStartLine(state) : '';
+  // The banner over the deciding moment, until the result dialog covers it.
   const roundOver = useMemo(() => {
-    if (!state || !dialogOpen || resultVisible) return null;
+    if (!menuState || !dialogOpen || resultVisible) return null;
     let winner: number | null = null;
-    if (isVersus(state)) {
-      winner = state.phase === 'game_over' ? matchWinnerSlot(state) : lastRoundWinnerSlot(state);
+    if (isVersus(menuState)) {
+      winner = menuState.phase === 'game_over'
+        ? matchWinnerSlot(menuState)
+        : lastRoundWinnerSlot(menuState);
     }
     return {
-      text: roundOverBanner(state),
+      text: roundOverBanner(menuState),
       accent: winner !== null ? playerSlotColor(winner) : 'var(--anime-mustard)',
     };
-  }, [dialogOpen, resultVisible, state]);
-  let liveAnnouncement = feedback.caption;
-  if (countdownVisible) {
-    liveAnnouncement = roundStart.countdown === '3' && roundLine
-      ? `${roundLine}. 3`
-      : roundStart.countdown;
-  } else if (goVisible) liveAnnouncement = 'Go!';
-  else if (roundOver) {
-    // The knockout that decided it, then who took the round.
-    liveAnnouncement = feedback.caption ? `${feedback.caption}. ${roundOver.text}` : roundOver.text;
-  }
+  }, [dialogOpen, menuState, resultVisible]);
 
-  if (!state || !renderState || !sceneState || !hudState) {
+  if (!view.loaded) {
     return (
       <StyledBackground>
         <LoadingMessage>Loading game...</LoadingMessage>
@@ -655,7 +604,7 @@ export const GameScreen = () => {
 
   return (
     <GameBackground>
-      {showHud && <MemoGameHUD state={hudState} scale={preferences.hudScale} />}
+      {showHud && <MatchHud store={store} scale={preferences.hudScale} />}
       <GameTopControls
         isPaused={isPaused}
         locked={isPaused && !showControlsGuide}
@@ -666,8 +615,8 @@ export const GameScreen = () => {
         onToggleHud={handleToggleHud}
       />
       <GameSceneContainer>
-        <MemoGameScene3D
-          state={sceneState}
+        <MatchScene
+          store={store}
           preferences={preferences}
           impact={feedback.impact}
           motion={motion}
@@ -679,21 +628,14 @@ export const GameScreen = () => {
           idle={(isPaused && !dialogOpen) || resultVisible}
         />
       </GameSceneContainer>
-      <CaptionLiveRegion role="status" aria-atomic="true">
-        {liveAnnouncement}
-      </CaptionLiveRegion>
-      {feedback.caption && (
-        <FeedbackCaption key={feedback.eventId} aria-hidden="true">
-          {feedback.caption}
-        </FeedbackCaption>
-      )}
-      <MatchBeatOverlay
-        countdown={countdownVisible ? roundStart.countdown : ''}
-        go={goVisible}
-        line={roundLine}
+      <MatchAnnouncer
+        store={store}
+        caption={feedback.caption}
+        eventId={feedback.eventId}
         roundOver={roundOver}
+        held={isPaused || dialogOpen}
         hudScale={preferences.hudScale}
-        campaign={!!state.campaign}
+        campaign={view.campaign}
       />
       {showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
         <ControlsGuide aria-label="controls guide" data-pad-layer="">
@@ -709,7 +651,7 @@ export const GameScreen = () => {
           <ControlsTable rows={controlRows} label="controls" />
         </ControlsGuide>
       )}
-      {isPaused && !showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
+      {isPaused && menuState && !showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
         // Tab stays inside the menu; pads treat it as their menu.
         <FocusTrap open disableRestoreFocus isEnabled={pauseTrapEnabled}>
           <PauseOverlay
@@ -756,7 +698,7 @@ export const GameScreen = () => {
                   Quit Game
                 </PauseMenuButton>
               </PauseMenuActions>
-              <PauseMissionDetails state={state} />
+              <PauseMissionDetails state={menuState} />
               <ControlsTable rows={controlRows} label="controls" />
               <PlayerKits aria-label="shinobi kits">
                 {playerKits.map((kit) => (
@@ -783,15 +725,19 @@ export const GameScreen = () => {
         onCancel={handleCancelConfirm}
         onConfirm={handleConfirm}
       />
-      <MemoRoundResultDialog
-        open={resultVisible}
-        onClose={handleCloseDialog}
-        onRestart={restart}
-        resultMessage={state.resultMessage}
-        isGameOver={state.phase === 'game_over'}
-        tone={resultTone}
-        state={state}
-      />
+      {menuState && (
+        // Shown from the state the round ended on, which it keeps while it
+        // fades out under the next round.
+        <MemoRoundResultDialog
+          open={resultVisible}
+          onClose={handleCloseDialog}
+          onRestart={restart}
+          resultMessage={menuState.resultMessage}
+          isGameOver={menuState.phase === 'game_over'}
+          tone={resultTone}
+          state={menuState}
+        />
+      )}
       <MemoSettingsScreen
         open={isSettingsOpen}
         onClose={handleCloseMenus}

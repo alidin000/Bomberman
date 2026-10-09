@@ -122,6 +122,18 @@ const SettingsScreen: React.FC<Props> = (
               )}
               label="High contrast"
             />
+            <FormControlLabel
+              control={(
+                <Switch
+                  checked={preferences.scenery}
+                  onChange={(event) => onPreferencesChange({
+                    ...preferences,
+                    scenery: event.target.checked,
+                  })}
+                />
+              )}
+              label="Stage scenery"
+            />
           </PreferenceGrid>
           <PreferenceSlider>
             <span>

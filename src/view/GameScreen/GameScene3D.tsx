@@ -90,6 +90,7 @@ import {
 } from './scene/motionFeel';
 import { StageAtmosphere } from './scene/StageAtmosphere';
 import { StageLandmarks } from './scene/StageLandmarks';
+import { SceneryContext } from './scene/scenery';
 import { BOARD_LIP } from './scene/landmarkPlacement';
 import { MonsterFigure, monsterIsTranslucent } from './scene/MonsterFigure';
 import { BossFigure } from './scene/BossFigure';
@@ -3751,13 +3752,15 @@ const SceneCanvas = React.memo(({
     camera={{ position: [0, 13.2, 9.6], fov: 48 }}
   >
     <ReducedMotionContext.Provider value={preferences.reducedMotion}>
-      <MotionContext.Provider value={motion}>
-        <BombClockContext.Provider value={bombClock}>
-          <LiveStateContext.Provider value={readState}>
-            <SceneFromStore store={store} preferences={preferences} impact={impact} />
-          </LiveStateContext.Provider>
-        </BombClockContext.Provider>
-      </MotionContext.Provider>
+      <SceneryContext.Provider value={preferences.scenery}>
+        <MotionContext.Provider value={motion}>
+          <BombClockContext.Provider value={bombClock}>
+            <LiveStateContext.Provider value={readState}>
+              <SceneFromStore store={store} preferences={preferences} impact={impact} />
+            </LiveStateContext.Provider>
+          </BombClockContext.Provider>
+        </MotionContext.Provider>
+      </SceneryContext.Provider>
     </ReducedMotionContext.Provider>
     {PERF_PROBE_ENABLED && <PerfProbe />}
   </Canvas>

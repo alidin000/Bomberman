@@ -31,16 +31,23 @@ const mockState = createInitialState({
 });
 let currentMockState = mockState;
 
-vi.mock('../../hooks/useGameEngine', () => ({
-  useGameEngine: () => ({
-    state: currentMockState,
-    dispatch: vi.fn(),
-    pause: engineMocks.pause,
-    resume: engineMocks.resume,
-    restart: engineMocks.restart,
-    dismissDialog: engineMocks.dismissDialog,
-  }),
-}));
+vi.mock('../../hooks/useGameEngine', async () => {
+  const { testEngineStore } = await import('../../hooks/engineStore.testutil');
+  const engine = testEngineStore(() => currentMockState);
+  return {
+    useGameEngineStore: () => {
+      engine.usePublish();
+      return {
+        store: engine.store,
+        dispatch: vi.fn(),
+        pause: engineMocks.pause,
+        resume: engineMocks.resume,
+        restart: engineMocks.restart,
+        dismissDialog: engineMocks.dismissDialog,
+      };
+    },
+  };
+});
 
 // The key shown for one player and action in a controls table.
 function controlKey(table: HTMLElement, slot: string, column: string): string | null {

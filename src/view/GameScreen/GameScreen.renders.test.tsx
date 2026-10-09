@@ -49,9 +49,16 @@ const engine = vi.hoisted(() => {
 });
 engine.motion = createMotionStore();
 
-vi.mock('../../hooks/useGameEngine', () => ({
-  useGameEngine: () => ({ ...engine }),
-}));
+vi.mock('../../hooks/useGameEngine', async () => {
+  const { testEngineStore } = await import('../../hooks/engineStore.testutil');
+  const published = testEngineStore(() => engine.state as GameEngineState | null);
+  return {
+    useGameEngineStore: () => {
+      published.usePublish();
+      return { ...engine, store: published.store };
+    },
+  };
+});
 
 // No monsters or crates: a tick changes only clocks.
 const openArena = parseMapRows([

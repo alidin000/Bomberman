@@ -5,6 +5,7 @@ import { StageLandmarkKind, StageLook } from '../../../content/stageLooks';
 import { toWorld } from './sceneSpace';
 import { StagePropInstance, StagePropSector, placeStageProps } from './landmarkPlacement';
 import { LANDMARK_MATERIAL, LandmarkColors, getLandmarkGeometry } from './landmarkGeometry';
+import { useScenery } from './scenery';
 
 /** Landmark bases sit at the slab's underside, so they rise out of the mist. */
 export const PROP_BASE_Y = -0.5;
@@ -76,7 +77,9 @@ function LandmarkLayer({
 
 /**
  * The stage's off-grid landmarks. Placed once per stage and map size (never
- * per frame), never casting shadows, all on one shared material.
+ * per frame), never casting shadows, all on one shared material. Not drawn
+ * at all with the scenery setting off; their material shares the wall and
+ * crate program, so turning them back on mid-match compiles nothing.
  */
 function StageLandmarksBase({
   look,
@@ -89,6 +92,7 @@ function StageLandmarksBase({
   width: number;
   height: number;
 }) {
+  const scenery = useScenery();
   const layers = useMemo(
     () => stagePropLayers(placeStageProps(look, width, height)),
     [height, look, width]
@@ -103,6 +107,7 @@ function StageLandmarksBase({
     return map;
   }, [look, slabColor]);
 
+  if (!scenery) return null;
   return (
     <>
       {layers.map((layer) => {

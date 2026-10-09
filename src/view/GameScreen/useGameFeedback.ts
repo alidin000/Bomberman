@@ -1,5 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  useCallback, useEffect, useRef, useState,
+} from 'react';
 import { GameEngineState } from '../../engine/types';
+import type { EngineStore } from '../../hooks/engineStore';
+import { differsOnlyInPlayerMotion } from '../../hooks/useRenderState';
 import { getRoundTimeRemainingMs, isSuddenDeathMode } from '../../engine/suddenDeath';
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
 import { GamePreferences } from './gamePreferences';
@@ -67,15 +71,20 @@ function playTone(
   oscillator.stop(now + duration);
 }
 
-export function useGameFeedback(
-  state: GameEngineState | null,
+type GameFeedback = { caption: string; impact: number; eventId: number };
+
+/** Compares each state it is shown with the one before and plays what happened. */
+function useFeedbackCore(
   preferences: GamePreferences
-): { caption: string; impact: number; eventId: number } {
+): { observe: (state: GameEngineState | null) => void; feedback: GameFeedback } {
   const previousRef = useRef<FeedbackSnapshot | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
   const [caption, setCaption] = useState('');
   const [impact, setImpact] = useState(0);
   const [eventId, setEventId] = useState(0);
+  // Read when an event plays, so a volume change does not re-run anything.
+  const soundRef = useRef(preferences);
+  soundRef.current = preferences;
 
   useEffect(() => {
     const unlock = () => {
@@ -97,7 +106,7 @@ export function useGameFeedback(
     };
   }, []);
 
-  useEffect(() => {
+  const observe = useCallback((state: GameEngineState | null) => {
     if (!state) return;
     const current = snapshot(state);
     const previous = previousRef.current;
@@ -134,8 +143,9 @@ export function useGameFeedback(
     const suddenDeathLeadIn = clockRunning
       && previousClock > SUDDEN_DEATH_LEAD_MS && currentClock <= SUDDEN_DEATH_LEAD_MS;
     const suddenDeath = clockRunning && previousClock > 0 && currentClock <= 0;
-    const volume = (preferences.effectsVolume / 100) * 0.08;
-    const audio = preferences.soundEnabled ? audioRef.current : null;
+    const { effectsVolume, soundEnabled } = soundRef.current;
+    const volume = (effectsVolume / 100) * 0.08;
+    const audio = soundEnabled ? audioRef.current : null;
 
     // Captions in priority order, one line of 40 characters or fewer
     // (composeCaption). Blasts get the shake and a tone, not a caption: they
@@ -190,7 +200,7 @@ export function useGameFeedback(
       setCaption(composeCaption(captions));
       setEventId((currentId) => currentId + 1);
     }
-  }, [preferences.effectsVolume, preferences.soundEnabled, state]);
+  }, []);
 
   useEffect(() => {
     if (!caption) return undefined;
@@ -204,5 +214,38 @@ export function useGameFeedback(
     return () => window.clearTimeout(timeout);
   }, [eventId, impact]);
 
-  return { caption: preferences.captions ? caption : '', impact, eventId };
+  return {
+    observe,
+    feedback: { caption: preferences.captions ? caption : '', impact, eventId },
+  };
+}
+
+/** Feedback for each new `state` a render passes in. */
+export function useGameFeedback(
+  state: GameEngineState | null,
+  preferences: GamePreferences
+): GameFeedback {
+  const { observe, feedback } = useFeedbackCore(preferences);
+  useEffect(() => { observe(state); }, [observe, state]);
+  return feedback;
+}
+
+/**
+ * Feedback straight from the engine's publishes: the caller re-renders only
+ * when a caption, a shake or a tone starts or ends, never for a plain tick.
+ * Frames that only move players are skipped (no event can happen in one).
+ */
+export function useEngineFeedback(store: EngineStore, preferences: GamePreferences): GameFeedback {
+  const { observe, feedback } = useFeedbackCore(preferences);
+  useEffect(() => {
+    let observed = store.getState();
+    observe(observed);
+    return store.subscribe(() => {
+      const next = store.getState();
+      if (next === observed || differsOnlyInPlayerMotion(observed, next)) return;
+      observed = next;
+      observe(next);
+    });
+  }, [observe, store]);
+  return feedback;
 }

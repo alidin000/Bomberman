@@ -23,6 +23,7 @@ import {
   isSuddenDeathMode,
 } from '../engine/suddenDeath';
 import { MotionStore, playerMotionId } from './motionStore';
+import type { EngineSelector } from './engineStore';
 
 // Fields a MOVE step changes that the scene draws from the motion store.
 const PLAYER_MOTION_KEYS: ReadonlySet<string> = new Set(['x', 'y', 'facing']);
@@ -367,6 +368,19 @@ export function useSceneState(
 export function useHudState(state: GameEngineState | null): GameEngineState | null {
   return useSharedState(state, shareHudState);
 }
+
+/** The scene's rules as a store selector, for a view that subscribes itself. */
+export function sceneStateSelector(
+  motion?: MotionStore | null
+): EngineSelector<GameEngineState | null> {
+  const share = createSceneShare(motion);
+  return (state, previous) => (previous && state ? share(previous, state) : state);
+}
+
+/** The HUD's rules as a store selector (see useHudState). */
+export const selectHudState: EngineSelector<GameEngineState | null> = (state, previous) => (
+  previous && state ? shareHudState(previous, state) : state
+);
 
 /** For tests: the share rules without React. */
 export const shareRenderState = {

@@ -1,6 +1,6 @@
 /* eslint-disable prefer-destructuring, no-continue */
 import {
-  useState, useCallback, useEffect, useMemo, useRef,
+  useCallback, useEffect, useMemo, useRef, useSyncExternalStore,
 } from 'react';
 import {
   GameAction,
@@ -26,6 +26,7 @@ import {
 } from './engineLoop';
 import { useGamepadInput } from './useGamepadInput';
 import { isCpuSlot } from '../ai/controllers';
+import { EngineStore, createEngineStore, PublishingEngineStore } from './engineStore';
 
 type HeldDirection = {
   direction: Direction;
@@ -58,24 +59,24 @@ function pruneInactiveMovement(
   );
 }
 
-export function useGameEngine(config: GameConfig | null, keyBindings: KeyBindings) {
+/**
+ * Runs a match. The simulation is reduced synchronously in the engine loop;
+ * views get a published snapshot through `store`, at most once per frame,
+ * and subscribe to just what they draw. Nothing here re-renders the caller.
+ */
+export function useGameEngineStore(config: GameConfig | null, keyBindings: KeyBindings) {
   const loopRef = useRef<EngineLoop | null>(null);
   if (!loopRef.current) loopRef.current = createEngineLoop();
   const loop = loopRef.current;
-  // The simulation is reduced synchronously in `loop`; React only receives a
-  // published snapshot, at most once per frame from the frame loop.
-  const [state, setState] = useState<GameEngineState | null>(null);
+  const storeRef = useRef<PublishingEngineStore | null>(null);
+  if (!storeRef.current) storeRef.current = createEngineStore();
+  const store = storeRef.current;
   const rafRef = useRef<number>();
   const humanControllerRef = useRef(new HumanController());
   // Every direction key each player is holding, oldest first. Releasing one
   // falls back to the newest key still down instead of stopping the player.
   const heldDirectionsRef = useRef<Record<string, HeldDirection[]>>({});
   const releasedDirectionRef = useRef<Record<string, { direction: Direction; atMs: number }>>({});
-
-  const dispatch = useCallback((action: GameAction) => {
-    applyEngineAction(loop, action);
-    setState(loop.state);
-  }, [loop]);
 
   const clearMovement = useCallback(() => {
     loop.activeMovement = {};
@@ -105,6 +106,38 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     }
     return { fallbackDirection: undefined, fallbackUntilMs: undefined };
   }, [loop]);
+
+  // Runs for every published state: drops movement of players that are
+  // gone, and picks up directions still held through a pause or into a new
+  // round.
+  const syncHeldMovement = useCallback((state: GameEngineState | null) => {
+    loop.activeMovement = pruneInactiveMovement(loop.activeMovement, state);
+    if (!state || state.paused || state.phase !== 'playing') {
+      releasedDirectionRef.current = {};
+      return;
+    }
+    state.players.forEach((player) => {
+      const held = heldDirectionsRef.current[player.id] ?? [];
+      const newest = held[held.length - 1];
+      if (!player.alive || !newest || loop.activeMovement[player.id]) return;
+      loop.activeMovement[player.id] = {
+        accumulatorMs: 0,
+        ...newest,
+        ...getFallback(player.id, newest.direction),
+      };
+    });
+  }, [loop, getFallback]);
+
+  const publish = useCallback(() => {
+    if (loop.state === store.getState()) return;
+    syncHeldMovement(loop.state);
+    store.publish(loop.state);
+  }, [loop, store, syncHeldMovement]);
+
+  const dispatch = useCallback((action: GameAction) => {
+    applyEngineAction(loop, action);
+    publish();
+  }, [loop, publish]);
 
   useEffect(() => {
     if (config) {
@@ -268,25 +301,6 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
   }, [config, keyBindings]);
   useGamepadInput(padBindings);
 
-  useEffect(() => {
-    loop.activeMovement = pruneInactiveMovement(loop.activeMovement, state);
-    if (!state || state.paused || state.phase !== 'playing') {
-      releasedDirectionRef.current = {};
-      return;
-    }
-    // Pick up directions still held through a pause or into a new round.
-    state.players.forEach((player) => {
-      const held = heldDirectionsRef.current[player.id] ?? [];
-      const newest = held[held.length - 1];
-      if (!player.alive || !newest || loop.activeMovement[player.id]) return;
-      loop.activeMovement[player.id] = {
-        accumulatorMs: 0,
-        ...newest,
-        ...getFallback(player.id, newest.direction),
-      };
-    });
-  }, [state, loop, getFallback]);
-
   // Advances the simulation to a frame timestamp. Every rAF callback in one
   // frame gets the same timestamp, so this is idempotent per frame: the 3D
   // scene calls it before it renders (R3F addEffect) and the hook's own rAF
@@ -297,12 +311,11 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     const last = lastFrameTimeRef.current;
     if (last !== null && now <= last) return;
     lastFrameTimeRef.current = now;
-    const before = loop.state;
     if (!advanceEngineFrame(loop, last === null ? 0 : now - last)) {
       releasedDirectionRef.current = {};
     }
-    if (loop.state !== before) setState(loop.state);
-  }, [loop]);
+    publish();
+  }, [loop, publish]);
 
   useEffect(() => {
     lastFrameTimeRef.current = performance.now();
@@ -317,7 +330,7 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     };
   }, [advanceFrame]);
 
-  // The newest simulation state, ahead of what React last rendered: the 3D
+  // The newest simulation state, ahead of what was last published: the 3D
   // scene reads it before every frame for what it draws without re-rendering.
   const getState = useCallback(() => loop.state, [loop]);
 
@@ -328,7 +341,7 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
   const dismissDialog = useCallback(() => dispatch({ type: 'DISMISS_DIALOG' }), [dispatch]);
 
   return {
-    state,
+    store: store as EngineStore,
     motion: loop.motion,
     getState,
     advanceFrame,
@@ -338,4 +351,15 @@ export function useGameEngine(config: GameConfig | null, keyBindings: KeyBinding
     restart,
     dismissDialog,
   };
+}
+
+/**
+ * The engine plus its whole published state, re-rendering the caller on
+ * every publish. For tests and small tools; the game screen subscribes to
+ * slices instead (useGameEngineStore + useEngineSelector).
+ */
+export function useGameEngine(config: GameConfig | null, keyBindings: KeyBindings) {
+  const engine = useGameEngineStore(config, keyBindings);
+  const state = useSyncExternalStore(engine.store.subscribe, engine.store.getState);
+  return { ...engine, state };
 }

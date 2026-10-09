@@ -43,16 +43,23 @@ const baseState = createInitialState({
 });
 let currentState: GameEngineState = baseState;
 
-vi.mock('../../hooks/useGameEngine', () => ({
-  useGameEngine: () => ({
-    state: currentState,
-    dispatch: vi.fn(),
-    pause: engineMocks.pause,
-    resume: engineMocks.resume,
-    restart: engineMocks.restart,
-    dismissDialog: engineMocks.dismissDialog,
-  }),
-}));
+vi.mock('../../hooks/useGameEngine', async () => {
+  const { testEngineStore } = await import('../../hooks/engineStore.testutil');
+  const engine = testEngineStore(() => currentState);
+  return {
+    useGameEngineStore: () => {
+      engine.usePublish();
+      return {
+        store: engine.store,
+        dispatch: vi.fn(),
+        pause: engineMocks.pause,
+        resume: engineMocks.resume,
+        restart: engineMocks.restart,
+        dismissDialog: engineMocks.dismissDialog,
+      };
+    },
+  };
+});
 
 type TestPad = {
   index: number;
