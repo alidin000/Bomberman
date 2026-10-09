@@ -7,8 +7,6 @@ import {
   Canvas, addEffect, useFrame, useThree,
 } from '@react-three/fiber';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils';
 import {
   BombKind,
   BossHazard,
@@ -71,16 +69,14 @@ import { KoMarkers } from './scene/KoMarkers';
 import { useCueChips } from './scene/cueChips';
 import { createPlayerPose, samplePlayerCuePose } from './scene/playerCuePose';
 import { LightPool, PooledPointLight } from './scene/LightPool';
-import { disposeModelSkeletons } from './scene/modelDisposal';
 import { nextFlameAgeMs } from './scene/flameAge';
 import { LIGHT_PRIORITY, PooledLightHandle } from './scene/lightPoolSlots';
 import { LABEL_SPRITES, labelSpriteKey } from './scene/labelSprites';
-import { ShaderWarmup, useTransparencyVariantWarmup } from './scene/ShaderWarmup';
+import { ShaderWarmup } from './scene/ShaderWarmup';
 import {
   FIGHTER_INK_HIGH_CONTRAST, FIGHTER_INK_MATERIAL, cachedInkHull, fighterToonMaterial, inkHullFor,
   setInkViewportHeight,
 } from './scene/fighterInk';
-import { shareSkeletons } from './scene/sharedSkeletons';
 import { MAX_FRAME_DELTA_MS } from '../../hooks/engineLoop';
 import {
   BOSS_MOTION_ID,
@@ -156,8 +152,6 @@ function lerpAngle(from: number, to: number, alpha: number): number {
   const diff = ((((to - from) % turn) + turn * 1.5) % turn) - Math.PI;
   return from + diff * alpha;
 }
-
-const USE_ARCHIVE_MODELS = false;
 
 function getMapDimensions(map: GameMap): { width: number; height: number } {
   return {
@@ -272,186 +266,6 @@ const CHARACTER_VISUALS: Record<CharacterId, {
     body: '#111827', accent: '#dc2626', hair: '#111827', aura: '#ef4444', trim: '#7f1d1d', headband: '#374151'
   },
 };
-
-type SceneModelConfig = {
-  paths: string[];
-  height: number;
-  footY?: number;
-  rotation?: [number, number, number];
-  scale?: number;
-};
-
-const CHARACTER_MODEL_CONFIGS: Record<CharacterId, SceneModelConfig> = {
-  deidara: {
-    paths: ['/models/characters/deidara.glb'],
-    height: 1.16,
-  },
-  naruto: {
-    paths: [
-      '/models/characters/naruto_rigged.glb',
-      '/models/characters/naruto.glb',
-      '/models/characters/naruto_mode_kurama_free_fire.glb',
-    ],
-    height: 1.16,
-  },
-  sasuke: {
-    paths: [
-      '/models/characters/sasuke_fortnite.glb',
-      '/models/characters/sasuke.glb',
-    ],
-    height: 1.16,
-  },
-  gaara: {
-    paths: ['/models/characters/gaara.glb'],
-    height: 1.16,
-  },
-  minato: {
-    paths: [
-      '/models/characters/freefire_new_3d_character_minato_namikaze.glb',
-      '/models/characters/minato.glb',
-    ],
-    height: 1.16,
-  },
-  itachi: {
-    paths: [
-      '/models/characters/itachi_uchiha_sharingan_akatsuki_amaterasu.glb',
-      '/models/characters/itachi.glb',
-    ],
-    height: 1.16,
-  },
-};
-
-const BOSS_MODEL_CONFIGS: Partial<Record<BossId, SceneModelConfig>> = {
-  shukaku: {
-    paths: [
-      '/models/characters/shukaku_naruto.glb',
-      '/models/bosses/shukaku.glb',
-    ],
-    height: 0.94,
-    footY: -0.58,
-  },
-  kurama: {
-    paths: [
-      '/models/characters/kurama__nine-tails.glb',
-      '/models/bosses/kurama.glb',
-    ],
-    height: 0.9,
-    footY: -0.58,
-  },
-};
-
-type SceneModelAsset = {
-  scene: THREE.Group;
-  animations: THREE.AnimationClip[];
-  config: SceneModelConfig;
-  sourcePath: string;
-};
-
-type SceneModelCacheEntry =
-  | { status: 'loaded'; asset: SceneModelAsset }
-  | { status: 'loading'; promise: Promise<SceneModelAsset | null> }
-  | { status: 'missing' };
-
-const SCENE_MODEL_CACHE = new Map<string, SceneModelCacheEntry>();
-
-function configureModelMeshes(root: THREE.Object3D, cloneMaterials: boolean) {
-  root.traverse((object) => {
-    const mesh = object as THREE.Mesh;
-    if (!mesh.isMesh) return;
-
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    if (cloneMaterials) {
-      mesh.material = Array.isArray(mesh.material)
-        ? mesh.material.map((material) => material.clone())
-        : mesh.material.clone();
-    }
-  });
-}
-
-function findCharacterClip(
-  animations: THREE.AnimationClip[],
-  pattern: RegExp,
-): THREE.AnimationClip | undefined {
-  return animations.find((clip) => pattern.test(clip.name));
-}
-
-function loadSceneModelPath(
-  loader: GLTFLoader,
-  cacheKey: string,
-  config: SceneModelConfig,
-  index = 0,
-): Promise<SceneModelAsset | null> {
-  const path = config.paths[index];
-  if (!path) return Promise.resolve(null);
-
-  return loader.loadAsync(path).then((gltf) => {
-    const asset = {
-      scene: gltf.scene,
-      animations: gltf.animations ?? [],
-      config,
-      sourcePath: path,
-    };
-    configureModelMeshes(asset.scene, false);
-    SCENE_MODEL_CACHE.set(cacheKey, { status: 'loaded', asset });
-    return asset;
-  }).catch(() => loadSceneModelPath(loader, cacheKey, config, index + 1));
-}
-
-function loadSceneModel(
-  cacheKey: string,
-  config: SceneModelConfig,
-): Promise<SceneModelAsset | null> {
-  const cached = SCENE_MODEL_CACHE.get(cacheKey);
-  if (cached?.status === 'loaded') return Promise.resolve(cached.asset);
-  if (cached?.status === 'missing') return Promise.resolve(null);
-  if (cached?.status === 'loading') return cached.promise;
-
-  const loader = new GLTFLoader();
-  const promise = loadSceneModelPath(loader, cacheKey, config).then((asset) => {
-    if (!asset) {
-      SCENE_MODEL_CACHE.set(cacheKey, { status: 'missing' });
-    }
-    return asset;
-  });
-
-  SCENE_MODEL_CACHE.set(cacheKey, { status: 'loading', promise });
-  return promise;
-}
-
-function useSceneModel(cacheKey: string | null, config?: SceneModelConfig) {
-  const [asset, setAsset] = useState<SceneModelAsset | null>(() => {
-    if (!cacheKey) return null;
-    const cached = SCENE_MODEL_CACHE.get(cacheKey);
-    return cached?.status === 'loaded' ? cached.asset : null;
-  });
-
-  useEffect(() => {
-    if (!cacheKey || !config) {
-      setAsset(null);
-      return undefined;
-    }
-
-    let mounted = true;
-    const cached = SCENE_MODEL_CACHE.get(cacheKey);
-    setAsset(cached?.status === 'loaded' ? cached.asset : null);
-    loadSceneModel(cacheKey, config).then((nextAsset) => {
-      if (mounted) setAsset(nextAsset);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [cacheKey, config]);
-
-  return asset;
-}
-
-function useCharacterModel(characterId: CharacterId) {
-  return useSceneModel(
-    USE_ARCHIVE_MODELS ? `character:${characterId}` : null,
-    USE_ARCHIVE_MODELS ? CHARACTER_MODEL_CONFIGS[characterId] : undefined,
-  );
-}
 
 function TextSprite({
   text,
@@ -1558,111 +1372,6 @@ function CharacterAccessory({
   return null;
 }
 
-function createFittedSceneModel(asset: SceneModelAsset): THREE.Group {
-  const clone = cloneSkeleton(asset.scene) as THREE.Group;
-  const model = new THREE.Group();
-  const rotation = asset.config.rotation ?? [0, 0, 0];
-  configureModelMeshes(clone, true);
-  shareSkeletons(clone);
-  clone.rotation.set(rotation[0], rotation[1], rotation[2]);
-  model.add(clone);
-  model.updateMatrixWorld(true);
-
-  const bounds = new THREE.Box3().setFromObject(model);
-  const size = new THREE.Vector3();
-  const center = new THREE.Vector3();
-  bounds.getSize(size);
-  bounds.getCenter(center);
-
-  clone.position.x -= center.x;
-  clone.position.y -= bounds.min.y;
-  clone.position.z -= center.z;
-  model.scale.setScalar((asset.config.height / Math.max(size.y, 0.001)) * (asset.config.scale ?? 1));
-  model.position.y = asset.config.footY ?? -0.56;
-
-  return model;
-}
-
-function LoadedSceneModel({
-  asset,
-  ghost,
-  motionRef,
-  warmGhostVariant = false,
-}: {
-  asset: SceneModelAsset;
-  ghost: boolean;
-  motionRef?: React.MutableRefObject<number>;
-  /** Precompile the Ghost (transparent) look of the model's materials. */
-  warmGhostVariant?: boolean;
-}) {
-  const model = useMemo(() => createFittedSceneModel(asset), [asset]);
-  useTransparencyVariantWarmup(model, warmGhostVariant);
-
-  const mixerRef = useRef<THREE.AnimationMixer | null>(null);
-  const actionsRef = useRef<{
-    idle?: THREE.AnimationAction;
-    move?: THREE.AnimationAction;
-    fallback?: THREE.AnimationAction;
-  } | null>(null);
-
-  useEffect(() => {
-    const mixer = new THREE.AnimationMixer(model);
-    const idleClip = findCharacterClip(asset.animations, /idle|stand|breath/i);
-    const moveClip = findCharacterClip(asset.animations, /run|walk|move|sprint/i);
-    const fallbackClip = asset.animations[0];
-    const idle = idleClip ? mixer.clipAction(idleClip).play() : undefined;
-    const move = moveClip && moveClip !== idleClip ? mixer.clipAction(moveClip).play() : undefined;
-    const fallback = !idle && !move && fallbackClip ? mixer.clipAction(fallbackClip).play() : undefined;
-
-    if (idle) idle.setEffectiveWeight(1);
-    if (move) move.setEffectiveWeight(0);
-    if (fallback) fallback.setEffectiveWeight(1);
-
-    mixerRef.current = mixer;
-    actionsRef.current = { idle, move, fallback };
-
-    return () => {
-      mixer.stopAllAction();
-      mixer.uncacheRoot(model);
-      mixerRef.current = null;
-      actionsRef.current = null;
-      // Each mount clones its own skeletons; free their bone textures, which
-      // otherwise piled up every time a GLB ninja died and respawned.
-      disposeModelSkeletons(model);
-    };
-  }, [asset.animations, model]);
-
-  useEffect(() => {
-    model.traverse((object) => {
-      const mesh = object as THREE.Mesh;
-      if (!mesh.isMesh) return;
-
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      materials.forEach((sourceMaterial) => {
-        const material = sourceMaterial;
-        material.transparent = ghost;
-        material.opacity = ghost ? 0.56 : 1;
-        material.depthWrite = !ghost;
-      });
-    });
-  }, [ghost, model]);
-
-  useFrame((_, delta) => {
-    const movement = THREE.MathUtils.clamp(motionRef?.current ?? 0, 0, 1);
-    const actions = actionsRef.current;
-    if (actions?.idle && actions.move) {
-      actions.idle.setEffectiveWeight(1 - movement);
-      actions.move.setEffectiveWeight(movement);
-      actions.move.timeScale = 0.8 + movement * 0.85;
-    } else if (actions?.fallback) {
-      actions.fallback.timeScale = 0.72 + movement * 0.72;
-    }
-    mixerRef.current?.update(delta);
-  });
-
-  return <primitive object={model} />;
-}
-
 function isTransformationActive(player: PlayerState): boolean {
   return player.ultimateCharge >= 100
     || player.specialState === 'Kurama Mode'
@@ -1819,14 +1528,13 @@ function PlayerMesh({
   const ghost = isPowerUpActive(state, player.id, 'Ghost');
   const invincible = isPowerUpActive(state, player.id, 'Invincibility');
   const visual = CHARACTER_VISUALS[player.characterId];
-  const characterModel = useCharacterModel(player.characterId);
   // The ink hull is built from the first figure of each character to mount
   // (in the countdown) and shared by every later one.
   const figureRef = useRef<THREE.Group>(null);
   const [inkHull, setInkHull] = useState(() => cachedInkHull(player.characterId));
   useLayoutEffect(() => {
     setInkHull(inkHullFor(player.characterId, figureRef.current));
-  }, [player.characterId, characterModel]);
+  }, [player.characterId]);
   const reducedMotion = React.useContext(ReducedMotionContext);
   const strideRef = useRef({ phase: 0, x: NaN, z: 0 });
   useSmoothWorldPosition(
@@ -1842,7 +1550,6 @@ function PlayerMesh({
   // Toggling `transparent` changes the shader's OPAQUE define, which three.js
   // only picks up after needsUpdate. A light-count change used to force that
   // recompile by accident; with a fixed light pool it has to be explicit.
-  // Child effects (LoadedSceneModel) run first, so their flags are already set.
   useEffect(() => {
     bodyRef.current?.traverse((object) => {
       const { material } = object as THREE.Mesh;
@@ -1969,97 +1676,91 @@ function PlayerMesh({
         {slot !== undefined && <PlayerTag slot={slot} color={playerSlotColor(slot - 1)} cpu={cpu} />}
         <group ref={poseRef} position={[0, FEET_Y, 0]}>
           <group position={[0, -FEET_Y, 0]}>
-            {characterModel ? (
-              <LoadedSceneModel asset={characterModel} ghost={ghost} motionRef={motionRef} warmGhostVariant />
-            ) : (
-              <>
-                <group ref={figureRef}>
-                  <mesh
-                    position={[0, -0.04, 0]}
-                    material={fighterToonMaterial(visual.body, { ghost, glow: visual.body })}
-                    castShadow
-                  >
-                    <capsuleGeometry args={[0.19, 0.26, 6, 10]} />
-                  </mesh>
-                  <mesh
-                    position={[0, -0.08, 0.16]}
-                    material={fighterToonMaterial(visual.trim, { ghost, glow: visual.trim })}
-                    castShadow
-                  >
-                    <boxGeometry args={[0.38, 0.26, 0.035]} />
-                  </mesh>
-                  <mesh position={[0, 0.32, 0.02]} material={fighterToonMaterial('#f2c7a2', { ghost })} castShadow>
-                    <sphereGeometry args={[0.225, 10, 8]} />
-                  </mesh>
-                  <CharacterHair characterId={player.characterId} visual={visual} ghost={ghost} />
-                  <mesh
-                    position={[0, 0.35, 0.2]}
-                    material={fighterToonMaterial(visual.headband, { ghost, glow: visual.headband, glowIntensity: 0.18 })}
-                    castShadow
-                  >
-                    <boxGeometry args={[0.42, 0.055, 0.04]} />
-                  </mesh>
-                  <mesh position={[0, 0.35, 0.225]} material={fighterToonMaterial('#d1d5db', { ghost })} castShadow>
-                    <boxGeometry args={[0.16, 0.05, 0.018]} />
-                  </mesh>
-                  {[-0.22, 0.22].map((side) => (
-                    <mesh
-                      key={`${player.id}-arm-${side}`}
-                      position={[side, 0.04, 0.04]}
-                      rotation={[0.35, 0, side > 0 ? -0.55 : 0.55]}
-                      material={fighterToonMaterial(visual.accent, { ghost })}
-                      castShadow
-                    >
-                      <capsuleGeometry args={[0.055, 0.34, 5, 8]} />
-                    </mesh>
-                  ))}
-                  {[-0.09, 0.09].map((side) => (
-                    <mesh
-                      key={`${player.id}-leg-${side}`}
-                      position={[side, -0.36, 0.02]}
-                      rotation={[0.18, 0, side > 0 ? -0.08 : 0.08]}
-                      material={fighterToonMaterial(visual.body, { ghost })}
-                      castShadow
-                    >
-                      <capsuleGeometry args={[0.052, 0.34, 5, 8]} />
-                    </mesh>
-                  ))}
-                  {[-0.1, 0.1].map((side) => (
-                    <mesh
-                      key={`${player.id}-shoe-${side}`}
-                      position={[side, -0.55, 0.1]}
-                      rotation={[0.2, 0, 0]}
-                      material={fighterToonMaterial('#111827', { ghost })}
-                      castShadow
-                    >
-                      <boxGeometry args={[0.13, 0.06, 0.2]} />
-                    </mesh>
-                  ))}
-                  {[-0.09, 0.09].map((side) => (
-                    <mesh key={`${player.id}-eye-${side}`} position={[side, 0.34, 0.17]} material={fighterToonMaterial('#111827')}>
-                      <sphereGeometry args={[0.025, 8, 8]} />
-                    </mesh>
-                  ))}
-                  <CharacterAccessory characterId={player.characterId} visual={visual} ghost={ghost} />
-                  <mesh
-                    position={[0, -0.27, -0.08]}
-                    rotation={[Math.PI / 2, 0, Math.PI / 2]}
-                    material={fighterToonMaterial(visual.accent, { glow: visual.accent, glowIntensity: 0.12 })}
-                    castShadow
-                  >
-                    <cylinderGeometry args={[0.075, 0.075, 0.42, 12]} />
-                  </mesh>
-                </group>
-                {/* The ink line; Ghost drops it with the solid look. */}
-                {inkHull && (
-                  <mesh
-                    geometry={inkHull}
-                    material={FIGHTER_INK_MATERIAL}
-                    visible={!ghost}
-                    userData={marks.ink}
-                  />
-                )}
-              </>
+            <group ref={figureRef}>
+              <mesh
+                position={[0, -0.04, 0]}
+                material={fighterToonMaterial(visual.body, { ghost, glow: visual.body })}
+                castShadow
+              >
+                <capsuleGeometry args={[0.19, 0.26, 6, 10]} />
+              </mesh>
+              <mesh
+                position={[0, -0.08, 0.16]}
+                material={fighterToonMaterial(visual.trim, { ghost, glow: visual.trim })}
+                castShadow
+              >
+                <boxGeometry args={[0.38, 0.26, 0.035]} />
+              </mesh>
+              <mesh position={[0, 0.32, 0.02]} material={fighterToonMaterial('#f2c7a2', { ghost })} castShadow>
+                <sphereGeometry args={[0.225, 10, 8]} />
+              </mesh>
+              <CharacterHair characterId={player.characterId} visual={visual} ghost={ghost} />
+              <mesh
+                position={[0, 0.35, 0.2]}
+                material={fighterToonMaterial(visual.headband, { ghost, glow: visual.headband, glowIntensity: 0.18 })}
+                castShadow
+              >
+                <boxGeometry args={[0.42, 0.055, 0.04]} />
+              </mesh>
+              <mesh position={[0, 0.35, 0.225]} material={fighterToonMaterial('#d1d5db', { ghost })} castShadow>
+                <boxGeometry args={[0.16, 0.05, 0.018]} />
+              </mesh>
+              {[-0.22, 0.22].map((side) => (
+                <mesh
+                  key={`${player.id}-arm-${side}`}
+                  position={[side, 0.04, 0.04]}
+                  rotation={[0.35, 0, side > 0 ? -0.55 : 0.55]}
+                  material={fighterToonMaterial(visual.accent, { ghost })}
+                  castShadow
+                >
+                  <capsuleGeometry args={[0.055, 0.34, 5, 8]} />
+                </mesh>
+              ))}
+              {[-0.09, 0.09].map((side) => (
+                <mesh
+                  key={`${player.id}-leg-${side}`}
+                  position={[side, -0.36, 0.02]}
+                  rotation={[0.18, 0, side > 0 ? -0.08 : 0.08]}
+                  material={fighterToonMaterial(visual.body, { ghost })}
+                  castShadow
+                >
+                  <capsuleGeometry args={[0.052, 0.34, 5, 8]} />
+                </mesh>
+              ))}
+              {[-0.1, 0.1].map((side) => (
+                <mesh
+                  key={`${player.id}-shoe-${side}`}
+                  position={[side, -0.55, 0.1]}
+                  rotation={[0.2, 0, 0]}
+                  material={fighterToonMaterial('#111827', { ghost })}
+                  castShadow
+                >
+                  <boxGeometry args={[0.13, 0.06, 0.2]} />
+                </mesh>
+              ))}
+              {[-0.09, 0.09].map((side) => (
+                <mesh key={`${player.id}-eye-${side}`} position={[side, 0.34, 0.17]} material={fighterToonMaterial('#111827')}>
+                  <sphereGeometry args={[0.025, 8, 8]} />
+                </mesh>
+              ))}
+              <CharacterAccessory characterId={player.characterId} visual={visual} ghost={ghost} />
+              <mesh
+                position={[0, -0.27, -0.08]}
+                rotation={[Math.PI / 2, 0, Math.PI / 2]}
+                material={fighterToonMaterial(visual.accent, { glow: visual.accent, glowIntensity: 0.12 })}
+                castShadow
+              >
+                <cylinderGeometry args={[0.075, 0.075, 0.42, 12]} />
+              </mesh>
+            </group>
+            {/* The ink line; Ghost drops it with the solid look. */}
+            {inkHull && (
+              <mesh
+                geometry={inkHull}
+                material={FIGHTER_INK_MATERIAL}
+                visible={!ghost}
+                userData={marks.ink}
+              />
             )}
             {invincible && (
               <>
@@ -2380,11 +2081,6 @@ function BossMesh({ state }: { state: GameEngineState }) {
   // Written in place each frame.
   const cueRef = useRef(phaseCue(1, null, false));
   const sealRef = useRef(sealPose(0, false));
-  const bossModelConfig = boss && USE_ARCHIVE_MODELS ? BOSS_MODEL_CONFIGS[boss.id] : undefined;
-  const bossModel = useSceneModel(
-    boss && bossModelConfig ? `boss:${boss.id}` : null,
-    bossModelConfig,
-  );
   // Always faces the camera ('down'): its face is its weak point.
   useSmoothWorldPosition(ref, boss?.x ?? 0, boss?.y ?? 0, BOSS_FLOAT_Y, undefined, BOSS_MOTION_ID, FACING_HEADING.down);
 
@@ -2471,11 +2167,7 @@ function BossMesh({ state }: { state: GameEngineState }) {
         <meshStandardMaterial ref={ringRef} color={visual.glow} emissive={visual.glow} emissiveIntensity={1.05} transparent opacity={BOSS_RING_OPACITY} />
       </mesh>
       <group ref={poseRef}>
-        {bossModel ? (
-          <LoadedSceneModel asset={bossModel} ghost={false} />
-        ) : (
-          <BossFigure ref={figureRef} bossId={boss.id} />
-        )}
+        <BossFigure ref={figureRef} bossId={boss.id} />
       </group>
       {boss.phase > 1 && boss.health > 0 && (
         <>

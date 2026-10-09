@@ -111,7 +111,6 @@ npm run test:e2e
 
 - [System design, rendering, networking, and optimization](docs/ARCHITECTURE.md)
 - [Full product and feature specification](docs/EXPLOSIVE_SHINOBI_ARENA_PRD.md)
-- [Archived character model experiments](public/models/characters/README.md)
 
 ## License
 
