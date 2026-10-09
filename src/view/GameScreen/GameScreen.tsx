@@ -15,6 +15,7 @@ import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
+import TouchAppIcon from '@mui/icons-material/TouchApp';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { Tooltip } from '@mui/material';
@@ -76,6 +77,11 @@ import { loadCampaignDifficulty } from '../ConfigScreen/campaignDifficulty';
 import { isCpuSlot, normalizeControllers } from '../../ai/controllers';
 import { usePadGameSurface } from '../../input/MenuPad';
 import { PAD_START_EVENT } from '../../input/padNavigator';
+import { getPlayerBindings } from '../../input/humanController';
+import { useTouchMode } from '../../input/touchMode';
+import { useTouchPreferences } from '../../input/touchPreferences';
+import { useScreenWakeLock } from '../../input/touchWakeLock';
+import { TouchControls, TouchGuide } from './TouchControls';
 import {
   isVersus, lastRoundWinnerSlot, matchWinnerSlot, roundOverBanner,
 } from './matchCopy';
@@ -176,6 +182,8 @@ export const RESULT_HOLD_MS = 1200;
 
 type GameTopControlsProps = {
   isPaused: boolean;
+  /** Touch controls are up: the guide button shows the touch guide. */
+  touch: boolean;
   /** A menu is up: the bar is inert, so only that menu takes input. */
   locked: boolean;
   showHud: boolean;
@@ -193,6 +201,7 @@ type GameTopControlsProps = {
 // menu's confirm instead of one stray click away from Pause.
 const GameTopControls = React.memo(({
   isPaused,
+  touch,
   locked,
   showHud,
   onPauseToggle,
@@ -228,7 +237,7 @@ const GameTopControls = React.memo(({
           aria-label="show controls"
           onClick={onShowControls}
         >
-          <KeyboardIcon />
+          {touch ? <TouchAppIcon /> : <KeyboardIcon />}
         </ControlButton>
       </Tooltip>
       <Tooltip title={showHud ? 'Hide HUD' : 'Show HUD'}>
@@ -367,6 +376,17 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
   const view = useEngineSelector(store, selectMatchView);
   const { menuState } = view;
   const feedback = useEngineFeedback(store, preferences);
+  // A phone is one player: the touch controls play the first human seat.
+  const touchMode = useTouchMode();
+  const { leftHanded } = useTouchPreferences();
+  const touchSlot = useMemo(() => {
+    if (!config) return null;
+    for (let slot = 0; slot < config.numPlayers; slot += 1) {
+      if (!isCpuSlot(config, slot)) return slot;
+    }
+    return null;
+  }, [config]);
+  const touchKeys = touchSlot === null ? undefined : getPlayerBindings(keyBindings, touchSlot);
 
   // High contrast and reduced motion reach the page as well as the canvas.
   useEffect(() => {
@@ -641,6 +661,8 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
     || isModifyingControls
     || pendingConfirm !== null;
   usePadGameSurface(padMenuActive);
+  // The screen stays on while a round is in play (the engine pauses at a round end).
+  useScreenWakeLock(view.loaded && view.phase === 'playing' && !isPaused);
 
   // Start on the round result continues, like its focused main button. It
   // waits for the dialog itself (not the hold before it) and, like a click,
@@ -693,6 +715,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
       })}
       <GameTopControls
         isPaused={isPaused}
+        touch={touchMode}
         locked={isPaused && !showControlsGuide}
         showHud={showHud}
         onPauseToggle={showControlsGuide ? handleDismissControlsGuide : handleTogglePause}
@@ -734,7 +757,9 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
               <CloseIcon fontSize="small" />
             </ControlsDismissButton>
           </ControlsGuideHeader>
-          <ControlsTable rows={controlRows} label="controls" />
+          {touchMode
+            ? <TouchGuide leftHanded={leftHanded} />
+            : <ControlsTable rows={controlRows} label="controls" />}
         </ControlsGuide>
       )}
       {isPaused && menuState && !showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
@@ -750,7 +775,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
             <PauseMenuCard>
               <PauseMenuTitle id="pause-menu-title">
                 <strong>Paused</strong>
-                <span>Esc or Start resumes</span>
+                <span>{touchMode ? 'Tap Resume to play on' : 'Esc or Start resumes'}</span>
               </PauseMenuTitle>
               <PauseMenuActions>
                 <PauseMenuButton
@@ -795,7 +820,9 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
                 </PauseMenuButton>
               </PauseMenuActions>
               <PauseMissionDetails state={menuState} />
-              <ControlsTable rows={controlRows} label="controls" />
+              {touchMode
+                ? <TouchGuide leftHanded={leftHanded} />
+                : <ControlsTable rows={controlRows} label="controls" />}
               <PlayerKits aria-label="shinobi kits">
                 {playerKits.map((kit) => (
                   <li key={kit.slot}>
@@ -815,6 +842,14 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
             </PauseMenuCard>
           </PauseOverlay>
         </FocusTrap>
+      )}
+      {touchMode && touchSlot !== null && touchKeys && (
+        <TouchControls
+          store={store}
+          slot={touchSlot}
+          keys={touchKeys}
+          enabled={!padMenuActive}
+        />
       )}
       <MemoMatchConfirmDialog
         kind={pendingConfirm}

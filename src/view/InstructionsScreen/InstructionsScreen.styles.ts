@@ -17,7 +17,9 @@ export const InstructionsBackground = styled('div')({
   flexDirection: 'column',
   justifyContent: 'center',
   alignItems: 'center',
-  padding: 24,
+  // Clear of notches and the home indicator (viewport-fit=cover).
+  padding: 'max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) '
+    + 'max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left))',
   overflow: 'hidden',
   backgroundColor: 'var(--anime-paper)',
   backgroundImage: 'radial-gradient(rgba(33,29,26,0.12) 0.7px, transparent 0.7px)',

@@ -13,6 +13,9 @@ import {
   SHARED_SCREEN_MAX_DELTA_X,
   SHARED_SCREEN_MAX_DELTA_Y,
 } from '../../../engine/players';
+import {
+  HudDevice, NO_HUD_DEVICE, touchBands, touchOrientation,
+} from '../../../input/touchLayout';
 
 export const CAMERA_HEIGHT = 13.2;
 export const CAMERA_BACK = 9.6;
@@ -101,6 +104,18 @@ export type ScreenInsets = { top: number; bottom: number; side: number };
  *   the sudden-death banner) 12z above the edge.
  * - short: match bar (12z + 57z) and controls (18-76 px) on top; cards 80z
  *   tall, 12z from the bottom: 298-378 px on an 844x390 screen.
+ *
+ * With touch controls up (`device.touch`, input/touchLayout) the bands make
+ * room for them as well:
+ * - portrait: a bottom band as tall as the controls; on phones the one-line
+ *   strip moves up onto it (GameHUD.styles), so it stacks on top.
+ * - landscape: the controls fill both bottom corners, so the side bands
+ *   take their width. Short screens move the cards up beside the match bar,
+ *   P1 (and P3, or the mission line) over the pad and P2 over the bomb
+ *   cluster, so the side bands take the wider of a card and the controls,
+ *   and the top band shrinks to the match bar.
+ * The safe-area insets (notches, the home indicator) add to every band:
+ * the HUD and the controls are inset by them.
  */
 const ROW_CARD_PX = 80;
 const PHONE_CARD_PX = 99;
@@ -110,36 +125,67 @@ const SHORT_STRIP_PX = 69;
 const EDGE_PX = 12;
 const AIR_PX = 8;
 
+/** Player card width at 100% HUD (GameHUD.styles PlayerCardPaper): narrower up to 900 px. */
+const CARD_WIDTH_PX = 248;
+const NARROW_CARD_WIDTH_PX = 206;
+/** The furthest a band may reach into the screen with touch controls up. */
+const TOUCH_BAND_CAP = 0.45;
+
 function belowControls(zoom: number): number {
   return Math.max(78 * zoom, 84);
 }
 
-export function hudInsets(hudScale: number, width: number, height: number): ScreenInsets {
+export function hudInsets(
+  hudScale: number,
+  width: number,
+  height: number,
+  device: HudDevice = NO_HUD_DEVICE
+): ScreenInsets {
   const zoom = hudZoom(hudScale, width, height);
   const h = Math.max(height, 1);
+  const w = Math.max(width, 1);
   const layout = hudLayout(width, height);
+  const { safe } = device;
+  const touch = device.touch ? touchBands(device.touch, touchOrientation(width, height)) : null;
+  // The notch side: the HUD is inset by the wider of the two.
+  const safeSidePx = Math.max(safe.left, safe.right);
+  // Touch side bands (landscape): the controls plus air, from the safe edge.
+  const touchSidePx = touch && touch.side > 0 ? touch.side + AIR_PX : 0;
+  const side = Math.min(TOUCH_BAND_CAP, Math.max(0.03, (safeSidePx + touchSidePx) / w));
   if (layout === 'phone') {
     // Cards wrap only above 100%; interpolate to the measured 125% worst case.
     const cardPx = PHONE_CARD_PX
       + Math.max(0, Math.min(1, (zoom - 1) / 0.25)) * (PHONE_WRAPPED_CARD_PX - PHONE_CARD_PX);
-    const cardsBottomPx = belowControls(zoom) + cardPx * zoom + AIR_PX;
-    const linePx = (EDGE_PX + PHONE_LINE_PX) * zoom + AIR_PX;
+    const cardsBottomPx = safe.top + belowControls(zoom) + cardPx * zoom + AIR_PX;
+    // The one-line strip sits on top of a touch bottom band.
+    const linePx = safe.bottom + (touch?.bottom ?? 0) + (EDGE_PX + PHONE_LINE_PX) * zoom + AIR_PX;
     return {
       top: Math.min(0.45, cardsBottomPx / h),
-      bottom: Math.min(0.2, linePx / h),
-      side: 0.03,
+      bottom: Math.min(touch ? TOUCH_BAND_CAP : 0.2, linePx / h),
+      side,
     };
   }
   if (layout === 'short') {
-    const topPx = Math.max(SHORT_STRIP_PX * zoom, 76) + AIR_PX;
-    const cardsTopPx = (EDGE_PX + ROW_CARD_PX) * zoom + AIR_PX;
-    return { top: Math.min(0.3, topPx / h), bottom: Math.min(0.3, cardsTopPx / h), side: 0.03 };
+    const topPx = safe.top + Math.max(SHORT_STRIP_PX * zoom, 76) + AIR_PX;
+    if (touch) {
+      // The cards stand in the side columns, over the controls.
+      const cardPx = (width <= 900 ? NARROW_CARD_WIDTH_PX : CARD_WIDTH_PX) * zoom;
+      const columnPx = safeSidePx + Math.max(EDGE_PX + cardPx, touch.side) + AIR_PX;
+      return {
+        top: Math.min(0.3, topPx / h),
+        bottom: Math.max(0.03, (safe.bottom + EDGE_PX) / h),
+        side: Math.min(TOUCH_BAND_CAP, columnPx / w),
+      };
+    }
+    const cardsTopPx = safe.bottom + (EDGE_PX + ROW_CARD_PX) * zoom + AIR_PX;
+    return { top: Math.min(0.3, topPx / h), bottom: Math.min(0.3, cardsTopPx / h), side };
   }
-  const cardsBottomPx = belowControls(zoom) + ROW_CARD_PX * zoom + AIR_PX;
+  const cardsBottomPx = safe.top + belowControls(zoom) + ROW_CARD_PX * zoom + AIR_PX;
+  const touchBottomPx = touch && touch.bottom > 0 ? touch.bottom + AIR_PX : 0;
   return {
     top: Math.min(0.45, Math.max(0.18, cardsBottomPx / h)),
-    bottom: 0.03,
-    side: 0.03,
+    bottom: Math.min(TOUCH_BAND_CAP, Math.max(0.03, (safe.bottom + touchBottomPx) / h)),
+    side,
   };
 }
 

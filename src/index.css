@@ -75,6 +75,34 @@
   box-sizing: border-box;
 }
 
+/*
+ * Touch screens (input/touchMode sets data-touch="on"): every menu control
+ * is at least 44 x 44 px (Apple HIG, WCAG 2.5.5). A switch's target is its
+ * whole labelled row.
+ */
+:root[data-touch="on"] .MuiButton-root,
+:root[data-touch="on"] .MuiToggleButton-root,
+:root[data-touch="on"] .MuiFormControlLabel-root {
+  min-height: 44px;
+}
+
+:root[data-touch="on"] .MuiIconButton-root {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+:root[data-touch="on"] .MuiSlider-root {
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
+/* Dialogs stay clear of notches and the home indicator (viewport-fit=cover). */
+.MuiDialog-container {
+  padding:
+    env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
 html,
 body,
 #root {

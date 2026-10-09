@@ -1,3 +1,4 @@
+import { HudDevice, NO_HUD_DEVICE } from '../../../input/touchLayout';
 import { ScreenInsets, hudInsets } from './cameraFraming';
 
 /**
@@ -18,11 +19,12 @@ export function canvasHudInsets(
   hudScale: number,
   canvasWidth: number,
   canvasHeight: number,
-  framePx: number = ARENA_FRAME_PX
+  framePx: number = ARENA_FRAME_PX,
+  device: HudDevice = NO_HUD_DEVICE
 ): ScreenInsets {
   const viewWidth = canvasWidth + 2 * framePx;
   const viewHeight = canvasHeight + 2 * framePx;
-  const view = hudInsets(hudScale, viewWidth, viewHeight);
+  const view = hudInsets(hudScale, viewWidth, viewHeight, device);
   const toCanvas = (fraction: number, viewPx: number, canvasPx: number) => (
     Math.max(0, (fraction * viewPx - framePx) / Math.max(canvasPx, 1))
   );

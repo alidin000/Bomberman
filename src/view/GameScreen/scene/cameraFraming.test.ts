@@ -13,6 +13,9 @@ import {
   hudZoom,
   maxFramingFor,
 } from './cameraFraming';
+import {
+  HudDevice, NO_HUD_DEVICE, NO_SAFE_AREA, TouchSize, touchLayout,
+} from '../../../input/touchLayout';
 
 // Place a real three.js camera the way CameraRig does and project world
 // points, so the framing maths is checked against the renderer's projection.
@@ -31,13 +34,18 @@ function toScreen(camera: THREE.Camera, x: number, h: number, z: number) {
 
 // Players' cells in world units (1 cell = 1 unit); returns where the camera
 // aims and how far it zooms, exactly as CameraRig derives them.
-function frame(players: { x: number; y: number }[], view: [number, number], hudScale = 100) {
+function frame(
+  players: { x: number; y: number }[],
+  view: [number, number],
+  hudScale = 100,
+  device: HudDevice = NO_HUD_DEVICE
+) {
   const aspect = view[0] / view[1];
   const xs = players.map((p) => p.x);
   const ys = players.map((p) => p.y);
   const halfWidth = players.length > 1 ? (Math.max(...xs) - Math.min(...xs)) / 2 : 0;
   const halfDepth = players.length > 1 ? (Math.max(...ys) - Math.min(...ys)) / 2 : 0;
-  const insets = hudInsets(hudScale, view[0], view[1]);
+  const insets = hudInsets(hudScale, view[0], view[1], device);
   const maxFraming = maxFramingFor(aspect, insets);
   const scale = framingScaleFor(halfWidth, halfDepth, aspect, insets, maxFraming);
   const shift = groupShift(scale, halfWidth, halfDepth, insets);
@@ -290,5 +298,158 @@ describe('camera framing on compact layouts', () => {
       const leftEdge = toScreen(camera, 10 - 5.5, 0, 10 + FRAME_MARGIN.bottom);
       expect(leftEdge.x).toBeGreaterThanOrEqual(insets.side - 0.002);
     });
+  });
+});
+
+// The HUD with the touch controls up, measured in Chromium with touch
+// emulation (p6work/meas.cjs) at 100% HUD: the match bar, the top controls,
+// the union of the cards (three players, P2/P3 CPU, best of 5), the
+// campaign's mission line, then the bomb, ultimate and pad ring as drawn at
+// the medium size. Portrait phones keep the cards on top and lift the line
+// onto the controls; short landscape screens stand the cards in the side
+// columns (P1 and P3 left, P2 right) and the line under P1's card.
+const MEASURED_TOUCH_HUD: Record<string, Rect[]> = {
+  '390x844': [
+    [12, 12, 76, 66], [156, 18, 372, 78], [12, 84, 378, 183], [12, 601, 378, 644],
+    [278, 732, 374, 828], [194, 744, 266, 816], [24, 688, 156, 820],
+  ],
+  '360x780': [
+    [12, 12, 76, 66], [126, 18, 342, 78], [12, 84, 348, 183], [12, 537, 348, 580],
+    [248, 668, 344, 764], [164, 680, 236, 752], [24, 624, 156, 756],
+  ],
+  '844x390': [
+    [194, 12, 554, 69], [610, 18, 826, 78], [12, 84, 218, 252], [626, 84, 832, 164],
+    [12, 172, 218, 215], [724, 274, 820, 370], [640, 286, 712, 358], [24, 238, 156, 370],
+  ],
+  '932x430': [
+    [282, 12, 642, 69], [698, 18, 914, 78], [12, 84, 260, 252], [672, 84, 920, 164],
+    [12, 172, 218, 215], [812, 314, 908, 410], [728, 326, 800, 398], [24, 278, 156, 410],
+  ],
+  '768x1024': [
+    [118, 12, 478, 69], [534, 18, 750, 78], [12, 84, 756, 164],
+    [656, 912, 752, 1008], [572, 924, 644, 996], [24, 868, 156, 1000],
+  ],
+  '1024x768': [
+    [332, 12, 692, 69], [790, 18, 1006, 78], [12, 84, 1012, 164],
+    [904, 652, 1000, 748], [820, 664, 892, 736], [24, 616, 156, 748],
+  ],
+};
+
+// Every control the layout can draw at `size`, detonate and cover included
+// (they come and go with pickups), and the pad ring at rest, as squares.
+function touchRects(view: [number, number], size: TouchSize, leftHanded = false): Rect[] {
+  const layout = touchLayout(view[0], view[1], size, leftHanded);
+  return [...Object.values(layout.buttons), {
+    x: layout.pad.x, y: layout.pad.y, size: layout.pad.ring,
+  }].map((circle) => [
+    circle.x - circle.size / 2,
+    circle.y - circle.size / 2,
+    circle.x + circle.size / 2,
+    circle.y + circle.size / 2,
+  ]);
+}
+
+// Deep boxes as well: on a portrait phone a column of players is what
+// reaches down into the bottom band.
+const TOUCH_SPREADS: [string, Cell[]][] = [
+  ...SPREADS,
+  ['two players 8 deep', [{ x: 7, y: 1 }, { x: 7, y: 9 }]],
+  ['two players escaping 12 deep', [{ x: 7, y: 1 }, { x: 8, y: 13 }]],
+  ['three players in an L, 12x8', [{ x: 1, y: 1 }, { x: 1, y: 9 }, { x: 13, y: 9 }]],
+];
+
+describe('camera framing with the touch controls up', () => {
+  const sizes: TouchSize[] = ['small', 'medium', 'large'];
+  type TouchCase = [string, TouchSize, string, Cell[]];
+  const cases = Object.keys(MEASURED_TOUCH_HUD).flatMap((name) => sizes.flatMap(
+    (size) => TOUCH_SPREADS.map(([label, players]): TouchCase => [name, size, label, players])
+  ));
+  const title = 'at %s with %s controls keeps %s clear of them and the HUD';
+  it.each(cases)(title, (name, size, _label, players) => {
+    const view = name.split('x').map(Number) as [number, number];
+    const device: HudDevice = { touch: size, safe: NO_SAFE_AREA };
+    [false, true].forEach((leftHanded) => {
+      const { camera } = frame(players, view, 100, device);
+      const covered = [...MEASURED_TOUCH_HUD[name], ...touchRects(view, size, leftHanded)];
+      players.forEach((cell) => {
+        const box = spriteBox(camera, view, cell);
+        expect(box[0]).toBeGreaterThanOrEqual(0);
+        expect(box[1]).toBeGreaterThanOrEqual(0);
+        expect(box[2]).toBeLessThanOrEqual(view[0]);
+        expect(box[3]).toBeLessThanOrEqual(view[1]);
+        covered.forEach((rect) => expect(overlaps(box, rect)).toBe(false));
+      });
+    });
+  });
+
+  // The same at 125% HUD, where the cards grow and wrap.
+  const large: Record<string, Rect[]> = {
+    '390x844': [
+      [15, 15, 81, 83], [156, 18, 372, 78], [15, 98, 375, 266], [15, 589, 375, 641],
+      [278, 732, 374, 828], [194, 744, 266, 816], [24, 688, 156, 820],
+    ],
+    '844x390': [
+      [104, 15, 554, 86], [610, 18, 826, 78], [15, 98, 273, 306], [572, 98, 829, 197],
+      [15, 208, 273, 260], [724, 274, 820, 370], [640, 286, 712, 358], [24, 238, 156, 370],
+    ],
+  };
+  const largeCases = Object.keys(large).flatMap((name) => TOUCH_SPREADS.map(
+    ([label, players]) => [name, label, players] as [string, string, Cell[]]
+  ));
+  const largeTitle = 'at %s with a 125 percent HUD keeps %s clear of the controls and the HUD';
+  it.each(largeCases)(largeTitle, (name, _label, players) => {
+    const view = name.split('x').map(Number) as [number, number];
+    const { camera } = frame(players, view, 125, { touch: 'medium', safe: NO_SAFE_AREA });
+    players.forEach((cell) => {
+      const box = spriteBox(camera, view, cell);
+      [...large[name], ...touchRects(view, 'medium')].forEach((rect) => {
+        expect(overlaps(box, rect)).toBe(false);
+      });
+    });
+  });
+
+  it('draws the controls exactly where the camera keeps players out', () => {
+    // The medium layout is what Chromium drew (MEASURED_TOUCH_HUD); a band
+    // that ended above the controls would let a player under them.
+    [[390, 844], [844, 390]].forEach(([width, height]) => {
+      const measured = MEASURED_TOUCH_HUD[`${width}x${height}`].slice(-3);
+      const drawn = touchRects([width, height], 'medium');
+      [drawn[0], drawn[1], drawn[4]].forEach((rect, index) => {
+        rect.forEach((edge, side) => expect(edge).toBeCloseTo(measured[index][side], 0));
+      });
+    });
+  });
+
+  it('gives a lone campaign player the band between the cards and the controls', () => {
+    const view: [number, number] = [390, 844];
+    const device: HudDevice = { touch: 'medium', safe: NO_SAFE_AREA };
+    const insets = hudInsets(100, 390, 844, device);
+    // Above the lifted mission line (601 px), below the cards (183 px).
+    expect((1 - insets.bottom) * 844).toBeLessThanOrEqual(601);
+    expect(insets.top * 844).toBeGreaterThanOrEqual(183);
+    const { camera } = frame([{ x: 10, y: 10 }], view, 100, device);
+    expect(toScreen(camera, 10, 0, 10).x).toBeCloseTo(0.5, 5);
+    expect(pxPerCell(camera, view, { x: 10, y: 10 })).toBeGreaterThan(24);
+  });
+
+  it('adds the notch and the home indicator to the bands', () => {
+    const safe = {
+      top: 47, right: 0, bottom: 34, left: 0,
+    };
+    const plain = hudInsets(100, 390, 844, { touch: 'medium', safe: NO_SAFE_AREA });
+    const notched = hudInsets(100, 390, 844, { touch: 'medium', safe });
+    expect((notched.top - plain.top) * 844).toBeCloseTo(47, 3);
+    expect((notched.bottom - plain.bottom) * 844).toBeCloseTo(34, 3);
+    // Landscape: the notch side widens both side bands.
+    const wide = hudInsets(100, 844, 390, {
+      touch: 'medium',
+      safe: {
+        top: 0, right: 47, bottom: 21, left: 47,
+      },
+    });
+    const flat = hudInsets(100, 844, 390, { touch: 'medium', safe: NO_SAFE_AREA });
+    expect((wide.side - flat.side) * 844).toBeCloseTo(47, 3);
+    // Without touch controls or a notch the bands are as measured before.
+    expect(hudInsets(100, 390, 844, NO_HUD_DEVICE)).toEqual(hudInsets(100, 390, 844));
   });
 });

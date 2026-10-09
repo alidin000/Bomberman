@@ -20,6 +20,7 @@ import {
 } from './SettingsScreen.styles';
 import { SettingsScreenProps } from '../../../constants/props';
 import { MatchConfirmDialog, MatchConfirmKind } from './MatchConfirmDialog';
+import { TouchSettings } from './TouchSettings';
 
 // `onClose` goes back to wherever settings were opened from (the pause menu
 // or live play); `onResume` always gives play back.
@@ -185,6 +186,8 @@ const SettingsScreen: React.FC<Props> = (
             />
           </PreferenceSlider>
         </PreferenceSection>
+        {/* Touch screens only. */}
+        <TouchSettings />
       </DialogContent>
       <MatchConfirmDialog
         kind={confirmKind}

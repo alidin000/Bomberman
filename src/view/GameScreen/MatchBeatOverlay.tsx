@@ -4,6 +4,7 @@ import {
 } from './MatchBeatOverlay.styles';
 import { hudInsets, hudLayout } from './scene/cameraFraming';
 import { useViewportSize } from './useViewportSize';
+import { useHudDevice } from '../../input/touchMode';
 
 type MatchBeatOverlayProps = {
   countdown: string;
@@ -31,8 +32,10 @@ export const MatchBeatOverlay = React.memo(({
   countdown, go, line, roundOver, hudScale, campaign,
 }: MatchBeatOverlayProps) => {
   const { width, height } = useViewportSize();
+  // Touch controls and the safe area move the bands (and so the plates).
+  const device = useHudDevice();
   if (!countdown && !go && !roundOver) return null;
-  const insets = hudInsets(hudScale, width, height);
+  const insets = hudInsets(hudScale, width, height, device);
   let place: React.CSSProperties = { top: Math.round(insets.top * height) + 6 };
   if (hudLayout(width, height) === 'short') place = { top: 8 };
   else if (campaign) place = { bottom: Math.round(insets.bottom * height) + 8 };

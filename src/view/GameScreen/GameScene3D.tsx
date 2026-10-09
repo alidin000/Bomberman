@@ -102,9 +102,10 @@ import {
 } from './scene/objectiveModels';
 import { BossFigure } from './scene/BossFigure';
 import { BombClockState, createBombClock, refreshBombClock } from './scene/bombClock';
-import { canvasHudInsets } from './scene/canvasInsets';
+import { ARENA_FRAME_PX, canvasHudInsets } from './scene/canvasInsets';
 import { PuzzleMarkers } from './scene/PuzzleMarkers';
 import { DojoMarkers } from './scene/DojoMarkers';
+import { useHudDevice } from '../../input/touchMode';
 import {
   HighContrastOverride, highContrastPalette, useHighContrastMaterials,
 } from './scene/highContrast';
@@ -2750,14 +2751,22 @@ function CameraRig({
   const lookTargetRef = useRef(new THREE.Vector3());
   const framingRef = useRef<number | null>(null);
   const shakeRef = useRef(0);
+  // The touch controls and the safe area widen the HUD bands.
+  const device = useHudDevice();
   // The HUD bands for this layout, and how far out this screen's shape
   // needs to zoom for the widest spread players can reach. The HUD is laid
   // out on the viewport; the canvas sits inside the arena frame.
   const frame = useMemo(() => {
-    const insets = canvasHudInsets(preferences.hudScale, size.width, size.height);
+    const insets = canvasHudInsets(
+      preferences.hudScale,
+      size.width,
+      size.height,
+      ARENA_FRAME_PX,
+      device
+    );
     const aspect = size.width > 0 && size.height > 0 ? size.width / size.height : 16 / 9;
     return { insets, aspect, maxFraming: maxFramingFor(aspect, insets) };
-  }, [preferences.hudScale, size.width, size.height]);
+  }, [preferences.hudScale, size.width, size.height, device]);
 
   useFrame(({ clock }, delta) => {
     const fallbackCenter = getMapWorldCenter(

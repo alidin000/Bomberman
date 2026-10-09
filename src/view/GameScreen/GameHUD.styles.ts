@@ -24,15 +24,21 @@ const CONTROLS_CLEARANCE = '290px / var(--hud-zoom, 1)';
 const BELOW_CONTROLS = 'max(78px, 84px / var(--hud-zoom, 1))';
 const PHONE = '@media (max-width: 640px)';
 const SHORT = '@media (max-height: 560px) and (min-width: 641px)';
+// Touch controls are up (input/touchMode): --touch-bottom is their band in
+// portrait, --touch-side their columns in landscape, --touch-corner their
+// height (screen px, from the safe-area edges). hudInsets mirrors these.
+const TOUCH = 'html[data-touch="on"] &';
+const IN_HUD_PX = (variable: string) => `var(${variable}, 0px) / var(--hud-zoom, 1)`;
 
 export const HudRoot = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'hudZoom',
 })<{ hudZoom: number }>(({ hudZoom }) => ({
   position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
+  // Inside the safe area (viewport-fit=cover). The zoom scales these too.
+  top: 'calc(env(safe-area-inset-top, 0px) / var(--hud-zoom, 1))',
+  left: 'calc(env(safe-area-inset-left, 0px) / var(--hud-zoom, 1))',
+  right: 'calc(env(safe-area-inset-right, 0px) / var(--hud-zoom, 1))',
+  bottom: 'calc(env(safe-area-inset-bottom, 0px) / var(--hud-zoom, 1))',
   zIndex: 10,
   pointerEvents: 'none',
   zoom: hudZoom,
@@ -203,10 +209,24 @@ const BOTTOM_LINE = {
   [PHONE]: {
     left: 12,
     right: 12,
+    // On top of the touch band, between the touch columns.
+    [TOUCH]: {
+      bottom: `calc(12px + ${IN_HUD_PX('--touch-bottom')})`,
+      left: `calc(12px + ${IN_HUD_PX('--touch-side')})`,
+      right: `calc(12px + ${IN_HUD_PX('--touch-side')})`,
+    },
   },
   [SHORT]: {
     right: 12,
     width: 'min(380px, 100% - 260px)',
+    // Under P1's card in the left column (PlayerCards), clear of the controls.
+    [TOUCH]: {
+      top: `calc(${BELOW_CONTROLS} + 88px)`,
+      bottom: 'auto',
+      left: 12,
+      right: 'auto',
+      width: 206,
+    },
   },
 };
 
@@ -318,6 +338,18 @@ export const PlayerCards = styled(Box)({
   [SHORT]: {
     top: 'auto',
     bottom: 12,
+    // With touch controls in the bottom corners the cards stand above them:
+    // P1 (and P3 under it) on the left, P2 on the right under the top
+    // controls, and the middle stays open for the players.
+    [TOUCH]: {
+      top: BELOW_CONTROLS,
+      bottom: 'auto',
+      display: 'grid',
+      gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+      gap: 8,
+      '& > :nth-of-type(2)': { gridColumn: 3, gridRow: 1 },
+      '& > :nth-of-type(3)': { gridColumn: 1, gridRow: 2 },
+    },
   },
 });
 
@@ -657,6 +689,10 @@ export const HudRight = styled(Box)({
   // (a 768 px tablet at 125% HUD would otherwise cover it).
   width: 'min(300px, 50% - 80px)',
   maxHeight: 'calc(100% - 96px / var(--hud-zoom, 1))',
+  // Stops above the touch bomb cluster.
+  [TOUCH]: {
+    maxHeight: `calc(100% - 104px / var(--hud-zoom, 1) - ${IN_HUD_PX('--touch-corner')})`,
+  },
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',

@@ -7,6 +7,7 @@ import { BrowserRouter, useNavigate, NavigateFunction } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import theme from '../../theme/InstructionsTheme';
 import { WelcomeScreen } from './WelcomeScreen';
+import { setTouchMode } from '../../input/touchMode';
 
 vi.mock('react-router-dom', async () => {
   const originalModule = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -37,6 +38,30 @@ describe('WelcomeScreen', () => {
       </BrowserRouter>
     );
   };
+
+  it('puts Battle a CPU first on a touch screen: a phone is one player', async () => {
+    setTouchMode(true);
+    try {
+      setup();
+      const cpu = screen.getByRole('button', { name: /battle a cpu/i });
+      const quick = screen.getByRole('button', { name: /quick play/i });
+      expect(cpu).toHaveFocus();
+      // First in reading and Tab order, and the summary describes it.
+      const order = screen.getAllByRole('button');
+      expect(order.indexOf(cpu)).toBeLessThan(order.indexOf(quick));
+      expect(cpu).toHaveAccessibleDescription(/Deidara vs Naruto \(CPU Normal\)/);
+      expect(screen.getByText(/Touch controls: slide a thumb low on the left/)).toBeInTheDocument();
+
+      fireEvent.click(cpu);
+      await waitFor(() => {
+        expect(JSON.parse(localStorage.getItem('gameSetup') as string)).toMatchObject({
+          mode: 'local', controllers: ['human', 'cpu-normal'],
+        });
+      });
+    } finally {
+      setTouchMode(false);
+    }
+  });
 
   it('should display the game title', () => {
     setup();

@@ -16,7 +16,9 @@ export const WelcomeContainer = styled(Box)({
   alignItems: 'center',
   justifyContent: 'center',
   overflow: 'hidden',
-  padding: 20,
+  // Clear of notches and the home indicator (viewport-fit=cover).
+  padding: 'max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) '
+    + 'max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left))',
   color: '#f8f3e8',
   backgroundColor: '#18292f',
   '&::before': {

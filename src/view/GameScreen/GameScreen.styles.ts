@@ -90,8 +90,8 @@ export const GameSceneContainer = styled.div({
 
 export const TopControls = styled.div({
   position: 'absolute',
-  top: 18,
-  right: 18,
+  top: 'calc(18px + env(safe-area-inset-top, 0px))',
+  right: 'calc(18px + env(safe-area-inset-right, 0px))',
   zIndex: 20,
   display: 'flex',
   flexWrap: 'wrap',
@@ -121,6 +121,15 @@ export const GameBackground = styled(StyledBackground)({
   overflow: 'hidden',
   background: 'var(--anime-night)',
   boxShadow: `inset 0 0 0 ${ARENA_FRAME_PX}px rgba(239,227,196,0.4)`,
+  // The game surface owns its touches: no pan, pinch or double-tap zoom, and
+  // no pull-to-refresh or scroll chaining. The menus keep browser zoom; the
+  // pause menu scrolls as its own container.
+  touchAction: 'none',
+  overscrollBehavior: 'none',
+  // A held thumb selects no HUD text and opens no callout.
+  userSelect: 'none',
+  WebkitUserSelect: 'none',
+  WebkitTouchCallout: 'none',
 });
 
 export const ControlButton = styled(IconButton)({
@@ -223,9 +232,13 @@ export const PauseMenuButton = styled(Button)({
 
 export const ControlsGuide = styled.aside({
   position: 'absolute',
-  left: 16,
-  bottom: 16,
+  left: 'calc(16px + env(safe-area-inset-left, 0px))',
+  bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
   zIndex: 16,
+  // Over the touch controls (18), which take no presses while it is up.
+  'html[data-touch="on"] &': {
+    zIndex: 19,
+  },
   width: 'min(390px, calc(100vw - 32px))',
   display: 'grid',
   gap: 10,
@@ -399,9 +412,18 @@ export const FeedbackCaption = styled.div({
   // phones keep a one-line mission or sudden-death strip there.
   '@media (max-height: 560px) and (min-width: 641px)': {
     bottom: 104,
+    // The cards moved up beside the match bar; the controls hold the corners.
+    'html[data-touch="on"] &': {
+      bottom: 'calc(28px + env(safe-area-inset-bottom, 0px))',
+      maxWidth: 'calc(100vw - 40px - 2 * var(--touch-side, 0px))',
+    },
   },
   '@media (max-width: 640px)': {
     bottom: 66,
+    // Above the touch band and the one-line strip on it.
+    'html[data-touch="on"] &': {
+      bottom: 'calc(66px + var(--touch-bottom, 0px) + env(safe-area-inset-bottom, 0px))',
+    },
   },
 });
 

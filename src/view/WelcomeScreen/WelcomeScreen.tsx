@@ -29,6 +29,15 @@ import {
 } from '../ConfigScreen/launchGame';
 import { moveFocusWithArrows } from '../ConfigScreen/menuNavigation';
 import { DojoSuggestion } from '../DojoScreen/DojoSuggestion';
+import { useTouchMode } from '../../input/touchMode';
+import { useTouchPreferences } from '../../input/touchPreferences';
+
+type Door = {
+  id: 'quick' | 'cpu';
+  label: string;
+  icon: React.ReactNode;
+  plan: QuickPlayPlan;
+};
 
 export const WelcomeScreen = () => {
   const navigate = useNavigate();
@@ -36,6 +45,17 @@ export const WelcomeScreen = () => {
   const quickPlay = useMemo(() => getQuickPlayPlan(storyProgress), [storyProgress]);
   const cpuBattle = useMemo(() => getCpuBattlePlan(storyProgress), [storyProgress]);
   const [launching, setLaunching] = useState(false);
+  // A phone is one player, so on a touch screen the CPU battle is the
+  // first door (focused, and the one the summary describes).
+  const touch = useTouchMode();
+  const { leftHanded } = useTouchPreferences();
+  const quickDoor: Door = {
+    id: 'quick', label: 'Quick Play', icon: <PlayArrowIcon />, plan: quickPlay,
+  };
+  const cpuDoor: Door = {
+    id: 'cpu', label: 'Battle a CPU', icon: <SmartToyOutlinedIcon />, plan: cpuBattle,
+  };
+  const [primary, secondary] = touch ? [cpuDoor, quickDoor] : [quickDoor, cpuDoor];
 
   // Both doors start a match straight away, the same way the Mission Deck does.
   const launch = async (plan: QuickPlayPlan) => {
@@ -69,10 +89,11 @@ export const WelcomeScreen = () => {
             {/* Two doors: the last setup again, or straight into a fight with a CPU. */}
             <QuickPlayDoors>
               <Button
+                key={primary.id}
                 variant="contained"
                 size="large"
-                startIcon={<PlayArrowIcon />}
-                onClick={() => launch(quickPlay)}
+                startIcon={primary.icon}
+                onClick={() => launch(primary.plan)}
                 disabled={launching}
                 disableFocusRipple
                 aria-describedby="quick-play-summary"
@@ -80,21 +101,28 @@ export const WelcomeScreen = () => {
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
               >
-                Quick Play
+                {primary.label}
               </Button>
               <Button
+                key={secondary.id}
                 variant="outlined"
                 size="large"
-                startIcon={<SmartToyOutlinedIcon />}
-                onClick={() => launch(cpuBattle)}
+                startIcon={secondary.icon}
+                onClick={() => launch(secondary.plan)}
                 disabled={launching}
                 disableFocusRipple
-                title={cpuBattle.summary}
+                title={secondary.plan.summary}
               >
-                Battle a CPU
+                {secondary.label}
               </Button>
             </QuickPlayDoors>
-            <QuickPlaySummary id="quick-play-summary">{quickPlay.summary}</QuickPlaySummary>
+            <QuickPlaySummary id="quick-play-summary">{primary.plan.summary}</QuickPlaySummary>
+            {touch && (
+              <QuickPlaySummary>
+                {`Touch controls: slide a thumb low on the ${leftHanded ? 'right' : 'left'} to move, `
+                  + `tap Bomb on the ${leftHanded ? 'left' : 'right'}.`}
+              </QuickPlaySummary>
+            )}
             <ActionButtons>
               <Button
                 variant="outlined"

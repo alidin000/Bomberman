@@ -2,6 +2,7 @@ import { KeyBindings } from '../constants/props';
 import {
   GamepadPoller, KeySink, PadMenuSink, PadSnapshot,
 } from './gamepad';
+import { notePadUse } from './touchMode';
 
 // One poll loop for every pad consumer: the match (pads press the bound
 // keys) and the menus (pads move focus and press buttons). Both read the
@@ -62,6 +63,9 @@ const sendKey: KeySink = (type, key) => {
 };
 
 const menuSink: PadMenuSink = (control, pressed, slot) => {
+  // Game presses arrive as key events, which put the touch controls away;
+  // a menu press does it here.
+  if (pressed) notePadUse();
   menu?.control(control, pressed, slot);
 };
 

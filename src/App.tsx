@@ -9,6 +9,7 @@ import { InstructionsScreen } from './view/InstructionsScreen/InstructionsScreen
 import { DojoScreen } from './view/DojoScreen/DojoScreen';
 import { GameSettingsProvider } from './contexts/GameSettingsContext';
 import { MenuPad } from './input/MenuPad';
+import { TouchMode } from './input/TouchMode';
 import {
   dojoRoomChunk,
   gameScreenChunk,
@@ -69,6 +70,8 @@ export function App() {
       <ThemeProvider theme={theme}>
         {/* Gamepads drive every screen's menus and dialogs. */}
         <MenuPad />
+        {/* Touch controls on touch screens, until a keyboard or pad is used. */}
+        <TouchMode />
         <Routes>
           <Route
             path="/"
