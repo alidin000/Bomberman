@@ -84,7 +84,11 @@ export function reachPuzzle(state: GameEngineState): GameEngineState {
   next.campaign!.objectives[0].targets!.forEach((target) => {
     next = tick(setPlayer(next, target), 0);
   });
-  next = calm(tick(next, 20000));
+  // Hold the defense through its scripted waves (40-60 s by stage and
+  // difficulty), clearing attackers so the seal holds.
+  for (let heldMs = 0; heldMs < 120000 && puzzleObjective(next).status !== 'active'; heldMs += 1000) {
+    next = calm(tick(next, 1000));
+  }
   if (puzzleObjective(next).status !== 'active') throw new Error('puzzle did not activate');
   return next;
 }

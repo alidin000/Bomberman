@@ -100,8 +100,10 @@ describe('campaign hazards and objectives', () => {
     const telegraphed = tick({ ...ready, hazards: [hazard(x!, y!, 2000)] });
     const struck = tick({ ...ready, hazards: [hazard(x!, y!, 300)] });
 
-    expect(defenseOf(telegraphed).structureHp).toBe(100);
-    expect(defenseOf(struck).structureHp).toBe(50);
+    // The wave script sets the seal's health; one struck hit costs 50 of it.
+    const full = defenseOf(ready).structureMaxHp!;
+    expect(defenseOf(telegraphed).structureHp).toBe(full);
+    expect(defenseOf(struck).structureHp).toBe(full - 50);
   });
 
   it('strikes an enemy hazard when its warning marker ends, not later', () => {

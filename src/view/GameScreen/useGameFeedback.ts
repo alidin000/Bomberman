@@ -9,6 +9,7 @@ import { getCharacterPowerTheme } from '../../content/characterPowerups';
 import { GamePreferences } from './gamePreferences';
 import { playerSlotLabel } from './playerSlots';
 import { composeCaption, knockoutCaption, SUDDEN_DEATH_LEAD_MS } from './matchCopy';
+import { waveCaption, waveCueSnapshot, WaveCueSnapshot } from './waveCopy';
 
 // Clock milestones worth a caption (and a screen-reader announcement, since
 // the clock itself is role="timer" and stays silent).
@@ -28,6 +29,8 @@ type FeedbackSnapshot = {
   bossName: string;
   // Versus only: time left on the round clock; null in the campaign.
   clockMs: number | null;
+  // Campaign defense waves: marks up, held, arrived.
+  wave: WaveCueSnapshot;
 };
 
 function snapshot(state: GameEngineState): FeedbackSnapshot {
@@ -50,6 +53,7 @@ function snapshot(state: GameEngineState): FeedbackSnapshot {
     bossPhase: state.boss?.phase ?? null,
     bossName: state.boss?.name ?? '',
     clockMs: isSuddenDeathMode(state) ? getRoundTimeRemainingMs(state) : null,
+    wave: waveCueSnapshot(state.campaign),
   };
 }
 
@@ -190,6 +194,12 @@ function useFeedbackCore(
     if (bossEnraged) {
       captions.push(`${current.bossName} enrages · phase ${current.bossPhase}`);
       if (audio && newExplosions === 0) playTone(audio, 64, 0.5, volume, 'sawtooth');
+    }
+    // A wave's spawn points are marked, or it waits at the cap.
+    const wave = waveCaption(previous.wave, current.wave, state.campaign);
+    if (wave) {
+      captions.push(wave);
+      if (audio && newExplosions === 0) playTone(audio, 392, 0.14, volume * 0.6, 'triangle');
     }
     if (bossHit) {
       captions.push('Boss hit');

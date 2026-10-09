@@ -318,7 +318,10 @@ describe('gameReducer', () => {
       });
       expect(state.campaign?.objectives[0].status).toBe('complete');
 
-      state = gameReducer(state, { type: 'TICK', deltaMs: 20000 })!;
+      // One tick as long as the seal (the wave script sets its length).
+      state = gameReducer(state, {
+        type: 'TICK', deltaMs: state.campaign!.objectives[1].durationMs!,
+      })!;
       expect(state.campaign?.objectives[1].status).toBe('complete');
 
       // The route puzzle (its own tests drive it on the real stage maps).
@@ -759,7 +762,10 @@ describe('gameReducer', () => {
     expect(state.campaign?.missionStep).toBe('defense');
     expect(state.boss).toBeNull();
 
-    state = gameReducer(state, { type: 'TICK', deltaMs: 20000 })!;
+    // One tick as long as the seal (the wave script sets its length).
+    state = gameReducer(state, {
+      type: 'TICK', deltaMs: state.campaign!.objectives[1].durationMs!,
+    })!;
 
     expect(state.campaign?.objectives[1].status).toBe('complete');
     // The watchfire lanterns come between the defense and Iruka's gate.

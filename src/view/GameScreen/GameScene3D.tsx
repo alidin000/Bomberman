@@ -59,6 +59,7 @@ import { PLAYER_TAG_SPRITES, PlayerTagSprite, playerTagKey } from './scene/playe
 import { playerSlotColor } from './playerSlots';
 import { isCpuSlot } from '../../ai/controllers';
 import { HazardTelegraphs } from './scene/HazardTelegraphs';
+import { WaveTelegraphs } from './scene/WaveTelegraphs';
 import { KoMarkers } from './scene/KoMarkers';
 import { useCueChips } from './scene/cueChips';
 import { createPlayerPose, samplePlayerCuePose } from './scene/playerCuePose';
@@ -3457,6 +3458,7 @@ function SceneContentBase({
           reducedMotion={preferences.reducedMotion}
         />
       )}
+      <WaveTelegraphs waves={state.campaign?.waves ?? null} readLive={readLiveState} motion={motion} />
       {getUpcomingPressureCells(state).map((cell, order) => (
         <PressureBlockWarningMemo
           key={`pressure-${cell.x}-${cell.y}`}

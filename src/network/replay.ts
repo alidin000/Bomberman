@@ -13,12 +13,13 @@ import { GameEngineState } from '../engine/types';
 // v5: multi-round matches end once a ninja has won most of the rounds.
 // v6: Ghost and Shield picked up on the map wear off like the others.
 // v7: this round's rule changes: a route puzzle objective between the defense
-// and the mini boss gate; training mode (Training Dojo rooms): room goals end
-// the round, preset charges, scripted patrol sentries, no crate drops and no
-// sudden death; campaign loadouts from the village hub (config.loadout) apply
-// at INIT, and a retry or restart drops the one-mission consumables; the
-// campaign boss's entrance freezes the arena for BOSS_INTRO_MS
-// (SKIP_BOSS_INTRO ends it early).
+// and the mini boss gate; scripted defense waves (wave enemies that reach the
+// seal hit it once and leave; the seal holds 300 HP during waves); training
+// mode (Training Dojo rooms): room goals end the round, preset charges,
+// scripted patrol sentries, no crate drops and no sudden death; campaign
+// loadouts from the village hub (config.loadout) apply at INIT, and a retry
+// or restart drops the one-mission consumables; the campaign boss's entrance
+// freezes the arena for BOSS_INTRO_MS (SKIP_BOSS_INTRO ends it early).
 export const REPLAY_VERSION = 7;
 
 export interface ReplayFrame {

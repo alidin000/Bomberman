@@ -15,6 +15,11 @@ import { hazardIsActive } from './bosses';
 import { getDifficulty, getMatchDifficulty } from './difficulty';
 import { FALL_NOTICE_TICKS, livesLabel } from './campaignLives';
 import { createPuzzleState, puzzleMessage, updatePuzzleObjective } from './campaignPuzzles';
+import {
+  advanceCampaignWaves,
+  createCampaignWaveState,
+  scheduleWaveDefense,
+} from './campaignWaves';
 
 const RESCUE_TOUCH_DISTANCE = 0.72;
 const MINI_BOSS_TOUCH_DISTANCE = 0.82;
@@ -277,7 +282,7 @@ export function createCampaignRuntimeState(
   if (!mission) return null;
   const difficulty = getMatchDifficulty(config);
 
-  const objectives: CampaignObjectiveState[] = mission.objectives.map((objective) => {
+  const missionObjectives: CampaignObjectiveState[] = mission.objectives.map((objective) => {
     const targets = objective.targets?.map((target) => ({
       ...target,
       rescued: false,
@@ -321,6 +326,15 @@ export function createCampaignRuntimeState(
       requires: objective.requires,
     };
   });
+  // Scripted defense waves set the defense's seal timer and structure health.
+  const waves = createCampaignWaveState(
+    mission.stageId,
+    missionObjectives,
+    difficulty.id,
+    getCampaignEvent(mission.stageId),
+    config.seed
+  );
+  const objectives = scheduleWaveDefense(missionObjectives, waves, mission.stageId, difficulty.id);
 
   const campaign: CampaignRuntimeState = {
     missionId: mission.id,
@@ -359,6 +373,7 @@ export function createCampaignRuntimeState(
     difficulty: difficulty.id,
     livesRemaining: difficulty.lives,
     livesTotal: difficulty.lives,
+    waves,
   };
 
   return {
@@ -528,9 +543,9 @@ function sameCampaignSummary(
     && sameStructures(previous.structures, next.structures);
 }
 
-export function advanceCampaignObjectives(
+function advanceObjectiveStates(
   state: GameEngineState,
-  deltaMs = 0
+  deltaMs: number
 ): GameEngineState {
   if (!state.campaign) return state;
 
@@ -626,4 +641,11 @@ export function advanceCampaignObjectives(
     ...workingState,
     campaign: nextCampaign,
   };
+}
+
+export function advanceCampaignObjectives(
+  state: GameEngineState,
+  deltaMs = 0
+): GameEngineState {
+  return advanceCampaignWaves(state, advanceObjectiveStates(state, deltaMs), deltaMs);
 }

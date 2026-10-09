@@ -223,7 +223,9 @@ describe('campaign lives', () => {
       abilityCooldown: 60000,
     };
     state = placePlayer({ ...state, monsters: [raider] }, 1, 1);
-    for (let elapsed = 0; elapsed < 1500; elapsed += 50) state = tick(state);
+    // A hit every 650 ms until the seal's health is gone.
+    const hits = Math.ceil(defense().structureMaxHp! / 50);
+    for (let elapsed = 0; elapsed < hits * 650 + 300; elapsed += 50) state = tick(state);
 
     expect(state.phase).toBe('playing');
     expect(state.campaign!.missionResult).toBe('in_progress');

@@ -15,6 +15,7 @@ import {
   CampaignPuzzleTuning,
   CampaignSpawnPointDefinition,
 } from '../content/campaignMissions';
+import { CampaignWaveEntryDefinition } from '../content/campaignWaves';
 import { EnemyAbilityKind, EnemyArchetype } from '../content/enemies';
 import { CampaignEventDefinition } from '../content/campaignEvents';
 import { StoryUpgradeId } from '../story/progress';
@@ -329,6 +330,50 @@ export interface CampaignRespawnPointState extends CampaignSpawnPointDefinition 
   spawnCount: number;
 }
 
+export interface CampaignWaveUnitPlan {
+  archetype: EnemyArchetype;
+  entryId: string;
+  // Set for the wave's captain: its title, shown as the enemy's name.
+  eliteLabel?: string;
+}
+
+export interface CampaignWavePlan {
+  id: string;
+  label: string;
+  // Quiet time before this wave arrives (after the previous one did).
+  breatherMs: number;
+  units: CampaignWaveUnitPlan[];
+  // The entries it uses, in first-use order: these are telegraphed.
+  entryIds: string[];
+}
+
+// Scripted defense waves (engine/campaignWaves.ts), resolved for the
+// difficulty, the village event and the match seed when the match starts.
+// Times are on the defense clock: ms since the defense objective began.
+export interface CampaignWaveRuntimeState {
+  scriptId: string;
+  objectiveId: CampaignObjectiveId;
+  entries: CampaignWaveEntryDefinition[];
+  waves: CampaignWavePlan[];
+  telegraphMs: number;
+  maxActive: number;
+  leashRadius: number;
+  eventNote?: string;
+  // How many waves of this seal run have arrived (a fallen seal restarts).
+  opened: number;
+  // When the next wave is due.
+  dueAtMs: number;
+  // Its spawn points are marked.
+  telegraphing: boolean;
+  // It is due, but waits until enough wave enemies are down (maxActive).
+  held: boolean;
+  // Wave enemies still alive.
+  activeMonsterIds: string[];
+  run: number;
+  // The defense ended: survivors were released to patrol.
+  finished: boolean;
+}
+
 export interface CampaignRuntimeState {
   missionId: CampaignMissionId;
   stageId: StageId;
@@ -358,6 +403,8 @@ export interface CampaignRuntimeState {
   // Shown instead of the objective hint until the given tick after a fall.
   fallNotice?: string;
   fallNoticeUntilTick?: number;
+  // Scripted waves for the defense objective; missing without a script.
+  waves?: CampaignWaveRuntimeState | null;
 }
 
 export type CellVisibility = 'hidden' | 'explored' | 'visible';

@@ -71,6 +71,8 @@ import {
   winsBySlot,
   winsNeeded,
 } from './matchCopy';
+import { WaveLineModel, waveLineModel, waveShortText } from './waveCopy';
+import { WaveLine } from './WaveLine';
 
 const CHARACTER_POSITIONS: Record<CharacterId, string> = {
   deidara: '0% 0%',
@@ -506,6 +508,7 @@ type CampaignModel = {
     detail: string;
   }[];
   patrols: { name: string; kind: MonsterKind; count: number }[];
+  wave: WaveLineModel | null;
 };
 
 function toPatrols(state: GameEngineState): CampaignModel['patrols'] {
@@ -557,6 +560,7 @@ function toCampaignModel(
       detail: formatObjectiveDetail(objective),
     })),
     patrols: toPatrols(state),
+    wave: waveLineModel(campaign),
   };
 }
 
@@ -602,6 +606,7 @@ const CampaignSummary = React.memo(({ model }: { model: CampaignModel }) => (
         );
       })}
     </ObjectiveList>
+    {model.wave && <WaveLine model={model.wave} />}
     <IntelLine>
       <span>
         <strong>{model.stageReputation}</strong>
@@ -663,9 +668,10 @@ function toMissionLineModel(state: GameEngineState): MissionLineModel | null {
       lives,
     };
   }
+  const wave = active.kind === 'defense' ? waveLineModel(campaign) : null;
   return {
     label: active.label,
-    progressText: formatObjectiveShort(active),
+    progressText: wave ? waveShortText(wave) : formatObjectiveShort(active),
     progress: getObjectiveProgress(active),
     boss: false,
     lives,
