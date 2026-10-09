@@ -86,7 +86,8 @@ flowchart TD
   - Off-grid landmarks reuse the same program and stay outside every legal camera framing. The Stage scenery setting can hide them.
 - **Entities.**
   - Fighters are procedural figures with shared toon materials and one merged ink-outline mesh each.
-  - Monsters and bosses use shared module-level geometry and materials per archetype.
+  - Monsters and bosses use shared module-level geometry and materials per archetype. Mini-boss gate guards add their stage's regalia (`scene/guardLooks.ts`).
+  - Pickups and campaign objectives are inked tokens (`scene/inkedToken.ts`): one merged vertex-coloured toon body plus one ink hull, shared per look. Each pickup type has its own outline (`scene/pickupModels.ts`); a defended structure shows its HP as damage (`scene/objectiveModels.ts`).
   - Labels and tags share sprite textures.
 - **Camera.** The camera fits the players' box against the measured HUD bands (`cameraFraming.ts`). Narrow screens may zoom out far enough for the widest legal spread of players.
 - **Accessibility.** High contrast retones palettes and material uniforms, with no CSS filter on the canvas. Reduced motion holds poses still and turns off camera shake.

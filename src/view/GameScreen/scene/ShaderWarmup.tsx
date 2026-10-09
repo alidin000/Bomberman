@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { createFighterWarmupMaterials } from './fighterInk';
+import { createTokenWarmupMaterial } from './inkedToken';
 
 function instancedWarmup(material: THREE.Material): THREE.Material {
   const target = material;
@@ -11,7 +12,7 @@ function instancedWarmup(material: THREE.Material): THREE.Material {
 
 /**
  * One material per shader variant that entities mount and unmount mid-match:
- * bombs, pickups, hazards, markers, warnings and text labels. three.js deletes
+ * bombs, pickups, hazards, objective markers, warnings and text labels. three.js deletes
  * a program when the last material using it is disposed, so without a
  * long-lived user every re-entry of such an entity compiled the program again
  * (a campaign marker label scrolling in and out of view recompiled the sprite
@@ -39,6 +40,9 @@ export function createWarmupMaterials(): THREE.Material[] {
     // program.
     instancedWarmup(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })),
     ...createFighterWarmupMaterials(),
+    // Pickups, villagers, structures and gates: toon bands with vertex
+    // colours (inkedToken.ts). Their ink line is the fighters' ink above.
+    createTokenWarmupMaterial(),
   ];
 }
 

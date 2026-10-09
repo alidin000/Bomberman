@@ -1,8 +1,9 @@
-/* eslint-disable react/no-unknown-property */
+/* eslint-disable react/no-unknown-property, react/require-default-props */
 import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { EnemyArchetype } from '../../../content/enemies';
+import { StageId } from '../../../content/types';
 import { MonsterState } from '../../../engine/types';
 import {
   FigureMaterialPool, FigurePart, mergeFigureParts, part,
@@ -10,6 +11,7 @@ import {
 import {
   MONSTER_LOOKS, MonsterPose, monsterArchetypeOf, monsterMotionPhase,
 } from './monsterLooks';
+import { GUARD_FIGURE_SCALE, GUARD_LOOKS, guardRegaliaParts } from './guardLooks';
 
 /**
  * One enemy figure per archetype, drawn from five shared geometries (body,
@@ -210,6 +212,46 @@ export function getMonsterFigureMaterials(
   };
 }
 
+const GUARD_REGALIA_CACHE = new Map<string, THREE.BufferGeometry>();
+
+/** The top of the archetype's figure (headgear, stalks, hood), unscaled. */
+function figureTop(archetype: EnemyArchetype): number {
+  const geometries = getMonsterFigureGeometries(archetype);
+  return Math.max(...MONSTER_FIGURE_TONES.map((tone) => geometries[tone].boundingBox?.max.y ?? 0));
+}
+
+/**
+ * A mini-boss guard's regalia (crest, back piece, shoulders) for its stage,
+ * fitted over the archetype's head: one more shared geometry per guard.
+ */
+export function getGuardRegaliaGeometry(
+  stageId: StageId,
+  archetype: EnemyArchetype
+): THREE.BufferGeometry {
+  const key = `${stageId}:${archetype}`;
+  let geometry = GUARD_REGALIA_CACHE.get(key);
+  if (!geometry) {
+    geometry = mergeFigureParts(guardRegaliaParts(GUARD_LOOKS[stageId], figureTop(archetype)));
+    GUARD_REGALIA_CACHE.set(key, geometry);
+  }
+  return geometry;
+}
+
+export type GuardFigureTone = MonsterFigureTone | 'regalia';
+
+/** The archetype's materials with the guard's body colour, plus its regalia. */
+export function getGuardFigureMaterials(
+  stageId: StageId,
+  archetype: EnemyArchetype
+): Record<GuardFigureTone, THREE.MeshStandardMaterial> {
+  const look = GUARD_LOOKS[stageId];
+  return {
+    ...getMonsterFigureMaterials(archetype, false),
+    body: MATERIAL_POOL.get(look.body),
+    regalia: MATERIAL_POOL.get(look.regalia, { glowIntensity: 0.14 }),
+  };
+}
+
 const POSE = new MonsterPose();
 
 /**
@@ -227,20 +269,29 @@ export function monsterIsTranslucent(monster: Pick<MonsterState, 'kind' | 'clone
 export function MonsterFigure({
   monster,
   reducedMotion,
+  guard,
 }: {
   monster: MonsterState;
   reducedMotion: boolean;
+  /** The stage whose mini-boss gate this monster guards, if it does. */
+  guard?: StageId;
 }) {
   const poseRef = useRef<THREE.Group>(null);
   const archetype = monsterArchetypeOf(monster);
   const look = MONSTER_LOOKS[archetype];
   const translucent = monsterIsTranslucent(monster);
   const geometries = getMonsterFigureGeometries(archetype);
-  const materials = useMemo(
-    () => getMonsterFigureMaterials(archetype, translucent),
-    [archetype, translucent]
+  // A guard's water clone keeps the patrol look: only the guard wears regalia.
+  const guardStage = guard && !translucent ? guard : undefined;
+  const materials = useMemo<Partial<Record<GuardFigureTone, THREE.MeshStandardMaterial>>>(
+    () => (guardStage
+      ? getGuardFigureMaterials(guardStage, archetype)
+      : getMonsterFigureMaterials(archetype, translucent)),
+    [archetype, guardStage, translucent]
   );
+  const regalia = guardStage ? getGuardRegaliaGeometry(guardStage, archetype) : null;
   const phase = useMemo(() => monsterMotionPhase(monster.id), [monster.id]);
+  const figureScale = MONSTER_FIGURE_SCALE * (guardStage ? GUARD_FIGURE_SCALE : 1);
 
   useFrame(({ clock }) => {
     const group = poseRef.current;
@@ -248,12 +299,11 @@ export function MonsterFigure({
     POSE.sample(look.motion, clock.elapsedTime + phase, look.tempo, reducedMotion);
     group.position.set(0, POSE.lift, POSE.reach);
     group.rotation.set(POSE.lean, 0, POSE.roll);
-    const scale = MONSTER_FIGURE_SCALE;
-    group.scale.set(scale, scale * POSE.squash, scale);
+    group.scale.set(figureScale, figureScale * POSE.squash, figureScale);
   });
 
   return (
-    <group ref={poseRef} scale={MONSTER_FIGURE_SCALE}>
+    <group ref={poseRef} scale={figureScale}>
       {MONSTER_FIGURE_TONES.map((tone) => (
         <mesh
           key={tone}
@@ -262,6 +312,14 @@ export function MonsterFigure({
           castShadow={tone === 'body'}
         />
       ))}
+      {regalia && (
+        <mesh
+          geometry={regalia}
+          material={materials.regalia}
+          castShadow
+          userData={{ guardRegalia: guardStage }}
+        />
+      )}
     </group>
   );
 }

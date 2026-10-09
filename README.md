@@ -158,7 +158,7 @@ Implemented today:
 - **Vision and fog of war:** character vision radii, Deidara explosion reveal, Sasuke/Itachi/Minato enemy sensing, and Gaara wall sensing.
 - **Characters:**
   - Character-themed bomb behaviour, ultimate effects, passives, power-up labels, and HUD/manual presentation.
-  - Per-character campaign pickup pools with PRD signature rewards and procedural 3D pickup fallbacks.
+  - Per-character campaign pickup pools with PRD signature rewards, and a distinct procedural 3D model for every pickup type.
 - **Exploration:**
   - Hidden-area metadata on every campaign map: a scroll cache, an archive fragment, and an elite Zetsu burrow per stage.
   - A deterministic destroyed-crate outcome table: 60% nothing, 20% power-up, 15% White Zetsu, 4% elite Zetsu, and 1% rare reward.

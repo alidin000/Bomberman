@@ -16,8 +16,11 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 /** Light bands, dark to lit: each texel covers a third of the N·L range. */
 const TOON_BANDS = [82, 165, 255];
 
-/** Shared by every fighter toon material (one texture, one program define). */
-const FIGHTER_TOON_RAMP = (() => {
+/**
+ * Shared by every fighter toon material (one texture, one program define),
+ * and by the inked tokens (pickups, objectives; see inkedToken.ts).
+ */
+export const FIGHTER_TOON_RAMP = (() => {
   const texture = new THREE.DataTexture(
     new Uint8Array(TOON_BANDS),
     TOON_BANDS.length,
