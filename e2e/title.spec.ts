@@ -5,9 +5,12 @@ test('the title screen loads with its hero image', { tag: '@phone' }, async ({ p
 
   await expect(page).toHaveTitle('Explosive Shinobi Arena');
   await expect(page.getByRole('heading', { level: 1, name: 'Explosive Shinobi Arena' })).toBeVisible();
-  // The main door has focus on arrival, so Enter starts a match.
-  await expect(page.getByRole('button', { name: 'Quick Play' })).toBeFocused();
-  await expect(page.getByRole('button', { name: 'Battle a CPU' })).toBeEnabled();
+  // The main door has focus on arrival, so Enter starts a match. On a touch
+  // screen a phone is one player, so Battle a CPU leads there.
+  const touch = await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches);
+  const [mainDoor, otherDoor] = touch ? ['Battle a CPU', 'Quick Play'] : ['Quick Play', 'Battle a CPU'];
+  await expect(page.getByRole('button', { name: mainDoor })).toBeFocused();
+  await expect(page.getByRole('button', { name: otherDoor })).toBeEnabled();
 
   const hero = page.getByRole('img', { name: 'Hidden Leaf arena' });
   await expect(hero).toBeVisible();
