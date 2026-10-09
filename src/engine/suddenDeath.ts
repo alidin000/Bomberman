@@ -49,8 +49,9 @@ function getPressureOrder(state: GameEngineState): Point[] {
   return order;
 }
 
+// Versus only: the campaign and the Training Dojo have no round clock.
 export function isSuddenDeathMode(state: GameEngineState): boolean {
-  return state.config.mode !== 'solo';
+  return state.config.mode !== 'solo' && state.config.mode !== 'training';
 }
 
 export function getRoundTimeRemainingMs(state: GameEngineState): number {

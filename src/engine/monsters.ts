@@ -4,7 +4,7 @@ import {
   GameMap, isBomb, isObstacle,
 } from '../model/gameItem';
 import {
-  BossHazard, HazardKind, Point, GameEngineState, MonsterState, PlayerState,
+  BossHazard, HazardKind, Point, GameEngineState, MonsterPatrol, MonsterState, PlayerState,
 } from './types';
 import { MONSTER_MOVE_MS } from './constants';
 import { applyCharacterSurvival, isPowerUpActive } from './players';
@@ -540,6 +540,50 @@ function leashMove(
   return home ? { ...monster, x: home.x, y: home.y } : null;
 }
 
+// The patrol leg after `leg`, turning back at either end of the route.
+function nextPatrolLeg(
+  length: number,
+  leg: number,
+  forward: boolean
+): Pick<MonsterPatrol, 'leg' | 'forward'> {
+  if (forward) {
+    return leg + 1 < length
+      ? { leg: leg + 1, forward }
+      : { leg: Math.max(0, leg - 1), forward: false };
+  }
+  return leg - 1 >= 0
+    ? { leg: leg - 1, forward }
+    : { leg: Math.min(length - 1, leg + 1), forward: true };
+}
+
+// Scripted walkers ignore danger and players: one cell toward the waypoint
+// ahead, or, when a bomb, crate or body is in the way, turn back and wait.
+function movePatrolMonster(
+  monster: MonsterState,
+  patrol: MonsterPatrol,
+  map: GameMap,
+  context: MonsterMovementContext,
+): MonsterState {
+  const { route } = patrol;
+  if (route.length < 2) return monster;
+  let { leg, forward } = patrol;
+  if (monster.x === route[leg].x && monster.y === route[leg].y) {
+    ({ leg, forward } = nextPatrolLeg(route.length, leg, forward));
+  }
+  const target = route[leg];
+  const dx = Math.sign(target.x - monster.x);
+  const step = {
+    x: monster.x + dx,
+    y: monster.y + (dx === 0 ? Math.sign(target.y - monster.y) : 0),
+  };
+  if (basicValidMove(step.x, step.y, map, context.occupiedCells)) {
+    return { ...monster, ...step, patrol: { route, leg, forward } };
+  }
+  // Back toward the waypoint it came from.
+  const back = nextPatrolLeg(route.length, leg, !forward);
+  return { ...monster, patrol: { route, ...back } };
+}
+
 function moveMonsterByKind(
   monster: MonsterState,
   map: GameMap,
@@ -547,6 +591,7 @@ function moveMonsterByKind(
   players: PlayerState[],
   tick: number,
 ): MonsterState {
+  if (monster.patrol) return movePatrolMonster(monster, monster.patrol, map, context);
   const fled = fleeDanger(monster, map, context, tick);
   if (fled) return fled;
   const homeward = leashMove(monster, map, context, players, tick);
@@ -602,6 +647,7 @@ function abilityCooldownFor(
 }
 
 export function getMonsterMoveMs(monster: MonsterState, difficulty: DifficultySettings): number {
+  if (typeof monster.moveMs === 'number') return monster.moveMs;
   return Math.round(MONSTER_MOVE_MS[monster.kind] * difficulty.enemyMoveScale);
 }
 

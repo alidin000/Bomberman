@@ -12,6 +12,7 @@ Play it at <https://bomberman-zuqb.onrender.com>.
   - Any seat can be a human or an Easy, Normal, or Hard CPU.
   - A match is one round, or best of 3 or 5.
   - Each round runs on a 90-second clock, then a sudden-death spiral closes the arena.
+- **Training Dojo.** Four short rooms (move, bomb and step clear, read a blast, power-up and enemy) teach the loop by playing it, with the player's own keys and pad buttons in each goal line and the explanation only after the room is cleared. A first visit suggests it once; the Shinobi Manual and the Mission Deck link it. Rooms can be skipped or replayed, and progress is saved.
 - **Quick starts.** The welcome screen offers Quick Play, which replays your last setup (or starts the campaign on a first visit), and Battle a CPU. The Mission Deck fits a Local Arena setup on one screen of player seat cards.
 - **Readable match flow.**
   - Win pips and "Round 2 · First to 2" in the HUD.

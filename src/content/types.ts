@@ -1,4 +1,5 @@
-export type GameMode = 'solo' | 'local' | 'onlinePreview';
+// `training`: a Training Dojo room (one player, a handcrafted map, a goal).
+export type GameMode = 'solo' | 'local' | 'onlinePreview' | 'training';
 
 export type CharacterId =
   | 'deidara'

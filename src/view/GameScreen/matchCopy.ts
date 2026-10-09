@@ -5,6 +5,7 @@ import { DeathCause, GameEngineState, PlayerState } from '../../engine/types';
 import { getRoundTimeRemainingMs, isSuddenDeathMode } from '../../engine/suddenDeath';
 import { getControllerLabel, getSlotController } from '../../ai/controllers';
 import { playerSlotLabel } from './playerSlots';
+import { getDojoRoomInfo, isDojoRoomId } from '../../content/dojo';
 
 /** Longest caption line (Xbox Accessibility Guideline 104). */
 export const CAPTION_MAX_CHARS = 40;
@@ -13,7 +14,14 @@ export const CAPTION_MAX_CHARS = 40;
 export const SUDDEN_DEATH_LEAD_MS = 5000;
 
 export function isVersus(state: GameEngineState): boolean {
-  return !state.campaign && state.config.mode !== 'solo';
+  return !state.campaign && state.config.mode !== 'solo' && state.config.mode !== 'training';
+}
+
+function trainingRoomLine(state: GameEngineState): string | null {
+  const roomId = state.config.training?.roomId;
+  if (state.config.mode !== 'training' || !isDojoRoomId(roomId)) return null;
+  const room = getDojoRoomInfo(roomId);
+  return `Room ${room.order} · ${room.name}`;
 }
 
 export function slotOf(state: GameEngineState, playerId: string | undefined): number {
@@ -76,6 +84,8 @@ export function firstToText(totalRounds: number): string {
  * leads 1–0", "Round 3 · Tied 1–1", or "Round 1 · First to 2".
  */
 export function roundStartLine(state: GameEngineState): string {
+  const room = trainingRoomLine(state);
+  if (room) return room;
   if (state.campaign) {
     const active = state.campaign.objectives.find((objective) => objective.status === 'active');
     return active ? `${state.campaign.villageName} · ${active.label}` : state.campaign.villageName;
@@ -93,6 +103,9 @@ export function roundStartLine(state: GameEngineState): string {
 
 /** The banner held over the deciding moment, before the result dialog. */
 export function roundOverBanner(state: GameEngineState): string {
+  if (state.config.mode === 'training') {
+    return state.players.some((player) => player.alive) ? 'Room cleared' : 'Caught · try again';
+  }
   if (!isVersus(state)) {
     if (state.campaign?.missionResult === 'success' || (state.boss && state.boss.health <= 0)) {
       return 'Mission complete';

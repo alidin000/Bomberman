@@ -12,7 +12,10 @@ import { GameEngineState } from '../engine/types';
 // difficulty and lives; body flicker lands where it warned.
 // v5: multi-round matches end once a ninja has won most of the rounds.
 // v6: Ghost and Shield picked up on the map wear off like the others.
-// v7: a route puzzle objective between the defense and the mini boss gate.
+// v7: this round's rule changes: a route puzzle objective between the defense
+// and the mini boss gate; training mode (Training Dojo rooms): room goals end
+// the round, preset charges, scripted patrol sentries, no crate drops and no
+// sudden death.
 export const REPLAY_VERSION = 7;
 
 export interface ReplayFrame {

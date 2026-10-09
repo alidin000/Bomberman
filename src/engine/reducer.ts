@@ -25,6 +25,7 @@ import { tickCampaignRespawns } from './campaignEnemies';
 import { deriveMatchSeed } from './random';
 import { tickSuddenDeath } from './suddenDeath';
 import { regroupFallenPlayers } from './campaignLives';
+import { checkTrainingRoundEnd, isTrainingConfig } from './training';
 
 function getWinnerName(state: GameEngineState, winnerId: string): string {
   return state.players.find((player) => player.id === winnerId)?.name ?? winnerId;
@@ -95,6 +96,7 @@ function advanceCampaignState(
 
 function checkRoundEnd(state: GameEngineState): GameEngineState {
   if (state.roundProcessed || state.phase !== 'playing') return state;
+  if (isTrainingConfig(state.config)) return checkTrainingRoundEnd(state);
 
   if (state.campaign?.missionResult === 'failed') {
     return {

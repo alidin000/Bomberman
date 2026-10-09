@@ -99,6 +99,12 @@ export interface PlayerState {
   survivalGraceMs?: number;
 }
 
+export interface MonsterPatrol {
+  route: Point[];
+  leg: number;
+  forward: boolean;
+}
+
 export interface MonsterState {
   id: string;
   name: string;
@@ -121,6 +127,12 @@ export interface MonsterState {
   // A mini boss guards its gate: with no player in sight it walks back
   // within `radius` cells of it instead of wandering the whole map.
   leash?: { x: number; y: number; radius: number };
+  // A scripted walker (the Training Dojo's sentry): it walks its route's
+  // waypoints in order and back again, turning when something blocks it,
+  // and never dodges or chases. `leg` is the waypoint it heads for.
+  patrol?: MonsterPatrol;
+  // Milliseconds per step, in place of its kind's pace.
+  moveMs?: number;
 }
 
 export interface BombState {
@@ -361,6 +373,43 @@ export interface FogOfWarState {
 // and replays from before CPU players load and play exactly as they did.
 export type PlayerSlotController = 'human' | 'cpu-easy' | 'cpu-normal' | 'cpu-hard';
 
+// Training Dojo rooms. A room ends as soon as every goal holds at once
+// (cleared) or its player falls (failed).
+export type TrainingGoal =
+  // Stand on this cell.
+  | { kind: 'reach'; x: number; y: number }
+  // These crates are broken.
+  | { kind: 'breakCrates'; cells: Point[] }
+  // Every training charge has gone off.
+  | { kind: 'outlastCharges' }
+  // The pickups on these cells are taken.
+  | { kind: 'collect'; cells: Point[] }
+  // No enemy is left.
+  | { kind: 'defeatAll' };
+
+// A bomb lit before the room starts (owned by no player), so the room can
+// show a blast the player did not set.
+export interface TrainingCharge {
+  x: number;
+  y: number;
+  range: number;
+  fuseMs: number;
+}
+
+export interface TrainingSentry {
+  id: string;
+  name: string;
+  route: Point[];
+  moveMs: number;
+}
+
+export interface TrainingSetup {
+  roomId: string;
+  goals: TrainingGoal[];
+  charges?: TrainingCharge[];
+  sentries?: TrainingSentry[];
+}
+
 export interface GameConfig {
   mode?: GameMode;
   numPlayers: number;
@@ -378,6 +427,8 @@ export interface GameConfig {
   // Per-slot controllers for Local Arena (see PlayerSlotController). The
   // reducer never reads it: CPU players act through ordinary actions.
   controllers?: PlayerSlotController[];
+  // Training mode only: the room's goals, charges and sentries.
+  training?: TrainingSetup;
 }
 
 export interface GameEngineState {

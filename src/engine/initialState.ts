@@ -20,6 +20,7 @@ import { createCampaignRuntimeState } from './campaignObjectives';
 import { initializeCampaignEnemies } from './campaignEnemies';
 import { normalizeSeed } from './random';
 import { getMatchDifficulty } from './difficulty';
+import { createTrainingSentries, isTrainingConfig, placeTrainingCharges } from './training';
 
 const PLAYER_NAMES = ['player1', 'player2', 'player3'];
 const ULTIMATE_COOLDOWN_MS = 12000;
@@ -189,12 +190,31 @@ export function createBossForConfig(config: GameConfig): GameEngineState['boss']
   };
 }
 
+function openingMonsters(
+  config: GameConfig,
+  campaignMonsters: MonsterState[],
+  map: GameMap,
+  players: PlayerState[]
+): MonsterState[] {
+  if (config.mode === 'solo') return campaignMonsters;
+  // A training room brings its own scripted sentries and nothing else.
+  if (isTrainingConfig(config)) return createTrainingSentries(config);
+  return placeVersusMonsters(
+    getMonstersForMap(config.selectedMap, config.numPlayers),
+    map,
+    players
+  );
+}
+
 export function createInitialState(config: GameConfig): GameEngineState {
   resetBombIdCounter();
   resetBossHazardIdCounter();
   resetMonsterHazardIdCounter();
   const players = Array.from({ length: config.numPlayers }, (_, i) => createPlayer(i, config));
-  const map = createSpawnSafeMap(config.map, players);
+  const safeMap = createSpawnSafeMap(config.map, players);
+  // The config keeps the board without the room's charges, so a restart
+  // lights them again.
+  const { map, bombs } = placeTrainingCharges(config, safeMap);
   const campaignRuntime = createCampaignRuntimeState(config);
   const {
     campaign,
@@ -204,14 +224,8 @@ export function createInitialState(config: GameConfig): GameEngineState {
   const state: GameEngineState = {
     map,
     players,
-    monsters: config.mode === 'solo'
-      ? campaignMonsters
-      : placeVersusMonsters(
-        getMonstersForMap(config.selectedMap, config.numPlayers),
-        map,
-        players
-      ),
-    bombs: [],
+    monsters: openingMonsters(config, campaignMonsters, map, players),
+    bombs,
     explosions: [],
     destroyedBoxes: [],
     timedPowerUps: {},
@@ -238,7 +252,7 @@ export function createInitialState(config: GameConfig): GameEngineState {
     rngSeed: normalizeSeed(config.seed),
     roundElapsedMs: 0,
     pressureBlocksPlaced: 0,
-    config: { ...config, map },
+    config: { ...config, map: safeMap },
     roundProcessed: false,
   };
 
@@ -253,7 +267,10 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     { length: state.config.numPlayers },
     (_, i) => createPlayer(i, state.config),
   );
-  const map = createSpawnSafeMap(state.config.map, players);
+  const { map, bombs } = placeTrainingCharges(
+    state.config,
+    createSpawnSafeMap(state.config.map, players)
+  );
   const campaignRuntime = createCampaignRuntimeState(state.config);
   const {
     campaign,
@@ -264,14 +281,8 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     ...state,
     map,
     players,
-    monsters: state.config.mode === 'solo'
-      ? campaignMonsters
-      : placeVersusMonsters(
-        getMonstersForMap(state.config.selectedMap, state.config.numPlayers),
-        map,
-        players
-      ),
-    bombs: [],
+    monsters: openingMonsters(state.config, campaignMonsters, map, players),
+    bombs,
     explosions: [],
     destroyedBoxes: [],
     timedPowerUps: {},

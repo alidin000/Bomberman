@@ -1,6 +1,6 @@
 /* eslint-disable object-curly-newline, max-len */
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import GpsFixedIcon from '@mui/icons-material/GpsFixed';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
@@ -49,6 +49,7 @@ import {
 } from '../../content';
 import { getCharacterPowerLoadout } from '../../content/characterPowerups';
 import { MAIN_MENU_LABEL } from '../ConfigScreen/menuCopy';
+import { DOJO_NAME, DOJO_PATH } from '../../content/dojo';
 
 const LOCAL_BEASTS = [
   'Leaf: Rogue Genin, Rogue Chunin, Training Clone.',
@@ -205,6 +206,10 @@ export const InstructionsScreen = () => {
 
           <ManualIntro>
             Start with the four-step loop. Use the guide rail to jump to the detailed rule you need mid-match.
+            {' '}
+            <Link to={DOJO_PATH} style={{ color: 'var(--action)', fontWeight: 900 }}>
+              {`Rather learn by playing? Try the ${DOJO_NAME}.`}
+            </Link>
           </ManualIntro>
 
           <ManualLayout>

@@ -25,6 +25,14 @@ export const PAUSE_KEY = 'Escape';
 // Listed in key-binding order: up, left, down, right, bomb, detonate,
 // ultimate, cover.
 const BUTTONS_BY_BINDING: readonly number[] = [12, 14, 13, 15, 0, 1, 3, 2];
+/**
+ * What each binding is on a pad, in the same order, for on-screen prompts.
+ * Face buttons use the letters most pads print (bottom A, right B, top Y,
+ * left X); the left stick also moves.
+ */
+export const PAD_BINDING_LABELS: readonly string[] = [
+  'D-pad up', 'D-pad left', 'D-pad down', 'D-pad right', 'A', 'B', 'Y', 'X',
+];
 const START_BUTTON = 9;
 const CONTROL_COUNT = KEY_BINDING_COUNT + 1;
 const PAUSE_CONTROL = KEY_BINDING_COUNT;

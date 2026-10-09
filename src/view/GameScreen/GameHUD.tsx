@@ -766,7 +766,10 @@ export function GameHUD({ state, scale }: GameHUDRootProps) {
 
   return (
     <HudRoot hudZoom={zoom}>
-      <MissionSummary model={toMissionModel(state, layout)} />
+      {/* A Training Dojo room has no round or clock: its goal line takes this place. */}
+      {state.config.mode !== 'training' && (
+        <MissionSummary model={toMissionModel(state, layout)} />
+      )}
       <PlayerCards>
         {state.players.map((player, index) => (
           <PlayerCard

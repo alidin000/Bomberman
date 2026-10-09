@@ -591,7 +591,8 @@ export function explodeBombs(
       const cell = map[y][x];
       if (cell === 'Box') {
         let pendingPowerUp: GenericPower | null = null;
-        if (!state.campaign) {
+        // Training Dojo crates hide nothing: each room places its own pickups.
+        if (!state.campaign && state.config.mode !== 'training') {
           const drop = rollBoxDrop(rngSeed);
           pendingPowerUp = drop.power;
           rngSeed = drop.seed;

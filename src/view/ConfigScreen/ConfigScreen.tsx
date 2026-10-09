@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import Info from '@mui/icons-material/Info';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import {
   StyledDialog,
   StepContent,
@@ -94,6 +95,7 @@ import {
   getCampaignMission,
   getStageDefinition,
 } from '../../content';
+import { DOJO_PATH } from '../../content/dojo';
 import {
   loadStoryProgress,
   STORY_UPGRADES,
@@ -733,13 +735,21 @@ export const ConfigScreen = () => {
                         </MissionObjectiveItem>
                       ))}
                     </MissionObjectiveList>
-                    {showContinueCampaign && (
-                      <MissionActionRow>
+                    <MissionActionRow>
+                      {showContinueCampaign && (
                         <Button variant="outlined" onClick={handleContinueCampaign}>
                           Continue Campaign
                         </Button>
-                      </MissionActionRow>
-                    )}
+                      )}
+                      {/* New to the controls: four short practice rooms first. */}
+                      <Button
+                        variant="text"
+                        startIcon={<SchoolOutlinedIcon />}
+                        onClick={() => navigate(DOJO_PATH)}
+                      >
+                        Training Dojo
+                      </Button>
+                    </MissionActionRow>
                   </MissionBriefingDetails>
                 </MissionBriefing>
               )}

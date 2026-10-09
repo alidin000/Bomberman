@@ -28,6 +28,7 @@ import {
   loadStoredKeyBindings,
 } from '../ConfigScreen/launchGame';
 import { moveFocusWithArrows } from '../ConfigScreen/menuNavigation';
+import { DojoSuggestion } from '../DojoScreen/DojoSuggestion';
 
 export const WelcomeScreen = () => {
   const navigate = useNavigate();
@@ -112,6 +113,8 @@ export const WelcomeScreen = () => {
                 Shinobi Manual
               </Button>
             </ActionButtons>
+            {/* First visit only, below the doors: never in the way of Quick Play. */}
+            <DojoSuggestion onOpen={() => navigate('/dojo')} />
           </QuickPlayPanel>
         </HeroCopy>
       </HeroSection>

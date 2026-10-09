@@ -14,6 +14,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import SkipNextIcon from '@mui/icons-material/SkipNext';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { Tooltip } from '@mui/material';
@@ -35,8 +36,8 @@ import { PauseMissionDetails } from './GameHUD';
 import { MatchAnnouncer, MatchHud, MatchScene } from './MatchLeaves';
 import { selectMatchView } from './matchView';
 import { useGameEngineStore } from '../../hooks/useGameEngine';
-import { useEngineSelector } from '../../hooks/engineStore';
-import { GameConfig, loadMapFromStorage } from '../../engine';
+import { EngineStore, useEngineSelector } from '../../hooks/engineStore';
+import { GameConfig, GameEngineState, loadMapFromStorage } from '../../engine';
 import {
   DEFAULT_CHARACTER_ID, DEFAULT_STAGE_ID, GameMode, getCharacterDefinition,
 } from '../../content';
@@ -256,13 +257,52 @@ const MemoMatchConfirmDialog = React.memo(
   (prev, next) => prev.kind === null && next.kind === null
 );
 
-export const GameScreen = () => {
+export type MatchOverlayProps = {
+  store: EngineStore;
+  keyBindings: KeyBindings;
+  hudScale: number;
+  showHud: boolean;
+};
+
+export type MatchResultProps = {
+  /** After the hold on the deciding moment, like the round result dialog. */
+  open: boolean;
+  state: GameEngineState;
+  restart: () => void;
+};
+
+/**
+ * A match its caller sets up (the Training Dojo) instead of the route and
+ * the stored setup, with the parts of the screen it replaces. Keep the
+ * object stable: a new config starts a new match.
+ */
+export type GameScreenMatch = {
+  config: GameConfig;
+  /** Where Quit Game leaves to. */
+  exitTo: string;
+  /** More pause-menu buttons, after Restart. */
+  pauseActions?: readonly { label: string; onSelect: () => void }[];
+  /** Drawn over the arena, beside the HUD. */
+  renderOverlay?: (props: MatchOverlayProps) => React.ReactNode;
+  /** Shown in place of the round result dialog; it also takes Start. */
+  renderResult?: (props: MatchResultProps) => React.ReactNode;
+};
+
+type GameScreenProps = {
+  // eslint-disable-next-line react/require-default-props -- absent for routed matches
+  match?: GameScreenMatch;
+};
+
+export const GameScreen = ({ match }: GameScreenProps = {}) => {
   const { numOfPlayers, numOfRounds, selectedMap } = useParams();
   const navigate = useNavigate();
   const [keyBindings, setKeyBindings] = useState<KeyBindings>(loadStoredKeyBindings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isModifyingControls, setIsModifyingControls] = useState(false);
-  const [showControlsGuide, setShowControlsGuide] = useState(() => !hasSeenControlsGuide());
+  // A caller's match teaches its own controls (the dojo prompts them).
+  const [showControlsGuide, setShowControlsGuide] = useState(
+    () => !match && !hasSeenControlsGuide()
+  );
   const [showHud, setShowHud] = useState(true);
   const [preferences, setPreferences] = useState(loadGamePreferences);
   const controlsGuidePausedGame = useRef(false);
@@ -276,7 +316,9 @@ export const GameScreen = () => {
   const [pendingConfirm, setPendingConfirm] = useState<MatchConfirmKind | null>(null);
   const confirmOpen = useRef(false);
 
+  const matchConfig = match?.config;
   const config = useMemo<GameConfig | null>(() => {
+    if (matchConfig) return matchConfig;
     if (!numOfPlayers || !numOfRounds || !selectedMap) return null;
     const setup = loadStoredGameSetup();
     const players = parseInt(numOfPlayers, 10);
@@ -294,7 +336,7 @@ export const GameScreen = () => {
       difficulty: loadCampaignDifficulty(),
       controllers: mode === 'local' ? normalizeControllers(setup.controllers, players) : undefined,
     };
-  }, [numOfPlayers, numOfRounds, selectedMap]);
+  }, [matchConfig, numOfPlayers, numOfRounds, selectedMap]);
 
   const {
     store,
@@ -490,9 +532,10 @@ export const GameScreen = () => {
     setShowHud((visible) => !visible);
   }, []);
 
+  const exitTo = match?.exitTo ?? '/';
   const handleQuitGame = useCallback(() => {
-    navigate('/');
-  }, [navigate]);
+    navigate(exitTo);
+  }, [exitTo, navigate]);
 
   const requestConfirm = useCallback((kind: MatchConfirmKind) => {
     confirmOpen.current = true;
@@ -571,8 +614,9 @@ export const GameScreen = () => {
   // waits for the dialog itself (not the hold before it) and, like a click,
   // ignores the first RESULT_INPUT_LOCK_MS so a mashed button skips nothing.
   const isGameOver = view.phase === 'game_over';
+  const customResult = !!match?.renderResult;
   useEffect(() => {
-    if (!dialogOpen) return undefined;
+    if (!dialogOpen || customResult) return undefined;
     const shownAt = resultVisible ? Date.now() : null;
     const handlePadStart = (event: Event) => {
       event.preventDefault();
@@ -582,7 +626,7 @@ export const GameScreen = () => {
     };
     window.addEventListener(PAD_START_EVENT, handlePadStart);
     return () => window.removeEventListener(PAD_START_EVENT, handlePadStart);
-  }, [dialogOpen, resultVisible, dismissDialog, isGameOver, restart]);
+  }, [customResult, dialogOpen, resultVisible, dismissDialog, isGameOver, restart]);
 
   // The banner over the deciding moment, until the result dialog covers it.
   const roundOver = useMemo(() => {
@@ -610,6 +654,9 @@ export const GameScreen = () => {
   return (
     <GameBackground>
       {showHud && <MatchHud store={store} scale={preferences.hudScale} />}
+      {match?.renderOverlay?.({
+        store, keyBindings, hudScale: preferences.hudScale, showHud,
+      })}
       <GameTopControls
         isPaused={isPaused}
         locked={isPaused && !showControlsGuide}
@@ -687,6 +734,16 @@ export const GameScreen = () => {
                 >
                   Restart
                 </PauseMenuButton>
+                {match?.pauseActions?.map((action) => (
+                  <PauseMenuButton
+                    key={action.label}
+                    variant="outlined"
+                    startIcon={<SkipNextIcon />}
+                    onClick={action.onSelect}
+                  >
+                    {action.label}
+                  </PauseMenuButton>
+                ))}
                 <PauseMenuButton
                   variant="outlined"
                   startIcon={<SettingsIcon />}
@@ -730,7 +787,8 @@ export const GameScreen = () => {
         onCancel={handleCancelConfirm}
         onConfirm={handleConfirm}
       />
-      {menuState && (
+      {menuState && match?.renderResult?.({ open: resultVisible, state: menuState, restart })}
+      {menuState && !match?.renderResult && (
         // Shown from the state the round ended on, which it keeps while it
         // fades out under the next round.
         <MemoRoundResultDialog

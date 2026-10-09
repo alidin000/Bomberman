@@ -97,6 +97,7 @@ import { BossFigure } from './scene/BossFigure';
 import { BombClockState, createBombClock, refreshBombClock } from './scene/bombClock';
 import { canvasHudInsets } from './scene/canvasInsets';
 import { PuzzleMarkers } from './scene/PuzzleMarkers';
+import { DojoMarkers } from './scene/DojoMarkers';
 import {
   HighContrastOverride, highContrastPalette, useHighContrastMaterials,
 } from './scene/highContrast';
@@ -3457,6 +3458,7 @@ const MissionObjectiveMarkersMemo = React.memo(MissionObjectiveMarkers, (previou
 ));
 
 const ShaderWarmupMemo = React.memo(ShaderWarmup);
+const DojoMarkersMemo = React.memo(DojoMarkers);
 const FloorMemo = React.memo(Floor);
 const BombBlastPreviewsMemo = React.memo(BombBlastPreviews);
 const PressureBlockWarningMemo = React.memo(PressureBlockWarning);
@@ -3586,6 +3588,12 @@ function SceneContentBase({
           motion={motion}
           reducedMotion={preferences.reducedMotion}
           highContrast={highContrast}
+        />
+      )}
+      {state.config.mode === 'training' && (
+        <DojoMarkersMemo
+          goals={state.config.training?.goals}
+          reducedMotion={preferences.reducedMotion}
         />
       )}
       {getUpcomingPressureCells(state).map((cell, order) => (
