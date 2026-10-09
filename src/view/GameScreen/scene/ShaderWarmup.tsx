@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { createFighterWarmupMaterials } from './fighterInk';
 
 function instancedWarmup(material: THREE.Material): THREE.Material {
   const target = material;
@@ -15,7 +16,9 @@ function instancedWarmup(material: THREE.Material): THREE.Material {
  * long-lived user every re-entry of such an entity compiled the program again
  * (a campaign marker label scrolling in and out of view recompiled the sprite
  * shader each time). Explosions, tiles, the floor and players stay mounted
- * for the whole match and keep their own programs alive.
+ * for the whole match and keep their own programs alive, but a fighter's
+ * Ghost look (see-through toon) only shows mid-match, so the fighter looks,
+ * ink line included, are compiled here too.
  */
 export function createWarmupMaterials(): THREE.Material[] {
   const labelMap = new THREE.Texture();
@@ -32,6 +35,7 @@ export function createWarmupMaterials(): THREE.Material[] {
     // layer staying up. Compiled on an InstancedMesh: instancing is its own
     // program.
     instancedWarmup(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })),
+    ...createFighterWarmupMaterials(),
   ];
 }
 

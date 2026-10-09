@@ -69,6 +69,10 @@ import { nextFlameAgeMs } from './scene/flameAge';
 import { LIGHT_PRIORITY, PooledLightHandle } from './scene/lightPoolSlots';
 import { LABEL_SPRITES, labelSpriteKey } from './scene/labelSprites';
 import { ShaderWarmup, useTransparencyVariantWarmup } from './scene/ShaderWarmup';
+import {
+  FIGHTER_INK_HIGH_CONTRAST, FIGHTER_INK_MATERIAL, cachedInkHull, fighterToonMaterial, inkHullFor,
+  setInkViewportHeight,
+} from './scene/fighterInk';
 import { shareSkeletons } from './scene/sharedSkeletons';
 import { MAX_FRAME_DELTA_MS } from '../../hooks/engineLoop';
 import {
@@ -1277,17 +1281,6 @@ function ShadowBlob() {
 
 type CharacterVisual = (typeof CHARACTER_VISUALS)[CharacterId];
 
-function HairMaterial({ visual, ghost }: { visual: CharacterVisual; ghost: boolean }) {
-  return (
-    <meshStandardMaterial
-      color={visual.hair}
-      roughness={0.5}
-      transparent={ghost}
-      opacity={ghost ? 0.55 : 1}
-    />
-  );
-}
-
 function CharacterHair({
   characterId,
   visual,
@@ -1297,25 +1290,26 @@ function CharacterHair({
   visual: CharacterVisual;
   ghost: boolean;
 }) {
+  const hair = fighterToonMaterial(visual.hair, { ghost });
+
   if (characterId === 'naruto' || characterId === 'minato') {
     const spikes = characterId === 'naruto'
       ? [-0.22, -0.11, 0, 0.11, 0.22]
       : [-0.26, -0.14, 0, 0.14, 0.26];
     return (
       <>
-        <mesh position={[0, 0.45, -0.03]} scale={[1.08, 0.58, 0.95]} castShadow>
+        <mesh position={[0, 0.45, -0.03]} scale={[1.08, 0.58, 0.95]} material={hair} castShadow>
           <sphereGeometry args={[0.2, 16, 16]} />
-          <HairMaterial visual={visual} ghost={ghost} />
         </mesh>
         {spikes.map((side) => (
           <mesh
             key={`${characterId}-hair-spike-${side}`}
             position={[side, 0.58 - Math.abs(side) * 0.12, 0.03]}
             rotation={[0.38, side * 3.2, side > 0 ? -0.64 : 0.64]}
+            material={hair}
             castShadow
           >
             <coneGeometry args={[0.07, characterId === 'minato' ? 0.3 : 0.24, 8]} />
-            <HairMaterial visual={visual} ghost={ghost} />
           </mesh>
         ))}
       </>
@@ -1331,19 +1325,18 @@ function CharacterHair({
     ];
     return (
       <>
-        <mesh position={[0, 0.45, -0.04]} scale={[1.12, 0.62, 0.95]} castShadow>
+        <mesh position={[0, 0.45, -0.04]} scale={[1.12, 0.62, 0.95]} material={hair} castShadow>
           <sphereGeometry args={[0.2, 16, 16]} />
-          <HairMaterial visual={visual} ghost={ghost} />
         </mesh>
         {spikes.map((spike, index) => (
           <mesh
             key={`sasuke-hair-${index}`}
             position={spike.position as [number, number, number]}
             rotation={spike.rotation as [number, number, number]}
+            material={hair}
             castShadow
           >
             <coneGeometry args={[0.075, 0.3, 8]} />
-            <HairMaterial visual={visual} ghost={ghost} />
           </mesh>
         ))}
       </>
@@ -1353,17 +1346,14 @@ function CharacterHair({
   if (characterId === 'deidara') {
     return (
       <>
-        <mesh position={[0, 0.45, -0.03]} scale={[1.1, 0.58, 0.95]} castShadow>
+        <mesh position={[0, 0.45, -0.03]} scale={[1.1, 0.58, 0.95]} material={hair} castShadow>
           <sphereGeometry args={[0.2, 16, 16]} />
-          <HairMaterial visual={visual} ghost={ghost} />
         </mesh>
-        <mesh position={[-0.05, 0.65, -0.04]} castShadow>
+        <mesh position={[-0.05, 0.65, -0.04]} material={hair} castShadow>
           <sphereGeometry args={[0.13, 14, 14]} />
-          <HairMaterial visual={visual} ghost={ghost} />
         </mesh>
-        <mesh position={[0.17, 0.34, 0.08]} rotation={[0.28, 0, -0.18]} castShadow>
+        <mesh position={[0.17, 0.34, 0.08]} rotation={[0.28, 0, -0.18]} material={hair} castShadow>
           <capsuleGeometry args={[0.04, 0.38, 5, 8]} />
-          <HairMaterial visual={visual} ghost={ghost} />
         </mesh>
       </>
     );
@@ -1372,19 +1362,18 @@ function CharacterHair({
   if (characterId === 'gaara') {
     return (
       <>
-        <mesh position={[0, 0.45, -0.03]} scale={[1.02, 0.52, 0.92]} castShadow>
+        <mesh position={[0, 0.45, -0.03]} scale={[1.02, 0.52, 0.92]} material={hair} castShadow>
           <sphereGeometry args={[0.2, 16, 16]} />
-          <HairMaterial visual={visual} ghost={ghost} />
         </mesh>
         {[-0.14, 0, 0.14].map((side) => (
           <mesh
             key={`gaara-hair-${side}`}
             position={[side, 0.56, 0.04]}
             rotation={[0.62, side * 2.2, side > 0 ? -0.4 : 0.4]}
+            material={hair}
             castShadow
           >
             <coneGeometry args={[0.055, 0.2, 7]} />
-            <HairMaterial visual={visual} ghost={ghost} />
           </mesh>
         ))}
       </>
@@ -1393,17 +1382,14 @@ function CharacterHair({
 
   return (
     <>
-      <mesh position={[0, 0.45, -0.03]} scale={[1.06, 0.6, 0.95]} castShadow>
+      <mesh position={[0, 0.45, -0.03]} scale={[1.06, 0.6, 0.95]} material={hair} castShadow>
         <sphereGeometry args={[0.2, 16, 16]} />
-        <HairMaterial visual={visual} ghost={ghost} />
       </mesh>
-      <mesh position={[-0.15, 0.28, 0.02]} rotation={[0.12, 0, 0.2]} castShadow>
+      <mesh position={[-0.15, 0.28, 0.02]} rotation={[0.12, 0, 0.2]} material={hair} castShadow>
         <capsuleGeometry args={[0.045, 0.34, 5, 8]} />
-        <HairMaterial visual={visual} ghost={ghost} />
       </mesh>
-      <mesh position={[0.15, 0.28, 0.02]} rotation={[0.12, 0, -0.2]} castShadow>
+      <mesh position={[0.15, 0.28, 0.02]} rotation={[0.12, 0, -0.2]} material={hair} castShadow>
         <capsuleGeometry args={[0.045, 0.34, 5, 8]} />
-        <HairMaterial visual={visual} ghost={ghost} />
       </mesh>
     </>
   );
@@ -1418,21 +1404,18 @@ function CharacterAccessory({
   visual: CharacterVisual;
   ghost: boolean;
 }) {
-  const transparent = ghost;
-  const opacity = ghost ? 0.55 : 1;
-
   if (characterId === 'naruto') {
+    // Face marks stay solid under Ghost, as before.
+    const mark = fighterToonMaterial('#111827');
     return (
       <>
         {[-0.1, 0.1].map((side) => (
           <React.Fragment key={`naruto-face-${side}`}>
-            <mesh position={[side, 0.31, 0.205]} rotation={[0, 0, side > 0 ? 0.2 : -0.2]}>
+            <mesh position={[side, 0.31, 0.205]} rotation={[0, 0, side > 0 ? 0.2 : -0.2]} material={mark}>
               <boxGeometry args={[0.07, 0.008, 0.012]} />
-              <meshStandardMaterial color="#111827" />
             </mesh>
-            <mesh position={[side, 0.27, 0.205]} rotation={[0, 0, side > 0 ? -0.2 : 0.2]}>
+            <mesh position={[side, 0.27, 0.205]} rotation={[0, 0, side > 0 ? -0.2 : 0.2]} material={mark}>
               <boxGeometry args={[0.07, 0.008, 0.012]} />
-              <meshStandardMaterial color="#111827" />
             </mesh>
           </React.Fragment>
         ))}
@@ -1443,13 +1426,15 @@ function CharacterAccessory({
   if (characterId === 'sasuke') {
     return (
       <>
-        <mesh position={[0, -0.19, 0.16]} rotation={[Math.PI / 2, 0, 0]}>
+        <mesh
+          position={[0, -0.19, 0.16]}
+          rotation={[Math.PI / 2, 0, 0]}
+          material={fighterToonMaterial(visual.trim, { ghost, glow: visual.trim, glowIntensity: 0.18 })}
+        >
           <torusGeometry args={[0.24, 0.035, 8, 28]} />
-          <meshStandardMaterial color={visual.trim} emissive={visual.trim} emissiveIntensity={0.18} transparent={transparent} opacity={opacity} />
         </mesh>
-        <mesh position={[0, -0.2, 0.2]} rotation={[0.2, 0, 0]}>
+        <mesh position={[0, -0.2, 0.2]} rotation={[0.2, 0, 0]} material={fighterToonMaterial(visual.trim, { ghost })}>
           <boxGeometry args={[0.46, 0.05, 0.04]} />
-          <meshStandardMaterial color={visual.trim} transparent={transparent} opacity={opacity} />
         </mesh>
       </>
     );
@@ -1458,13 +1443,16 @@ function CharacterAccessory({
   if (characterId === 'deidara') {
     return (
       <>
-        <mesh position={[-0.24, 0.13, 0.02]} scale={[0.8, 0.55, 0.7]} castShadow>
+        <mesh
+          position={[-0.24, 0.13, 0.02]}
+          scale={[0.8, 0.55, 0.7]}
+          material={fighterToonMaterial('#f8fafc', { ghost, glow: '#f97316', glowIntensity: 0.12 })}
+          castShadow
+        >
           <sphereGeometry args={[0.11, 12, 12]} />
-          <meshStandardMaterial color="#f8fafc" emissive="#f97316" emissiveIntensity={0.12} transparent={transparent} opacity={opacity} />
         </mesh>
-        <mesh position={[-0.28, 0.14, 0.12]} rotation={[0.2, 0, 0.6]}>
+        <mesh position={[-0.28, 0.14, 0.12]} rotation={[0.2, 0, 0.6]} material={fighterToonMaterial('#f8fafc', { ghost })}>
           <coneGeometry args={[0.035, 0.16, 8]} />
-          <meshStandardMaterial color="#f8fafc" transparent={transparent} opacity={opacity} />
         </mesh>
       </>
     );
@@ -1473,13 +1461,11 @@ function CharacterAccessory({
   if (characterId === 'gaara') {
     return (
       <group position={[0.24, 0.06, -0.2]} rotation={[0.18, 0.5, -0.28]}>
-        <mesh castShadow>
+        <mesh material={fighterToonMaterial('#9a5f2b', { ghost, glow: '#d6a45d', glowIntensity: 0.08 })} castShadow>
           <sphereGeometry args={[0.19, 16, 16]} />
-          <meshStandardMaterial color="#9a5f2b" emissive="#d6a45d" emissiveIntensity={0.08} transparent={transparent} opacity={opacity} />
         </mesh>
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]} material={fighterToonMaterial('#2f1c16', { ghost })}>
           <torusGeometry args={[0.14, 0.018, 8, 24]} />
-          <meshStandardMaterial color="#2f1c16" transparent={transparent} opacity={opacity} />
         </mesh>
       </group>
     );
@@ -1488,30 +1474,37 @@ function CharacterAccessory({
   if (characterId === 'minato') {
     return (
       <>
-        <mesh position={[0, -0.08, -0.16]} rotation={[0.15, 0, 0]} castShadow>
+        <mesh
+          position={[0, -0.08, -0.16]}
+          rotation={[0.15, 0, 0]}
+          material={fighterToonMaterial('#f8fafc', { ghost, glow: '#fde047', glowIntensity: 0.06 })}
+          castShadow
+        >
           <boxGeometry args={[0.58, 0.68, 0.045]} />
-          <meshStandardMaterial color="#f8fafc" emissive="#fde047" emissiveIntensity={0.06} transparent={transparent} opacity={opacity} />
         </mesh>
-        <mesh position={[0, 0.08, -0.19]}>
+        <mesh position={[0, 0.08, -0.19]} material={fighterToonMaterial('#dc2626', { ghost })}>
           <boxGeometry args={[0.5, 0.06, 0.05]} />
-          <meshStandardMaterial color="#dc2626" transparent={transparent} opacity={opacity} />
         </mesh>
       </>
     );
   }
 
   if (characterId === 'itachi') {
+    const cloud = fighterToonMaterial('#dc2626', { ghost, glow: '#ef4444', glowIntensity: 0.28 });
     return (
       <>
         {[-0.12, 0.12].map((side) => (
-          <mesh key={`itachi-cloud-${side}`} position={[side, 0.0, 0.2]}>
+          <mesh key={`itachi-cloud-${side}`} position={[side, 0.0, 0.2]} material={cloud}>
             <sphereGeometry args={[0.055, 10, 10]} />
-            <meshStandardMaterial color="#dc2626" emissive="#ef4444" emissiveIntensity={0.28} transparent={transparent} opacity={opacity} />
           </mesh>
         ))}
-        <mesh position={[0, -0.22, -0.02]} scale={[1.05, 0.72, 0.92]} castShadow>
+        <mesh
+          position={[0, -0.22, -0.02]}
+          scale={[1.05, 0.72, 0.92]}
+          material={fighterToonMaterial('#050507', { ghost })}
+          castShadow
+        >
           <sphereGeometry args={[0.22, 12, 12]} />
-          <meshStandardMaterial color="#050507" transparent={transparent} opacity={opacity} roughness={0.5} />
         </mesh>
       </>
     );
@@ -1736,6 +1729,7 @@ function PlayerMesh({
   const marks = useMemo(() => ({
     ring: { playerRing: player.id },
     pickup: { pickupLabel: player.id },
+    ink: { fighterInk: player.id },
   }), [player.id]);
   const motionId = useMemo(() => playerMotionId(player.id), [player.id]);
   const motion = React.useContext(MotionContext);
@@ -1744,6 +1738,13 @@ function PlayerMesh({
   const invincible = isPowerUpActive(state, player.id, 'Invincibility');
   const visual = CHARACTER_VISUALS[player.characterId];
   const characterModel = useCharacterModel(player.characterId);
+  // The ink hull is built from the first figure of each character to mount
+  // (in the countdown) and shared by every later one.
+  const figureRef = useRef<THREE.Group>(null);
+  const [inkHull, setInkHull] = useState(() => cachedInkHull(player.characterId));
+  useLayoutEffect(() => {
+    setInkHull(inkHullFor(player.characterId, figureRef.current));
+  }, [player.characterId, characterModel]);
   const reducedMotion = React.useContext(ReducedMotionContext);
   const strideRef = useRef({ phase: 0, x: NaN, z: 0 });
   useSmoothWorldPosition(
@@ -1776,11 +1777,12 @@ function PlayerMesh({
     [pickupChips],
   );
 
-  useFrame(({ clock }, delta) => {
+  useFrame(({ clock, size, viewport }, delta) => {
     const group = ref.current;
     const body = bodyRef.current;
     const pose = poseRef.current;
     if (!group || !body || !pose) return;
+    setInkViewportHeight(size.height * viewport.dpr);
     const cues = motion?.cues ?? null;
     const now = cues ? cues.clockMs : 0;
 
@@ -1886,86 +1888,92 @@ function PlayerMesh({
               <LoadedSceneModel asset={characterModel} ghost={ghost} motionRef={motionRef} warmGhostVariant />
             ) : (
               <>
-                <mesh position={[0, -0.04, 0]} castShadow>
-                  <capsuleGeometry args={[0.19, 0.26, 6, 10]} />
-                  <meshStandardMaterial
-                    color={visual.body}
-                    emissive={visual.body}
-                    emissiveIntensity={0.08}
-                    transparent={ghost}
-                    opacity={ghost ? 0.55 : 1}
-                    roughness={0.46}
-                    flatShading
-                  />
-                </mesh>
-                <mesh position={[0, -0.08, 0.16]} castShadow>
-                  <boxGeometry args={[0.38, 0.26, 0.035]} />
-                  <meshStandardMaterial
-                    color={visual.trim}
-                    emissive={visual.trim}
-                    emissiveIntensity={0.08}
-                    transparent={ghost}
-                    opacity={ghost ? 0.55 : 1}
-                  />
-                </mesh>
-                <mesh position={[0, 0.32, 0.02]} castShadow>
-                  <sphereGeometry args={[0.225, 10, 8]} />
-                  <meshStandardMaterial color="#f2c7a2" roughness={0.9} flatShading transparent={ghost} opacity={ghost ? 0.55 : 1} />
-                </mesh>
-                <CharacterHair characterId={player.characterId} visual={visual} ghost={ghost} />
-                <mesh position={[0, 0.35, 0.2]} castShadow>
-                  <boxGeometry args={[0.42, 0.055, 0.04]} />
-                  <meshStandardMaterial
-                    color={visual.headband}
-                    emissive={visual.headband}
-                    emissiveIntensity={0.18}
-                    transparent={ghost}
-                    opacity={ghost ? 0.55 : 1}
-                  />
-                </mesh>
-                <mesh position={[0, 0.35, 0.225]} castShadow>
-                  <boxGeometry args={[0.16, 0.05, 0.018]} />
-                  <meshStandardMaterial color="#d1d5db" metalness={0.6} roughness={0.32} transparent={ghost} opacity={ghost ? 0.55 : 1} />
-                </mesh>
-                {[-0.22, 0.22].map((side) => (
+                <group ref={figureRef}>
                   <mesh
-                    key={`${player.id}-arm-${side}`}
-                    position={[side, 0.04, 0.04]}
-                    rotation={[0.35, 0, side > 0 ? -0.55 : 0.55]}
+                    position={[0, -0.04, 0]}
+                    material={fighterToonMaterial(visual.body, { ghost, glow: visual.body })}
                     castShadow
                   >
-                    <capsuleGeometry args={[0.055, 0.34, 5, 8]} />
-                    <meshStandardMaterial color={visual.accent} roughness={0.48} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+                    <capsuleGeometry args={[0.19, 0.26, 6, 10]} />
                   </mesh>
-                ))}
-                {[-0.09, 0.09].map((side) => (
                   <mesh
-                    key={`${player.id}-leg-${side}`}
-                    position={[side, -0.36, 0.02]}
-                    rotation={[0.18, 0, side > 0 ? -0.08 : 0.08]}
+                    position={[0, -0.08, 0.16]}
+                    material={fighterToonMaterial(visual.trim, { ghost, glow: visual.trim })}
                     castShadow
                   >
-                    <capsuleGeometry args={[0.052, 0.34, 5, 8]} />
-                    <meshStandardMaterial color={visual.body} roughness={0.5} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+                    <boxGeometry args={[0.38, 0.26, 0.035]} />
                   </mesh>
-                ))}
-                {[-0.1, 0.1].map((side) => (
-                  <mesh key={`${player.id}-shoe-${side}`} position={[side, -0.55, 0.1]} rotation={[0.2, 0, 0]} castShadow>
-                    <boxGeometry args={[0.13, 0.06, 0.2]} />
-                    <meshStandardMaterial color="#111827" roughness={0.56} transparent={ghost} opacity={ghost ? 0.55 : 1} />
+                  <mesh position={[0, 0.32, 0.02]} material={fighterToonMaterial('#f2c7a2', { ghost })} castShadow>
+                    <sphereGeometry args={[0.225, 10, 8]} />
                   </mesh>
-                ))}
-                {[-0.09, 0.09].map((side) => (
-                  <mesh key={`${player.id}-eye-${side}`} position={[side, 0.34, 0.17]}>
-                    <sphereGeometry args={[0.025, 8, 8]} />
-                    <meshStandardMaterial color="#111827" />
+                  <CharacterHair characterId={player.characterId} visual={visual} ghost={ghost} />
+                  <mesh
+                    position={[0, 0.35, 0.2]}
+                    material={fighterToonMaterial(visual.headband, { ghost, glow: visual.headband, glowIntensity: 0.18 })}
+                    castShadow
+                  >
+                    <boxGeometry args={[0.42, 0.055, 0.04]} />
                   </mesh>
-                ))}
-                <CharacterAccessory characterId={player.characterId} visual={visual} ghost={ghost} />
-                <mesh position={[0, -0.27, -0.08]} rotation={[Math.PI / 2, 0, Math.PI / 2]} castShadow>
-                  <cylinderGeometry args={[0.075, 0.075, 0.42, 12]} />
-                  <meshStandardMaterial color={visual.accent} emissive={visual.accent} emissiveIntensity={0.12} />
-                </mesh>
+                  <mesh position={[0, 0.35, 0.225]} material={fighterToonMaterial('#d1d5db', { ghost })} castShadow>
+                    <boxGeometry args={[0.16, 0.05, 0.018]} />
+                  </mesh>
+                  {[-0.22, 0.22].map((side) => (
+                    <mesh
+                      key={`${player.id}-arm-${side}`}
+                      position={[side, 0.04, 0.04]}
+                      rotation={[0.35, 0, side > 0 ? -0.55 : 0.55]}
+                      material={fighterToonMaterial(visual.accent, { ghost })}
+                      castShadow
+                    >
+                      <capsuleGeometry args={[0.055, 0.34, 5, 8]} />
+                    </mesh>
+                  ))}
+                  {[-0.09, 0.09].map((side) => (
+                    <mesh
+                      key={`${player.id}-leg-${side}`}
+                      position={[side, -0.36, 0.02]}
+                      rotation={[0.18, 0, side > 0 ? -0.08 : 0.08]}
+                      material={fighterToonMaterial(visual.body, { ghost })}
+                      castShadow
+                    >
+                      <capsuleGeometry args={[0.052, 0.34, 5, 8]} />
+                    </mesh>
+                  ))}
+                  {[-0.1, 0.1].map((side) => (
+                    <mesh
+                      key={`${player.id}-shoe-${side}`}
+                      position={[side, -0.55, 0.1]}
+                      rotation={[0.2, 0, 0]}
+                      material={fighterToonMaterial('#111827', { ghost })}
+                      castShadow
+                    >
+                      <boxGeometry args={[0.13, 0.06, 0.2]} />
+                    </mesh>
+                  ))}
+                  {[-0.09, 0.09].map((side) => (
+                    <mesh key={`${player.id}-eye-${side}`} position={[side, 0.34, 0.17]} material={fighterToonMaterial('#111827')}>
+                      <sphereGeometry args={[0.025, 8, 8]} />
+                    </mesh>
+                  ))}
+                  <CharacterAccessory characterId={player.characterId} visual={visual} ghost={ghost} />
+                  <mesh
+                    position={[0, -0.27, -0.08]}
+                    rotation={[Math.PI / 2, 0, Math.PI / 2]}
+                    material={fighterToonMaterial(visual.accent, { glow: visual.accent, glowIntensity: 0.12 })}
+                    castShadow
+                  >
+                    <cylinderGeometry args={[0.075, 0.075, 0.42, 12]} />
+                  </mesh>
+                </group>
+                {/* The ink line; Ghost drops it with the solid look. */}
+                {inkHull && (
+                  <mesh
+                    geometry={inkHull}
+                    material={FIGHTER_INK_MATERIAL}
+                    visible={!ghost}
+                    userData={marks.ink}
+                  />
+                )}
               </>
             )}
             {invincible && (
@@ -3463,6 +3471,7 @@ const HIGH_CONTRAST_MATERIALS: readonly HighContrastOverride[] = [
   { material: PRESSURE_RING_MATERIAL, opacity: 1 },
   { material: PRESSURE_BLOCK_MATERIAL, opacity: 0.72 },
   { material: SHADOW_BLOB_MATERIAL, opacity: 0.42 },
+  { material: FIGHTER_INK_MATERIAL, color: FIGHTER_INK_HIGH_CONTRAST },
 ];
 
 function SceneContentBase({
