@@ -31,6 +31,7 @@ import { EXPLOSION_MS } from '../../engine/constants';
 import { hazardIsActive } from '../../engine/bosses';
 import { cellKey } from '../../engine/fogOfWar';
 import { getStageDefinition } from '../../content';
+import { getStageLook, stageSkyBackground } from '../../content/stageLooks';
 import { getCharacterPowerTheme } from '../../content/characterPowerups';
 import {
   BossId, CharacterId, StageDefinition
@@ -84,6 +85,11 @@ import { PICKUP_CUE_MS, bodyCueAt, pickupCueAt } from '../../hooks/cueStore';
 import {
   FACING_HEADING, advanceStride, cameraFollowRate, decayShake, turnToward,
 } from './scene/motionFeel';
+import { StageAtmosphere } from './scene/StageAtmosphere';
+import { StageLandmarks } from './scene/StageLandmarks';
+import { BOARD_LIP } from './scene/landmarkPlacement';
+import { MonsterFigure, monsterIsTranslucent } from './scene/MonsterFigure';
+import { BossFigure } from './scene/BossFigure';
 
 const ENTITY_LERP_SPEED = 7.2;
 const ENTITY_SNAP_EPSILON = 0.0016;
@@ -184,70 +190,28 @@ const POWERUP_VISUALS: Record<Power, {
   },
 };
 
-const BEAST_TAILS: Record<MonsterKind, number> = {
-  basic: 0,
-  smart: 0,
-  ghost: 0,
-  fork: 0,
+// Per movement kind: the floor ring and nameplate bar colour, and size. The
+// figure itself (head, carried shape, motion) comes from the archetype; see
+// scene/monsterLooks.ts.
+const MONSTER_VISUALS: Record<MonsterKind, { glow: string; scale: number }> = {
+  basic: { glow: '#f29664', scale: 1.08 },
+  smart: { glow: '#df9c6b', scale: 1.12 },
+  ghost: { glow: '#8bcac9', scale: 1.06 },
+  fork: { glow: '#c08ea8', scale: 1.16 },
 };
 
-const MONSTER_VISUALS: Record<MonsterKind, {
-  body: string;
-  accent: string;
-  belly: string;
-  glow: string;
-  scale: number;
-  style: 'fox' | 'sand' | 'flame' | 'horn';
-}> = {
-  basic: {
-    body: '#536b78', accent: '#b6c8c7', belly: '#e0d5bd', glow: '#f29664', scale: 1.08, style: 'fox'
-  },
-  smart: {
-    body: '#c18669', accent: '#765966', belly: '#eed6b5', glow: '#df9c6b', scale: 1.12, style: 'sand'
-  },
-  ghost: {
-    body: '#668c9b', accent: '#a8d9d4', belly: '#d5e7dc', glow: '#8bcac9', scale: 1.06, style: 'flame'
-  },
-  fork: {
-    body: '#d4b6c5', accent: '#886a8d', belly: '#685b77', glow: '#c08ea8', scale: 1.16, style: 'horn'
-  },
-};
-
-const BOSS_VISUALS: Record<BossId, {
-  body: string;
-  accent: string;
-  belly: string;
-  glow: string;
-  scale: number;
-  style: 'sand' | 'flameCat' | 'shell' | 'lavaApe' | 'steam' | 'slug' | 'wing' | 'octo' | 'fox';
-}> = {
-  shukaku: {
-    body: '#c48a4a', accent: '#7c2d12', belly: '#f5deb3', glow: '#f59e0b', scale: 1.5, style: 'sand'
-  },
-  matatabi: {
-    body: '#1d4ed8', accent: '#7dd3fc', belly: '#dbeafe', glow: '#38bdf8', scale: 1.42, style: 'flameCat'
-  },
-  isobu: {
-    body: '#0e7490', accent: '#67e8f9', belly: '#cffafe', glow: '#22d3ee', scale: 1.5, style: 'shell'
-  },
-  sonGoku: {
-    body: '#dc2626', accent: '#fed7aa', belly: '#7f1d1d', glow: '#fb923c', scale: 1.56, style: 'lavaApe'
-  },
-  kokuo: {
-    body: '#e5e7eb', accent: '#93c5fd', belly: '#f8fafc', glow: '#bfdbfe', scale: 1.48, style: 'steam'
-  },
-  saiken: {
-    body: '#7c3aed', accent: '#bef264', belly: '#ddd6fe', glow: '#a3e635', scale: 1.42, style: 'slug'
-  },
-  chomei: {
-    body: '#16a34a', accent: '#bbf7d0', belly: '#dcfce7', glow: '#86efac', scale: 1.44, style: 'wing'
-  },
-  gyuki: {
-    body: '#3f1d1d', accent: '#e9d5ff', belly: '#7c2d12', glow: '#a855f7', scale: 1.54, style: 'octo'
-  },
-  kurama: {
-    body: '#f97316', accent: '#fed7aa', belly: '#fff7ed', glow: '#fb923c', scale: 1.58, style: 'fox'
-  },
+// Glow (floor ring, pooled light, sensed marker) and size per boss. Each
+// boss's base silhouette comes from scene/BossFigure.tsx.
+const BOSS_VISUALS: Record<BossId, { glow: string; scale: number }> = {
+  shukaku: { glow: '#f59e0b', scale: 1.5 },
+  matatabi: { glow: '#38bdf8', scale: 1.42 },
+  isobu: { glow: '#22d3ee', scale: 1.5 },
+  sonGoku: { glow: '#fb923c', scale: 1.56 },
+  kokuo: { glow: '#bfdbfe', scale: 1.48 },
+  saiken: { glow: '#a3e635', scale: 1.42 },
+  chomei: { glow: '#86efac', scale: 1.44 },
+  gyuki: { glow: '#a855f7', scale: 1.54 },
+  kurama: { glow: '#fb923c', scale: 1.58 },
 };
 
 const HAZARD_VISUALS: Record<HazardKind, {
@@ -2016,92 +1980,57 @@ function PlayerMesh({
   );
 }
 
-function MonsterNameplate({
-  monster,
-  visual,
-}: {
-  monster: MonsterState;
-  visual: typeof MONSTER_VISUALS[MonsterKind];
-}) {
+// Nameplates and floor rings: one geometry each and one material per kind,
+// shared by every enemy instead of built per mount.
+const NAMEPLATE_BACK_GEOMETRY = new THREE.BoxGeometry(0.72, 0.12, 0.025);
+const NAMEPLATE_TRACK_GEOMETRY = new THREE.BoxGeometry(0.58, 0.035, 0.02);
+const NAMEPLATE_BAR_GEOMETRY = new THREE.BoxGeometry(1, 0.035, 0.018);
+const NAMEPLATE_BACK_MATERIAL = new THREE.MeshBasicMaterial({ color: '#0f172a', transparent: true, opacity: 0.72 });
+const NAMEPLATE_TRACK_MATERIAL = new THREE.MeshBasicMaterial({ color: '#334155', transparent: true, opacity: 0.78 });
+const MONSTER_RING_GEOMETRY = new THREE.TorusGeometry(0.5, 0.022, 6, 36).rotateX(-Math.PI / 2);
+const NAMEPLATE_BAR_MATERIALS = new Map<MonsterKind, THREE.MeshBasicMaterial>();
+const MONSTER_RING_MATERIALS = new Map<string, THREE.MeshStandardMaterial>();
+
+function nameplateBarMaterial(kind: MonsterKind): THREE.MeshBasicMaterial {
+  let material = NAMEPLATE_BAR_MATERIALS.get(kind);
+  if (!material) {
+    material = new THREE.MeshBasicMaterial({ color: MONSTER_VISUALS[kind].glow, transparent: true, opacity: 0.92 });
+    NAMEPLATE_BAR_MATERIALS.set(kind, material);
+  }
+  return material;
+}
+
+function monsterRingMaterial(kind: MonsterKind, translucent: boolean): THREE.MeshStandardMaterial {
+  const key = `${kind}:${translucent ? 1 : 0}`;
+  let material = MONSTER_RING_MATERIALS.get(key);
+  if (!material) {
+    const { glow } = MONSTER_VISUALS[kind];
+    material = new THREE.MeshStandardMaterial({
+      color: glow, emissive: glow, emissiveIntensity: 0.9, transparent: true, opacity: translucent ? 0.58 : 0.4,
+    });
+    MONSTER_RING_MATERIALS.set(key, material);
+  }
+  return material;
+}
+
+function MonsterNameplate({ monster }: { monster: MonsterState }) {
   let barWidth = 0.36;
   if (monster.kind === 'smart') barWidth = 0.44;
   if (monster.kind === 'fork') barWidth = 0.52;
   return (
-    <group position={[0, 0.8, 0]} rotation={[-0.25, 0, 0]}>
-      <mesh>
-        <boxGeometry args={[0.72, 0.12, 0.025]} />
-        <meshBasicMaterial color="#0f172a" transparent opacity={0.72} />
-      </mesh>
-      <mesh position={[0, -0.085, 0.005]}>
-        <boxGeometry args={[0.58, 0.035, 0.02]} />
-        <meshBasicMaterial color="#334155" transparent opacity={0.78} />
-      </mesh>
-      <mesh position={[-(0.58 - barWidth) / 2, -0.085, 0.016]}>
-        <boxGeometry args={[barWidth, 0.035, 0.018]} />
-        <meshBasicMaterial color={visual.glow} transparent opacity={0.92} />
-      </mesh>
+    <group position={[0, 0.95, 0]} rotation={[-0.25, 0, 0]}>
+      <mesh geometry={NAMEPLATE_BACK_GEOMETRY} material={NAMEPLATE_BACK_MATERIAL} />
+      <mesh position={[0, -0.085, 0.005]} geometry={NAMEPLATE_TRACK_GEOMETRY} material={NAMEPLATE_TRACK_MATERIAL} />
+      <mesh
+        position={[-(0.58 - barWidth) / 2, -0.085, 0.016]}
+        scale={[barWidth, 1, 1]}
+        geometry={NAMEPLATE_BAR_GEOMETRY}
+        material={nameplateBarMaterial(monster.kind)}
+      />
       <group position={[0, 0.008, 0.03]}>
         <TextSprite text={monster.name} color="#f8fafc" width={monster.name.length > 16 ? 0.82 : 0.7} />
       </group>
     </group>
-  );
-}
-
-function MonsterBodyGeometry({ style }: { style: typeof MONSTER_VISUALS[MonsterKind]['style'] }) {
-  if (style === 'flame') return <coneGeometry args={[0.24, 0.76, 7]} />;
-  if (style === 'horn') return <dodecahedronGeometry args={[0.34, 0]} />;
-  if (style === 'sand') return <sphereGeometry args={[0.35, 8, 6]} />;
-  return <capsuleGeometry args={[0.17, 0.46, 5, 8]} />;
-}
-
-function MonsterAttackTell({ monster, visual }: { monster: MonsterState; visual: typeof MONSTER_VISUALS[MonsterKind] }) {
-  if (monster.kind === 'basic') {
-    return (
-      <>
-        <mesh position={[0, 0.14, 0.48]} rotation={[Math.PI / 2, 0, 0]}>
-          <coneGeometry args={[0.035, 0.38, 4]} />
-          <meshStandardMaterial color="#d1d5db" metalness={0.5} roughness={0.32} emissive={visual.glow} emissiveIntensity={0.18} />
-        </mesh>
-        <mesh position={[0, 0.14, 0.28]} rotation={[Math.PI / 2, 0, 0]}>
-          <boxGeometry args={[0.035, 0.34, 0.022]} />
-          <meshStandardMaterial color={visual.glow} emissive={visual.glow} emissiveIntensity={0.58} transparent opacity={0.5} />
-        </mesh>
-      </>
-    );
-  }
-  if (monster.kind === 'smart') {
-    return (
-      <>
-        {[-0.2, 0, 0.2].map((offset) => (
-          <mesh key={`${monster.id}-sand-line-${offset}`} position={[offset, -0.08, 0.46 + Math.abs(offset) * 0.2]} rotation={[0.42, 0, 0]}>
-            <coneGeometry args={[0.045, 0.34, 6]} />
-            <meshStandardMaterial color="#d6a45d" emissive="#f59e0b" emissiveIntensity={0.32} />
-          </mesh>
-        ))}
-      </>
-    );
-  }
-  if (monster.kind === 'ghost') {
-    return (
-      <>
-        {[-0.2, 0.2].map((offset) => (
-          <mesh key={`${monster.id}-clone-wisp-${offset}`} position={[offset, 0.1, 0.42]} rotation={[0.7, offset * 2, offset > 0 ? -0.25 : 0.25]}>
-            <coneGeometry args={[0.065, 0.42, 8]} />
-            <meshStandardMaterial color="#bfdbfe" emissive={visual.glow} emissiveIntensity={0.9} transparent opacity={0.56} />
-          </mesh>
-        ))}
-      </>
-    );
-  }
-  return (
-    <>
-      {[-0.26, 0.26].map((offset) => (
-        <mesh key={`${monster.id}-slam-tell-${offset}`} position={[offset, 0.04, 0.5]} rotation={[1.05, offset > 0 ? -0.35 : 0.35, offset > 0 ? -0.6 : 0.6]}>
-          <capsuleGeometry args={[0.04, 0.62, 5, 8]} />
-          <meshStandardMaterial color="#4c1d95" emissive={visual.glow} emissiveIntensity={0.38} />
-        </mesh>
-      ))}
-    </>
   );
 }
 
@@ -2142,18 +2071,9 @@ const ELITE_BADGE_MATERIAL = new THREE.MeshBasicMaterial({
 function MonsterMeshBase({ monster }: { monster: MonsterState }) {
   const ref = useRef<THREE.Group>(null);
   const visual = MONSTER_VISUALS[monster.kind];
-  const color = visual.body;
-  const isGhost = monster.kind === 'ghost';
-  const tails = BEAST_TAILS[monster.kind];
+  const translucent = monsterIsTranslucent(monster);
   const reducedMotion = React.useContext(ReducedMotionContext);
   useSmoothWorldPosition(ref, monster.x, monster.y, 0.45, undefined, monsterMotionId(monster.id));
-
-  useFrame(({ clock }) => {
-    if (ref.current) {
-      ref.current.position.y += reducedMotion ? 0 : Math.sin(clock.elapsedTime * 5) * 0.002;
-      ref.current.rotation.z = reducedMotion ? 0 : Math.sin(clock.elapsedTime * 4) * 0.05;
-    }
-  });
 
   return (
     <group ref={ref} scale={visual.scale * (monster.elite ? 1.12 : 1)}>
@@ -2161,151 +2081,14 @@ function MonsterMeshBase({ monster }: { monster: MonsterState }) {
       {monster.elite && (
         <mesh position={[0, -0.41, 0]} geometry={ELITE_BADGE_GEOMETRY} material={ELITE_BADGE_MATERIAL} />
       )}
-      <mesh position={[0, -0.05, 0]} castShadow scale={visual.style === 'sand' ? [1.12, 0.86, 1] : [0.95, 1, 0.9]}>
-        <MonsterBodyGeometry style={visual.style} />
-        <meshStandardMaterial
-          color={color}
-          emissive={visual.glow}
-          emissiveIntensity={isGhost ? 0.85 : 0.22}
-          transparent={isGhost}
-          opacity={isGhost ? 0.58 : 1}
-          roughness={0.46}
-          flatShading
-        />
-      </mesh>
-      <mesh position={[0, -0.08, 0.17]} scale={[0.9, 0.76, 0.22]} castShadow>
-        <boxGeometry args={[0.34, 0.28, 0.05]} />
-        <meshStandardMaterial color={visual.belly} emissive={visual.glow} emissiveIntensity={0.08} transparent={isGhost} opacity={isGhost ? 0.42 : 1} />
-      </mesh>
-      <mesh position={[0, 0.31, 0.04]} scale={visual.style === 'horn' ? [0.82, 0.94, 0.78] : [0.82, 0.78, 0.78]} castShadow>
-        <sphereGeometry args={[0.2, 10, 8]} />
-        <meshStandardMaterial color={color} emissive={visual.glow} emissiveIntensity={isGhost ? 0.9 : 0.28} transparent={isGhost} opacity={isGhost ? 0.55 : 1} roughness={0.9} flatShading />
-      </mesh>
-      {[-0.21, 0.21].map((side) => (
-        <mesh
-          key={`${monster.id}-ninja-arm-${side}`}
-          position={[side, 0.02, 0.04]}
-          rotation={[0.28, 0, side > 0 ? -0.62 : 0.62]}
-          castShadow
-        >
-          <capsuleGeometry args={[0.04, 0.34, 5, 8]} />
-          <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.14} transparent={isGhost} opacity={isGhost ? 0.5 : 1} />
-        </mesh>
-      ))}
-      {[-0.08, 0.08].map((side) => (
-        <mesh key={`${monster.id}-ninja-leg-${side}`} position={[side, -0.36, 0.01]} rotation={[0.12, 0, side > 0 ? -0.08 : 0.08]} castShadow>
-          <capsuleGeometry args={[0.044, 0.28, 5, 8]} />
-          <meshStandardMaterial color={visual.belly} roughness={0.5} transparent={isGhost} opacity={isGhost ? 0.48 : 1} />
-        </mesh>
-      ))}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.39, 0]}>
-        <torusGeometry args={[0.5, 0.022, 6, 36]} />
-        <meshStandardMaterial
-          color={visual.glow}
-          emissive={visual.glow}
-          emissiveIntensity={0.9}
-          transparent
-          opacity={isGhost ? 0.58 : 0.4}
-        />
-      </mesh>
-
-      {visual.style === 'fox' && (
-        <>
-          <mesh position={[0, 0.37, 0.21]} castShadow>
-            <boxGeometry args={[0.34, 0.045, 0.026]} />
-            <meshStandardMaterial color="#0f172a" emissive={visual.glow} emissiveIntensity={0.16} />
-          </mesh>
-          <mesh position={[0, 0.37, 0.235]}>
-            <boxGeometry args={[0.11, 0.04, 0.018]} />
-            <meshStandardMaterial color="#d1d5db" metalness={0.5} roughness={0.32} />
-          </mesh>
-          <mesh position={[0.24, 0.08, 0.18]} rotation={[Math.PI / 2, 0, -0.72]}>
-            <coneGeometry args={[0.035, 0.32, 4]} />
-            <meshStandardMaterial color="#d1d5db" metalness={0.45} roughness={0.28} emissive={visual.glow} emissiveIntensity={0.12} />
-          </mesh>
-        </>
-      )}
-
-      {visual.style === 'sand' && (
-        <>
-          <mesh position={[0, 0.48, 0.03]} rotation={[Math.PI, 0, 0]}>
-            <coneGeometry args={[0.14, 0.2, 8]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.3} />
-          </mesh>
-          {[-0.18, 0.18].map((side) => (
-            <mesh key={`${monster.id}-sand-spike-${side}`} position={[side, 0.2, -0.25]} rotation={[0.7, side, side > 0 ? -0.35 : 0.35]}>
-              <coneGeometry args={[0.055, 0.28, 7]} />
-              <meshStandardMaterial color="#d6a45d" emissive={visual.glow} emissiveIntensity={0.16} />
-            </mesh>
-          ))}
-        </>
-      )}
-
-      {visual.style === 'flame' && (
-        <>
-          <mesh position={[0, 0.56, 0.0]} rotation={[0.05, 0, 0]}>
-            <coneGeometry args={[0.13, 0.36, 8]} />
-            <meshStandardMaterial color="#bfdbfe" emissive={visual.glow} emissiveIntensity={1.1} transparent opacity={0.72} />
-          </mesh>
-          {[-0.18, 0.18].map((side) => (
-            <mesh key={`${monster.id}-flame-wisp-${side}`} position={[side, 0.18, -0.28]} rotation={[0.8, side * 2, side > 0 ? -0.3 : 0.3]}>
-              <coneGeometry args={[0.07, 0.34, 8]} />
-              <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.9} transparent opacity={0.62} />
-            </mesh>
-          ))}
-        </>
-      )}
-
-      {visual.style === 'horn' && (
-        <>
-          {[-0.18, 0.18].map((side) => (
-            <mesh key={`${monster.id}-main-horn-${side}`} position={[side, 0.5, 0.04]} rotation={[0.28, 0, side > 0 ? -0.55 : 0.55]}>
-              <coneGeometry args={[0.075, 0.34, 8]} />
-              <meshStandardMaterial color="#f8fafc" roughness={0.35} />
-            </mesh>
-          ))}
-          <mesh position={[0, 0.0, -0.25]} scale={[0.8, 0.32, 0.2]}>
-            <sphereGeometry args={[0.26, 12, 12]} />
-            <meshStandardMaterial color="#111827" emissive={visual.glow} emissiveIntensity={0.22} />
-          </mesh>
-        </>
-      )}
-
-      {Array.from({ length: tails }, (_, index) => {
-        const offset = (index - (tails - 1) / 2) * 0.12;
-        return (
-          <mesh
-            key={`${monster.id}-tail-${index}`}
-            position={[offset, 0.02 + index * 0.014, -0.38]}
-            rotation={[0.86, offset * 2.4, offset * 3.4]}
-            castShadow
-          >
-            <capsuleGeometry args={[0.052, visual.style === 'horn' ? 0.58 : 0.46, 5, 8]} />
-            <meshStandardMaterial
-              color={visual.accent}
-              emissive={visual.glow}
-              emissiveIntensity={isGhost ? 0.45 : 0.16}
-              transparent={isGhost}
-              opacity={isGhost ? 0.55 : 1}
-            />
-          </mesh>
-        );
-      })}
-      {[-0.12, 0.12].map((side) => (
-        <mesh key={`${monster.id}-eye-${side}`} position={[side, 0.33, 0.2]}>
-          <sphereGeometry args={[0.045, 10, 10]} />
-          <meshStandardMaterial color={isGhost ? '#bfdbfe' : '#f8f9fa'} emissive={visual.glow} emissiveIntensity={isGhost ? 0.8 : 0.15} />
-        </mesh>
-      ))}
-      {[-0.12, 0.12].map((side) => (
-        <mesh key={`${monster.id}-pupil-${side}`} position={[side, 0.325, 0.24]}>
-          <sphereGeometry args={[0.018, 8, 8]} />
-          <meshStandardMaterial color={visual.style === 'flame' ? '#1e3a8a' : '#111'} />
-        </mesh>
-      ))}
-      <MonsterAttackTell monster={monster} visual={visual} />
+      <MonsterFigure monster={monster} reducedMotion={reducedMotion} />
+      <mesh
+        position={[0, -0.39, 0]}
+        geometry={MONSTER_RING_GEOMETRY}
+        material={monsterRingMaterial(monster.kind, translucent)}
+      />
       <MonsterAbilityWarning monster={monster} visual={visual} />
-      <MonsterNameplate monster={monster} visual={visual} />
+      <MonsterNameplate monster={monster} />
     </group>
   );
 }
@@ -2315,6 +2098,8 @@ const MonsterMesh = React.memo(MonsterMeshBase, (previous, next) => (
   && previous.monster.x === next.monster.x
   && previous.monster.y === next.monster.y
   && previous.monster.kind === next.monster.kind
+  && previous.monster.archetype === next.monster.archetype
+  && previous.monster.clone === next.monster.clone
   && previous.monster.elite === next.monster.elite
   && previous.monster.abilityWarningTicks === next.monster.abilityWarningTicks
   && previous.monster.abilityTarget?.x === next.monster.abilityTarget?.x
@@ -2365,169 +2150,6 @@ function SensedEnemyMarker({
   );
 }
 
-function BossStyleDetails({
-  bossId,
-  visual,
-}: {
-  bossId: BossId;
-  visual: (typeof BOSS_VISUALS)[BossId];
-}) {
-  if (visual.style === 'sand') {
-    return (
-      <>
-        {[-0.18, 0.18].map((side) => (
-          <mesh key={`${bossId}-sand-ear-${side}`} position={[side, 0.78, 0.05]} rotation={[0.28, 0, side > 0 ? -0.36 : 0.36]} castShadow>
-            <coneGeometry args={[0.12, 0.34, 8]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.2} />
-          </mesh>
-        ))}
-        {[-0.26, 0, 0.26].map((offset) => (
-          <mesh key={`${bossId}-sand-mark-${offset}`} position={[offset, 0.13, 0.31]} scale={[1.2, 0.44, 0.18]}>
-            <sphereGeometry args={[0.07, 10, 10]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.16} />
-          </mesh>
-        ))}
-      </>
-    );
-  }
-  if (visual.style === 'flameCat') {
-    return (
-      <>
-        {[-0.17, 0.17].map((side) => (
-          <mesh key={`${bossId}-cat-ear-${side}`} position={[side, 0.74, 0.05]} rotation={[0.24, 0, side > 0 ? -0.42 : 0.42]}>
-            <coneGeometry args={[0.1, 0.28, 8]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.88} transparent opacity={0.86} />
-          </mesh>
-        ))}
-        {[0, Math.PI * 0.66, Math.PI * 1.33].map((rotation) => (
-          <mesh key={`${bossId}-blue-flame-${rotation}`} position={[Math.sin(rotation) * 0.28, 0.3, -0.22 + Math.cos(rotation) * 0.16]} rotation={[0.75, rotation, 0]}>
-            <coneGeometry args={[0.08, 0.48, 8]} />
-            <meshStandardMaterial color="#bfdbfe" emissive={visual.glow} emissiveIntensity={1.05} transparent opacity={0.62} />
-          </mesh>
-        ))}
-      </>
-    );
-  }
-  if (visual.style === 'shell') {
-    return (
-      <>
-        <mesh position={[0, 0.16, -0.1]} scale={[1.24, 0.42, 0.92]} castShadow>
-          <sphereGeometry args={[0.34, 16, 16]} />
-          <meshStandardMaterial color="#164e63" emissive={visual.glow} emissiveIntensity={0.2} roughness={0.5} />
-        </mesh>
-        {[-0.28, 0, 0.28].map((offset) => (
-          <mesh key={`${bossId}-shell-spike-${offset}`} position={[offset, 0.56, -0.08]} rotation={[0.5, offset * 2, 0]}>
-            <coneGeometry args={[0.075, 0.26, 7]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.34} />
-          </mesh>
-        ))}
-      </>
-    );
-  }
-  if (visual.style === 'lavaApe') {
-    return (
-      <>
-        {[-0.42, 0.42].map((side) => (
-          <mesh key={`${bossId}-fist-${side}`} position={[side, 0.08, 0.23]} scale={[1.15, 0.88, 1.05]} castShadow>
-            <sphereGeometry args={[0.16, 14, 14]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.46} roughness={0.5} />
-          </mesh>
-        ))}
-        {[-0.18, 0.18].map((offset) => (
-          <mesh key={`${bossId}-lava-crack-${offset}`} position={[offset, 0.14, 0.34]} rotation={[0.2, 0, offset > 0 ? -0.45 : 0.45]}>
-            <boxGeometry args={[0.035, 0.42, 0.025]} />
-            <meshStandardMaterial color="#fed7aa" emissive="#fb923c" emissiveIntensity={0.72} />
-          </mesh>
-        ))}
-      </>
-    );
-  }
-  if (visual.style === 'steam') {
-    return (
-      <>
-        {[-0.15, 0.15].map((side) => (
-          <mesh key={`${bossId}-steam-horn-${side}`} position={[side, 0.76, 0.04]} rotation={[0.22, 0, side > 0 ? -0.22 : 0.22]}>
-            <coneGeometry args={[0.065, 0.42, 8]} />
-            <meshStandardMaterial color="#f8fafc" emissive={visual.glow} emissiveIntensity={0.28} />
-          </mesh>
-        ))}
-        {[0.18, 0.32].map((height) => (
-          <mesh key={`${bossId}-steam-ring-${height}`} position={[0, height, -0.02]} rotation={[-Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[0.42 + height * 0.35, 0.018, 8, 32]} />
-            <meshStandardMaterial color="#f8fafc" emissive={visual.glow} emissiveIntensity={0.54} transparent opacity={0.38} />
-          </mesh>
-        ))}
-      </>
-    );
-  }
-  if (visual.style === 'slug') {
-    return (
-      <>
-        {[-0.13, 0.13].map((side) => (
-          <mesh key={`${bossId}-slug-antenna-${side}`} position={[side, 0.77, 0.08]} rotation={[0.55, 0, side > 0 ? -0.22 : 0.22]}>
-            <capsuleGeometry args={[0.025, 0.32, 4, 6]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.55} />
-          </mesh>
-        ))}
-        {[0, 1, 2].map((bubble) => (
-          <mesh key={`${bossId}-acid-bubble-${bubble}`} position={[(bubble - 1) * 0.18, 0.34 + bubble * 0.05, -0.24]}>
-            <sphereGeometry args={[0.075, 12, 12]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.72} transparent opacity={0.58} />
-          </mesh>
-        ))}
-      </>
-    );
-  }
-  if (visual.style === 'wing') {
-    return (
-      <>
-        {[-0.42, 0.42].map((side) => (
-          <mesh key={`${bossId}-wing-${side}`} position={[side, 0.28, -0.12]} rotation={[0.24, side > 0 ? -0.5 : 0.5, side > 0 ? -0.38 : 0.38]}>
-            <planeGeometry args={[0.52, 0.72]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.42} transparent opacity={0.44} side={THREE.DoubleSide} />
-          </mesh>
-        ))}
-        <mesh position={[0, 0.64, 0.03]}>
-          <coneGeometry args={[0.07, 0.26, 6]} />
-          <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.5} />
-        </mesh>
-      </>
-    );
-  }
-  if (visual.style === 'octo') {
-    return (
-      <>
-        {[-0.16, 0.16].map((side) => (
-          <mesh key={`${bossId}-octo-horn-${side}`} position={[side, 0.76, 0.04]} rotation={[0.25, 0, side > 0 ? -0.42 : 0.42]}>
-            <coneGeometry args={[0.085, 0.36, 8]} />
-            <meshStandardMaterial color="#f8fafc" roughness={0.36} />
-          </mesh>
-        ))}
-        {[-0.34, 0.34].map((side) => (
-          <mesh key={`${bossId}-octo-arm-${side}`} position={[side, 0.05, 0.18]} rotation={[0.95, 0, side > 0 ? -0.86 : 0.86]}>
-            <capsuleGeometry args={[0.055, 0.72, 5, 8]} />
-            <meshStandardMaterial color="#4c1d95" emissive={visual.glow} emissiveIntensity={0.4} />
-          </mesh>
-        ))}
-      </>
-    );
-  }
-  return (
-    <>
-      {[-0.18, 0.18].map((side) => (
-        <mesh key={`${bossId}-fox-ear-${side}`} position={[side, 0.77, 0.04]} rotation={[0.25, 0, side > 0 ? -0.45 : 0.45]} castShadow>
-          <coneGeometry args={[0.11, 0.34, 8]} />
-          <meshStandardMaterial color={visual.accent} emissive={visual.glow} emissiveIntensity={0.26} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.43, 0.28]} scale={[0.8, 0.38, 0.32]}>
-        <sphereGeometry args={[0.18, 14, 14]} />
-        <meshStandardMaterial color={visual.belly} emissive={visual.glow} emissiveIntensity={0.12} />
-      </mesh>
-    </>
-  );
-}
-
 function BossMesh({ state }: { state: GameEngineState }) {
   const { boss } = state;
   const ref = useRef<THREE.Group>(null);
@@ -2561,50 +2183,7 @@ function BossMesh({ state }: { state: GameEngineState }) {
       {bossModel ? (
         <LoadedSceneModel asset={bossModel} ghost={false} />
       ) : (
-        <>
-          <mesh castShadow scale={visual.style === 'shell' || visual.style === 'slug' ? [1.22, 0.78, 1.04] : [1, 0.95, 1]}>
-            <dodecahedronGeometry args={[0.42, 1]} />
-            <meshStandardMaterial color={visual.body} emissive={visual.glow} emissiveIntensity={0.18} roughness={0.95} flatShading />
-          </mesh>
-          <mesh position={[0, -0.02, 0.28]} scale={[0.86, 0.52, 0.28]}>
-            <sphereGeometry args={[0.2, 14, 14]} />
-            <meshStandardMaterial color={visual.belly} emissive={visual.glow} emissiveIntensity={0.1} roughness={0.5} />
-          </mesh>
-          <mesh position={[0, 0.48, 0.08]} scale={[0.92, 0.74, 0.8]} castShadow>
-            <dodecahedronGeometry args={[0.25, 1]} />
-            <meshStandardMaterial color={visual.body} emissive={visual.glow} emissiveIntensity={0.22} roughness={0.95} flatShading />
-          </mesh>
-          {[-0.1, 0.1].map((side) => (
-            <React.Fragment key={`${boss.id}-eye-${side}`}>
-              <mesh position={[side, 0.5, 0.27]}>
-                <sphereGeometry args={[0.045, 10, 10]} />
-                <meshStandardMaterial color="#fff7ed" emissive={visual.glow} emissiveIntensity={0.32} />
-              </mesh>
-              <mesh position={[side, 0.5, 0.305]}>
-                <sphereGeometry args={[0.019, 8, 8]} />
-                <meshStandardMaterial color={boss.id === 'kurama' ? '#7f1d1d' : '#111827'} emissive={boss.id === 'kurama' ? '#f97316' : '#000'} emissiveIntensity={0.25} />
-              </mesh>
-            </React.Fragment>
-          ))}
-          <BossStyleDetails bossId={boss.id} visual={visual} />
-          {Array.from({ length: boss.tails }, (_, index) => {
-            const offset = (index - (boss.tails - 1) / 2) * (boss.tails > 5 ? 0.08 : 0.12);
-            let tailLength = 0.68;
-            if (visual.style === 'shell') tailLength = 0.52;
-            if (visual.style === 'octo') tailLength = 0.78;
-            return (
-              <mesh
-                key={`${boss.id}-boss-tail-${index}`}
-                position={[offset, -0.02 + index * 0.008, -0.42 - Math.abs(offset) * 0.28]}
-                rotation={[0.92, offset * 4.5, offset * 4.1]}
-                castShadow
-              >
-                <capsuleGeometry args={[visual.style === 'octo' ? 0.05 : 0.044, tailLength, 5, 8]} />
-                <meshStandardMaterial color={visual.style === 'octo' ? '#4c1d95' : visual.accent} emissive={visual.glow} emissiveIntensity={0.34} />
-              </mesh>
-            );
-          })}
-        </>
+        <BossFigure bossId={boss.id} />
       )}
       {boss.phase > 1 && (
         <>
@@ -3763,6 +3342,7 @@ function SceneContent({
     () => getStageDefinition(state.config.stageId),
     [state.config.stageId]
   );
+  const look = useMemo(() => getStageLook(state.config.stageId), [state.config.stageId]);
   const mapDimensions = useMemo(() => getMapDimensions(state.map), [state.map]);
   const visibleCellSet = useMemo(
     () => new Set(state.fogOfWar.visible ?? []),
@@ -3821,11 +3401,15 @@ function SceneContent({
     <LightPool>
       <ShaderWarmup />
       <CameraRig state={state} preferences={preferences} impact={impact} />
-      <ambientLight intensity={0.55} />
-      <hemisphereLight args={['#fff3da', '#526773', 0.85]} />
-      <directionalLight position={[-8, 15, 9]} intensity={1.7} color="#fff0d3" castShadow />
+      <StageAtmosphere look={look} farEdgeZ={toWorld(0, -BOARD_LIP)[2]} />
       <Floor
         palette={stage.palette}
+        width={mapDimensions.width}
+        height={mapDimensions.height}
+      />
+      <StageLandmarks
+        look={look}
+        slabColor={stage.palette.wall}
         width={mapDimensions.width}
         height={mapDimensions.height}
       />
@@ -3917,6 +3501,10 @@ export function GameScene3D({
   state, preferences, impact = 0, motion = null, advanceFrame,
 }: GameScene3DProps) {
   useAdvanceBeforeRender(advanceFrame);
+  const sky = useMemo(
+    () => stageSkyBackground(getStageLook(state.config.stageId)),
+    [state.config.stageId],
+  );
   const bombClockRef = useRef<BombClock>({ bombs: [], detonationMs: new Map() });
   // Free cached label canvases nothing shows any more once the arena closes.
   useEffect(() => () => {
@@ -3930,7 +3518,7 @@ export function GameScene3D({
       style={{
         width: '100%',
         height: '100%',
-        background: '#7899a1',
+        background: sky,
         filter: preferences.highContrast ? 'contrast(1.28) saturate(1.14)' : 'none',
       }}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
