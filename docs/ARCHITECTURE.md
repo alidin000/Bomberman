@@ -1,127 +1,192 @@
-# Explosive Shinobi Arena Architecture
+# System Design
 
-## Overview
+Explosive Shinobi Arena separates game rules from input, networking, and
+rendering. The same deterministic simulation powers campaign, training, local
+battles, CPU players, replays, and online rooms.
 
-The game uses a **pure game engine** (`src/engine/`) separated from React UI, content catalogs, and the 3D renderer.
-- Input, from keyboards, gamepads and CPU players, flows into serializable actions.
-- A fixed-step loop runs the reducer outside React.
-- The views read the resulting state through narrow subscriptions.
+## Design Goals
 
-Solo campaign, Local Arena, replays, and private online rooms all share this simulation.
+- One source of truth for every match.
+- Repeatable outcomes from the same seed and action stream.
+- Smooth rendering without tying game speed to frame rate.
+- Untrusted online clients that send intent, never game state.
+- Content that can grow without duplicating engine rules.
+
+## Top-Level Design
 
 ```mermaid
-flowchart TD
-  contentCatalogs[Content Catalogs] --> gameEngine[Pure Game Engine]
-  inputLayer[Keyboard and Gamepad] --> engineLoop[Engine Loop]
-  cpuPlayers[CPU Players] --> engineLoop
-  engineLoop --> gameEngine
-  gameEngine --> gameState[Serializable Game State]
-  engineLoop --> motionCues[Motion and Cue Stores]
-  gameState --> engineStore[Engine Store and Selectors]
-  engineStore --> hudUi[React HUD and Menus]
-  engineStore --> threeScene[3D Scene Renderer]
-  motionCues --> threeScene
-  gameState --> tests[Logic Tests and Replays]
-  onlineServer[Authoritative Online Server] --> gameEngine
-  inputLayer --> onlineServer
-  onlineServer --> gameState
+flowchart TB
+  subgraph Clients
+    controls[Keyboard / gamepad]
+    cpu[CPU controller]
+    localLoop[Local 50 ms loop]
+    onlineClient[Online session]
+    store[Engine store]
+    react[React screens and HUD]
+    three[Three.js scene]
+    cues[Motion and pose stores]
+  end
+
+  subgraph Shared
+    reducer[Pure reducer]
+    content[Content catalogs]
+    state[Serializable state]
+  end
+
+  subgraph OnlineServer
+    protocol[Protocol validation]
+    room[Room and seat manager]
+    serverLoop[Authoritative 50 ms loop]
+  end
+
+  controls --> localLoop
+  cpu --> localLoop
+  localLoop --> reducer
+  controls --> onlineClient
+  onlineClient --> protocol --> room --> serverLoop --> reducer
+  content --> reducer
+  reducer --> state
+  state --> store
+  state --> onlineClient
+  localLoop --> cues
+  onlineClient --> cues
+  store --> react
+  store --> three
+  cues --> three
 ```
 
-## Directory Layout
+## State Ownership
+
+| Mode | Authoritative state | Input path |
+| --- | --- | --- |
+| Campaign | Browser engine loop | Keyboard or gamepad |
+| Training | Browser engine loop | Keyboard or gamepad |
+| Local Arena | Browser engine loop | Humans and CPU controllers |
+| Online Arena | Node room server | Validated WebSocket intent |
+
+The reducer owns players, bombs, flames, pickups, monsters, bosses, hazards,
+objectives, fog, the round clock, and results. React and Three.js only present
+that state. Visual effects cannot award damage, move a player, or finish a
+mission.
+
+## Local Match Flow
+
+1. The Mission Deck creates a serializable `GameConfig` and seed.
+2. `engineLoop.ts` accepts movement and action intent.
+3. It accumulates elapsed time and advances the reducer in fixed 50 ms steps.
+   Frame gaps are capped, and no more than four simulation steps run per frame.
+4. CPU controllers inspect state and submit the same actions as human players.
+5. The engine store publishes once per display frame.
+6. Narrow selectors update only the HUD or scene leaves whose data changed.
+7. Motion tracks interpolate positions between simulation steps. Pose cues
+   animate plants, hits, ultimates, and knockouts outside the reducer.
+
+Seeded randomness is the only randomness inside a match. This keeps tests,
+replays, CPU simulations, and online execution reproducible.
+
+## Online Room Flow
+
+```mermaid
+sequenceDiagram
+  participant A as Host browser
+  participant S as Room server
+  participant B as Guest browser
+
+  A->>S: Create room
+  S-->>A: Room code + seat + reconnect token
+  B->>S: Join room code
+  S-->>B: Seat + reconnect token
+  A->>S: Select fighter and ready
+  B->>S: Select fighter and ready
+  S->>S: Create seeded match
+  loop Every simulation step
+    A->>S: Input intent + sequence
+    B->>S: Input intent + sequence
+    S->>S: Validate, reduce, advance
+    S-->>A: Snapshot/delta + acknowledgement
+    S-->>B: Snapshot/delta + acknowledgement
+  end
+```
+
+The browser never sends a player ID, reducer action, or replacement state.
+`src/network/protocol.ts` validates message shape and limits. The server assigns
+seats, applies allowed intent, owns round advancement, and sends snapshots with
+sequence acknowledgements.
+
+A short disconnect pauses the room. A reconnect token restores the seat and
+forces a full snapshot before play resumes. Rooms live in memory, so the current
+deployment must use one server instance. Matchmaking, spectators, persistent
+rooms, rollback prediction, and multi-region routing are future systems.
+
+## Rendering
+
+The renderer has three layers:
+
+- **Static world:** floor, walls, crates, and stage landmarks use instanced
+  meshes.
+- **Actors:** fighters, enemies, bosses, bombs, pickups, and objectives use
+  shared geometry and materials where possible.
+- **Presentation:** HUD, labels, fog, telegraphs, camera framing, animation
+  cues, and accessibility settings.
+
+The simulation stores decimal grid coordinates. The scene maps `(x, y)` to
+Three.js `(x, 0, y)` and samples motion tracks each frame. This makes movement
+look continuous while collisions remain deterministic.
+
+### Model Pipeline
+
+Fighters are assembled from poseable Three.js primitives. Hair, clothing, and
+accessories vary by fighter. Monsters and bosses use reusable part recipes;
+their transformed pieces are merged once and cached. Pickups and objectives use
+merged vertex-colored bodies.
+
+The cel-shaded finish has two passes:
+
+1. A shared three-band toon texture quantizes light.
+2. One welded, back-facing hull per fighter expands along vertex normals to
+   create a stable dark outline.
+
+Archived GLB experiments are disabled in the shipping renderer. Keeping the
+procedural path as the default gives predictable scale, silhouettes, animation,
+load time, and draw-call cost.
+
+## Performance Constraints
+
+- Simulation: fixed 50 ms steps outside React.
+- React: selector-based subscriptions and stable render-state identity.
+- GPU: instancing, merged geometry, pooled materials, and cached textures.
+- Shaders: a fixed pool of five point lights and countdown warmup.
+- Canvas: no antialiasing, device pixel ratio capped at 1.35, demand rendering
+  while paused or showing results.
+- Loading: route-level lazy loading, a separate Three.js vendor chunk, and
+  static first paint.
+- Camera: gameplay is framed against measured HUD safe areas.
+
+Performance work is checked on production builds. Useful signals are draw calls,
+triangles, shader programs, late compiles, main-thread long tasks, React render
+counts, and first-load timing. Reducer tests verify rules; scene tests verify
+resource and rendering contracts; Playwright exercises real browser flows.
+
+## Main Modules
 
 | Path | Responsibility |
 | --- | --- |
-| `src/engine/` | Serializable state and the pure reducer: players, bombs, flames, monsters, bosses, hazards, campaign, fog of war, sudden death, seeded randomness (`random.ts`) |
-| `src/ai/` | CPU players: think after each tick, steer each frame, act only through engine actions |
-| `src/hooks/engineLoop.ts` | Fixed-step simulation loop outside React, held-movement repeats, CPU thinking, motion and cue recording |
-| `src/hooks/engineStore.ts` | Store over the engine loop, with `useEngineSelector` for narrow React subscriptions |
-| `src/hooks/useRenderState.ts` | Scene and HUD states that keep their identity across clock-only ticks |
-| `src/hooks/motionStore.ts`, `cueStore.ts` | Per-step motion tracks and render-only pose cues for the 3D scene |
-| `src/hooks/useGameEngine.ts` | React bridge: keyboard input, pad bindings, engine store |
-| `src/hooks/useOnlineGame.ts` | Online bridge: local input intent, snapshot state, motion and cue playback |
-| `src/input/` | Key bindings, the shared gamepad poll (`padHub.ts`), and gamepad menu navigation |
-| `src/content/` | Character, stage, stage look, enemy, boss, campaign, and power-up definitions |
-| `src/story/` | Saved campaign progress and unlocks |
-| `src/network/` | Replay helpers, strict room protocol, browser WebSocket session and reconnect handling |
-| `server/` | Authoritative two-seat rooms, fixed simulation ticks, reconnect grace, rate limits and health check |
-| `src/view/GameScreen/GameScreen.tsx` | Match screen: pause, confirmations, result hold, captions, gamepad claim |
-| `src/view/GameScreen/GameScene3D.tsx` | React Three Fiber arena renderer |
-| `src/view/GameScreen/scene/` | Light pool, shader warmup, instanced tiles, camera framing, stage atmosphere and landmarks, figures, ink outlines, hazard telegraphs, cue poses |
-| `src/view/GameScreen/GameHUD.tsx` | In-game HUD: player cards, match bar, campaign panel |
-| `src/view/*` | Welcome, Mission Deck setup, Shinobi Manual, and game screens |
-| `public/maps/` | Text map layouts for the stages; they are bundled into the build |
+| `src/engine/` | State, reducer, rules, hazards, campaign, and seeded randomness |
+| `src/ai/` | CPU decision-making through ordinary engine actions |
+| `src/content/` | Data-driven stages, fighters, missions, enemies, and bosses |
+| `src/hooks/engineLoop.ts` | Local fixed-step scheduler |
+| `src/hooks/engineStore.ts` | State publication and selector subscriptions |
+| `src/hooks/motionStore.ts` | Display interpolation tracks |
+| `src/hooks/cueStore.ts` | Render-only animation cues |
+| `src/network/` | Online protocol, browser session, reconnects, and replay |
+| `server/` | Authoritative rooms, ticks, rate limits, and health check |
+| `src/view/GameScreen/` | Match shell, HUD, camera, and 3D renderer |
+| `src/view/GameScreen/scene/` | Instancing, lights, warmup, models, ink, and telegraphs |
 
-## State Flow
+## Deployment
 
-1. **Init.**
-   - The Mission Deck (`ConfigScreen`) stores mode, stage, characters, CPU seats, round count, upgrade, and key bindings.
-   - `GameScreen` builds a `GameConfig` and dispatches `INIT` with a seed.
-   - The match code is a lazy chunk that the menus prefetch.
-2. **Countdown.** The 3-2-1 countdown freezes the simulation: the reducer rejects actions until the round is live. Every material variant compiles during this window. When a campaign boss appears, its entrance (`bossIntroMsRemaining`, 2.5 s) freezes the arena the same way until it runs out or a player sends `SKIP_BOSS_INTRO`.
-3. **Input.**
-   - A key press sends `MOVE` at once. Holding the key repeats it from the engine loop every 28 ms (18 ms for Minato or with a speed boost), in 0.1-cell steps, with buffered turns at intersections.
-   - Bombs, detonations, ultimates, and cover are single actions.
-   - Gamepads press the same bindings: the n-th pad plays the n-th human seat.
-4. **Tick.** The loop accumulates frame time, capped at 100 ms, and runs up to four 50 ms `TICK`s per frame.
-   - After each tick, CPU players may act through the same actions a human would.
-   - The reducer advances players, bombs, flames, monsters, bosses, hazards, objectives, fog of war, the round clock, and sudden death.
-5. **Publish.** The engine store notifies subscribers once per frame.
-   - The scene and HUD get states that stay the same object until something they draw changes.
-   - Clock-only ticks reach only the components that print a clock or countdown.
-6. **Render.**
-   - `GameScene3D` draws the board from the scene state.
-   - Each frame it samples the motion store for smooth fighter movement and the cue store for poses.
-   - It reads the live engine state for fuses and flames.
-7. **Round end.**
-   - The engine sets `phase` to `round_end` or `game_over` and pauses.
-   - The screen holds the deciding moment for 1.2 s, then shows the result. A sealed boss holds for 2.2 s while it collapses and its reward card shows. The scene keeps drawing through the hold. The result ignores input for its first 600 ms.
-   - `DISMISS_DIALOG` starts the next round, and `RESTART` rematches with a fresh seed.
-
-Online Arena replaces the local engine loop with the server loop. Each browser sends only direction and action intent. The server assigns the player ID, runs the reducer every 50 ms, and returns full or top-level delta snapshots with sequence acknowledgements. A disconnect pauses the room; a reconnect token restores the same seat and receives a full snapshot before play resumes.
-
-## Render Pipeline
-
-- **Canvas.**
-  - Antialiasing is off, the device pixel ratio is capped at 1.35, and the canvas is transparent over a CSS sky gradient.
-  - The frame loop switches to on-demand under a real pause or the result dialog.
-- **Lights.** Per stage, one ambient, one hemisphere, and one directional light are recoloured. Dynamic lights come from a fixed pool of five point lights (`LightPool.tsx`). The light count never changes, because three.js recompiles every lit material when it does.
-- **Warmup.** `ShaderWarmup.tsx` compiles every material variant during the countdown, with the scene fog attached. The variants include toon fighters, Ghost, ink outlines, telegraphs, and labels. A variant missing from the warmup would compile mid-match and stutter.
-- **Static board.**
-  - Floor, walls, and crates are instanced layers (`StaticTiles.tsx`).
-  - Off-grid landmarks reuse the same program and stay outside every legal camera framing. The Stage scenery setting can hide them.
-- **Entities.**
-  - Fighters are procedural figures with shared toon materials and one merged ink-outline mesh each.
-  - Monsters and bosses use shared module-level geometry and materials per archetype. Mini-boss gate guards add their stage's regalia (`scene/guardLooks.ts`).
-  - Pickups and campaign objectives are inked tokens (`scene/inkedToken.ts`): one merged vertex-coloured toon body plus one ink hull, shared per look. Each pickup type has its own outline (`scene/pickupModels.ts`); a defended structure shows its HP as damage (`scene/objectiveModels.ts`).
-  - Labels and tags share sprite textures.
-- **Camera.** The camera fits the players' box against the measured HUD bands (`cameraFraming.ts`). Narrow screens may zoom out far enough for the widest legal spread of players.
-- **Accessibility.** High contrast retones palettes and material uniforms, with no CSS filter on the canvas. Reduced motion holds poses still and turns off camera shake.
-
-## Coordinate System
-
-- The grid uses `map[y][x]` (row = y, column = x).
-- Player positions are decimal cell coordinates that move in 0.1-cell steps. Bombs, flames, and pickups stay on whole cells.
-- The 3D scene maps `(x, y)` to `(x, 0, y)` with Y up.
-
-## Character Bombs and Bosses
-
-Character behavior is content-driven where possible and engine-driven where simulation rules are needed:
-
-- `src/content/characters.ts` exposes names, titles, colors, bomb labels, ultimate labels, and descriptions.
-- `src/engine/bombs.ts` maps characters to concrete bomb kinds and applies different blast shapes, damage, and boss-control effects.
-- `src/content/bosses.ts` and `src/engine/bosses.ts` pair boss catalog data with movement, warning windows, hazards, phases, and cooldown tuning.
-- `ExplosionCell.kind` lets the renderer color and animate blasts by the bomb that created them.
-
-## Legacy Issues Fixed in Engine
-
-- Mutable `Player` class instances mixed with React state.
-- `setTimeout` for bombs/explosions (non-deterministic).
-- `SmartMonster.getNeighbors` indexed `map[x][y]` instead of `map[y][x]`.
-- `GameScreen.tsx` mixed UI, timers, spawning, and win detection.
-- Cell-by-cell rendering made movement look stiff; render-side interpolation now smooths entity motion.
-
-## Online Multiplayer
-
-The first online slice is a private two-player arena on one server instance. `src/network/protocol.ts` validates every client message and never accepts a player ID, game action object, or game state from a browser. `server/onlineServer.ts` owns room setup, readiness, simulation, round advancement, reconnects and rematches.
-
-Rooms currently live in memory, so the Render service must remain at one instance. Matchmaking, spectators, shared persistence, rollback prediction, campaign co-op and multi-region routing remain future work.
+Vite builds the static browser client. The Node service hosts WebSocket rooms
+and `/healthz`. In `render.yaml`, the client receives the server URL through
+`VITE_GAME_SERVER_URL`, and the server receives the allowed browser origin.
+The online service must remain single-instance until rooms move to shared
+storage or use sticky routing.
