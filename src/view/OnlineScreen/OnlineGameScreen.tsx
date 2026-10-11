@@ -3,13 +3,16 @@ import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import ReplayIcon from '@mui/icons-material/Replay';
 import { Button } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
+import { DEFAULT_KEY_BINDINGS } from '../../constants/props';
 import { useEngineSelector } from '../../hooks/engineStore';
 import { useOnlineEngine, useOnlineInput, useOnlineSessionSnapshot } from '../../hooks/useOnlineGame';
+import { useTouchMode } from '../../input/touchMode';
 import { getOnlineSession } from '../../network/onlineSession';
 import { useEngineFeedback } from '../GameScreen/useGameFeedback';
 import { applyDocumentPreferences, loadGamePreferences } from '../GameScreen/gamePreferences';
 import { MatchAnnouncer, MatchHud, MatchScene } from '../GameScreen/MatchLeaves';
 import { GameBackground, GameSceneContainer, LoadingMessage } from '../GameScreen/GameScreen.styles';
+import { TouchControls } from '../GameScreen/TouchControls';
 import { StyledBackground } from '../WelcomeScreen/WelcomeScreen.styles';
 import {
   CompactButton, ConnectionCurtain, MatchNetworkBar, ResultPanel
@@ -24,6 +27,8 @@ export function OnlineGameScreen() {
   const [preferences] = useState(loadGamePreferences);
   const state = useEngineSelector(engine.store, (current) => current);
   const feedback = useEngineFeedback(engine.store, preferences);
+  const touchMode = useTouchMode();
+  const canPlay = online.connected && !!state && state.phase === 'playing' && !state.paused;
 
   useEffect(() => applyDocumentPreferences(preferences), [preferences]);
   useEffect(() => {
@@ -36,7 +41,7 @@ export function OnlineGameScreen() {
     }
   }, [navigate, online.connected, roomId, session]);
 
-  useOnlineInput(session, online.connected && !!state && state.phase === 'playing' && !state.paused);
+  useOnlineInput(session, canPlay);
 
   const leave = () => {
     session.leave();
@@ -78,6 +83,16 @@ export function OnlineGameScreen() {
         />
       </GameSceneContainer>
       <MatchAnnouncer store={engine.store} caption={feedback.caption} eventId={feedback.eventId} roundOver={roundOver} held={state.paused || state.phase !== 'playing'} hudScale={preferences.hudScale} campaign={false} />
+      {touchMode && online.seat !== null && (
+        // Online has one local control set; the server seat only selects the
+        // fighter whose kit and ultimate charge the overlay displays.
+        <TouchControls
+          store={engine.store}
+          slot={online.seat}
+          keys={DEFAULT_KEY_BINDINGS['1']}
+          enabled={canPlay}
+        />
+      )}
       {online.error && state.phase === 'playing' && <ConnectionCurtain role="status"><strong>{online.error}</strong></ConnectionCurtain>}
       {state.phase === 'game_over' && (
         <ConnectionCurtain>

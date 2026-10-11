@@ -26,6 +26,57 @@ export const TouchLayer = styled.div({
   },
 });
 
+export const LandscapeHint = styled.div({
+  position: 'fixed',
+  zIndex: 19,
+  bottom: 'calc(var(--touch-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 76px)',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  maxWidth: 'calc(100vw - 32px)',
+  minHeight: 44,
+  padding: '4px 4px 4px 12px',
+  color: 'var(--anime-ink)',
+  background: 'var(--anime-paper-light)',
+  border: '2px solid var(--anime-ink)',
+  borderRadius: 4,
+  boxShadow: '3px 3px 0 color-mix(in srgb, var(--anime-ink) 72%, transparent)',
+  fontSize: '0.78rem',
+  fontWeight: 900,
+  lineHeight: 1.15,
+  whiteSpace: 'nowrap',
+  pointerEvents: 'auto',
+  '& > svg': {
+    flex: '0 0 auto',
+    fontSize: 20,
+    color: 'var(--anime-teal)',
+  },
+  '@media (orientation: landscape)': {
+    display: 'none',
+  },
+});
+
+export const LandscapeHintDismiss = styled.button({
+  width: 44,
+  height: 44,
+  flex: '0 0 auto',
+  display: 'grid',
+  placeItems: 'center',
+  padding: 0,
+  border: 0,
+  color: 'inherit',
+  background: 'transparent',
+  cursor: 'pointer',
+  touchAction: 'manipulation',
+  '& svg': { fontSize: 20 },
+  '&:focus-visible': {
+    outline: '3px solid var(--anime-teal)',
+    outlineOffset: -3,
+  },
+});
+
 export const PadZone = styled.div({
   position: 'absolute',
   pointerEvents: 'auto',

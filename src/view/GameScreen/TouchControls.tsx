@@ -1,6 +1,8 @@
 import React, {
-  useCallback, useEffect, useLayoutEffect, useMemo, useRef,
+  useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
 } from 'react';
+import CloseIcon from '@mui/icons-material/Close';
+import ScreenRotationAltIcon from '@mui/icons-material/ScreenRotationAlt';
 import { EngineSelector, EngineStore, useEngineSelector } from '../../hooks/engineStore';
 import { TouchController } from '../../input/touchController';
 import { TouchButtonId, TouchCircle, touchLayout } from '../../input/touchLayout';
@@ -10,6 +12,8 @@ import { useViewportSize } from './useViewportSize';
 import {
   ActionButton,
   BombButton,
+  LandscapeHint,
+  LandscapeHintDismiss,
   PadKnob,
   PadRing,
   PadZone,
@@ -20,6 +24,15 @@ import {
 
 /** A short buzz per press, where the browser has one (Android Chrome; not iOS). */
 export const TOUCH_VIBRATE_MS = 10;
+export const LANDSCAPE_HINT_DISMISSED_KEY = 'shinobiLandscapeHintDismissed';
+
+function landscapeHintWasDismissed(): boolean {
+  try {
+    return localStorage.getItem(LANDSCAPE_HINT_DISMISSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
 
 function vibrate(preferences: TouchPreferences): void {
   if (!preferences.vibration) return;
@@ -107,6 +120,9 @@ export const TouchControls = React.memo(({
   store, slot, keys, enabled,
 }: TouchControlsProps) => {
   const preferences = useTouchPreferences();
+  const [landscapeHintDismissed, setLandscapeHintDismissed] = useState(
+    landscapeHintWasDismissed
+  );
   const safe = useSafeArea();
   const viewport = useViewportSize();
   const width = Math.max(1, viewport.width - safe.left - safe.right);
@@ -297,67 +313,94 @@ export const TouchControls = React.memo(({
     height: circle.size,
   });
   const out = kit.alive ? undefined : '';
+  const dismissLandscapeHint = () => {
+    setLandscapeHintDismissed(true);
+    try {
+      localStorage.setItem(LANDSCAPE_HINT_DISMISSED_KEY, 'true');
+    } catch {
+      // The hint still closes when storage is unavailable.
+    }
+  };
 
   const { zone, pad } = layout;
   return (
-    <TouchLayer
-      ref={layerRef}
-      aria-hidden="true"
-      data-touch-controls=""
-      data-disabled={enabled ? undefined : ''}
-      style={{ '--touch-rest': String(preferences.opacity / 100) } as React.CSSProperties}
-      onContextMenu={(event) => event.preventDefault()}
-      onPointerDown={onButtonDown}
-      onPointerUp={onButtonUp}
-      onPointerCancel={onButtonUp}
-      onLostPointerCapture={onButtonUp}
-    >
-      <PadZone
-        data-touch-pad=""
-        style={{
-          left: zone.left, top: zone.top, width: zone.width, height: zone.height,
-        }}
-        onPointerDown={onPadDown}
-        onPointerMove={onPadMove}
-        onPointerUp={onPadEnd}
-        onPointerCancel={onPadEnd}
-        onLostPointerCapture={onPadEnd}
-      />
-      <PadRing ref={ringRef} style={{ width: pad.ring, height: pad.ring }}>
-        {DIRECTIONS.map((direction) => <i key={direction} data-dir={direction} />)}
-        <PadKnob ref={knobRef} style={{ width: pad.knob, height: pad.knob }} />
-      </PadRing>
-      <BombButton data-touch-button="bomb" data-out={out} style={place(layout.buttons.bomb)}>
-        <BombGlyph />
-        <span>Bomb</span>
-      </BombButton>
-      <UltimateButton
-        ref={ultimateRef}
-        data-touch-button="ultimate"
-        data-out={out}
-        style={place(layout.buttons.ultimate)}
-      >
-        <StarGlyph />
-        <span>Ult</span>
-      </UltimateButton>
-      {/* Only while they can do something (Apple HIG: hide unavailable controls). */}
-      {kit.detonator && (
-        <ActionButton
-          data-touch-button="detonate"
-          data-out={out}
-          style={place(layout.buttons.detonate)}
+    <>
+      {enabled && layout.orientation === 'portrait' && !landscapeHintDismissed && (
+        <LandscapeHint
+          role="region"
+          aria-label="screen orientation suggestion"
+          data-landscape-hint=""
         >
-          <BurstGlyph />
-          <span>Det</span>
-        </ActionButton>
+          <ScreenRotationAltIcon aria-hidden="true" />
+          <span>Rotate for a wider arena</span>
+          <LandscapeHintDismiss
+            type="button"
+            aria-label="dismiss orientation suggestion"
+            onClick={dismissLandscapeHint}
+          >
+            <CloseIcon aria-hidden="true" />
+          </LandscapeHintDismiss>
+        </LandscapeHint>
       )}
-      {kit.cover && (
-        <ActionButton data-touch-button="cover" data-out={out} style={place(layout.buttons.cover)}>
-          <WallGlyph />
-          <span>Cover</span>
-        </ActionButton>
-      )}
-    </TouchLayer>
+      <TouchLayer
+        ref={layerRef}
+        aria-hidden="true"
+        data-touch-controls=""
+        data-disabled={enabled ? undefined : ''}
+        style={{ '--touch-rest': String(preferences.opacity / 100) } as React.CSSProperties}
+        onContextMenu={(event) => event.preventDefault()}
+        onPointerDown={onButtonDown}
+        onPointerUp={onButtonUp}
+        onPointerCancel={onButtonUp}
+        onLostPointerCapture={onButtonUp}
+      >
+        <PadZone
+          data-touch-pad=""
+          style={{
+            left: zone.left, top: zone.top, width: zone.width, height: zone.height,
+          }}
+          onPointerDown={onPadDown}
+          onPointerMove={onPadMove}
+          onPointerUp={onPadEnd}
+          onPointerCancel={onPadEnd}
+          onLostPointerCapture={onPadEnd}
+        />
+        <PadRing ref={ringRef} style={{ width: pad.ring, height: pad.ring }}>
+          {DIRECTIONS.map((direction) => <i key={direction} data-dir={direction} />)}
+          <PadKnob ref={knobRef} style={{ width: pad.knob, height: pad.knob }} />
+        </PadRing>
+        <BombButton data-touch-button="bomb" data-out={out} style={place(layout.buttons.bomb)}>
+          <BombGlyph />
+          <span>Bomb</span>
+        </BombButton>
+        <UltimateButton
+          ref={ultimateRef}
+          data-touch-button="ultimate"
+          data-out={out}
+          style={place(layout.buttons.ultimate)}
+        >
+          <StarGlyph />
+          <span>Ult</span>
+        </UltimateButton>
+        {/* Only while they can do something (Apple HIG: hide unavailable controls). */}
+        {kit.detonator && (
+          <ActionButton
+            data-touch-button="detonate"
+            data-out={out}
+            style={place(layout.buttons.detonate)}
+          >
+            <BurstGlyph />
+            <span>Det</span>
+          </ActionButton>
+        )}
+        {kit.cover && (
+          <ActionButton data-touch-button="cover" data-out={out} style={place(layout.buttons.cover)}>
+            <WallGlyph />
+            <span>Cover</span>
+          </ActionButton>
+        )}
+      </TouchLayer>
+    </>
   );
 });
 TouchControls.displayName = 'TouchControls';

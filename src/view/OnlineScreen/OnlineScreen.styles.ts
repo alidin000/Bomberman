@@ -121,6 +121,11 @@ export const MatchNetworkBar = styled(Box)({
   color: 'var(--anime-paper-light)',
   fontSize: '.78rem',
   whiteSpace: 'nowrap',
+  'html[data-touch="on"] &': {
+    '@media (orientation: portrait)': {
+      bottom: 'calc(var(--touch-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 8px)',
+    },
+  },
 });
 
 export const ConnectionCurtain = styled(Box)({
