@@ -9,7 +9,10 @@ import {
 } from './motionStore';
 import { clearCues, recordStepCues } from './cueStore';
 import { getInputStateForKey } from '../input/humanController';
-import { getOnlineSession, OnlineSession } from '../network/onlineSession';
+import {
+  getOnlineSession, OnlineSession, OnlineSessionSnapshot,
+} from '../network/onlineSession';
+import { onlineGlideDuration } from '../network/onlineInterpolation';
 
 const MAX_FRAME_DELTA_MS = 100;
 
@@ -24,6 +27,42 @@ function inputDirection(key: string): Direction | null {
 
 export function useOnlineSessionSnapshot(session: OnlineSession = getOnlineSession()) {
   return useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+}
+
+type OnlineStatusSnapshot = Pick<
+OnlineSessionSnapshot,
+'connected' | 'roomId' | 'seat' | 'error'
+>;
+
+function sameOnlineStatus(
+  previous: OnlineStatusSnapshot | null,
+  next: OnlineSessionSnapshot
+): boolean {
+  return !!previous
+    && previous.connected === next.connected
+    && previous.roomId === next.roomId
+    && previous.seat === next.seat
+    && previous.error === next.error;
+}
+
+/** Socket metadata without subscribing the screen shell to 20 Hz game snapshots. */
+export function useOnlineStatusSnapshot(
+  session: OnlineSession = getOnlineSession()
+): OnlineStatusSnapshot {
+  const cachedRef = useRef<OnlineStatusSnapshot | null>(null);
+  const getSnapshot = useCallback(() => {
+    const next = session.getSnapshot();
+    if (!sameOnlineStatus(cachedRef.current, next)) {
+      cachedRef.current = {
+        connected: next.connected,
+        roomId: next.roomId,
+        seat: next.seat,
+        error: next.error,
+      };
+    }
+    return cachedRef.current!;
+  }, [session]);
+  return useSyncExternalStore(session.subscribe, getSnapshot, getSnapshot);
 }
 
 export function useOnlineInput(session: OnlineSession, enabled: boolean): void {
@@ -86,35 +125,52 @@ export type OnlineEngine = {
 };
 
 export function useOnlineEngine(session: OnlineSession = getOnlineSession()): OnlineEngine {
-  const snapshot = useOnlineSessionSnapshot(session);
   const storeRef = useRef<PublishingEngineStore>();
   if (!storeRef.current) storeRef.current = createEngineStore();
   const motionRef = useRef<MotionStore>();
   if (!motionRef.current) motionRef.current = createMotionStore();
-  const stateRef = useRef(snapshot.gameState);
+  const stateRef = useRef<OnlineSessionSnapshot['gameState']>(null);
   const lastFrameRef = useRef<number | null>(null);
+  const lastSnapshotAtRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const before = stateRef.current;
-    const after = snapshot.gameState;
-    const motion = motionRef.current!;
-    if (!after) {
-      stateRef.current = null;
-      clearMotion(motion);
-      if (motion.cues) clearCues(motion.cues);
-      storeRef.current!.publish(null);
-      return;
-    }
-    if (!before || after.tick < before.tick) {
-      clearMotion(motion);
-      if (motion.cues) clearCues(motion.cues);
-    } else if (before !== after) {
-      recordTickMotion(motion, before, after, motion.simTimeMs, TICK_MS);
-      if (motion.cues) recordStepCues(motion.cues, before, after, motion.cues.clockMs);
-    }
-    stateRef.current = after;
-    storeRef.current!.publish(after);
-  }, [snapshot.gameState]);
+    const publishSessionState = () => {
+      const before = stateRef.current;
+      const after = session.getSnapshot().gameState;
+      if (before === after) return;
+      const motion = motionRef.current!;
+      const receivedAt = performance.now();
+      if (!after) {
+        stateRef.current = null;
+        lastSnapshotAtRef.current = null;
+        clearMotion(motion);
+        if (motion.cues) clearCues(motion.cues);
+        storeRef.current!.publish(null);
+        return;
+      }
+      if (!before || after.tick < before.tick) {
+        clearMotion(motion);
+        if (motion.cues) clearCues(motion.cues);
+      } else {
+        const observedInterval = lastSnapshotAtRef.current === null
+          ? TICK_MS
+          : receivedAt - lastSnapshotAtRef.current;
+        recordTickMotion(
+          motion,
+          before,
+          after,
+          motion.simTimeMs,
+          onlineGlideDuration(before.tick, after.tick, observedInterval)
+        );
+        if (motion.cues) recordStepCues(motion.cues, before, after, motion.cues.clockMs);
+      }
+      lastSnapshotAtRef.current = receivedAt;
+      stateRef.current = after;
+      storeRef.current!.publish(after);
+    };
+    publishSessionState();
+    return session.subscribe(publishSessionState);
+  }, [session]);
 
   const advanceFrame = useCallback((now: number) => {
     const previous = lastFrameRef.current;

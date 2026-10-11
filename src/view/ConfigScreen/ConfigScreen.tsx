@@ -14,7 +14,7 @@ import {
   ToggleButtonGroup,
   Button,
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Info from '@mui/icons-material/Info';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -175,9 +175,14 @@ function shortStageName(name: string): string {
 }
 
 export const ConfigScreen = () => {
+  const location = useLocation();
+  const requestedSolo = new URLSearchParams(location.search).get('mode') === 'solo';
   const initialStoryProgress = useMemo(() => loadStoryProgress(), []);
   // Reopen the deck on the last local battle setup, if that was the last match.
-  const lastLocalSetup = useMemo(() => readLastLocalSetup(), []);
+  const lastLocalSetup = useMemo(
+    () => (requestedSolo ? null : readLastLocalSetup()),
+    [requestedSolo]
+  );
   const [activeStep, setActiveStep] = useState(0);
   const [mode, setMode] = useState<GameMode>(lastLocalSetup ? 'local' : 'solo');
   const [rounds, setRounds] = useState<MatchRounds>(lastLocalSetup?.rounds ?? '1');

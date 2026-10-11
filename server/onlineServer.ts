@@ -3,27 +3,29 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { createServer, Server as HttpServer } from 'node:http';
 import WebSocket, { RawData, WebSocketServer } from 'ws';
-import { defaultMap } from '../src/constants/contants';
 import { GameAction } from '../src/engine/actions';
 import { TICK_MS } from '../src/engine/constants';
+import { loadStageMapRows, parseMapRows } from '../src/engine/mapLoader';
 import { gameReducer } from '../src/engine/reducer';
 import {
   Direction, GameConfig, GameEngineState, PlayerState,
 } from '../src/engine/types';
-import { CharacterId } from '../src/content/types';
+import { CharacterId, StageId } from '../src/content/types';
+import { getStageDefinition } from '../src/content/stages';
 import {
   ClientMessage,
   MAX_CLIENT_MESSAGE_BYTES,
   OnlineAction,
   OnlinePlayer,
-  OnlineRoomSize,
+  ONLINE_ROOM_CAPACITY,
+  OnlineRoomMode,
+  OnlineRounds,
   PROTOCOL_VERSION,
   SIMULATION_VERSION,
   ServerMessage,
   parseClientMessage,
   serializeMessage,
 } from '../src/network/protocol';
-import { GameMap, gameItem } from '../src/model/gameItem';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ROOM_CODE_LENGTH = 6;
@@ -34,9 +36,10 @@ const ROUND_RESULT_MS = 4_000;
 const EMPTY_ROOM_TTL_MS = 60_000;
 const LOBBY_TTL_MS = 10 * 60_000;
 const KEEPALIVE_MS = 15_000;
+const MAX_SNAPSHOT_BUFFER_BYTES = 16 * 1024;
 const MOVE_REPEAT_MS = 28;
 const FAST_MOVE_REPEAT_MS = 18;
-const ONLINE_STAGE = 'hiddenLeaf' as const;
+const MIN_ROOM_PLAYERS = 2;
 
 type InputMessage = Extract<ClientMessage, { type: 'input' }>;
 
@@ -54,12 +57,15 @@ type Seat = {
   direction: Direction | null;
   fallbackDirection: Direction | null;
   moveAccumulatorMs: number;
+  needsFullSnapshot: boolean;
   reconnectTimer: ReturnType<typeof setTimeout> | null;
 };
 
 type Room = {
   id: string;
-  maxPlayers: OnlineRoomSize;
+  roomMode: OnlineRoomMode;
+  stageId: StageId;
+  totalRounds: OnlineRounds;
   seats: Seat[];
   state: GameEngineState | null;
   config: GameConfig | null;
@@ -86,15 +92,10 @@ export type OnlineServerOptions = {
   emptyRoomTtlMs?: number;
   roundResultMs?: number;
   tickIntervalMs?: number;
+  maxSnapshotBufferBytes?: number;
 };
 
-function onlineMap(): GameMap {
-  return defaultMap.map((row) => row.map((cell): gameItem => {
-    if (cell === 'W') return 'Wall';
-    if (cell === 'B') return 'Box';
-    return 'Empty';
-  }));
-}
+type SnapshotDelivery = { needsFullSnapshot: boolean };
 
 function roomCode(): string {
   return Array.from({ length: ROOM_CODE_LENGTH }, () => (
@@ -124,8 +125,10 @@ function lobbyMessage(room: Room): ServerMessage {
   return {
     type: 'lobby',
     roomId: room.id,
-    stageId: ONLINE_STAGE,
-    maxPlayers: room.maxPlayers,
+    roomMode: room.roomMode,
+    stageId: room.stageId,
+    capacity: ONLINE_ROOM_CAPACITY,
+    totalRounds: room.totalRounds,
     players: roomPlayers(room),
   };
 }
@@ -158,14 +161,39 @@ function statePatch(
   return patch;
 }
 
-function createConfig(room: Room): GameConfig {
+/** @internal Exported so the backpressure/resync contract can be tested directly. */
+export function snapshotForDelivery(
+  delivery: SnapshotDelivery,
+  before: GameEngineState | null,
+  state: GameEngineState,
+  ack: number,
+  bufferedBytes: number,
+  maxBufferedBytes: number,
+  forceFull = false
+): Extract<ServerMessage, { type: 'snapshot' }> | null {
+  if (bufferedBytes > maxBufferedBytes) {
+    delivery.needsFullSnapshot = true;
+    return null;
+  }
+  const sendFull = forceFull || delivery.needsFullSnapshot || !before;
+  delivery.needsFullSnapshot = false;
   return {
-    mode: 'onlinePreview',
+    type: 'snapshot',
+    tick: state.tick,
+    ack,
+    ...(sendFull ? { state } : { patch: statePatch(before, state) }),
+  };
+}
+
+function createConfig(room: Room): GameConfig {
+  const stage = getStageDefinition(room.stageId);
+  return {
+    mode: room.roomMode === 'coop' ? 'solo' : 'onlinePreview',
     numPlayers: room.seats.length,
-    totalRounds: 3,
-    selectedMap: 'online-arena',
-    stageId: ONLINE_STAGE,
-    map: onlineMap(),
+    totalRounds: room.roomMode === 'coop' ? 1 : room.totalRounds,
+    selectedMap: stage.mapId,
+    stageId: stage.id,
+    map: parseMapRows(loadStageMapRows(stage.mapId)),
     selectedCharacters: room.seats.map((seat) => seat.characterId),
     playerNames: room.seats.map((seat) => seat.name),
     seed: randomInt(1, 2_147_483_646),
@@ -190,6 +218,8 @@ export async function startOnlineServer(
   const emptyRoomTtlMs = options.emptyRoomTtlMs ?? EMPTY_ROOM_TTL_MS;
   const roundResultMs = options.roundResultMs ?? ROUND_RESULT_MS;
   const tickIntervalMs = options.tickIntervalMs ?? TICK_MS;
+  const maxSnapshotBufferBytes = options.maxSnapshotBufferBytes
+    ?? MAX_SNAPSHOT_BUFFER_BYTES;
 
   const http: HttpServer = createServer((request, response) => {
     if (request.url === '/healthz') {
@@ -204,7 +234,15 @@ export async function startOnlineServer(
   const wss = new WebSocketServer({
     server: http,
     maxPayload: MAX_CLIENT_MESSAGE_BYTES,
-    perMessageDeflate: true,
+    perMessageDeflate: {
+      // Active patches are only a few KB. Avoid paying zlib/context costs on
+      // every 20 Hz update; larger full-state syncs still compress.
+      clientNoContextTakeover: true,
+      serverNoContextTakeover: true,
+      concurrencyLimit: 4,
+      threshold: 4 * 1024,
+      zlibDeflateOptions: { level: 3 },
+    },
     verifyClient: ({ origin }, done) => {
       if (originAllowed(origin, allowedOrigins)) done(true);
       else done(false, 403, 'Origin not allowed');
@@ -244,13 +282,18 @@ export async function startOnlineServer(
     forceFull = false
   ) => {
     if (!room.state) return;
-    const patch = before && !forceFull ? statePatch(before, room.state) : undefined;
-    room.seats.forEach((seat) => send(seat.socket, {
-      type: 'snapshot',
-      tick: room.state!.tick,
-      ack: seat.lastAppliedSeq,
-      ...(patch ? { patch } : { state: room.state! }),
-    }));
+    room.seats.forEach((seat) => {
+      const message = snapshotForDelivery(
+        seat,
+        before,
+        room.state!,
+        seat.lastAppliedSeq,
+        seat.socket?.bufferedAmount ?? 0,
+        maxSnapshotBufferBytes,
+        forceFull
+      );
+      if (message) send(seat.socket, message);
+    });
   };
 
   const reduce = (room: Room, action: GameAction): void => {
@@ -353,11 +396,6 @@ export async function startOnlineServer(
     if (!room.tickTimer) room.tickTimer = setInterval(() => tickRoom(room), tickIntervalMs);
   };
 
-  const maybeStart = (room: Room) => {
-    if (room.state || room.seats.length !== room.maxPlayers) return;
-    if (room.seats.every((seat) => seat.connected && seat.ready)) startMatch(room);
-  };
-
   const addSeat = (
     room: Room,
     socket: WebSocket,
@@ -365,7 +403,7 @@ export async function startOnlineServer(
     characterId: CharacterId
   ): Seat | null => {
     if (room.state) return null;
-    if (room.seats.length >= room.maxPlayers) return null;
+    if (room.seats.length >= ONLINE_ROOM_CAPACITY) return null;
     const seatIndex = room.seats.length;
     const seat: Seat = {
       seat: seatIndex,
@@ -381,6 +419,7 @@ export async function startOnlineServer(
       direction: null,
       fallbackDirection: null,
       moveAccumulatorMs: 0,
+      needsFullSnapshot: true,
       reconnectTimer: null,
     };
     room.seats.push(seat);
@@ -410,6 +449,7 @@ export async function startOnlineServer(
     room.cleanupTimer = null;
     seat.socket = socket;
     seat.connected = true;
+    seat.needsFullSnapshot = true;
     sessions.set(socket, { room, seat });
     send(socket, {
       type: 'welcome',
@@ -426,6 +466,7 @@ export async function startOnlineServer(
       send(socket, {
         type: 'snapshot', tick: room.state.tick, ack: seat.lastAppliedSeq, state: room.state,
       });
+      seat.needsFullSnapshot = false;
       if (room.state.phase === 'round_end') scheduleRoundAdvance(room);
       if (room.state.phase === 'playing') {
         setTimeout(() => {
@@ -467,6 +508,28 @@ export async function startOnlineServer(
     }
   };
 
+  const removeLobbyGuest = (room: Room, seat: Seat): void => {
+    const { socket } = seat;
+    if (socket) {
+      sessions.delete(socket);
+      rates.delete(socket);
+    }
+    room.seats.splice(seat.seat, 1);
+    room.seats.forEach((remaining, index) => {
+      remaining.seat = index;
+      remaining.playerId = `player${index + 1}`;
+      send(remaining.socket, {
+        type: 'welcome',
+        roomId: room.id,
+        seat: remaining.seat,
+        playerId: remaining.playerId,
+        token: remaining.token,
+      });
+    });
+    broadcast(room, lobbyMessage(room));
+    socket?.close(1000, 'Left room');
+  };
+
   const rateAllowed = (socket: WebSocket): boolean => {
     const now = Date.now();
     const current = rates.get(socket);
@@ -488,7 +551,9 @@ export async function startOnlineServer(
       while (rooms.has(id)) id = roomCode();
       const room: Room = {
         id,
-        maxPlayers: message.maxPlayers,
+        roomMode: message.roomMode,
+        stageId: message.stageId,
+        totalRounds: message.totalRounds,
         seats: [],
         state: null,
         config: null,
@@ -546,7 +611,22 @@ export async function startOnlineServer(
     if (message.type === 'ready' && !room.state) {
       seat.ready = message.ready;
       broadcast(room, lobbyMessage(room));
-      maybeStart(room);
+      return;
+    }
+    if (message.type === 'start-match' && !room.state) {
+      if (seat.seat !== 0) {
+        send(seat.socket, { type: 'error', code: 'not-host' });
+        return;
+      }
+      if (room.seats.length < MIN_ROOM_PLAYERS) {
+        send(seat.socket, { type: 'error', code: 'not-enough-players' });
+        return;
+      }
+      if (!room.seats.every((item) => item.connected && item.ready)) {
+        send(seat.socket, { type: 'error', code: 'not-ready' });
+        return;
+      }
+      startMatch(room);
       return;
     }
     if (message.type === 'input' && room.state) {
@@ -564,7 +644,8 @@ export async function startOnlineServer(
       return;
     }
     if (message.type === 'leave') {
-      closeRoom(room, 'left');
+      if (!room.state && seat.seat !== 0) removeLobbyGuest(room, seat);
+      else closeRoom(room, 'left');
       return;
     }
     send(seat.socket, { type: 'error', code: 'bad-message' });

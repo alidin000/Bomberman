@@ -2,11 +2,13 @@ import { CharacterId, StageId } from '../content/types';
 import { Direction, GameConfig, GameEngineState } from '../engine/types';
 import { REPLAY_VERSION } from './replay';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 export const SIMULATION_VERSION = REPLAY_VERSION;
 export const MAX_CLIENT_MESSAGE_BYTES = 1024;
-export const ONLINE_ROOM_SIZES = [2, 3, 4] as const;
-export type OnlineRoomSize = typeof ONLINE_ROOM_SIZES[number];
+export const ONLINE_ROOM_CAPACITY = 4;
+export const ONLINE_ROUND_OPTIONS = [1, 3, 5] as const;
+export type OnlineRoomMode = 'coop' | 'arena';
+export type OnlineRounds = typeof ONLINE_ROUND_OPTIONS[number];
 
 export type OnlineAction = 'bomb' | 'detonate' | 'ultimate' | 'cover';
 
@@ -21,7 +23,8 @@ export type OnlinePlayer = {
 export type ClientMessage =
   | {
     type: 'create'; protocol: typeof PROTOCOL_VERSION; simulation: typeof SIMULATION_VERSION;
-    name: string; characterId: CharacterId; maxPlayers: OnlineRoomSize;
+    name: string; characterId: CharacterId; roomMode: OnlineRoomMode;
+    stageId: StageId; totalRounds: OnlineRounds;
   }
   | {
     type: 'join'; protocol: typeof PROTOCOL_VERSION; simulation: typeof SIMULATION_VERSION;
@@ -33,6 +36,7 @@ export type ClientMessage =
   }
   | { type: 'selection'; characterId: CharacterId }
   | { type: 'ready'; ready: boolean }
+  | { type: 'start-match' }
   | {
     type: 'input'; seq: number; direction?: Direction | null;
     fallbackDirection?: Direction | null; action?: OnlineAction;
@@ -44,7 +48,8 @@ export type ServerMessage =
   | { type: 'welcome'; roomId: string; seat: number; playerId: string; token: string }
   | {
     type: 'lobby'; roomId: string; stageId: StageId;
-    maxPlayers: OnlineRoomSize; players: OnlinePlayer[];
+    roomMode: OnlineRoomMode; capacity: typeof ONLINE_ROOM_CAPACITY;
+    totalRounds: OnlineRounds; players: OnlinePlayer[];
   }
   | { type: 'start'; roomId: string; playerId: string; config: GameConfig }
   | {
@@ -56,7 +61,8 @@ export type ServerMessage =
   | {
     type: 'error';
     code: 'bad-message' | 'room-full' | 'room-not-found' | 'seat-expired'
-      | 'upgrade-required' | 'match-started' | 'rate-limited';
+      | 'upgrade-required' | 'match-started' | 'rate-limited' | 'not-host'
+      | 'not-ready' | 'not-enough-players';
   };
 
 const CHARACTER_IDS: CharacterId[] = [
@@ -93,8 +99,20 @@ function isRoomId(value: unknown): value is string {
   return typeof value === 'string' && /^[A-HJ-NP-Z2-9]{6}$/.test(value);
 }
 
-function isOnlineRoomSize(value: unknown): value is OnlineRoomSize {
-  return typeof value === 'number' && ONLINE_ROOM_SIZES.includes(value as OnlineRoomSize);
+function isStageId(value: unknown): value is StageId {
+  return typeof value === 'string' && [
+    'hiddenLeaf', 'hiddenSand', 'hiddenMist', 'hiddenCloud', 'hiddenStone',
+    'akatsukiHideout', 'greatShinobiWar',
+  ].includes(value);
+}
+
+function isOnlineRoomMode(value: unknown): value is OnlineRoomMode {
+  return value === 'coop' || value === 'arena';
+}
+
+function isOnlineRounds(value: unknown): value is OnlineRounds {
+  return typeof value === 'number'
+    && ONLINE_ROUND_OPTIONS.includes(value as OnlineRounds);
 }
 
 function hasVersions(value: Record<string, unknown>): boolean {
@@ -119,9 +137,13 @@ export function parseClientMessage(raw: string): ClientMessage | null {
     case 'create':
       return hasOnlyKeys(
         value,
-        ['type', 'protocol', 'simulation', 'name', 'characterId', 'maxPlayers']
+        [
+          'type', 'protocol', 'simulation', 'name', 'characterId',
+          'roomMode', 'stageId', 'totalRounds',
+        ]
       ) && hasVersions(value) && isName(value.name) && isCharacterId(value.characterId)
-        && isOnlineRoomSize(value.maxPlayers)
+        && isOnlineRoomMode(value.roomMode) && isStageId(value.stageId)
+        && isOnlineRounds(value.totalRounds)
         ? value as ClientMessage : null;
     case 'join':
       return hasOnlyKeys(
@@ -159,6 +181,7 @@ export function parseClientMessage(raw: string): ClientMessage | null {
         ? value as ClientMessage : null;
     }
     case 'leave':
+    case 'start-match':
       return hasOnlyKeys(value, ['type']) ? value as ClientMessage : null;
     default:
       return null;
@@ -179,8 +202,9 @@ export function parseServerMessage(raw: string): ServerMessage | null {
         && typeof value.playerId === 'string' && typeof value.token === 'string'
         ? value as ServerMessage : null;
     case 'lobby':
-      return isRoomId(value.roomId) && isOnlineRoomSize(value.maxPlayers)
-        && Array.isArray(value.players)
+      return isRoomId(value.roomId) && isOnlineRoomMode(value.roomMode)
+        && value.capacity === ONLINE_ROOM_CAPACITY && isStageId(value.stageId)
+        && isOnlineRounds(value.totalRounds) && Array.isArray(value.players)
         ? value as ServerMessage : null;
     case 'start':
       return isRoomId(value.roomId) && isRecord(value.config)

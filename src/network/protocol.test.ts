@@ -15,14 +15,18 @@ describe('online protocol', () => {
       simulation: SIMULATION_VERSION,
       name: 'Kakashi',
       characterId: 'naruto',
-      maxPlayers: 4,
+      roomMode: 'coop',
+      stageId: 'hiddenSand',
+      totalRounds: 1,
     }))).toEqual({
       type: 'create',
       protocol: PROTOCOL_VERSION,
       simulation: SIMULATION_VERSION,
       name: 'Kakashi',
       characterId: 'naruto',
-      maxPlayers: 4,
+      roomMode: 'coop',
+      stageId: 'hiddenSand',
+      totalRounds: 1,
     });
   });
 
@@ -50,7 +54,9 @@ describe('online protocol', () => {
       simulation: SIMULATION_VERSION,
       name: 'A',
       characterId: 'naruto',
-      maxPlayers: 5,
+      roomMode: 'arena',
+      stageId: 'hiddenLeaf',
+      totalRounds: 2,
     }),
   ])('rejects untrusted client data: %s', (raw) => {
     expect(parseClientMessage(raw)).toBeNull();

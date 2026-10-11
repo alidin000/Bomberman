@@ -20,7 +20,7 @@
   "scripts": {
     "start": "vite",
     "server": "npm run server:build && npm run server:start",
-    "server:build": "esbuild server/index.ts --bundle --platform=node --target=node22 --format=esm --external:ws --outfile=server-dist/index.mjs",
+    "server:build": "esbuild server/index.ts --bundle --platform=node --target=node22 --format=esm --loader:.txt=text --external:ws --outfile=server-dist/index.mjs",
     "server:start": "node server-dist/index.mjs",
     "build": "vite build",
     "lint": "eslint src server --ext .ts,.tsx",

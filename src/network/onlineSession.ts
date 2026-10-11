@@ -1,10 +1,12 @@
-import { CharacterId } from '../content/types';
+import { CharacterId, StageId } from '../content/types';
 import { GameEngineState } from '../engine/types';
 import {
   ClientMessage,
   OnlineAction,
   OnlinePlayer,
-  OnlineRoomSize,
+  ONLINE_ROOM_CAPACITY,
+  OnlineRoomMode,
+  OnlineRounds,
   PROTOCOL_VERSION,
   SIMULATION_VERSION,
   ServerMessage,
@@ -31,7 +33,10 @@ export type OnlineSessionSnapshot = {
   playerId: string;
   token: string;
   players: OnlinePlayer[];
-  maxPlayers: OnlineRoomSize;
+  roomMode: OnlineRoomMode;
+  stageId: StageId;
+  capacity: number;
+  totalRounds: OnlineRounds;
   gameState: GameEngineState | null;
   ack: number;
   error: string;
@@ -48,7 +53,10 @@ function emptySnapshot(): OnlineSessionSnapshot {
     playerId: '',
     token: '',
     players: [],
-    maxPlayers: 2,
+    roomMode: 'arena',
+    stageId: 'hiddenLeaf',
+    capacity: ONLINE_ROOM_CAPACITY,
+    totalRounds: 3,
     gameState: null,
     ack: -1,
     error: '',
@@ -207,8 +215,12 @@ export class OnlineSession {
       case 'lobby':
         this.publish({
           players: message.players,
-          maxPlayers: message.maxPlayers,
+          roomMode: message.roomMode,
+          stageId: message.stageId,
+          capacity: message.capacity,
+          totalRounds: message.totalRounds,
           status: this.snapshot.gameState ? 'playing' : 'lobby',
+          error: '',
         });
         break;
       case 'start':
@@ -250,6 +262,12 @@ export class OnlineSession {
             token: '',
             error: message.code.replace(/-/g, ' '),
           });
+        } else if (
+          message.code === 'not-host'
+          || message.code === 'not-ready'
+          || message.code === 'not-enough-players'
+        ) {
+          this.publish({ error: message.code.replace(/-/g, ' ') });
         } else {
           this.publish({ status: 'closed', error: message.code.replace(/-/g, ' ') });
         }
@@ -259,7 +277,13 @@ export class OnlineSession {
     }
   }
 
-  create(name: string, characterId: CharacterId, maxPlayers: OnlineRoomSize): void {
+  create(
+    name: string,
+    characterId: CharacterId,
+    roomMode: OnlineRoomMode,
+    stageId: StageId,
+    totalRounds: OnlineRounds
+  ): void {
     this.snapshot = emptySnapshot();
     this.connect({
       type: 'create',
@@ -267,7 +291,9 @@ export class OnlineSession {
       simulation: SIMULATION_VERSION,
       name: name.trim(),
       characterId,
-      maxPlayers,
+      roomMode,
+      stageId,
+      totalRounds,
     });
   }
 
@@ -304,6 +330,10 @@ export class OnlineSession {
 
   setReady(ready: boolean): void {
     this.send({ type: 'ready', ready });
+  }
+
+  startMatch(): void {
+    this.send({ type: 'start-match' });
   }
 
   setRematch(ready: boolean): void {

@@ -40,7 +40,7 @@ vi.mock('../../network/onlineSession', () => ({
 }));
 
 vi.mock('../../hooks/useOnlineGame', () => ({
-  useOnlineSessionSnapshot: () => mocks.snapshot,
+  useOnlineStatusSnapshot: () => mocks.snapshot,
   useOnlineEngine: () => mocks.engine,
   useOnlineInput: mocks.useOnlineInput,
 }));
@@ -125,7 +125,10 @@ describe('OnlineGameScreen touch play', () => {
       playerId: 'player2',
       token: 'resume-token',
       players: [],
-      maxPlayers: 2,
+      roomMode: 'arena',
+      stageId: 'hiddenLeaf',
+      capacity: 4,
+      totalRounds: 3,
       gameState: state,
       ack: 1,
       error: '',

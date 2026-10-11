@@ -29,6 +29,28 @@ export const SetupGrid = styled(Box)({
   '@media (max-width: 700px)': { gridTemplateColumns: '1fr' },
 });
 
+export const ExperienceGrid = styled(Box)({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+  gap: 10,
+  '@media (max-width: 700px)': { gridTemplateColumns: '1fr' },
+});
+
+export const ExperienceChoice = styled(Button)({
+  minHeight: 78,
+  justifyContent: 'flex-start',
+  borderRadius: 6,
+  padding: '12px 14px',
+  textAlign: 'left',
+  '& .MuiButton-startIcon': { alignSelf: 'flex-start', marginTop: 2 },
+  '& .MuiButton-endIcon + *, & .MuiButton-startIcon + *': { minWidth: 0 },
+  '& strong, & span': { display: 'block', letterSpacing: 0 },
+  '& strong': { fontSize: '.88rem' },
+  '& span': {
+    marginTop: 3, fontSize: '.72rem', lineHeight: 1.35, opacity: 0.78,
+  },
+});
+
 export const OnlinePanel = styled('section')({
   border: '1px solid color-mix(in srgb, var(--anime-paper-light) 22%, transparent)',
   background: 'color-mix(in srgb, var(--anime-night) 88%, var(--anime-paper-light))',
@@ -56,6 +78,15 @@ export const Field = styled('label')({
     font: 'inherit',
     letterSpacing: 0,
   },
+  '& .MuiSelect-select': {
+    color: 'var(--anime-paper-light)',
+    background: 'var(--anime-ink)',
+    letterSpacing: 0,
+  },
+  '& .MuiOutlinedInput-notchedOutline': {
+    borderColor: 'color-mix(in srgb, var(--anime-paper-light) 28%, transparent)',
+  },
+  '& .MuiSvgIcon-root': { color: 'var(--anime-paper-muted)' },
 });
 
 export const CharacterGrid = styled(Box)({

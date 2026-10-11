@@ -4,8 +4,9 @@ import ReplayIcon from '@mui/icons-material/Replay';
 import { Button } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DEFAULT_KEY_BINDINGS } from '../../constants/props';
-import { useEngineSelector } from '../../hooks/engineStore';
-import { useOnlineEngine, useOnlineInput, useOnlineSessionSnapshot } from '../../hooks/useOnlineGame';
+import { GameEngineState } from '../../engine';
+import { EngineSelector, useEngineSelector } from '../../hooks/engineStore';
+import { useOnlineEngine, useOnlineInput, useOnlineStatusSnapshot } from '../../hooks/useOnlineGame';
 import { useTouchMode } from '../../input/touchMode';
 import { getOnlineSession } from '../../network/onlineSession';
 import { useEngineFeedback } from '../GameScreen/useGameFeedback';
@@ -18,14 +19,35 @@ import {
   CompactButton, ConnectionCurtain, MatchNetworkBar, ResultPanel
 } from './OnlineScreen.styles';
 
+type OnlineMatchStatus = (
+  Pick<GameEngineState, 'phase' | 'paused' | 'resultMessage'> & { campaign: boolean }
+) | null;
+
+const selectOnlineMatchStatus: EngineSelector<OnlineMatchStatus> = (state, previous) => {
+  if (!state) return null;
+  if (
+    previous
+    && previous.phase === state.phase
+    && previous.paused === state.paused
+    && previous.resultMessage === state.resultMessage
+    && previous.campaign === Boolean(state.campaign)
+  ) return previous;
+  return {
+    phase: state.phase,
+    paused: state.paused,
+    resultMessage: state.resultMessage,
+    campaign: Boolean(state.campaign),
+  };
+};
+
 export function OnlineGameScreen() {
   const navigate = useNavigate();
   const { roomId = '' } = useParams();
   const session = useMemo(getOnlineSession, []);
-  const online = useOnlineSessionSnapshot(session);
+  const online = useOnlineStatusSnapshot(session);
   const engine = useOnlineEngine(session);
   const [preferences] = useState(loadGamePreferences);
-  const state = useEngineSelector(engine.store, (current) => current);
+  const state = useEngineSelector(engine.store, selectOnlineMatchStatus);
   const feedback = useEngineFeedback(engine.store, preferences);
   const touchMode = useTouchMode();
   const canPlay = online.connected && !!state && state.phase === 'playing' && !state.paused;
@@ -82,7 +104,7 @@ export function OnlineGameScreen() {
           idle={!online.connected || state.paused}
         />
       </GameSceneContainer>
-      <MatchAnnouncer store={engine.store} caption={feedback.caption} eventId={feedback.eventId} roundOver={roundOver} held={state.paused || state.phase !== 'playing'} hudScale={preferences.hudScale} campaign={false} />
+      <MatchAnnouncer store={engine.store} caption={feedback.caption} eventId={feedback.eventId} roundOver={roundOver} held={state.paused || state.phase !== 'playing'} hudScale={preferences.hudScale} campaign={state.campaign} />
       {touchMode && online.seat !== null && (
         // Online has one local control set; the server seat only selects the
         // fighter whose kit and ultimate charge the overlay displays.

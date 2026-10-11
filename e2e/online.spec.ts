@@ -53,10 +53,11 @@ test(
       await guest.getByLabel('display name').fill('Guest');
       await guest.getByRole('button', { name: 'Join room' }).click();
       await expect(page.getByText('P2 · Guest')).toBeVisible();
-      await expect(guest.getByText('P1 · Host')).toBeVisible();
+      await expect(guest.getByText('P1 · Host · Host')).toBeVisible();
 
       await page.getByRole('button', { name: 'Ready' }).click();
       await guest.getByRole('button', { name: 'Ready' }).click();
+      await page.getByRole('button', { name: 'Start mission' }).click();
       await expect(page).toHaveURL(new RegExp(`/online/${roomCode}/play$`));
       await expect(guest).toHaveURL(new RegExp(`/online/${roomCode}/play$`));
       await expect(page.locator('canvas')).toBeVisible();
@@ -73,7 +74,7 @@ test(
 );
 
 test(
-  'a four-seat room waits for all four players before launch',
+  'an arena accepts four players and waits for the host to launch',
   { tag: '@phone' },
   async ({ browser, page }, testInfo) => {
     const guestContexts = await Promise.all(Array.from({ length: 3 }, () => browser.newContext()));
@@ -82,7 +83,7 @@ test(
     try {
       await page.goto('/online');
       await page.getByLabel('display name').fill('Host');
-      await page.getByRole('button', { name: '4 players' }).click();
+      await page.getByRole('button', { name: /Online Arena/i }).click();
       await page.getByRole('button', { name: 'Create room' }).click();
       const codeElement = page.locator('strong').filter({ hasText: /^[A-HJ-NP-Z2-9]{6}$/ });
       await expect(codeElement).toBeVisible();
@@ -110,6 +111,9 @@ test(
       await expect(guests[1]).not.toHaveURL(/\/play$/);
 
       await guests[2].getByRole('button', { name: 'Ready' }).click();
+      await page.waitForTimeout(250);
+      await expect(page).not.toHaveURL(/\/play$/);
+      await page.getByRole('button', { name: 'Start battle' }).click();
       await Promise.all([page, ...guests].map((playerPage) => (
         expect(playerPage).toHaveURL(new RegExp(`/online/${roomCode}/play$`))
       )));

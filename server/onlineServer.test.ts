@@ -1,6 +1,9 @@
 // @vitest-environment node
 import WebSocket from 'ws';
-import { startOnlineServer } from './onlineServer';
+import { snapshotForDelivery, startOnlineServer } from './onlineServer';
+import { defaultMap } from '../src/constants/contants';
+import { gameReducer } from '../src/engine/reducer';
+import { gameItem } from '../src/model/gameItem';
 import {
   PROTOCOL_VERSION, SIMULATION_VERSION, ServerMessage,
 } from '../src/network/protocol';
@@ -63,18 +66,56 @@ async function waitFor(
   }
 }
 
-function createMessage(name: string, maxPlayers: 2 | 3 | 4 = 2) {
+function createMessage(
+  name: string,
+  roomMode: 'coop' | 'arena' = 'arena',
+  stageId = 'hiddenLeaf',
+  totalRounds = 3
+) {
   return {
     type: 'create',
     protocol: PROTOCOL_VERSION,
     simulation: SIMULATION_VERSION,
     name,
     characterId: 'naruto',
-    maxPlayers,
+    roomMode,
+    stageId,
+    totalRounds,
   };
 }
 
 describe('online room server', () => {
+  it('drops backed-up patches and resumes with one full authoritative state', () => {
+    const state = gameReducer(null, {
+      type: 'INIT',
+      config: {
+        mode: 'onlinePreview',
+        numPlayers: 2,
+        totalRounds: 3,
+        selectedMap: 'online-arena',
+        stageId: 'hiddenLeaf',
+        map: defaultMap.map((row) => row.map((cell): gameItem => {
+          if (cell === 'W') return 'Wall';
+          if (cell === 'B') return 'Box';
+          return 'Empty';
+        })),
+      },
+    });
+    if (!state) throw new Error('Missing state');
+    const delivery = { needsFullSnapshot: false };
+
+    expect(snapshotForDelivery(delivery, state, state, 1, 17_000, 16_000)).toBeNull();
+    expect(delivery.needsFullSnapshot).toBe(true);
+
+    const recovered = snapshotForDelivery(delivery, state, state, 2, 0, 16_000);
+    expect(recovered).toMatchObject({ type: 'snapshot', ack: 2, state });
+    expect(recovered && 'patch' in recovered).toBe(false);
+    expect(delivery.needsFullSnapshot).toBe(false);
+
+    const incremental = snapshotForDelivery(delivery, state, state, 3, 0, 16_000);
+    expect(incremental).toMatchObject({ type: 'snapshot', ack: 3, patch: {} });
+  });
+
   it('runs one authoritative match for two clients', async () => {
     const server = await startOnlineServer({ port: 0 });
     const first = await connect(server.port);
@@ -98,6 +139,8 @@ describe('online room server', () => {
 
       send(first, { type: 'ready', ready: true });
       send(second, { type: 'ready', ready: true });
+      await wait(30);
+      send(first, { type: 'start-match' });
       await Promise.all([first.next('start'), second.next('start')]);
       const initial = await first.next('snapshot');
       expect(initial.type === 'snapshot' && initial.state?.players).toHaveLength(2);
@@ -129,11 +172,11 @@ describe('online room server', () => {
     }
   }, 10_000);
 
-  it('starts a three-seat room only after the third player is ready', async () => {
+  it('lets the host start with three ready players without reserving a room size', async () => {
     const server = await startOnlineServer({ port: 0 });
     const clients = await Promise.all(Array.from({ length: 3 }, () => connect(server.port)));
     try {
-      send(clients[0], createMessage('First', 3));
+      send(clients[0], createMessage('First'));
       const welcome = await clients[0].next('welcome');
       if (welcome.type !== 'welcome') throw new Error('Missing welcome');
 
@@ -157,6 +200,10 @@ describe('online room server', () => {
       expect(server.getRoomState(welcome.roomId)).toBeNull();
 
       send(clients[2], { type: 'ready', ready: true });
+      await wait(30);
+      expect(server.getRoomState(welcome.roomId)).toBeNull();
+
+      send(clients[0], { type: 'start-match' });
       const starts = await Promise.all(clients.map((client) => client.next('start')));
       expect(starts.every((message) => (
         message.type === 'start' && message.config.numPlayers === 3
@@ -167,11 +214,11 @@ describe('online room server', () => {
     }
   });
 
-  it('waits for all four seats, starts four players, and rejects a fifth', async () => {
+  it('accepts up to four players, starts on host command, and rejects a fifth', async () => {
     const server = await startOnlineServer({ port: 0 });
     const clients = await Promise.all(Array.from({ length: 5 }, () => connect(server.port)));
     try {
-      send(clients[0], createMessage('First', 4));
+      send(clients[0], createMessage('First'));
       const welcome = await clients[0].next('welcome');
       if (welcome.type !== 'welcome') throw new Error('Missing welcome');
 
@@ -207,6 +254,7 @@ describe('online room server', () => {
       expect(server.getRoomState(welcome.roomId)).toBeNull();
 
       send(clients[3], { type: 'ready', ready: true });
+      send(clients[0], { type: 'start-match' });
       await Promise.all(clients.slice(0, 4).map((client) => client.next('start')));
       const initial = await clients[0].next('snapshot');
       expect(initial.type === 'snapshot' && initial.state?.players.map((player) => player.id))
@@ -317,6 +365,8 @@ describe('online room server', () => {
       await second.next('welcome');
       send(first, { type: 'ready', ready: true });
       send(second, { type: 'ready', ready: true });
+      await wait(30);
+      send(first, { type: 'start-match' });
       await Promise.all([first.next('start'), second.next('start')]);
       await waitFor(() => (
         (server.getRoomState(welcome.roomId)?.roundStartTicksRemaining ?? 1) === 0
@@ -332,6 +382,62 @@ describe('online room server', () => {
     } finally {
       first.socket.close();
       second.socket.close();
+      await server.close();
+    }
+  });
+
+  it('rejects a guest launch and starts the selected co-op mission for the host', async () => {
+    const server = await startOnlineServer({ port: 0 });
+    const host = await connect(server.port);
+    const guest = await connect(server.port);
+    try {
+      send(host, createMessage('Host', 'coop', 'hiddenSand', 1));
+      const welcome = await host.next('welcome');
+      if (welcome.type !== 'welcome') throw new Error('Missing welcome');
+      send(host, { type: 'start-match' });
+      await expect(host.next('error')).resolves.toEqual({
+        type: 'error', code: 'not-enough-players',
+      });
+      send(guest, {
+        type: 'join',
+        protocol: PROTOCOL_VERSION,
+        simulation: SIMULATION_VERSION,
+        roomId: welcome.roomId,
+        name: 'Guest',
+        characterId: 'gaara',
+      });
+      await guest.next('welcome');
+
+      send(host, { type: 'ready', ready: true });
+      await wait(20);
+      send(host, { type: 'start-match' });
+      await expect(host.next('error')).resolves.toEqual({
+        type: 'error', code: 'not-ready',
+      });
+      send(guest, { type: 'ready', ready: true });
+      await wait(20);
+      send(guest, { type: 'start-match' });
+      await expect(guest.next('error')).resolves.toEqual({ type: 'error', code: 'not-host' });
+      expect(server.getRoomState(welcome.roomId)).toBeNull();
+
+      send(host, { type: 'start-match' });
+      const started = await host.next('start');
+      expect(started.type === 'start' && started.config).toMatchObject({
+        mode: 'solo',
+        numPlayers: 2,
+        totalRounds: 1,
+        selectedMap: 'hiddenSand',
+        stageId: 'hiddenSand',
+      });
+      const snapshot = await host.next('snapshot');
+      expect(snapshot.type === 'snapshot' && snapshot.state?.campaign?.stageId)
+        .toBe('hiddenSand');
+      expect(snapshot.type === 'snapshot' && snapshot.state?.campaign?.villageName)
+        .toBe('Hidden Sand');
+      expect(snapshot.type === 'snapshot' && snapshot.state?.map).toHaveLength(35);
+    } finally {
+      host.socket.close();
+      guest.socket.close();
       await server.close();
     }
   });
