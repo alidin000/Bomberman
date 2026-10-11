@@ -119,17 +119,108 @@ function canPlaceBombAt(state: GameEngineState, x: number, y: number): boolean {
   return state.map[y]?.[x] === 'Empty';
 }
 
+const CLONE_DIRECTIONS = [
+  { x: 1, y: 0 },
+  { x: -1, y: 0 },
+  { x: 0, y: 1 },
+  { x: 0, y: -1 },
+] as const;
+
+function pointKey(x: number, y: number): string {
+  return `${x},${y}`;
+}
+
+function hasActorAt(state: GameEngineState, playerId: string, x: number, y: number): boolean {
+  return state.players.some((other) => (
+    other.id !== playerId && other.alive && positionOverlapsCell(other, x, y)
+  )) || state.monsters.some((monster) => monster.x === x && monster.y === y)
+    || (state.boss?.x === x && state.boss.y === y);
+}
+
+function isCloneEscapeCell(
+  state: GameEngineState,
+  x: number,
+  y: number,
+  blocked: Set<string>,
+): boolean {
+  if (blocked.has(pointKey(x, y))) return false;
+  const cell = state.map[y]?.[x];
+  return cell === 'Empty' || (cell !== undefined && !isBomb(cell) && !isObstacle(cell)
+    && cell !== 'Wall' && cell !== 'Box');
+}
+
+function hasCloneEscapeRoute(
+  state: GameEngineState,
+  player: PlayerState,
+  candidate: { x: number; y: number },
+  primaryRange: number,
+  cloneRange: number,
+): boolean {
+  const origin = getPlayerCell(player);
+  const blocked = new Set([
+    pointKey(origin.x, origin.y),
+    pointKey(candidate.x, candidate.y),
+  ]);
+  const previewBombs: BombState[] = [
+    {
+      id: 'clone-preview-primary',
+      ownerId: player.id,
+      x: origin.x,
+      y: origin.y,
+      range: primaryRange,
+      ticksRemaining: 0,
+      manualDetonation: false,
+      kind: 'shadowClone',
+    },
+    {
+      id: 'clone-preview-extra',
+      ownerId: player.id,
+      x: candidate.x,
+      y: candidate.y,
+      range: cloneRange,
+      ticksRemaining: 0,
+      manualDetonation: false,
+      kind: 'shadowClone',
+    },
+  ];
+  const danger = new Set(previewBombs.flatMap((bomb) => (
+    getExplosionPositions(bomb, state.map).map((point) => pointKey(point.x, point.y))
+  )));
+  const queue = CLONE_DIRECTIONS
+    .map(({ x, y }) => ({ x: origin.x + x, y: origin.y + y }))
+    .filter((point) => isCloneEscapeCell(state, point.x, point.y, blocked));
+  const visited = new Set(queue.map((point) => pointKey(point.x, point.y)));
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    if (!danger.has(pointKey(current.x, current.y))) return true;
+    CLONE_DIRECTIONS.forEach(({ x, y }) => {
+      const next = { x: current.x + x, y: current.y + y };
+      const key = pointKey(next.x, next.y);
+      if (!visited.has(key) && isCloneEscapeCell(state, next.x, next.y, blocked)) {
+        visited.add(key);
+        queue.push(next);
+      }
+    });
+  }
+
+  return false;
+}
+
 function getCloneBombPoint(
   state: GameEngineState,
   player: PlayerState,
+  primaryRange: number,
+  cloneRange: number,
 ): { x: number; y: number } | null {
   const origin = getPlayerCell(player);
-  return [
-    { x: origin.x + 1, y: origin.y },
-    { x: origin.x - 1, y: origin.y },
-    { x: origin.x, y: origin.y + 1 },
-    { x: origin.x, y: origin.y - 1 },
-  ].find((point) => canPlaceBombAt(state, point.x, point.y)) ?? null;
+  return CLONE_DIRECTIONS
+    .map(({ x, y }) => ({ x: origin.x + x, y: origin.y + y }))
+    .filter((point) => (
+      canPlaceBombAt(state, point.x, point.y)
+      && !hasActorAt(state, player.id, point.x, point.y)
+    ))
+    .find((point) => hasCloneEscapeRoute(state, player, point, primaryRange, cloneRange)) ?? null;
 }
 
 function getBasicBombPlacements(
@@ -139,12 +230,14 @@ function getBasicBombPlacements(
   hasDetonator: boolean,
 ): BombState[] {
   const origin = getPlayerCell(player);
+  const primaryRange = getBasicBombRange(player, kind);
+  const cloneRange = Math.max(1, player.bombRange - 1);
   const bombs = [
     createBomb(
       player.id,
       origin.x,
       origin.y,
-      getBasicBombRange(player, kind),
+      primaryRange,
       hasDetonator,
       kind,
       getBombFuse(kind),
@@ -152,13 +245,13 @@ function getBasicBombPlacements(
   ];
 
   if (kind === 'shadowClone') {
-    const clonePoint = getCloneBombPoint(state, player);
+    const clonePoint = getCloneBombPoint(state, player, primaryRange, cloneRange);
     if (clonePoint) {
       bombs.push(createBomb(
         player.id,
         clonePoint.x,
         clonePoint.y,
-        Math.max(1, player.bombRange - 1),
+        cloneRange,
         hasDetonator,
         kind,
         getBombFuse(kind) + 220,

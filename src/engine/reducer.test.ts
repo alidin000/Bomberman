@@ -1006,7 +1006,7 @@ describe('gameReducer', () => {
 
     expect(state.bombs).toHaveLength(2);
     expect(state.bombs.every((bomb) => bomb.kind === 'shadowClone')).toBe(true);
-    expect(state.bombs.map((bomb) => `${bomb.x},${bomb.y}`)).toEqual(['1,1', '2,1']);
+    expect(state.bombs.map((bomb) => `${bomb.x},${bomb.y}`)).toEqual(['1,1', '1,2']);
   });
 
   it('lets Sasuke Chidori mines pierce boxes', () => {

@@ -82,6 +82,42 @@ describe('Naruto shadow clone bombs', () => {
     expect(state.bombs).toHaveLength(3);
     expect(state.players[0].activeBombs).toBe(3);
   });
+
+  it('skips the extra clone when it would seal Naruto inside a corridor', () => {
+    const corridor = parseMapRows([
+      'WWWWWWWWWWW',
+      'WWWWWWWWWWW',
+      'WW      WWW',
+      'WWWWWWWWWWW',
+      'WWWWWWWWWWW',
+    ].map((row) => row.split('')));
+    let state = liveRound(
+      { numPlayers: 1, selectedCharacters: ['naruto'] },
+      { map: corridor }
+    );
+
+    state = drop(patchPlayer(state, 'player1', { x: 2, y: 2 }), 'player1');
+
+    expect(state.bombs.map((bomb) => `${bomb.x},${bomb.y}`)).toEqual(['2,2']);
+  });
+
+  it('puts the extra clone toward a dead end to preserve the open escape route', () => {
+    const corridor = parseMapRows([
+      'WWWWWWWW',
+      'WWWWWWWW',
+      'W     WW',
+      'WWWWWWWW',
+      'WWWWWWWW',
+    ].map((row) => row.split('')));
+    let state = liveRound(
+      { numPlayers: 1, selectedCharacters: ['naruto'] },
+      { map: corridor }
+    );
+
+    state = drop(patchPlayer(state, 'player1', { x: 4, y: 2 }), 'player1');
+
+    expect(state.bombs.map((bomb) => `${bomb.x},${bomb.y}`)).toEqual(['4,2', '5,2']);
+  });
 });
 
 describe('survival passives', () => {
