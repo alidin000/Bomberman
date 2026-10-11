@@ -63,13 +63,14 @@ async function waitFor(
   }
 }
 
-function createMessage(name: string) {
+function createMessage(name: string, maxPlayers: 2 | 3 | 4 = 2) {
   return {
     type: 'create',
     protocol: PROTOCOL_VERSION,
     simulation: SIMULATION_VERSION,
     name,
     characterId: 'naruto',
+    maxPlayers,
   };
 }
 
@@ -127,6 +128,96 @@ describe('online room server', () => {
       await server.close();
     }
   }, 10_000);
+
+  it('starts a three-seat room only after the third player is ready', async () => {
+    const server = await startOnlineServer({ port: 0 });
+    const clients = await Promise.all(Array.from({ length: 3 }, () => connect(server.port)));
+    try {
+      send(clients[0], createMessage('First', 3));
+      const welcome = await clients[0].next('welcome');
+      if (welcome.type !== 'welcome') throw new Error('Missing welcome');
+
+      for (let seat = 1; seat < 3; seat += 1) {
+        send(clients[seat], {
+          type: 'join',
+          protocol: PROTOCOL_VERSION,
+          simulation: SIMULATION_VERSION,
+          roomId: welcome.roomId,
+          name: `Player ${seat + 1}`,
+          characterId: 'sasuke',
+        });
+        // Joins are ordered here so each assigned seat is deterministic.
+        // eslint-disable-next-line no-await-in-loop
+        await clients[seat].next('welcome');
+      }
+
+      send(clients[0], { type: 'ready', ready: true });
+      send(clients[1], { type: 'ready', ready: true });
+      await wait(30);
+      expect(server.getRoomState(welcome.roomId)).toBeNull();
+
+      send(clients[2], { type: 'ready', ready: true });
+      const starts = await Promise.all(clients.map((client) => client.next('start')));
+      expect(starts.every((message) => (
+        message.type === 'start' && message.config.numPlayers === 3
+      ))).toBe(true);
+    } finally {
+      clients.forEach((client) => client.socket.close());
+      await server.close();
+    }
+  });
+
+  it('waits for all four seats, starts four players, and rejects a fifth', async () => {
+    const server = await startOnlineServer({ port: 0 });
+    const clients = await Promise.all(Array.from({ length: 5 }, () => connect(server.port)));
+    try {
+      send(clients[0], createMessage('First', 4));
+      const welcome = await clients[0].next('welcome');
+      if (welcome.type !== 'welcome') throw new Error('Missing welcome');
+
+      for (let seat = 1; seat < 4; seat += 1) {
+        send(clients[seat], {
+          type: 'join',
+          protocol: PROTOCOL_VERSION,
+          simulation: SIMULATION_VERSION,
+          roomId: welcome.roomId,
+          name: `Player ${seat + 1}`,
+          characterId: 'sasuke',
+        });
+        // Joins are ordered here so each assigned seat is deterministic.
+        // eslint-disable-next-line no-await-in-loop
+        const joined = await clients[seat].next('welcome');
+        expect(joined.type === 'welcome' && joined.seat).toBe(seat);
+      }
+
+      send(clients[4], {
+        type: 'join',
+        protocol: PROTOCOL_VERSION,
+        simulation: SIMULATION_VERSION,
+        roomId: welcome.roomId,
+        name: 'Too late',
+        characterId: 'gaara',
+      });
+      await expect(clients[4].next('error')).resolves.toEqual({
+        type: 'error', code: 'room-full',
+      });
+
+      clients.slice(0, 3).forEach((client) => send(client, { type: 'ready', ready: true }));
+      await wait(30);
+      expect(server.getRoomState(welcome.roomId)).toBeNull();
+
+      send(clients[3], { type: 'ready', ready: true });
+      await Promise.all(clients.slice(0, 4).map((client) => client.next('start')));
+      const initial = await clients[0].next('snapshot');
+      expect(initial.type === 'snapshot' && initial.state?.players.map((player) => player.id))
+        .toEqual(['player1', 'player2', 'player3', 'player4']);
+      expect(initial.type === 'snapshot' && initial.state?.players.map(({ x, y }) => [x, y]))
+        .toEqual([[1, 1], [13, 8], [1, 8], [13, 1]]);
+    } finally {
+      clients.forEach((client) => client.socket.close());
+      await server.close();
+    }
+  });
 
   it('reconnects the assigned seat and rejects authority-shaped input', async () => {
     const server = await startOnlineServer({ port: 0, reconnectGraceMs: 500 });

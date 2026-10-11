@@ -14,7 +14,7 @@ TypeScript, and Three.js.
   stage objectives, defeat guards, and seal tailed-beast bosses.
 - **Local Arena:** two or three human or CPU players, best-of-1/3/5 matches,
   gamepads, rebindable controls, and sudden death.
-- **Private online rooms:** two players share a room code, ready up, reconnect
+- **Private online rooms:** two to four players share a room code, ready up, reconnect
   after a short interruption, and request a rematch.
 - **Six distinct fighters:** each has a unique bomb, ultimate, passive, movement
   style, and visual effects.
@@ -131,7 +131,7 @@ For private online rooms, run the server in a second terminal:
 npm run server
 ```
 
-Open `/online` in two browser windows. The local server listens on
+Open `/online` in two to four browser windows. The local server listens on
 `ws://127.0.0.1:8787`. Production builds read `VITE_GAME_SERVER_URL`;
 `render.yaml` connects the static site to the WebSocket service.
 
@@ -153,7 +153,7 @@ npm run test:e2e
 | `src/hooks/` | Fixed-step loop, state stores, interpolation, and React bridges |
 | `src/network/` | Protocol validation, snapshots, reconnects, and replays |
 | `src/view/GameScreen/` | HUD and React Three Fiber renderer |
-| `server/` | Authoritative two-player rooms and health endpoint |
+| `server/` | Authoritative 2-4 player rooms and health endpoint |
 | `public/maps/` | Stage layouts |
 
 ## License

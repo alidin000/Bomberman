@@ -98,7 +98,7 @@ export function OnlineGameScreen() {
         <ConnectionCurtain>
           <ResultPanel role="dialog" aria-label="online match result">
             <h2>{state.resultMessage || 'Match over'}</h2>
-            <p>Both players must request a rematch.</p>
+            <p>Every player must request a rematch.</p>
             <Button variant="contained" startIcon={<ReplayIcon />} onClick={() => session.setRematch(true)}>Ready for rematch</Button>
             <Button variant="outlined" startIcon={<ExitToAppIcon />} onClick={leave}>Leave room</Button>
           </ResultPanel>

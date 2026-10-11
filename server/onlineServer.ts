@@ -16,6 +16,7 @@ import {
   MAX_CLIENT_MESSAGE_BYTES,
   OnlineAction,
   OnlinePlayer,
+  OnlineRoomSize,
   PROTOCOL_VERSION,
   SIMULATION_VERSION,
   ServerMessage,
@@ -58,6 +59,7 @@ type Seat = {
 
 type Room = {
   id: string;
+  maxPlayers: OnlineRoomSize;
   seats: Seat[];
   state: GameEngineState | null;
   config: GameConfig | null;
@@ -120,7 +122,11 @@ function roomPlayers(room: Room): OnlinePlayer[] {
 
 function lobbyMessage(room: Room): ServerMessage {
   return {
-    type: 'lobby', roomId: room.id, stageId: ONLINE_STAGE, players: roomPlayers(room),
+    type: 'lobby',
+    roomId: room.id,
+    stageId: ONLINE_STAGE,
+    maxPlayers: room.maxPlayers,
+    players: roomPlayers(room),
   };
 }
 
@@ -155,7 +161,7 @@ function statePatch(
 function createConfig(room: Room): GameConfig {
   return {
     mode: 'onlinePreview',
-    numPlayers: 2,
+    numPlayers: room.seats.length,
     totalRounds: 3,
     selectedMap: 'online-arena',
     stageId: ONLINE_STAGE,
@@ -348,7 +354,7 @@ export async function startOnlineServer(
   };
 
   const maybeStart = (room: Room) => {
-    if (room.state || room.seats.length !== 2) return;
+    if (room.state || room.seats.length !== room.maxPlayers) return;
     if (room.seats.every((seat) => seat.connected && seat.ready)) startMatch(room);
   };
 
@@ -359,7 +365,7 @@ export async function startOnlineServer(
     characterId: CharacterId
   ): Seat | null => {
     if (room.state) return null;
-    if (room.seats.length >= 2) return null;
+    if (room.seats.length >= room.maxPlayers) return null;
     const seatIndex = room.seats.length;
     const seat: Seat = {
       seat: seatIndex,
@@ -482,6 +488,7 @@ export async function startOnlineServer(
       while (rooms.has(id)) id = roomCode();
       const room: Room = {
         id,
+        maxPlayers: message.maxPlayers,
         seats: [],
         state: null,
         config: null,

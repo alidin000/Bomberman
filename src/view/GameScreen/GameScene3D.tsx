@@ -35,8 +35,13 @@ import { getStageLook, stageSkyBackground } from '../../content/stageLooks';
 import {
   BossId, CharacterId, StageDefinition, StageId
 } from '../../content/types';
-import { GamePreferences } from './gamePreferences';
+import { GamePreferences, isLikelyLowEndDevice } from './gamePreferences';
 import { PERF_PROBE_ENABLED, PerfProbe } from './scene/PerfProbe';
+import { AdaptiveResolution } from './scene/AdaptiveResolution';
+import {
+  AdaptiveDprRuntime, initialCanvasDpr, reconcileAdaptiveDpr,
+} from './scene/adaptiveResolution';
+import { useViewportSize } from './useViewportSize';
 import {
   MAP_OFFSET_X, MAP_OFFSET_Z, TILE_SIZE, toWorld
 } from './scene/sceneSpace';
@@ -3622,34 +3627,56 @@ type SceneCanvasProps = {
 
 const SceneCanvas = React.memo(({
   store, readState, preferences, impact, motion, idle, bombClock, sky,
-}: SceneCanvasProps) => (
-  <Canvas
-    shadows
-    dpr={[1, 1.35]}
-    frameloop={idle ? 'demand' : 'always'}
-    style={{
-      width: '100%',
-      height: '100%',
-      background: sky,
-    }}
-    gl={{ antialias: false, powerPreference: 'high-performance' }}
-    flat
-    camera={{ position: [0, 13.2, 9.6], fov: 48 }}
-  >
-    <ReducedMotionContext.Provider value={preferences.reducedMotion}>
-      <SceneryContext.Provider value={preferences.scenery}>
-        <MotionContext.Provider value={motion}>
-          <BombClockContext.Provider value={bombClock}>
-            <LiveStateContext.Provider value={readState}>
-              <SceneFromStore store={store} preferences={preferences} impact={impact} />
-            </LiveStateContext.Provider>
-          </BombClockContext.Provider>
-        </MotionContext.Provider>
-      </SceneryContext.Provider>
-    </ReducedMotionContext.Provider>
-    {PERF_PROBE_ENABLED && <PerfProbe />}
-  </Canvas>
-));
+}: SceneCanvasProps) => {
+  const viewport = useViewportSize();
+  const lowEnd = useMemo(() => isLikelyLowEndDevice(), []);
+  const targetDpr = initialCanvasDpr({
+    ...viewport,
+    deviceDpr: window.devicePixelRatio,
+    lowEnd,
+  });
+  const resolutionRef = useRef<AdaptiveDprRuntime>({
+    targetDpr, dpr: targetDpr, fastWindows: 0,
+  });
+  resolutionRef.current = reconcileAdaptiveDpr(resolutionRef.current, targetDpr);
+  const [renderDpr, setRenderDpr] = useState(targetDpr);
+  useLayoutEffect(() => setRenderDpr(targetDpr), [targetDpr]);
+
+  return (
+    <Canvas
+      shadows
+      dpr={renderDpr}
+      frameloop={idle ? 'demand' : 'always'}
+      style={{
+        width: '100%',
+        height: '100%',
+        background: sky,
+      }}
+      gl={{ antialias: false, powerPreference: 'high-performance' }}
+      flat
+      camera={{ position: [0, 13.2, 9.6], fov: 48 }}
+    >
+      <AdaptiveResolution
+        active={!idle}
+        targetDpr={targetDpr}
+        runtimeRef={resolutionRef}
+        onDprChange={setRenderDpr}
+      />
+      <ReducedMotionContext.Provider value={preferences.reducedMotion}>
+        <SceneryContext.Provider value={preferences.scenery}>
+          <MotionContext.Provider value={motion}>
+            <BombClockContext.Provider value={bombClock}>
+              <LiveStateContext.Provider value={readState}>
+                <SceneFromStore store={store} preferences={preferences} impact={impact} />
+              </LiveStateContext.Provider>
+            </BombClockContext.Provider>
+          </MotionContext.Provider>
+        </SceneryContext.Provider>
+      </ReducedMotionContext.Provider>
+      {PERF_PROBE_ENABLED && <PerfProbe />}
+    </Canvas>
+  );
+});
 SceneCanvas.displayName = 'SceneCanvas';
 
 export function GameScene3D({

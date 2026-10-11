@@ -71,3 +71,54 @@ test(
     }
   }
 );
+
+test(
+  'a four-seat room waits for all four players before launch',
+  { tag: '@phone' },
+  async ({ browser, page }, testInfo) => {
+    const guestContexts = await Promise.all(Array.from({ length: 3 }, () => browser.newContext()));
+    const guests = await Promise.all(guestContexts.map((context) => context.newPage()));
+
+    try {
+      await page.goto('/online');
+      await page.getByLabel('display name').fill('Host');
+      await page.getByRole('button', { name: '4 players' }).click();
+      await page.getByRole('button', { name: 'Create room' }).click();
+      const codeElement = page.locator('strong').filter({ hasText: /^[A-HJ-NP-Z2-9]{6}$/ });
+      await expect(codeElement).toBeVisible();
+      const roomCode = (await codeElement.textContent()) ?? '';
+
+      for (let index = 0; index < guests.length; index += 1) {
+        const guest = guests[index];
+        // Seat assignment is deterministic only when each join completes first.
+        // eslint-disable-next-line no-await-in-loop
+        await guest.goto(new URL(`/online/${roomCode}`, page.url()).toString());
+        // eslint-disable-next-line no-await-in-loop
+        await guest.getByLabel('display name').fill(`Guest ${index + 2}`);
+        // eslint-disable-next-line no-await-in-loop
+        await guest.getByRole('button', { name: 'Join room' }).click();
+        // eslint-disable-next-line no-await-in-loop
+        await expect(page.getByText(`P${index + 2} · Guest ${index + 2}`)).toBeVisible();
+      }
+
+      await page.getByRole('button', { name: 'Ready' }).click();
+      await guests[0].getByRole('button', { name: 'Ready' }).click();
+      await guests[1].getByRole('button', { name: 'Ready' }).click();
+      await page.waitForTimeout(500);
+      await expect(page).not.toHaveURL(/\/play$/);
+      await expect(guests[0]).not.toHaveURL(/\/play$/);
+      await expect(guests[1]).not.toHaveURL(/\/play$/);
+
+      await guests[2].getByRole('button', { name: 'Ready' }).click();
+      await Promise.all([page, ...guests].map((playerPage) => (
+        expect(playerPage).toHaveURL(new RegExp(`/online/${roomCode}/play$`))
+      )));
+      await expect(page.locator('canvas')).toBeVisible();
+      await expect(page.getByLabel('round countdown')).toBeVisible();
+      await expect(page.getByLabel('round countdown')).toBeHidden({ timeout: 15_000 });
+      await page.screenshot({ path: testInfo.outputPath('online-four-player-host.png') });
+    } finally {
+      await Promise.all(guestContexts.map((context) => context.close()));
+    }
+  }
+);

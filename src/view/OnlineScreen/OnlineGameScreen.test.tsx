@@ -125,6 +125,7 @@ describe('OnlineGameScreen touch play', () => {
       playerId: 'player2',
       token: 'resume-token',
       players: [],
+      maxPlayers: 2,
       gameState: state,
       ack: 1,
       error: '',

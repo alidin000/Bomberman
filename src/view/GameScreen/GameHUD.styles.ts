@@ -307,8 +307,8 @@ export const MissionLineProgress = styled(LinearProgress, {
   },
 }));
 
-// Local Arena mirrors the keyboard and the spawns: P1 top-left, P2 top-right
-// (under the top controls), P3 between them; each card sets its `order`.
+// Versus mirrors the spawns: P1/P3 on the left and P4/P2 on the right;
+// each card sets its `order`.
 // The campaign's lone card stays top-left.
 export const PlayerCards = styled(Box)({
   position: 'absolute',
@@ -332,6 +332,11 @@ export const PlayerCards = styled(Box)({
     gridAutoFlow: 'column',
     gridAutoColumns: 'minmax(0, 1fr)',
     gap: 6,
+    '&:has(> :nth-child(4))': {
+      gridAutoFlow: 'row',
+      gridAutoColumns: 'auto',
+      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    },
   },
   // Short landscape screens have no room above the players: use the bottom
   // edge instead (the players' band ends at 65% of the height).
@@ -339,7 +344,7 @@ export const PlayerCards = styled(Box)({
     top: 'auto',
     bottom: 12,
     // With touch controls in the bottom corners the cards stand above them:
-    // P1 (and P3 under it) on the left, P2 on the right under the top
+    // P1/P3 on the left, P2/P4 on the right under the top
     // controls, and the middle stays open for the players.
     [TOUCH]: {
       top: BELOW_CONTROLS,
@@ -349,6 +354,7 @@ export const PlayerCards = styled(Box)({
       gap: 8,
       '& > :nth-of-type(2)': { gridColumn: 3, gridRow: 1 },
       '& > :nth-of-type(3)': { gridColumn: 1, gridRow: 2 },
+      '& > :nth-of-type(4)': { gridColumn: 3, gridRow: 2 },
     },
   },
 });

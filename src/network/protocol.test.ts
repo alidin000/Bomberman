@@ -15,12 +15,14 @@ describe('online protocol', () => {
       simulation: SIMULATION_VERSION,
       name: 'Kakashi',
       characterId: 'naruto',
+      maxPlayers: 4,
     }))).toEqual({
       type: 'create',
       protocol: PROTOCOL_VERSION,
       simulation: SIMULATION_VERSION,
       name: 'Kakashi',
       characterId: 'naruto',
+      maxPlayers: 4,
     });
   });
 
@@ -42,6 +44,14 @@ describe('online protocol', () => {
     }),
     JSON.stringify({ type: 'input', seq: -1, action: 'bomb' }),
     JSON.stringify({ type: 'selection', characterId: 'not-a-character' }),
+    JSON.stringify({
+      type: 'create',
+      protocol: PROTOCOL_VERSION,
+      simulation: SIMULATION_VERSION,
+      name: 'A',
+      characterId: 'naruto',
+      maxPlayers: 5,
+    }),
   ])('rejects untrusted client data: %s', (raw) => {
     expect(parseClientMessage(raw)).toBeNull();
   });

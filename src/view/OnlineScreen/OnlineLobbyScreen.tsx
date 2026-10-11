@@ -2,10 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import PublicIcon from '@mui/icons-material/Public';
-import { Button } from '@mui/material';
+import { Button, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CHARACTER_DEFINITIONS, CharacterId } from '../../content';
 import { getOnlineSession } from '../../network/onlineSession';
+import {
+  ONLINE_ROOM_SIZES, OnlineRoomSize,
+} from '../../network/protocol';
 import { useOnlineSessionSnapshot } from '../../hooks/useOnlineGame';
 import {
   CharacterButton, CharacterGrid, CompactButton, Field, OnlineHeader,
@@ -28,6 +31,7 @@ export function OnlineLobbyScreen() {
   const [name, setName] = useState(savedName);
   const [roomCode, setRoomCode] = useState(routeRoomId?.toUpperCase() ?? '');
   const [characterId, setCharacterId] = useState<CharacterId>('naruto');
+  const [maxPlayers, setMaxPlayers] = useState<OnlineRoomSize>(2);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -51,7 +55,7 @@ export function OnlineLobbyScreen() {
   const createRoom = () => {
     if (!name.trim()) return;
     rememberName();
-    session.create(name, characterId);
+    session.create(name, characterId, maxPlayers);
   };
 
   const joinRoom = () => {
@@ -66,6 +70,7 @@ export function OnlineLobbyScreen() {
   };
 
   const ownPlayer = online.players.find((player) => player.seat === online.seat);
+  const openSeats = Math.max(0, online.maxPlayers - online.players.length);
   const inviteUrl = online.roomId ? `${window.location.origin}/online/${online.roomId}` : '';
   const copyInvite = async () => {
     if (!inviteUrl) return;
@@ -84,7 +89,7 @@ export function OnlineLobbyScreen() {
         <OnlineHeader>
           <div>
             <h1>Online Room</h1>
-            <p>One room, two browsers, one server-controlled arena.</p>
+            <p>Private battles for two to four players.</p>
           </div>
           <CompactButton startIcon={<ArrowBackIcon />} color="inherit" onClick={leave}>Home</CompactButton>
         </OnlineHeader>
@@ -108,6 +113,22 @@ export function OnlineLobbyScreen() {
               <OnlinePanel>
                 <h2>Create a private room</h2>
                 <p>You receive a six-character invite code.</p>
+                <ToggleButtonGroup
+                  exclusive
+                  fullWidth
+                  size="small"
+                  value={maxPlayers}
+                  aria-label="room size"
+                  onChange={(_, value: OnlineRoomSize | null) => {
+                    if (value) setMaxPlayers(value);
+                  }}
+                >
+                  {ONLINE_ROOM_SIZES.map((size) => (
+                    <ToggleButton key={size} value={size} aria-label={`${size} players`}>
+                      {`${size}P`}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
                 <Button variant="contained" startIcon={<PublicIcon />} disabled={!name.trim() || online.status === 'connecting'} onClick={createRoom}>Create room</Button>
               </OnlinePanel>
               <OnlinePanel>
@@ -126,12 +147,12 @@ export function OnlineLobbyScreen() {
               <h2>Invite code</h2>
               <RoomCode>{online.roomId}</RoomCode>
               <Button startIcon={<ContentCopyIcon />} variant="outlined" onClick={copyInvite}>{copied ? 'Copied' : 'Copy invite link'}</Button>
-              <p>Hidden Leaf · Best of 3</p>
+              <p>{`Hidden Leaf · Best of 3 · ${online.maxPlayers} players`}</p>
             </OnlinePanel>
             <OnlinePanel>
               <h2>Players</h2>
               <PlayerList aria-label="room players">
-                {[0, 1].map((seat) => {
+                {Array.from({ length: online.maxPlayers }, (_, seat) => {
                   const player = online.players.find((item) => item.seat === seat);
                   let playerStatus = '';
                   if (player) playerStatus = player.ready ? 'Ready' : 'Choosing';
@@ -143,6 +164,11 @@ export function OnlineLobbyScreen() {
                   );
                 })}
               </PlayerList>
+              <p>
+                {openSeats > 0
+                  ? `Waiting for ${openSeats} more ${openSeats === 1 ? 'player' : 'players'}.`
+                  : 'Room full. Everyone ready starts the match.'}
+              </p>
               <Button variant={ownPlayer?.ready ? 'outlined' : 'contained'} disabled={!ownPlayer || !online.connected} onClick={() => session.setReady(!ownPlayer?.ready)}>
                 {ownPlayer?.ready ? 'Not ready' : 'Ready'}
               </Button>

@@ -21,10 +21,11 @@ export const MONSTER_MOVE_MS: Record<string, number> = {
   basic: 700,
 };
 
-export const PLAYER_COLORS = ['#e74c3c', '#3498db', '#2ecc71'];
+export const PLAYER_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#cc79a7'];
 
 export const PLAYER_SPAWNS: { x: number; y: number }[] = [
   { x: 1, y: 1 },
   { x: 13, y: 8 },
   { x: 1, y: 8 },
+  { x: 13, y: 1 },
 ];

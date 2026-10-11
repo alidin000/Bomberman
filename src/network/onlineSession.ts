@@ -4,6 +4,7 @@ import {
   ClientMessage,
   OnlineAction,
   OnlinePlayer,
+  OnlineRoomSize,
   PROTOCOL_VERSION,
   SIMULATION_VERSION,
   ServerMessage,
@@ -30,6 +31,7 @@ export type OnlineSessionSnapshot = {
   playerId: string;
   token: string;
   players: OnlinePlayer[];
+  maxPlayers: OnlineRoomSize;
   gameState: GameEngineState | null;
   ack: number;
   error: string;
@@ -46,6 +48,7 @@ function emptySnapshot(): OnlineSessionSnapshot {
     playerId: '',
     token: '',
     players: [],
+    maxPlayers: 2,
     gameState: null,
     ack: -1,
     error: '',
@@ -202,7 +205,11 @@ export class OnlineSession {
         });
         break;
       case 'lobby':
-        this.publish({ players: message.players, status: this.snapshot.gameState ? 'playing' : 'lobby' });
+        this.publish({
+          players: message.players,
+          maxPlayers: message.maxPlayers,
+          status: this.snapshot.gameState ? 'playing' : 'lobby',
+        });
         break;
       case 'start':
         this.publish({ playerId: message.playerId, status: 'playing', error: '' });
@@ -252,7 +259,7 @@ export class OnlineSession {
     }
   }
 
-  create(name: string, characterId: CharacterId): void {
+  create(name: string, characterId: CharacterId, maxPlayers: OnlineRoomSize): void {
     this.snapshot = emptySnapshot();
     this.connect({
       type: 'create',
@@ -260,6 +267,7 @@ export class OnlineSession {
       simulation: SIMULATION_VERSION,
       name: name.trim(),
       characterId,
+      maxPlayers,
     });
   }
 

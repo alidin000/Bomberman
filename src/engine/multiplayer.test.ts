@@ -97,6 +97,20 @@ describe('two players sharing the arena', () => {
   });
 });
 
+describe('four players sharing the arena', () => {
+  it('creates four distinct corner seats', () => {
+    const state = liveRound({
+      numPlayers: 4,
+      selectedCharacters: ['naruto', 'sasuke', 'gaara', 'itachi'],
+    });
+
+    expect(state.players.map((player) => player.id))
+      .toEqual(['player1', 'player2', 'player3', 'player4']);
+    expect(state.players.map(({ x, y }) => [x, y]))
+      .toEqual([[1, 1], [13, 8], [1, 8], [13, 1]]);
+  });
+});
+
 describe('local versus on the 35x35 stage arenas', () => {
   const cases = STAGE_DEFINITIONS.flatMap((stage) => [2, 3].map((numPlayers) => ({
     mapId: stage.mapId,

@@ -2,9 +2,11 @@ import { CharacterId, StageId } from '../content/types';
 import { Direction, GameConfig, GameEngineState } from '../engine/types';
 import { REPLAY_VERSION } from './replay';
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export const SIMULATION_VERSION = REPLAY_VERSION;
 export const MAX_CLIENT_MESSAGE_BYTES = 1024;
+export const ONLINE_ROOM_SIZES = [2, 3, 4] as const;
+export type OnlineRoomSize = typeof ONLINE_ROOM_SIZES[number];
 
 export type OnlineAction = 'bomb' | 'detonate' | 'ultimate' | 'cover';
 
@@ -19,7 +21,7 @@ export type OnlinePlayer = {
 export type ClientMessage =
   | {
     type: 'create'; protocol: typeof PROTOCOL_VERSION; simulation: typeof SIMULATION_VERSION;
-    name: string; characterId: CharacterId;
+    name: string; characterId: CharacterId; maxPlayers: OnlineRoomSize;
   }
   | {
     type: 'join'; protocol: typeof PROTOCOL_VERSION; simulation: typeof SIMULATION_VERSION;
@@ -40,7 +42,10 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: 'welcome'; roomId: string; seat: number; playerId: string; token: string }
-  | { type: 'lobby'; roomId: string; stageId: StageId; players: OnlinePlayer[] }
+  | {
+    type: 'lobby'; roomId: string; stageId: StageId;
+    maxPlayers: OnlineRoomSize; players: OnlinePlayer[];
+  }
   | { type: 'start'; roomId: string; playerId: string; config: GameConfig }
   | {
     type: 'snapshot'; tick: number; ack: number;
@@ -88,6 +93,10 @@ function isRoomId(value: unknown): value is string {
   return typeof value === 'string' && /^[A-HJ-NP-Z2-9]{6}$/.test(value);
 }
 
+function isOnlineRoomSize(value: unknown): value is OnlineRoomSize {
+  return typeof value === 'number' && ONLINE_ROOM_SIZES.includes(value as OnlineRoomSize);
+}
+
 function hasVersions(value: Record<string, unknown>): boolean {
   return value.protocol === PROTOCOL_VERSION && value.simulation === SIMULATION_VERSION;
 }
@@ -108,8 +117,11 @@ export function parseClientMessage(raw: string): ClientMessage | null {
 
   switch (value.type) {
     case 'create':
-      return hasOnlyKeys(value, ['type', 'protocol', 'simulation', 'name', 'characterId'])
-        && hasVersions(value) && isName(value.name) && isCharacterId(value.characterId)
+      return hasOnlyKeys(
+        value,
+        ['type', 'protocol', 'simulation', 'name', 'characterId', 'maxPlayers']
+      ) && hasVersions(value) && isName(value.name) && isCharacterId(value.characterId)
+        && isOnlineRoomSize(value.maxPlayers)
         ? value as ClientMessage : null;
     case 'join':
       return hasOnlyKeys(
@@ -167,7 +179,8 @@ export function parseServerMessage(raw: string): ServerMessage | null {
         && typeof value.playerId === 'string' && typeof value.token === 'string'
         ? value as ServerMessage : null;
     case 'lobby':
-      return isRoomId(value.roomId) && Array.isArray(value.players)
+      return isRoomId(value.roomId) && isOnlineRoomSize(value.maxPlayers)
+        && Array.isArray(value.players)
         ? value as ServerMessage : null;
     case 'start':
       return isRoomId(value.roomId) && isRecord(value.config)

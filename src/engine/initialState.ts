@@ -23,7 +23,7 @@ import { getMatchDifficulty } from './difficulty';
 import { createTrainingSentries, isTrainingConfig, placeTrainingCharges } from './training';
 import { applyLoadoutAtInit } from './campaignLoadout';
 
-const PLAYER_NAMES = ['player1', 'player2', 'player3'];
+const PLAYER_NAMES = ['player1', 'player2', 'player3', 'player4'];
 const ULTIMATE_COOLDOWN_MS = 12000;
 export const ROUND_START_COUNTDOWN_MS = 3000;
 const SPAWN_CLEAR_OFFSETS = [

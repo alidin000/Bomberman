@@ -14,6 +14,9 @@ export type BombermanPerfSnapshot = {
   avgFrameMs: number;
   maxFrameMs: number;
   frames: number;
+  dpr: number;
+  drawingBufferWidth: number;
+  drawingBufferHeight: number;
   sampledAt: number;
 };
 
@@ -40,6 +43,7 @@ export function PerfProbe() {
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
   const camera = useThree((state) => state.camera);
+  const drawingBufferSize = useRef(new THREE.Vector2());
   const windowRef = useRef({
     frames: 0, elapsed: 0, maxFrame: 0, minCameraY: Infinity, maxCameraY: -Infinity
   });
@@ -58,6 +62,7 @@ export function PerfProbe() {
       if ((object as THREE.Mesh).isMesh) meshes += 1;
     });
     const { render, memory, programs } = gl.info;
+    gl.getDrawingBufferSize(drawingBufferSize.current);
     // eslint-disable-next-line no-underscore-dangle
     window.__bombermanPerf = {
       calls: render.calls,
@@ -70,6 +75,9 @@ export function PerfProbe() {
       avgFrameMs: (sample.elapsed * 1000) / sample.frames,
       maxFrameMs: sample.maxFrame * 1000,
       frames: sample.frames,
+      dpr: gl.getPixelRatio(),
+      drawingBufferWidth: drawingBufferSize.current.x,
+      drawingBufferHeight: drawingBufferSize.current.y,
       sampledAt: performance.now(),
     };
     sample.frames = 0;

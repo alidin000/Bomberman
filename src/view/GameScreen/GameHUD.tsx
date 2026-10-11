@@ -117,7 +117,7 @@ const OBJECTIVE_STATUS_LABELS: Record<CampaignObjectiveStatus, string> = {
 
 // Local Arena mirrors the shared keyboard: P1 (W A S D) on the left, P3
 // (U H J K, the middle keys) in the middle, P2 (the arrows) on the right.
-const CARD_ORDER = [0, 2, 1];
+const CARD_ORDER = [0, 2, 3, 1];
 
 type GameHUDProps = {
   state: GameEngineState;
@@ -186,7 +186,7 @@ type PlayerCardModel = {
   alive: boolean;
   // "Normal" for a CPU slot; null for a human.
   cpuLevel: string | null;
-  // Three cards share a phone's width: the badge reads "CPU" alone there
+  // Three or four cards share a phone's width: the badge reads "CPU" alone there
   // (the card's label keeps the level).
   compactBadge: boolean;
   // Round wins and the wins that take the match; no pips for one round.

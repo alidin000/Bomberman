@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
     playerId: '',
     token: '',
     players: [],
+    maxPlayers: 2,
     gameState: null,
     ack: -1,
     error: '',
@@ -72,6 +73,7 @@ describe('OnlineLobbyScreen', () => {
       playerId: '',
       token: '',
       players: [],
+      maxPlayers: 2,
       gameState: null,
       ack: -1,
       error: '',
@@ -83,7 +85,15 @@ describe('OnlineLobbyScreen', () => {
     fireEvent.change(screen.getByLabelText('display name'), { target: { value: 'Hinata' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sasuke' }));
     fireEvent.click(screen.getByRole('button', { name: /create room/i }));
-    expect(mocks.create).toHaveBeenCalledWith('Hinata', 'sasuke');
+    expect(mocks.create).toHaveBeenCalledWith('Hinata', 'sasuke', 2);
+  });
+
+  it('creates a four-player room when selected', () => {
+    renderLobby();
+    fireEvent.change(screen.getByLabelText('display name'), { target: { value: 'Hinata' } });
+    fireEvent.click(screen.getByRole('button', { name: '4 players' }));
+    fireEvent.click(screen.getByRole('button', { name: /create room/i }));
+    expect(mocks.create).toHaveBeenCalledWith('Hinata', 'naruto', 4);
   });
 
   it('prefills an invite code and joins it', () => {
@@ -110,10 +120,14 @@ describe('OnlineLobbyScreen', () => {
           seat: 1, name: 'Shikamaru', characterId: 'sasuke', ready: true, connected: true
         },
       ],
+      maxPlayers: 4,
     };
     renderLobby('/online/ABC234');
     expect(screen.getByText('P1 · Hinata')).toBeInTheDocument();
     expect(screen.getByText('P2 · Shikamaru')).toBeInTheDocument();
+    expect(screen.getByText('P3 · Waiting...')).toBeInTheDocument();
+    expect(screen.getByText('P4 · Waiting...')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for 2 more players.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ready' }));
     expect(mocks.setReady).toHaveBeenCalledWith(true);
   });
