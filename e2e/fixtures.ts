@@ -8,7 +8,7 @@ export { expect };
 export const GAME_URL = /\/game\/\d+\/\d+\/\w+$/;
 
 // Software WebGL runs the 3-2-1 countdown at a fraction of real speed.
-const LIVE_TIMEOUT_MS = 40_000;
+const LIVE_TIMEOUT_MS = 60_000;
 
 /**
  * Every test fails on a console error, an uncaught exception, or a request

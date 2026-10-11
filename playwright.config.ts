@@ -10,13 +10,15 @@ export default defineConfig({
   testDir: './e2e',
   // A match on software WebGL (SwiftShader) runs a few frames a second, so a
   // test gets a minute; the waits inside it are on game state, not on time.
-  timeout: 60_000,
+  timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  // Each worker renders the arena on the CPU; two fill a CI runner.
-  workers: process.env.CI ? 2 : 1,
+  // SwiftShader saturates a CI runner when two WebGL matches render together,
+  // which can freeze countdowns for tens of seconds. Keep browser smoke tests
+  // serial: the suite is faster overall when it does not retry starved frames.
+  workers: 1,
   reporter: process.env.CI
     ? [['list'], ['github'], ['html', { open: 'never' }]]
     : [['list']],

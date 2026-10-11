@@ -64,7 +64,10 @@ test(
       await expect(guest.locator('canvas')).toBeVisible();
       await expect(page.getByLabel('online match status')).toContainText('Connected');
       await expect(guest.getByLabel('online match status')).toContainText('Connected');
-      await expect.poll(() => canvasColorCount(page)).toBeGreaterThan(20);
+      await expect.poll(
+        () => canvasColorCount(page),
+        { timeout: 45_000 }
+      ).toBeGreaterThan(20);
       await page.screenshot({ path: testInfo.outputPath('online-host.png') });
       expect(guestProblems).toEqual([]);
     } finally {
