@@ -88,10 +88,7 @@ Partial<Record<GenericPower, Power>>
 const CHARACTER_CAMPAIGN_PICKUP_POOLS: Record<CharacterId, Power[]> = Object.fromEntries(
   Object.entries(CHARACTER_SIGNATURE_REPLACEMENTS).map(([characterId, replacements]) => [
     characterId,
-    [
-      ...GENERIC_POWER_ORDER.map((power) => replacements[power] ?? power),
-      'ChakraScroll',
-    ],
+    GENERIC_POWER_ORDER.map((power) => replacements[power] ?? power),
   ])
 ) as Record<CharacterId, Power[]>;
 

@@ -4,7 +4,7 @@ import {
   BossHazard, GameConfig, GameEngineState, MonsterState
 } from './types';
 import { parseMapRows } from './mapLoader';
-import { createBomb, explodeBombs } from './bombs';
+import { BOX_DROP_TABLE, createBomb, explodeBombs } from './bombs';
 import { createDangerMap } from './monsters';
 import {
   PRESSURE_BLOCK_INTERVAL_MS, PRESSURE_FILL_MS, VERSUS_ROUND_MS, getUpcomingPressureCells,
@@ -96,7 +96,12 @@ describe('seeded crate drops', () => {
     expect(blastCrateRow(98765)).not.toEqual(drops);
   });
 
-  it('varies arena drops without letting bomb and range upgrades dominate', () => {
+  it('gives every arena pickup category identical odds for every fighter', () => {
+    expect(BOX_DROP_TABLE.map(({ item }) => item)).toEqual(genericPowerUpOptions);
+    expect(new Set(BOX_DROP_TABLE.map(({ weight }) => weight))).toEqual(new Set([1]));
+    expect(BOX_DROP_TABLE.find(({ item }) => item === 'BlastRangeUp')?.weight)
+      .toBe(BOX_DROP_TABLE.find(({ item }) => item === 'UltimateRangeUp')?.weight);
+
     const counts = Object.fromEntries(
       genericPowerUpOptions.map((power) => [power, 0])
     ) as Record<(typeof genericPowerUpOptions)[number], number>;
@@ -105,13 +110,7 @@ describe('seeded crate drops', () => {
         if (power) counts[power] += 1;
       });
     }
-    const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
-    const coreShare = (
-      counts.AddBomb + counts.BlastRangeUp + counts.UltimateRangeUp
-    ) / total;
-
     genericPowerUpOptions.forEach((power) => expect(counts[power]).toBeGreaterThan(0));
-    expect(coreShare).toBeLessThan(0.5);
   });
 
   it('rolls a different, still reproducible seed for a rematch', () => {

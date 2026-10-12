@@ -84,11 +84,12 @@ mission.
 Seeded randomness is the only randomness inside a match. This keeps tests,
 replays, CPU simulations, and online execution reproducible.
 
-Power-up rolls preserve that determinism. Arena crates use one weighted table
-shared by every fighter. Campaign rewards expose the same eight effect
-categories, replacing equivalent generic entries with the active fighter's
-signature pickup, then add Chakra Scroll. Authored secrets and rare Character
-Fragments remain separate from ordinary random drops.
+Power-up rolls preserve that determinism. When an arena crate contains a
+pickup, all eight shared categories have equal odds for every fighter. Campaign
+rewards expose those same eight categories with equal slots, replacing
+equivalent generic entries with the active fighter's signature pickup. Authored
+Chakra Scrolls, secrets, and rare Character Fragments remain separate from
+ordinary random drops.
 
 Basic and ultimate reach are independent player stats. `BlastRangeUp` changes
 ordinary bombs, while `UltimateRangeUp` is added only when the engine creates

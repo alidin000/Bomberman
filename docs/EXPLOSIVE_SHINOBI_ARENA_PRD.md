@@ -650,10 +650,14 @@ Every character can receive the complete shared upgrade set:
 * Phase Step
 * Barrier Drop
 
+The eight shared categories have equal random odds for every character. Basic
+Blast Range and Ultimate Reach are separate categories, so a range-category
+pickup is a 50/50 choice between normal and ultimate bombs.
+
 The effect categories stay consistent, but matching generic entries are
 replaced by the active character's signature pickup. Names, models, colors, and
-pickup feedback match that character. Campaign also drops Chakra Scrolls.
-Character Fragments remain rare rewards instead of ordinary random drops.
+pickup feedback match that character. Chakra Scrolls and Character Fragments
+remain authored or rare rewards instead of ordinary random drops.
 
 ---
 

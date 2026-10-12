@@ -383,14 +383,15 @@ describe('gameReducer', () => {
           characterReplacements[power as keyof typeof characterReplacements] ?? power
         );
       });
-      expect(pool).toContain('ChakraScroll');
+      expect(pool).not.toContain('ChakraScroll');
       expect(pool).not.toContain('CharacterFragment');
+      expect(new Set(pool).size).toBe(8);
       const rolled = new Set(pool.map((_, seed) => getCampaignPowerUp(
         characterId as keyof typeof replacements,
         seed
       )));
       expect(rolled).toEqual(new Set(pool));
-      expect(pool).toHaveLength(9);
+      expect(pool).toHaveLength(8);
     });
     expect(getCampaignPickupPool('naruto')).not.toContain('Sharingan');
 

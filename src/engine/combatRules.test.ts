@@ -262,7 +262,7 @@ describe('signature bomb movement and control', () => {
 });
 
 describe('ultimate outer health damage', () => {
-  it('scales ultimate reach without changing basic bomb range', () => {
+  it('keeps basic and ultimate range upgrades independent', () => {
     let basicState = liveRound({ selectedCharacters: ['deidara', 'naruto'] });
     const basicRange = basicState.players[0].bombRange;
     basicState = applyPowerUp(basicState, 'player1', 'UltimateRangeUp');
@@ -276,6 +276,14 @@ describe('ultimate outer health damage', () => {
       { type: 'USE_ULTIMATE', playerId: 'player1' }
     )!;
     expect(ultimateState.bombs[0].range).toBe(basicRange + 4);
+
+    let normalUpgradeState = liveRound({ selectedCharacters: ['deidara', 'naruto'] });
+    normalUpgradeState = applyPowerUp(normalUpgradeState, 'player1', 'BlastRangeUp');
+    normalUpgradeState = gameReducer(
+      normalUpgradeState,
+      { type: 'USE_ULTIMATE', playerId: 'player1' }
+    )!;
+    expect(normalUpgradeState.bombs[0].range).toBe(basicRange + 3);
   });
 
   it('widens Kirin outer lightning because its core already spans the arena', () => {

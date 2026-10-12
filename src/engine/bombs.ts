@@ -1,7 +1,7 @@
 /* eslint-disable no-use-before-define */
 /* eslint-disable prefer-destructuring, comma-dangle, object-curly-newline, prefer-const */
 import {
-  Bomb, GameMap, GenericPower, isBomb, isObstacle,
+  Bomb, GameMap, GenericPower, genericPowerUpOptions, isBomb, isObstacle,
 } from '../model/gameItem';
 import {
   BombState, DestroyedBox, ExplosionCell, GameEngineState, PlayerState,
@@ -26,19 +26,11 @@ import {
 
 let bombIdCounter = 0;
 
-// Versus drops: not every crate hides an item, and the round-swinging powers
-// are rarer than the bomb and fire upgrades the round is built around.
+// Not every crate hides an item. When one does, every shared category has the
+// same odds for every fighter; in particular, basic and ultimate range are 50/50.
 export const BOX_DROP_CHANCE = 0.45;
-export const BOX_DROP_TABLE: readonly WeightedEntry<GenericPower>[] = [
-  { item: 'AddBomb', weight: 19 },
-  { item: 'BlastRangeUp', weight: 17 },
-  { item: 'UltimateRangeUp', weight: 12 },
-  { item: 'RollerSkate', weight: 17 },
-  { item: 'Obstacle', weight: 12 },
-  { item: 'Detonator', weight: 10 },
-  { item: 'Ghost', weight: 8 },
-  { item: 'Invincibility', weight: 5 },
-];
+export const BOX_DROP_TABLE: readonly WeightedEntry<GenericPower>[] = genericPowerUpOptions
+  .map((item) => ({ item, weight: 1 }));
 
 function rollBoxDrop(seed: number): { power: GenericPower | null; seed: number } {
   const chance = nextRandom(seed);
@@ -63,6 +55,17 @@ const ULTIMATE_BOMBS: Record<PlayerState['characterId'], BombState['kind']> = {
   gaara: 'sandTsunami',
   minato: 'instantTeleport',
   itachi: 'tsukuyomi',
+};
+
+// Ultimate reach has its own baseline, so BlastRangeUp cannot silently scale
+// both bomb families. UltimateRangeUp is the only pickup that changes it.
+const ULTIMATE_BASE_RANGES: Record<PlayerState['characterId'], number> = {
+  deidara: 6,
+  naruto: 5,
+  sasuke: 5,
+  gaara: 5,
+  minato: 3,
+  itachi: 5,
 };
 
 export function resetBombIdCounter(): void {
@@ -343,9 +346,7 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
     playerId,
     origin.x,
     origin.y,
-    player.bombRange
-      + (player.ultimateRangeBonus ?? 0)
-      + (player.characterId === 'minato' ? 1 : 3),
+    ULTIMATE_BASE_RANGES[player.characterId] + (player.ultimateRangeBonus ?? 0),
     false,
     ULTIMATE_BOMBS[player.characterId],
     getBombFuse(ULTIMATE_BOMBS[player.characterId]),
