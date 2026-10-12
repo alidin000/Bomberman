@@ -70,16 +70,24 @@ describe('two players sharing the arena', () => {
     expect(move(escaped, 'player2', 'left', 5).players[1].x).toBeGreaterThan(5.7);
   });
 
-  it('keeps Minato\'s teleport from landing on the other player', () => {
-    const state = liveRound(
+  it('sends Minato\'s ultimate bomb to his marker without moving either player', () => {
+    let state = liveRound(
       { selectedCharacters: ['sasuke', 'minato'] },
       [{ x: 7, y: 4 }, { x: 4, y: 4 }]
     );
+    state = gameReducer(state, { type: 'PLACE_OBSTACLE', playerId: 'player2' })!;
+    state = {
+      ...state,
+      players: state.players.map((player) => (
+        player.id === 'player2' ? { ...player, x: 8, y: 4 } : player
+      )),
+    };
 
     const next = gameReducer(state, { type: 'USE_ULTIMATE', playerId: 'player2' })!;
 
-    expect(next.players[1]).toMatchObject({ x: 1, y: 4 });
+    expect(next.players[1]).toMatchObject({ x: 8, y: 4 });
     expect(next.players[0]).toMatchObject({ x: 7, y: 4 });
+    expect(next.bombs[0]).toMatchObject({ kind: 'instantTeleport', x: 4, y: 4 });
   });
 
   it('always lets players close the gap even when they start too far apart', () => {

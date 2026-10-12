@@ -165,6 +165,29 @@ describe('GameScreen', () => {
       .getAllByText(/Clay Art Shinobi/)).toHaveLength(2);
   });
 
+  it('labels Minato\'s fourth action as Mark instead of combining it with Cover', () => {
+    localStorage.setItem('shinobiControlsGuideSeen', 'true');
+    currentMockState = {
+      ...createInitialState({
+        ...mockState.config,
+        selectedCharacters: ['minato', 'deidara'],
+      }),
+      paused: true,
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/game/2/1/map1']}>
+        <ThemeProvider theme={theme}>
+          <GameScreen />
+        </ThemeProvider>
+      </MemoryRouter>
+    );
+
+    const controls = screen.getByRole('table', { name: 'controls' });
+    expect(controlKey(controls, 'P1', 'Ability')).toBe('Mark 4');
+    expect(controlKey(controls, 'P2', 'Ability')).toBe('Cover [');
+  });
+
   it('loads saved bindings before rendering the controls guide', () => {
     localStorage.setItem('playerKeyBindings', JSON.stringify({
       1: ['t', 'f', 'g', 'h', 'b', 'n', 'm', ','],

@@ -49,8 +49,15 @@ export function canVibrate(): boolean {
   return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
 }
 
-type TouchKit = { alive: boolean; detonator: boolean; cover: boolean };
-const NO_KIT: TouchKit = { alive: false, detonator: false, cover: false };
+type TouchKit = {
+  alive: boolean;
+  detonator: boolean;
+  cover: boolean;
+  marker: boolean;
+};
+const NO_KIT: TouchKit = {
+  alive: false, detonator: false, cover: false, marker: false,
+};
 
 /** What the touch seat can do now; the same object until that changes. */
 function createTouchKitSelector(slot: number): EngineSelector<TouchKit> {
@@ -61,12 +68,14 @@ function createTouchKitSelector(slot: number): EngineSelector<TouchKit> {
       alive: player.alive,
       detonator: player.powerUps.includes('Detonator'),
       cover: player.obstacles > 0,
+      marker: player.characterId === 'minato',
     };
     if (
       previous
       && previous.alive === next.alive
       && previous.detonator === next.detonator
       && previous.cover === next.cover
+      && previous.marker === next.marker
     ) return previous;
     return next;
   };
@@ -94,6 +103,13 @@ const BurstGlyph = () => (
 const WallGlyph = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M2 5h9v4H2zm11 0h9v4h-9zM2 11h4v4H2zm6 0h8v4H8zm10 0h4v4h-4zM2 17h9v4H2zm11 0h9v4h-9z" />
+  </svg>
+);
+
+const MarkerGlyph = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="m12 2 2.2 6.4 6.8.1-5.4 4 2 6.5-5.6-3.8L6.4 19l2-6.5-5.4-4 6.8-.1z" />
+    <circle cx="12" cy="12" r="2.4" />
   </svg>
 );
 
@@ -393,10 +409,10 @@ export const TouchControls = React.memo(({
             <span>Det</span>
           </ActionButton>
         )}
-        {kit.cover && (
+        {(kit.cover || kit.marker) && (
           <ActionButton data-touch-button="cover" data-out={out} style={place(layout.buttons.cover)}>
-            <WallGlyph />
-            <span>Cover</span>
+            {kit.marker ? <MarkerGlyph /> : <WallGlyph />}
+            <span>{kit.marker ? 'Mark' : 'Cover'}</span>
           </ActionButton>
         )}
       </TouchLayer>
@@ -424,8 +440,8 @@ export const TouchGuide = ({ leftHanded }: { leftHanded: boolean }) => {
         {' its ring fills as it charges; tap it when the ring is full.'}
       </li>
       <li>
-        <strong>Det and Cover</strong>
-        {' appear when you pick up a Detonator or a Barrier.'}
+        <strong>Ability:</strong>
+        {' Cover appears with a Barrier; Minato gets Mark for his Flying Thunder kunai.'}
       </li>
       <li>
         <strong>Pause:</strong>

@@ -145,6 +145,12 @@ const BombGlyph = () => (
   </svg>
 );
 
+const HealthGlyph = () => (
+  <svg viewBox="0 0 18 18" aria-hidden focusable="false">
+    <path d="M9 16 2.3 9.5C-1.2 5.7 4.2 1 9 5.2 13.8 1 19.2 5.7 15.7 9.5Z" fill="currentColor" />
+  </svg>
+);
+
 const BlastGlyph = () => (
   <svg viewBox="0 0 18 18" aria-hidden focusable="false">
     <path
@@ -196,6 +202,8 @@ type PlayerCardModel = {
   bombsLeft: number;
   maxBombs: number;
   bombRange: number;
+  health: number;
+  maxHealth: number;
   ultimateCharge: number;
   activePowers: Power[];
   // Only the newest pickup: the note explains what the power just did.
@@ -223,10 +231,12 @@ function toPlayerCardModel(
     wins,
     winsNeeded: versus && state.totalRounds > 1 ? winsNeeded(state.totalRounds) : null,
     outNote: player.alive ? '' : (deathNote(state, player) || player.deathReason || ''),
-    // Naruto's clone and ultimate bombs can put more out than the base limit.
+    // Defensive clamp for imported or older match states with extra active bombs.
     bombsLeft: Math.max(0, player.maxBombs - player.activeBombs),
     maxBombs: player.maxBombs,
     bombRange: player.bombRange,
+    health: player.health ?? player.maxHealth ?? 3,
+    maxHealth: player.maxHealth ?? 3,
     ultimateCharge: Math.round(player.ultimateCharge),
     activePowers: Array.from(new Set(player.powerUps)).filter(
       (p) => isPowerUpActive(state, player.id, p)
@@ -289,6 +299,10 @@ const PlayerCard = React.memo(({ model }: { model: PlayerCardModel }) => {
           )}
           {model.alive ? (
             <PlayerStats>
+              <StatCell role="img" aria-label={`Health ${model.health} of ${model.maxHealth}`}>
+                <HealthGlyph />
+                <strong>{`${model.health}/${model.maxHealth}`}</strong>
+              </StatCell>
               <StatCell role="img" aria-label={`Bombs ready ${model.bombsLeft} of ${model.maxBombs}`}>
                 <BombGlyph />
                 <strong>{`${model.bombsLeft}/${model.maxBombs}`}</strong>

@@ -996,7 +996,7 @@ describe('gameReducer', () => {
     expect(state.players[0].x).toBeCloseTo(1.1);
   });
 
-  it('drops a Naruto shadow clone charge beside the first bomb', () => {
+  it('drops one Naruto shadow clone charge without blocking an adjacent cell', () => {
     let state = createInitialState({
       ...baseConfig,
       selectedCharacters: ['naruto', 'sasuke'],
@@ -1004,9 +1004,9 @@ describe('gameReducer', () => {
 
     state = gameReducer(state, { type: 'DROP_BOMB', playerId: 'player1' })!;
 
-    expect(state.bombs).toHaveLength(2);
+    expect(state.bombs).toHaveLength(1);
     expect(state.bombs.every((bomb) => bomb.kind === 'shadowClone')).toBe(true);
-    expect(state.bombs.map((bomb) => `${bomb.x},${bomb.y}`)).toEqual(['1,1', '1,2']);
+    expect(state.bombs.map((bomb) => `${bomb.x},${bomb.y}`)).toEqual(['1,1']);
   });
 
   it('lets Sasuke Chidori mines pierce boxes', () => {

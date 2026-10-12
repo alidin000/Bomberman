@@ -134,6 +134,7 @@ function formatMovementKeys(bindings: string[]): string {
 type ControlsRow = {
   slot: number;
   name: string;
+  abilityLabel: 'Cover' | 'Mark';
   keys: { move: string; bomb: string; detonate: string; ultimate: string; cover: string };
 };
 
@@ -152,7 +153,7 @@ const ControlsTable = ({ rows, label }: { rows: ControlsRow[]; label: string }) 
         <th scope="col">
           <abbr title="Ultimate">Ult</abbr>
         </th>
-        <th scope="col">Cover</th>
+        <th scope="col">Ability</th>
       </tr>
     </thead>
     <tbody>
@@ -171,7 +172,11 @@ const ControlsTable = ({ rows, label }: { rows: ControlsRow[]; label: string }) 
           <td><kbd>{row.keys.bomb}</kbd></td>
           <td><kbd>{row.keys.detonate}</kbd></td>
           <td><kbd>{row.keys.ultimate}</kbd></td>
-          <td><kbd>{row.keys.cover}</kbd></td>
+          <td>
+            <span>{row.abilityLabel}</span>
+            {' '}
+            <kbd>{row.keys.cover}</kbd>
+          </td>
         </tr>
       ))}
     </tbody>
@@ -500,6 +505,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
       return {
         slot: index,
         name: characterId ? getCharacterDefinition(characterId).name : `Player ${playerNumber}`,
+        abilityLabel: characterId === 'minato' ? 'Mark' : 'Cover',
         keys: {
           move: formatMovementKeys(bindings),
           bomb: formatKeyLabel(bindings[4]),

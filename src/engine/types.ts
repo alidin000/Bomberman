@@ -32,6 +32,7 @@ export type BombKind =
   | 'standard'
   | 'claySpider'
   | 'shadowClone'
+  | 'shadowCloneBarrage'
   | 'chidoriMine'
   | 'sandCoffin'
   | 'thunderMark'
@@ -82,6 +83,8 @@ export interface PlayerState {
   x: number;
   y: number;
   alive: boolean;
+  health?: number;
+  maxHealth?: number;
   deathReason?: string;
   deathCause?: DeathCause;
   maxBombs: number;
@@ -99,6 +102,10 @@ export interface PlayerState {
   passiveState?: string;
   // Time left in which a spent survival passive still shields its owner.
   survivalGraceMs?: number;
+  // Character abilities can briefly root a ninja without affecting actions.
+  movementLockMs?: number;
+  movementLockReason?: 'shadowClone' | 'lightning' | 'genjutsu';
+  teleportMark?: Point;
 }
 
 export interface MonsterPatrol {
@@ -146,6 +153,9 @@ export interface BombState {
   ticksRemaining: number;
   manualDetonation: boolean;
   kind: BombKind;
+  // Simulation-owned timing keeps transformations and moving bombs deterministic online.
+  ageMs?: number;
+  movementCooldownMs?: number;
 }
 
 export interface BossState {
@@ -185,6 +195,8 @@ export interface ExplosionCell {
   ticksRemaining: number;
   kind?: BombKind;
   ownerId?: string;
+  // Outer ultimate effects are visual damage zones, not lingering lethal fire.
+  chipDamage?: boolean;
   // Players and monsters the blast already resolved when it ignited. Anyone
   // else who walks into the lingering flame is caught by it.
   sparedIds?: string[];

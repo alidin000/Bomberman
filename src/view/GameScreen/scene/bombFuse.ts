@@ -8,6 +8,11 @@ import { PULSE_HZ, pulseRate } from './flashSafety';
 /** Last stretch of a fuse drawn as "about to blow": a reaction plus a step out. */
 export const FUSE_URGENT_MS = 800;
 
+/** Naruto's center charge calls four cardinal clones into a blocking formation. */
+export function shadowCloneCount(remainingMs: number, elapsedMs = 0): 1 | 5 {
+  return remainingMs <= FUSE_URGENT_MS || elapsedMs >= 2000 ? 5 : 1;
+}
+
 /** A remote bomb waits for its living owner, so it has no countdown. */
 export function isHeldRemote(bomb: BombState, players: GameEngineState['players']): boolean {
   return bomb.manualDetonation && players.some((p) => p.id === bomb.ownerId && p.alive);

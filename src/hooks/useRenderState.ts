@@ -219,6 +219,9 @@ const fogOfWar = record<FogOfWarState>({
 const scenePlayerRules: Rules<PlayerState> = {
   ultimateCooldownRemaining: IGNORE,
   survivalGraceMs: IGNORE,
+  movementLockMs: {
+    matters: (previous, next) => ((previous ?? 0) > 0) !== ((next ?? 0) > 0),
+  },
   // The scene shows only "ultimate ready"; the HUD shows the percentage.
   ultimateCharge: { matters: (a, b) => ultimateReady(a) !== ultimateReady(b) },
 };
@@ -231,7 +234,11 @@ const sceneMonster = record<MonsterState>({
   lifetimeMs: IGNORE,
 });
 // Fuses are drawn from the live state every frame (GameScene3D's bomb clock).
-const sceneBomb = record<BombState>({ ticksRemaining: IGNORE });
+const sceneBomb = record<BombState>({
+  ticksRemaining: IGNORE,
+  ageMs: IGNORE,
+  movementCooldownMs: IGNORE,
+});
 const sceneDestroyedBox = record<DestroyedBox>({ ticksRemaining: IGNORE });
 const sceneObjective = record<CampaignObjectiveState>({
   ticksRemaining: IGNORE,
@@ -289,6 +296,8 @@ const hudPlayer = record<PlayerState>({
   facing: IGNORE,
   ultimateCooldownRemaining: IGNORE,
   survivalGraceMs: IGNORE,
+  movementLockMs: IGNORE,
+  movementLockReason: IGNORE,
 });
 const hudMonster = record<MonsterState>({
   x: IGNORE,
@@ -332,7 +341,11 @@ const shareHudState = record<GameEngineState>({
   players: list(hudPlayer),
   monsters: list(hudMonster),
   boss: hudBoss,
-  bombs: list(record<BombState>({ ticksRemaining: IGNORE })),
+  bombs: list(record<BombState>({
+    ticksRemaining: IGNORE,
+    ageMs: IGNORE,
+    movementCooldownMs: IGNORE,
+  })),
   explosions: list(record<ExplosionCell>({ ticksRemaining: IGNORE })),
   destroyedBoxes: list(record<DestroyedBox>({ ticksRemaining: IGNORE })),
   hazards: list(record<BossHazard>({ ticksRemaining: IGNORE })),

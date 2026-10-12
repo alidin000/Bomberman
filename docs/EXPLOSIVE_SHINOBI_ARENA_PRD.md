@@ -712,9 +712,16 @@ Example:
 
 Naruto
 
-Bomb:
+Basic Bomb:
 
-Shadow Clone Marker
+One Shadow Clone Bomb
+
+Ultimate:
+
+Shadow Clone Barrage fills every traversable cell in its eventual blast area
+with clones after two seconds. Other players, monsters, and bosses caught in
+the formation cannot move. The Naruto who owns the barrage can move through
+his own clones; another Naruto cannot.
 
 Shield:
 
@@ -728,9 +735,18 @@ Orange Chakra Theme
 
 Minato
 
-Bomb:
+Basic Bomb:
 
 FTG Seal
+
+Ability:
+
+Place a passable Flying Thunder kunai marker.
+
+Ultimate:
+
+Create the ultimate bomb at the marker and consume it. If no marker exists,
+create the bomb at Minato's current cell.
 
 Shield:
 

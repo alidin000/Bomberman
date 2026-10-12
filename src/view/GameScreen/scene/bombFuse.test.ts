@@ -8,6 +8,7 @@ import {
   countdownNow,
   createCountdown,
   fuseRingRadius,
+  shadowCloneCount,
 } from './bombFuse';
 
 // 9 x 5 open room with one pillar at (4, 1).
@@ -117,5 +118,15 @@ describe('fuseRingRadius', () => {
     expect(fuseRingRadius(1000)).toBeGreaterThan(fuseRingRadius(200));
     expect(fuseRingRadius(0)).toBe(FUSE_RING_MIN_RADIUS);
     expect(fuseRingRadius(30000)).toBeLessThan(1);
+  });
+});
+
+describe('shadowCloneCount', () => {
+  it('multiplies the charge after two seconds of its 2.8 second fuse', () => {
+    expect(shadowCloneCount(801)).toBe(1);
+    expect(shadowCloneCount(800)).toBe(5);
+    expect(shadowCloneCount(0)).toBe(5);
+    expect(shadowCloneCount(Infinity, 1999)).toBe(1);
+    expect(shadowCloneCount(Infinity, 2000)).toBe(5);
   });
 });

@@ -33,6 +33,10 @@ import {
 import { normalizeSeed } from '../engine/random';
 import { getMonsterMoveMs } from '../engine/monsters';
 import { getMatchDifficulty } from '../engine/difficulty';
+import {
+  getShadowCloneFormationCells,
+  SHADOW_CLONE_FORMATION_MS,
+} from '../engine/characterAbilities';
 import { GameMap, gameItem, isBomb } from '../model/gameItem';
 import { CpuLevelId, getCpuLevelId } from './controllers';
 
@@ -278,6 +282,7 @@ const SHARED_SCREEN_X = 12;
 const SHARED_SCREEN_Y = 8;
 const ESCAPE_SCREEN_SCALE = 1.5;
 const MANUAL_BOMB_MS = 500;
+const SHADOW_CLONE_CLEARANCE_MS = 500;
 // Monsters catch on touch, so a CPU plans around where they could walk.
 const MONSTER_STEPS = 4;
 const SUDDEN_DEATH_LOOKAHEAD_MS = 8000;
@@ -546,6 +551,27 @@ function buildDanger(
       }
     }
     if (!updated) break;
+  }
+  // Naruto's blast-area clones are nonlethal, but they become solid after two
+  // seconds. Treat their occupied interval as danger so an escape never ends
+  // inside the future barricade or tries to cross it after it has formed.
+  for (let k = 0; k < list.length; k += 1) {
+    const bomb = list[k];
+    if (bomb.kind !== 'shadowCloneBarrage') continue;
+    if (bomb.ownerId === brain.playerId) continue;
+    const from = Math.max(
+      0,
+      SHADOW_CLONE_FORMATION_MS - (bomb.ageMs ?? 0) - SHADOW_CLONE_CLEARANCE_MS
+    );
+    const to = fuses[k];
+    if (from >= to) continue;
+    const formation = getShadowCloneFormationCells(bomb, state.map);
+    for (let index = 0; index < formation.length; index += 1) {
+      const { x, y } = formation[index];
+      const cell = y * width + x;
+      if (from < onset[cell]) onset[cell] = from;
+      if (to > clear[cell]) clear[cell] = to;
+    }
   }
   for (let k = 0; k < list.length; k += 1) {
     const bomb = list[k];

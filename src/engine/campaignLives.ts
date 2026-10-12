@@ -99,6 +99,7 @@ export function regroupFallenPlayers(state: GameEngineState): GameEngineState {
       x: cell.x,
       y: cell.y,
       alive: true,
+      health: player.maxHealth ?? 3,
       deathReason: undefined,
       deathCause: undefined,
       survivalGraceMs: graceMs,

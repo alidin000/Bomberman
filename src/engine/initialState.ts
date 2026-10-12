@@ -50,6 +50,8 @@ function createPlayer(index: number, config: GameConfig): PlayerState {
     x: spawn.x,
     y: spawn.y,
     alive: true,
+    health: 3,
+    maxHealth: 3,
     maxBombs: (isClayArtist ? 2 : 1) + extraBombs,
     activeBombs: 0,
     bombRange: (isClayArtist ? 3 : 2) + extraRange,

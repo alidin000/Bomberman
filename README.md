@@ -26,6 +26,17 @@ TypeScript, and Three.js.
 - **Deterministic simulation:** seeded matches support repeatable tests, CPU
   simulations, replays, and server-controlled online play.
 
+### Signature Techniques
+
+| Fighter | Basic style | Ultimate |
+| --- | --- | --- |
+| Deidara | Fast clay charges | A slower C3 bomb hunts a nearby opponent |
+| Naruto | One Shadow Clone Bomb | Clones fill the blast area after two seconds and pin every moving unit except their Naruto owner |
+| Sasuke | Chidori lane pressure | Kirin adds an outer lightning strike that removes one health point |
+| Gaara | Sand traps and protection | Sand Tsunami adds an outer sand strike that removes one health point |
+| Minato | Fast Flying Thunder bombs | The bomb appears at his passable kunai mark, or at Minato when no mark exists |
+| Itachi | Crow Clone blast angles | Tsukuyomi adds an outer dark-flame strike that removes one health point |
+
 ## Screens
 
 | Mission Deck | Live arena |

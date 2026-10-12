@@ -84,6 +84,26 @@ mission.
 Seeded randomness is the only randomness inside a match. This keeps tests,
 replays, CPU simulations, and online execution reproducible.
 
+## Character Ability Resolution
+
+Signature abilities are simulation rules, not renderer effects. Bomb creation,
+movement, blast geometry, damage, and movement locks resolve in `src/engine/`.
+The browser renderer reads the resulting bomb and actor state to draw matching
+models and effects.
+
+`characterAbilities.ts` is the shared geometry source for Naruto's Shadow
+Clone Barrage. After two seconds, traversable cells in the eventual blast
+footprint become clone blockers. The barrage owner's player ID is carried on
+every blocker: that owner can move through the formation, while other players,
+monsters, and bosses are immobilized. A different Naruto is still an opponent
+and remains affected.
+
+Minato's passable kunai marker lives on `PlayerState`. Using his ultimate
+consumes that marker and creates the bomb there. With no marker, the reducer
+uses Minato's current cell. Because both mechanics live in serializable state
+and the shared reducer, local and server-authoritative matches use identical
+rules.
+
 ## Online Room Flow
 
 ```mermaid
@@ -171,7 +191,7 @@ resource and rendering contracts; Playwright exercises real browser flows.
 
 | Path | Responsibility |
 | --- | --- |
-| `src/engine/` | State, reducer, rules, hazards, campaign, and seeded randomness |
+| `src/engine/` | State, reducer, character abilities, hazards, campaign, and seeded randomness |
 | `src/ai/` | CPU decision-making through ordinary engine actions |
 | `src/content/` | Data-driven stages, fighters, missions, enemies, and bosses |
 | `src/hooks/engineLoop.ts` | Local fixed-step scheduler |

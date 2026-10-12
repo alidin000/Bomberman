@@ -17,10 +17,12 @@ import {
   moveTowardCellCenter,
   PLAYER_COLLISION_RADIUS,
   PLAYER_MOVE_STEP,
+  positionOverlapsCell,
   positionsTouch,
   roundToMovementStep,
 } from './grid';
 import { getLoadoutEffects } from './campaignLoadout';
+import { getShadowCloneBlocks, isShadowCloneBlocked } from './characterAbilities';
 
 const MUTUALLY_EXCLUSIVE: Partial<Record<Power, Power | null>> = {
   Ghost: 'Invincibility',
@@ -93,9 +95,11 @@ export function applyCharacterSurvival(
   }
   return deathCause
     ? {
-      ...player, alive: false, deathReason, deathCause,
+      ...player, alive: false, health: 0, deathReason, deathCause,
     }
-    : { ...player, alive: false, deathReason };
+    : {
+      ...player, alive: false, health: 0, deathReason,
+    };
 }
 
 function isGhostActive(state: GameEngineState, playerId: string): boolean {
@@ -145,6 +149,8 @@ function isCellValidForPlayer(
 ): boolean {
   const { map } = state;
   if (cellY < 0 || cellY >= map.length || cellX < 0 || cellX >= map[0].length) return false;
+
+  if (isShadowCloneBlocked(state, cellX, cellY, playerId)) return false;
 
   if (isGhostActive(state, playerId)) {
     // Ghost phases through walls, but never past the edge of the arena.
@@ -240,6 +246,11 @@ export function movePlayer(
 
   const player = state.players[playerIndex];
   if (!player.alive) return state;
+  if ((player.movementLockMs ?? 0) > 0) return state;
+  // A clone that forms under a ninja pins them unless they own the barrage.
+  if (getShadowCloneBlocks(state).some((point) => (
+    point.ownerId !== playerId && positionOverlapsCell(player, point.x, point.y)
+  ))) return state;
 
   const others = state.players.filter((p) => p.id !== playerId && p.alive);
   const { dx, dy } = getDirectionDelta(direction);
@@ -580,17 +591,26 @@ export function tickPickupMessages(
   return { ...state, pickupMessages };
 }
 
-function tickSurvivalGrace(players: PlayerState[], deltaMs: number): PlayerState[] {
-  if (!players.some((p) => (p.survivalGraceMs ?? 0) > 0)) return players;
+function tickPlayerTimers(players: PlayerState[], deltaMs: number): PlayerState[] {
+  if (!players.some((p) => (
+    (p.survivalGraceMs ?? 0) > 0 || (p.movementLockMs ?? 0) > 0
+  ))) return players;
   return players.map((p) => (
-    (p.survivalGraceMs ?? 0) > 0
-      ? { ...p, survivalGraceMs: Math.max(0, (p.survivalGraceMs ?? 0) - deltaMs) }
+    (p.survivalGraceMs ?? 0) > 0 || (p.movementLockMs ?? 0) > 0
+      ? {
+        ...p,
+        survivalGraceMs: Math.max(0, (p.survivalGraceMs ?? 0) - deltaMs),
+        movementLockMs: Math.max(0, (p.movementLockMs ?? 0) - deltaMs),
+        movementLockReason: (p.movementLockMs ?? 0) > deltaMs
+          ? p.movementLockReason
+          : undefined,
+      }
       : p
   ));
 }
 
 export function tickPowerUps(state: GameEngineState, deltaMs: number): GameEngineState {
-  const graced = tickSurvivalGrace(state.players, deltaMs);
+  const graced = tickPlayerTimers(state.players, deltaMs);
   if (Object.keys(state.timedPowerUps).length === 0) {
     return graced === state.players ? state : { ...state, players: graced };
   }

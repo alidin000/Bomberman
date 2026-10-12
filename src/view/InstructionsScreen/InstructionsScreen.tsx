@@ -118,6 +118,8 @@ const POWER_RULES = [
   'Power-ups from boxes improve bomb count, blast range, movement, shields, manual detonation, cover, or character-specific abilities.',
   'Manual bombs require a detonation power-up and can be triggered with the configured detonate key.',
   'Cover creates a temporary blocker in front of you. It can protect space, but it can also be destroyed by blasts.',
+  'Naruto\'s ultimate forms clones across its blast area after two seconds. They pin other players, monsters, and bosses, but Naruto can move through his own clones.',
+  'Minato\'s Ability control is Mark. His ultimate targets that passable kunai, or Minato\'s current cell when no mark exists.',
   'Gaara and Itachi each have one passive survival save. After it triggers, that passive is spent.',
 ];
 

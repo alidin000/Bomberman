@@ -29,6 +29,7 @@ import { isPowerUpActive } from '../../engine/players';
 import { getUpcomingPressureCells, isBossIntroRunning } from '../../engine';
 import { BOSS_INTRO_MS, EXPLOSION_MS } from '../../engine/constants';
 import { hazardIsActive } from '../../engine/bosses';
+import { getShadowCloneFormationCells } from '../../engine/characterAbilities';
 import { cellKey } from '../../engine/fogOfWar';
 import { getStageDefinition } from '../../content';
 import { getStageLook, stageSkyBackground } from '../../content/stageLooks';
@@ -59,6 +60,7 @@ import {
   countdownNow,
   createCountdown,
   fuseRingRadius,
+  shadowCloneCount,
 } from './scene/bombFuse';
 import { PLAYER_TAG_SPRITES, PlayerTagSprite, playerTagKey } from './scene/playerTags';
 import { playerSlotColor } from './playerSlots';
@@ -230,6 +232,7 @@ const BOMB_STYLE: Record<BombKind, { color: string; emissive: string }> = {
   standard: { color: '#f5efe0', emissive: '#ff8a00' },
   claySpider: { color: '#f5efe0', emissive: '#ff8a00' },
   shadowClone: { color: '#ff9f1c', emissive: '#f97316' },
+  shadowCloneBarrage: { color: '#ff9f1c', emissive: '#f97316' },
   chidoriMine: { color: '#93c5fd', emissive: '#2563eb' },
   sandCoffin: { color: '#c48a4a', emissive: '#f59e0b' },
   thunderMark: { color: '#fde68a', emissive: '#facc15' },
@@ -696,34 +699,61 @@ function bombRemainingMs(
   return Infinity;
 }
 
-function BombMesh({ x, y, kind }: { x: number; y: number; kind: BombKind }) {
+function bombAgeMs(clock: BombClock | undefined, x: number, y: number): number | null {
+  if (!clock) return null;
+  const bomb = clock.bombs.find((candidate) => candidate.x === x && candidate.y === y);
+  return bomb?.ageMs ?? null;
+}
+
+function BombMesh({
+  x, y, kind, cloneOffsets = [],
+}: {
+  x: number;
+  y: number;
+  kind: BombKind;
+  cloneOffsets?: readonly { x: number; y: number }[];
+}) {
   const groupRef = useRef<THREE.Group>(null);
   const coreRef = useRef<THREE.Mesh>(null);
+  const cloneFormationRef = useRef<THREE.Group>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const lightRef = useRef<PooledLightHandle>(null);
+  const clonePlacedAtRef = useRef<number | null>(null);
   const bombClock = React.useContext(BombClockContext);
   const motion = React.useContext(MotionContext);
   const reducedMotion = React.useContext(ReducedMotionContext);
   const countdownRef = useRef(createCountdown());
-  const [wx, , wz] = toWorld(x, y);
-  const ultimateScale = ['giantClay', 'rasenshuriken', 'kirin', 'sandTsunami', 'instantTeleport', 'tsukuyomi']
+  const ultimateScale = [
+    'giantClay', 'shadowCloneBarrage', 'rasenshuriken', 'kirin',
+    'sandTsunami', 'instantTeleport', 'tsukuyomi',
+  ]
     .includes(kind)
     ? 1.35
     : 1;
   const giant = kind === 'giantClay';
   const baseScale = giant ? 1.72 : ultimateScale;
   const height = giant ? 0.48 : 0.36;
+  useSmoothWorldPosition(groupRef, x, y, height);
   useFrame(({ clock }) => {
     const remaining = bombRemainingMs(bombClock?.current, x, y, countdownRef.current, motion?.simTimeMs);
+    const simTimeMs = motion?.simTimeMs ?? clock.elapsedTime * 1000;
+    if (clonePlacedAtRef.current === null) clonePlacedAtRef.current = simTimeMs;
+    const cloneElapsedMs = bombAgeMs(bombClock?.current, x, y)
+      ?? simTimeMs - clonePlacedAtRef.current;
     const urgent = remaining <= FUSE_URGENT_MS;
     const pulse = reducedMotion ? 1 : 1 + Math.sin(clock.elapsedTime * pulseRate(PULSE_HZ.bombCore)) * 0.08;
     if (coreRef.current) {
       coreRef.current.scale.setScalar(pulse);
     }
+    if (cloneFormationRef.current) {
+      cloneFormationRef.current.visible = shadowCloneCount(remaining, cloneElapsedMs) === 5;
+    }
     // About to blow: the whole bomb swells and beats faster.
     const scale = baseScale * bombPulseScale(remaining, clock.elapsedTime, reducedMotion);
     if (groupRef.current) {
-      groupRef.current.rotation.y = clock.elapsedTime * 0.7;
+      groupRef.current.rotation.y = ['shadowClone', 'shadowCloneBarrage'].includes(kind)
+        ? 0
+        : clock.elapsedTime * 0.7;
       groupRef.current.scale.setScalar(scale);
     }
     if (lightRef.current) {
@@ -743,7 +773,7 @@ function BombMesh({ x, y, kind }: { x: number; y: number; kind: BombKind }) {
   });
   const style = BOMB_STYLE[kind];
   return (
-    <group ref={groupRef} position={[wx, height, wz]} scale={baseScale}>
+    <group ref={groupRef} scale={baseScale}>
       <mesh ref={ringRef} geometry={FUSE_RING_GEOMETRY} material={FUSE_RING_MATERIAL} />
       <PooledPointLight ref={lightRef} priority={LIGHT_PRIORITY.bomb} color={style.emissive} distance={2.8} intensity={0.72} />
 
@@ -782,7 +812,7 @@ function BombMesh({ x, y, kind }: { x: number; y: number; kind: BombKind }) {
         </>
       )}
 
-      {kind === 'shadowClone' && (
+      {(kind === 'shadowClone' || kind === 'shadowCloneBarrage') && (
         <>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.22, 0]}>
             <torusGeometry args={[0.33, 0.026, 8, 34]} />
@@ -822,6 +852,35 @@ function BombMesh({ x, y, kind }: { x: number; y: number; kind: BombKind }) {
             <sphereGeometry args={[0.07, 16, 16]} />
             <meshStandardMaterial color="#ffedd5" emissive="#f97316" emissiveIntensity={0.9} transparent opacity={0.68} />
           </mesh>
+          <group ref={cloneFormationRef} visible={false}>
+            {cloneOffsets.map((offset, index) => (
+              <group
+                key={`shadow-clone-copy-${index}`}
+                position={[offset.x / baseScale, 0.04, offset.y / baseScale]}
+                rotation={[0, (index - 1) * 0.55, 0]}
+                scale={0.78}
+              >
+                <mesh castShadow>
+                  <capsuleGeometry args={[0.11, 0.32, 6, 10]} />
+                  <meshStandardMaterial color="#ff8a00" emissive="#f97316" emissiveIntensity={0.42} roughness={0.5} />
+                </mesh>
+                <mesh position={[0, 0.29, 0.03]} castShadow>
+                  <sphereGeometry args={[0.14, 12, 12]} />
+                  <meshStandardMaterial color="#ffedd5" emissive="#f97316" emissiveIntensity={0.24} roughness={0.45} />
+                </mesh>
+                <mesh position={[0, 0.36, 0.12]} castShadow>
+                  <boxGeometry args={[0.29, 0.045, 0.035]} />
+                  <meshStandardMaterial color="#1d4ed8" emissive="#2563eb" emissiveIntensity={0.34} />
+                </mesh>
+                {[-0.08, 0.08].map((side) => (
+                  <mesh key={`copy-hair-${side}`} position={[side, 0.47, 0.01]} rotation={[0.15, 0, side > 0 ? -0.32 : 0.32]}>
+                    <coneGeometry args={[0.055, 0.18, 6]} />
+                    <meshStandardMaterial color="#facc15" emissive="#f59e0b" emissiveIntensity={0.32} />
+                  </mesh>
+                ))}
+              </group>
+            ))}
+          </group>
         </>
       )}
 
@@ -987,7 +1046,7 @@ function getExplosionStyle(kind?: BombKind): {
       color: '#fef3c7', emissive: '#facc15', accent: '#60a5fa', effect: 'teleport'
     };
   }
-  if (kind === 'shadowClone' || kind === 'rasenshuriken') {
+  if (kind === 'shadowClone' || kind === 'shadowCloneBarrage' || kind === 'rasenshuriken') {
     return {
       color: '#dbeafe', emissive: '#38bdf8', accent: '#f97316', effect: 'rasengan'
     };
@@ -1654,6 +1713,43 @@ function TransformationOverlay({
   );
 }
 
+function MovementLockOverlay({ player }: { player: PlayerState }) {
+  const ref = useRef<THREE.Group>(null);
+  const reducedMotion = React.useContext(ReducedMotionContext);
+  const active = (player.movementLockMs ?? 0) > 0;
+  let color = '#fb923c';
+  if (player.movementLockReason === 'lightning') color = '#60a5fa';
+  if (player.movementLockReason === 'genjutsu') color = '#ef4444';
+
+  useFrame(({ clock }) => {
+    if (!ref.current || reducedMotion) return;
+    ref.current.rotation.y = clock.elapsedTime * 2.2;
+  });
+  if (!active) return null;
+
+  return (
+    <group ref={ref}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.35, 0]}>
+        <torusGeometry args={[0.48, 0.045, 8, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.72} depthWrite={false} />
+      </mesh>
+      {[0, 1, 2, 3].map((index) => {
+        const angle = (index * Math.PI) / 2;
+        return (
+          <mesh
+            key={`movement-lock-${index}`}
+            position={[Math.sin(angle) * 0.4, 0.05, Math.cos(angle) * 0.4]}
+            rotation={[0, 0, index % 2 === 0 ? 0.18 : -0.18]}
+          >
+            <coneGeometry args={[0.04, 0.58, 4]} />
+            <meshBasicMaterial color={color} transparent opacity={0.68} depthWrite={false} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
 // "P1"-style chip in the HUD card's colour, over the fighter's head. A CPU
 // slot reads "P2 · CPU" on a square-cornered chip, so who is human shows by
 // text and shape, not by colour.
@@ -1869,6 +1965,7 @@ function PlayerMesh({
           />
         </mesh>
         <TransformationOverlay player={player} color={ringColor} />
+        <MovementLockOverlay player={player} />
         {slot !== undefined && <PlayerTag slot={slot} color={playerSlotColor(slot - 1)} cpu={cpu} />}
         <group ref={poseRef} position={[0, FEET_Y, 0]}>
           <group position={[0, -FEET_Y, 0]}>
@@ -2770,6 +2867,29 @@ function MissionObjectiveMarkers({
   );
 }
 
+function FlyingThunderMarker({ x, y }: { x: number; y: number }) {
+  const [wx, , wz] = toWorld(x, y);
+  return (
+    <group position={[wx, 0.055, wz]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.2, 0.34, 24]} />
+        <meshStandardMaterial
+          color="#facc15"
+          emissive="#f59e0b"
+          emissiveIntensity={0.8}
+          transparent
+          opacity={0.82}
+        />
+      </mesh>
+      <mesh position={[0, 0.16, 0]} rotation={[0, 0, Math.PI / 4]} castShadow>
+        <coneGeometry args={[0.07, 0.48, 4]} />
+        <meshStandardMaterial color="#f8fafc" emissive="#60a5fa" emissiveIntensity={0.28} />
+      </mesh>
+      <PooledPointLight priority={LIGHT_PRIORITY.pickup} color="#facc15" distance={2.2} intensity={0.5} />
+    </group>
+  );
+}
+
 type MapTilesProps = {
   map: GameMap;
   bombs: GameEngineState['bombs'];
@@ -2881,8 +3001,20 @@ function MapTilesBase({
       );
     } else if (isBomb(cell)) {
       const bomb = bombByCell.get(`${x},${y}`);
+      const cloneOffsets = bomb?.kind === 'shadowCloneBarrage'
+        ? getShadowCloneFormationCells(bomb, map).map((point) => ({
+          x: point.x - bomb.x,
+          y: point.y - bomb.y,
+        }))
+        : [];
       cellObjects.push(
-        <BombMeshMemo key={`bomb-${x}-${y}`} x={x} y={y} kind={bomb?.kind ?? 'standard'} />
+        <BombMeshMemo
+          key={bomb?.id ?? `bomb-${x}-${y}`}
+          x={x}
+          y={y}
+          kind={bomb?.kind ?? 'standard'}
+          cloneOffsets={cloneOffsets}
+        />
       );
     }
   }));
@@ -3437,6 +3569,13 @@ function SceneContentBase({
         fogOfWar={state.fogOfWar}
         powerTheme={state.players[0]?.characterId}
       />
+      {state.players.map((player) => player.teleportMark && (
+        <FlyingThunderMarker
+          key={`flying-thunder-mark-${player.id}`}
+          x={player.teleportMark.x}
+          y={player.teleportMark.y}
+        />
+      ))}
       <HazardLayer hazards={state.hazards} visibleCells={visibleCellSet} />
       <ExplosionFieldMemo explosions={visibleExplosions} />
       <BombBlastPreviewsMemo visibleCells={visibleCellSet} />

@@ -182,6 +182,8 @@ describe('GameHUD', () => {
     const bombs = within(screen.getByRole('group', { name: 'P1 Sasuke' }))
       .getByRole('img', { name: /Bombs ready/ });
     expect(declaredFontPx(bombs.querySelector('strong'))).toBeGreaterThanOrEqual(17.6);
+    expect(within(screen.getByRole('group', { name: 'P1 Sasuke' }))
+      .getByRole('img', { name: 'Health 3 of 3' })).toHaveTextContent('3/3');
   });
 
   it('grows the default HUD with the screen, up to 1.5x', () => {
@@ -256,7 +258,7 @@ describe('GameHUD', () => {
       selectedCharacters: ['sasuke', 'naruto'],
       map: parseMapRows(defaultMap),
     });
-    // Naruto's shadow clone puts one bomb more than his limit on the field.
+    // Imported or older match states may contain more active bombs than the current limit.
     const cloneOut = {
       ...state,
       players: state.players.map((player, index) => (

@@ -9,7 +9,7 @@ import {
 import {
   BOMB_FUSE_MS, BOX_DESTROY_MS, EXPLOSION_MS,
 } from './constants';
-import { applyCharacterSurvival, isPowerUpActive, staysInsideSharedScreen } from './players';
+import { applyCharacterSurvival, isPowerUpActive } from './players';
 import {
   FLAME_HURT_RADIUS, getCell, getPlayerCell, positionOverlapsCell,
 } from './grid';
@@ -18,6 +18,11 @@ import {
   resolveCampaignDestroyedBox,
 } from './campaignExploration';
 import { WeightedEntry, nextRandom, pickWeighted } from './random';
+import {
+  CARDINAL_DIRECTIONS,
+  getShadowCloneBarragePositions,
+  getShadowCloneBlocks,
+} from './characterAbilities';
 
 let bombIdCounter = 0;
 
@@ -52,7 +57,7 @@ const BASIC_BOMBS: Record<PlayerState['characterId'], BombState['kind']> = {
 
 const ULTIMATE_BOMBS: Record<PlayerState['characterId'], BombState['kind']> = {
   deidara: 'giantClay',
-  naruto: 'rasenshuriken',
+  naruto: 'shadowCloneBarrage',
   sasuke: 'kirin',
   gaara: 'sandTsunami',
   minato: 'instantTeleport',
@@ -82,6 +87,8 @@ export function createBomb(
     ticksRemaining,
     manualDetonation,
     kind,
+    ageMs: 0,
+    movementCooldownMs: kind === 'giantClay' ? 850 : undefined,
   };
 }
 
@@ -89,6 +96,7 @@ function getBombFuse(kind: BombState['kind']): number {
   const fuseByKind: Partial<Record<BombState['kind'], number>> = {
     claySpider: 2600,
     shadowClone: 2800,
+    shadowCloneBarrage: 2800,
     chidoriMine: 1800,
     sandCoffin: 3300,
     thunderMark: 1500,
@@ -115,114 +123,6 @@ function getBasicBombRange(player: PlayerState, kind: BombState['kind']): number
   return player.bombRange + (bonusByKind[kind] ?? 0);
 }
 
-function canPlaceBombAt(state: GameEngineState, x: number, y: number): boolean {
-  return state.map[y]?.[x] === 'Empty';
-}
-
-const CLONE_DIRECTIONS = [
-  { x: 1, y: 0 },
-  { x: -1, y: 0 },
-  { x: 0, y: 1 },
-  { x: 0, y: -1 },
-] as const;
-
-function pointKey(x: number, y: number): string {
-  return `${x},${y}`;
-}
-
-function hasActorAt(state: GameEngineState, playerId: string, x: number, y: number): boolean {
-  return state.players.some((other) => (
-    other.id !== playerId && other.alive && positionOverlapsCell(other, x, y)
-  )) || state.monsters.some((monster) => monster.x === x && monster.y === y)
-    || (state.boss?.x === x && state.boss.y === y);
-}
-
-function isCloneEscapeCell(
-  state: GameEngineState,
-  x: number,
-  y: number,
-  blocked: Set<string>,
-): boolean {
-  if (blocked.has(pointKey(x, y))) return false;
-  const cell = state.map[y]?.[x];
-  return cell === 'Empty' || (cell !== undefined && !isBomb(cell) && !isObstacle(cell)
-    && cell !== 'Wall' && cell !== 'Box');
-}
-
-function hasCloneEscapeRoute(
-  state: GameEngineState,
-  player: PlayerState,
-  candidate: { x: number; y: number },
-  primaryRange: number,
-  cloneRange: number,
-): boolean {
-  const origin = getPlayerCell(player);
-  const blocked = new Set([
-    pointKey(origin.x, origin.y),
-    pointKey(candidate.x, candidate.y),
-  ]);
-  const previewBombs: BombState[] = [
-    {
-      id: 'clone-preview-primary',
-      ownerId: player.id,
-      x: origin.x,
-      y: origin.y,
-      range: primaryRange,
-      ticksRemaining: 0,
-      manualDetonation: false,
-      kind: 'shadowClone',
-    },
-    {
-      id: 'clone-preview-extra',
-      ownerId: player.id,
-      x: candidate.x,
-      y: candidate.y,
-      range: cloneRange,
-      ticksRemaining: 0,
-      manualDetonation: false,
-      kind: 'shadowClone',
-    },
-  ];
-  const danger = new Set(previewBombs.flatMap((bomb) => (
-    getExplosionPositions(bomb, state.map).map((point) => pointKey(point.x, point.y))
-  )));
-  const queue = CLONE_DIRECTIONS
-    .map(({ x, y }) => ({ x: origin.x + x, y: origin.y + y }))
-    .filter((point) => isCloneEscapeCell(state, point.x, point.y, blocked));
-  const visited = new Set(queue.map((point) => pointKey(point.x, point.y)));
-
-  for (let index = 0; index < queue.length; index += 1) {
-    const current = queue[index];
-    if (!danger.has(pointKey(current.x, current.y))) return true;
-    CLONE_DIRECTIONS.forEach(({ x, y }) => {
-      const next = { x: current.x + x, y: current.y + y };
-      const key = pointKey(next.x, next.y);
-      if (!visited.has(key) && isCloneEscapeCell(state, next.x, next.y, blocked)) {
-        visited.add(key);
-        queue.push(next);
-      }
-    });
-  }
-
-  return false;
-}
-
-function getCloneBombPoint(
-  state: GameEngineState,
-  player: PlayerState,
-  primaryRange: number,
-  cloneRange: number,
-): { x: number; y: number } | null {
-  const origin = getPlayerCell(player);
-  return CLONE_DIRECTIONS
-    .map(({ x, y }) => ({ x: origin.x + x, y: origin.y + y }))
-    .filter((point) => (
-      canPlaceBombAt(state, point.x, point.y)
-      && !hasActorAt(state, player.id, point.x, point.y)
-    ))
-    .find((point) => hasCloneEscapeRoute(state, player, point, primaryRange, cloneRange)) ?? null;
-}
-
 function getBasicBombPlacements(
   state: GameEngineState,
   player: PlayerState,
@@ -230,34 +130,17 @@ function getBasicBombPlacements(
   hasDetonator: boolean,
 ): BombState[] {
   const origin = getPlayerCell(player);
-  const primaryRange = getBasicBombRange(player, kind);
-  const cloneRange = Math.max(1, player.bombRange - 1);
   const bombs = [
     createBomb(
       player.id,
       origin.x,
       origin.y,
-      primaryRange,
+      getBasicBombRange(player, kind),
       hasDetonator,
       kind,
       getBombFuse(kind),
     ),
   ];
-
-  if (kind === 'shadowClone') {
-    const clonePoint = getCloneBombPoint(state, player, primaryRange, cloneRange);
-    if (clonePoint) {
-      bombs.push(createBomb(
-        player.id,
-        clonePoint.x,
-        clonePoint.y,
-        cloneRange,
-        hasDetonator,
-        kind,
-        getBombFuse(kind) + 220,
-      ));
-    }
-  }
 
   // Live placements derive ids from room state, so two server rooms cannot
   // reset or advance one another's module-level helper counter.
@@ -268,6 +151,9 @@ function getBasicBombPlacements(
 }
 
 export function getExplosionPositions(bomb: BombState, map: GameMap): { x: number; y: number }[] {
+  if (bomb.kind === 'shadowCloneBarrage') {
+    return getShadowCloneBarragePositions(bomb, map);
+  }
   const positions: { x: number; y: number }[] = [{ x: bomb.x, y: bomb.y }];
   const { x, y, range } = bomb;
   const h = map.length;
@@ -290,7 +176,9 @@ export function getExplosionPositions(bomb: BombState, map: GameMap): { x: numbe
   addRay(-1, 0);
   addRay(1, 0);
 
-  if (bomb.kind === 'shadowClone' || bomb.kind === 'crowClone' || bomb.kind === 'rasenshuriken') {
+  if (bomb.kind === 'shadowClone'
+    || bomb.kind === 'crowClone'
+    || bomb.kind === 'rasenshuriken') {
     [
       { dx: -1, dy: -1 },
       { dx: 1, dy: -1 },
@@ -310,7 +198,9 @@ export function getExplosionPositions(bomb: BombState, map: GameMap): { x: numbe
     || bomb.kind === 'sandTsunami'
     || bomb.kind === 'tsukuyomi'
     || bomb.kind === 'rasenshuriken') {
-    const radius = ['giantClay', 'sandTsunami', 'tsukuyomi', 'rasenshuriken'].includes(bomb.kind)
+    const radius = [
+      'giantClay', 'sandTsunami', 'tsukuyomi', 'rasenshuriken',
+    ].includes(bomb.kind)
       ? 2
       : 1;
     for (let dy = -radius; dy <= radius; dy += 1) {
@@ -393,8 +283,7 @@ export function placeBomb(state: GameEngineState, playerId: string): GameEngineS
   const origin = getPlayerCell(player);
   const currentCell = getCell(state.map, origin);
 
-  // Naruto's shadow clone is the one bomb he may hold over his limit.
-  const bombLimit = player.maxBombs + (player.characterId === 'naruto' ? 1 : 0);
+  const bombLimit = player.maxBombs;
   if (player.activeBombs >= bombLimit) return state;
   if (currentCell !== 'Empty') return state;
 
@@ -424,11 +313,29 @@ export function placeBomb(state: GameEngineState, playerId: string): GameEngineS
   };
 }
 
+export function placeTeleportMarker(
+  state: GameEngineState,
+  playerId: string,
+): GameEngineState {
+  const player = state.players.find((candidate) => candidate.id === playerId);
+  if (!player?.alive || player.characterId !== 'minato') return state;
+  const origin = getPlayerCell(player);
+  if (getCell(state.map, origin) !== 'Empty') return state;
+  return {
+    ...state,
+    players: state.players.map((candidate) => (
+      candidate.id === playerId ? { ...candidate, teleportMark: origin } : candidate
+    )),
+  };
+}
+
 export function placeUltimateBomb(state: GameEngineState, playerId: string): GameEngineState {
   const player = state.players.find((p) => p.id === playerId);
   if (!player || !player.alive) return state;
   if (player.ultimateCooldownRemaining > 0) return state;
-  const origin = getPlayerCell(player);
+  const origin = player.characterId === 'minato'
+    ? player.teleportMark ?? getPlayerCell(player)
+    : getPlayerCell(player);
   if (getCell(state.map, origin) !== 'Empty') return state;
 
   const created = createBomb(
@@ -454,10 +361,8 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
     p.id === playerId
       ? {
         ...p,
-        ...(player.characterId === 'minato'
-          ? getTeleportDestination(state, playerId, origin.x, origin.y)
-          : {}),
         activeBombs: p.activeBombs + 1,
+        teleportMark: player.characterId === 'minato' ? undefined : p.teleportMark,
         ultimateCooldownRemaining: p.ultimateCooldown,
         ultimateCharge: 0,
       }
@@ -491,41 +396,12 @@ export function previewPlayerBombs(
   return owner ? { bombs: next.bombs.slice(state.bombs.length), owner } : null;
 }
 
-function getTeleportDestination(
-  state: GameEngineState,
-  playerId: string,
-  x: number,
-  y: number,
-): { x: number; y: number } {
-  const candidates = [
-    { x: x + 3, y },
-    { x: x - 3, y },
-    { x, y: y + 3 },
-    { x, y: y - 3 },
-    { x: 1, y: 1 },
-  ];
-  const player = state.players.find((p) => p.id === playerId);
-  // Never land on (or inside the reach of) another ninja, monster or boss,
-  // in a live flame, or off the shared screen.
-  const occupied = (point: { x: number; y: number }) => (
-    state.players.some((other) => (
-      other.id !== playerId && other.alive && positionOverlapsCell(other, point.x, point.y)
-    ))
-    || state.monsters.some((monster) => monster.x === point.x && monster.y === point.y)
-    || (state.boss?.x === point.x && state.boss?.y === point.y)
-    || state.explosions.some((flame) => flame.x === point.x && flame.y === point.y)
-    || (!!player && !staysInsideSharedScreen(state, player, point.x, point.y))
-  );
-  return candidates.find((point) => (
-    state.map[point.y]?.[point.x] === 'Empty' && !occupied(point)
-  )) ?? { x, y };
-}
-
 function getBombDeathLabel(kind: BombState['kind']): string {
   const labels: Record<BombState['kind'], string> = {
     standard: 'bomb',
     claySpider: 'Clay Spider',
     shadowClone: 'Shadow Clone',
+    shadowCloneBarrage: 'Shadow Clone Barrage',
     chidoriMine: 'Chidori Mine',
     sandCoffin: 'Sand Coffin',
     thunderMark: 'Flying Thunder Mark',
@@ -555,10 +431,53 @@ function formatBombDeathReason(
   return `${player.name} was caught in a ${label} blast.`;
 }
 
+const CHIP_DAMAGE_ULTIMATES = new Set<BombState['kind']>([
+  'sandTsunami', 'kirin', 'tsukuyomi',
+]);
+
+function getUltimateOuterPositions(
+  bomb: BombState,
+  core: { x: number; y: number }[],
+  map: GameMap,
+): { x: number; y: number }[] {
+  if (!CHIP_DAMAGE_ULTIMATES.has(bomb.kind)) return [];
+  const coreKeys = new Set(core.map(({ x, y }) => getCellKey(x, y)));
+  return dedupePositions(core.flatMap(({ x, y }) => CARDINAL_DIRECTIONS.map((direction) => ({
+    x: x + direction.x,
+    y: y + direction.y,
+  })))).filter((point) => (
+    map[point.y]?.[point.x] !== undefined
+    && map[point.y][point.x] !== 'Wall'
+    && !coreKeys.has(getCellKey(point.x, point.y))
+  ));
+}
+
+function applyUltimateChipDamage(
+  state: GameEngineState,
+  player: PlayerState,
+  owner: PlayerState | undefined,
+  bomb: BombState,
+): PlayerState {
+  if (!player.alive || isPowerUpActive(state, player.id, 'Invincibility')) return player;
+  const health = Math.max(0, (player.health ?? player.maxHealth ?? 3) - 1);
+  if (health > 0) return { ...player, health };
+  const label = getBombDeathLabel(bomb.kind);
+  const reason = owner?.id === player.id
+    ? `${player.name} was defeated by their own ${label} outer attack.`
+    : `${player.name} was defeated by ${owner?.name ?? 'an opponent'}'s ${label} outer attack.`;
+  const resolved = applyCharacterSurvival(
+    { ...player, health: 0 },
+    reason,
+    { kind: 'blast', byPlayerId: owner?.id, bombKind: bomb.kind }
+  );
+  return resolved.alive ? { ...resolved, health: 1 } : resolved;
+}
+
 function getBossDamage(kind: BombState['kind']): number {
   const damageByKind: Partial<Record<BombState['kind'], number>> = {
     claySpider: 90,
     shadowClone: 70,
+    shadowCloneBarrage: 150,
     chidoriMine: 95,
     sandCoffin: 60,
     thunderMark: 65,
@@ -685,6 +604,7 @@ export function explodeBombs(
           explosions[index] = {
             ...current,
             ticksRemaining: EXPLOSION_MS,
+            chipDamage: false,
             sparedIds,
           };
         }
@@ -745,6 +665,31 @@ export function explodeBombs(
         bossWasHit = true;
       }
     });
+    const outerPositions = getUltimateOuterPositions(bomb, positions, raycastMap);
+    outerPositions.forEach(({ x, y }) => {
+      const key = getCellKey(x, y);
+      if (!explosionKeys.has(key)) {
+        explosionKeys.add(key);
+        explosions.push({
+          x,
+          y,
+          ticksRemaining: EXPLOSION_MS,
+          kind: bomb.kind,
+          ownerId: bomb.ownerId,
+          chipDamage: true,
+          sparedIds: [],
+        });
+      }
+    });
+    if (outerPositions.length > 0) {
+      players = players.map((player) => (
+        outerPositions.some((point) => (
+          positionOverlapsCell(player, point.x, point.y, FLAME_HURT_RADIUS)
+        ))
+          ? applyUltimateChipDamage(state, player, owner, bomb)
+          : player
+      ));
+    }
     if (boss && bossWasHit) {
       boss = applyBossBombEffect(boss, bomb);
     }
@@ -772,11 +717,135 @@ export function explodeBombs(
   return next;
 }
 
+const TRACKING_CLAY_STEP_MS = 850;
+const CLAY_SPIDER_DETECTION_RANGE = 7;
+
+function getClaySpiderTargets(state: GameEngineState, bomb: BombState): { x: number; y: number }[] {
+  const rivalPlayers = state.config.mode === 'solo'
+    ? []
+    : state.players
+      .filter((player) => player.alive && player.id !== bomb.ownerId)
+      .map(getPlayerCell);
+  const enemies = state.monsters.map((monster) => ({ x: monster.x, y: monster.y }));
+  if (state.boss && state.boss.health > 0) enemies.push({ x: state.boss.x, y: state.boss.y });
+  return [...rivalPlayers, ...enemies].filter((target) => (
+    Math.abs(target.x - bomb.x) + Math.abs(target.y - bomb.y) <= CLAY_SPIDER_DETECTION_RANGE
+  ));
+}
+
+function getClaySpiderStep(
+  state: GameEngineState,
+  map: GameMap,
+  bomb: BombState,
+): { x: number; y: number } | null {
+  const targets = getClaySpiderTargets(state, bomb);
+  if (targets.length === 0) return null;
+
+  const distances = map.map((row) => row.map(() => Infinity));
+  const queue = targets.filter((target) => map[target.y]?.[target.x] !== undefined);
+  queue.forEach((target) => { distances[target.y][target.x] = 0; });
+  for (let head = 0; head < queue.length; head += 1) {
+    const current = queue[head];
+    const nextDistance = distances[current.y][current.x] + 1;
+    CARDINAL_DIRECTIONS.forEach((direction) => {
+      const x = current.x + direction.x;
+      const y = current.y + direction.y;
+      const isOrigin = x === bomb.x && y === bomb.y;
+      if (!map[y]?.[x] || (!isOrigin && map[y][x] !== 'Empty')) return;
+      if (nextDistance < distances[y][x]) {
+        distances[y][x] = nextDistance;
+        queue.push({ x, y });
+      }
+    });
+  }
+
+  const currentDistance = distances[bomb.y]?.[bomb.x] ?? Infinity;
+  if (
+    !Number.isFinite(currentDistance)
+    || currentDistance > CLAY_SPIDER_DETECTION_RANGE
+  ) return null;
+  const occupied = new Set([
+    ...state.players.filter((player) => player.alive).map((player) => {
+      const point = getPlayerCell(player);
+      return getCellKey(point.x, point.y);
+    }),
+    ...state.monsters.map((monster) => getCellKey(monster.x, monster.y)),
+    ...(state.boss ? [getCellKey(state.boss.x, state.boss.y)] : []),
+  ]);
+  return CARDINAL_DIRECTIONS
+    .map((direction) => ({ x: bomb.x + direction.x, y: bomb.y + direction.y }))
+    .filter((point) => map[point.y]?.[point.x] === 'Empty')
+    .filter((point) => !occupied.has(getCellKey(point.x, point.y)))
+    .sort((first, second) => (
+      distances[first.y][first.x] - distances[second.y][second.x]
+    ))
+    .find((point) => distances[point.y][point.x] < currentDistance) ?? null;
+}
+
+function advanceBombAbilities(state: GameEngineState, deltaMs: number): GameEngineState {
+  let map = state.map;
+  let mapChanged = false;
+  const bombs = state.bombs.map((bomb) => {
+    let next = { ...bomb, ageMs: (bomb.ageMs ?? 0) + deltaMs };
+    if (bomb.kind !== 'giantClay') return next;
+
+    const movementCooldownMs = (bomb.movementCooldownMs ?? TRACKING_CLAY_STEP_MS) - deltaMs;
+    if (movementCooldownMs > 0) return { ...next, movementCooldownMs };
+    const step = getClaySpiderStep(state, map, bomb);
+    next = { ...next, movementCooldownMs: TRACKING_CLAY_STEP_MS };
+    if (!step) return next;
+
+    if (!mapChanged) {
+      map = map.map((row) => [...row]);
+      mapChanged = true;
+    }
+    map[bomb.y][bomb.x] = 'Empty';
+    map[step.y][step.x] = {
+      range: bomb.range,
+      coords: { x: step.x, y: step.y },
+      ownerId: bomb.ownerId,
+    };
+    return { ...next, x: step.x, y: step.y };
+  });
+  const abilityState = { ...state, map, bombs };
+  const cloneCells = getShadowCloneBlocks(abilityState);
+  const players = cloneCells.length === 0
+    ? state.players
+    : state.players.map((player) => (
+      player.alive && cloneCells.some((cell) => (
+        cell.ownerId !== player.id
+        && positionOverlapsCell(player, cell.x, cell.y)
+      ))
+        ? {
+          ...player,
+          movementLockMs: Math.max(player.movementLockMs ?? 0, deltaMs + 60),
+          movementLockReason: 'shadowClone' as const,
+        }
+        : player
+    ));
+  const monsters = cloneCells.length === 0
+    ? state.monsters
+    : state.monsters.map((monster) => (
+      cloneCells.some((cell) => cell.x === monster.x && cell.y === monster.y)
+        ? { ...monster, moveCooldown: Math.max(monster.moveCooldown, deltaMs + 60) }
+        : monster
+    ));
+  const boss = state.boss && cloneCells.some((cell) => (
+    cell.x === state.boss!.x && cell.y === state.boss!.y
+  ))
+    ? { ...state.boss, moveCooldown: Math.max(state.boss.moveCooldown, deltaMs + 60) }
+    : state.boss;
+  return {
+    ...abilityState, players, monsters, boss,
+  };
+}
+
 export function tickBombs(state: GameEngineState, deltaMs: number): GameEngineState {
   if (state.bombs.length === 0) return state;
+  const advanced = advanceBombAbilities(state, deltaMs);
   const ready: BombState[] = [];
-  const ownerAlive = (ownerId: string) => state.players.some((p) => p.id === ownerId && p.alive);
-  const ticking = state.bombs.map((bomb) => {
+  const ownerAlive = (ownerId: string) => advanced.players.some((p) => p.id === ownerId && p.alive);
+  const ticking = advanced.bombs.map((bomb) => {
     // A manual bomb waits for its owner; once they fall it burns its normal fuse.
     if (bomb.manualDetonation && ownerAlive(bomb.ownerId)) return bomb;
     const remaining = bomb.ticksRemaining - deltaMs;
@@ -787,7 +856,7 @@ export function tickBombs(state: GameEngineState, deltaMs: number): GameEngineSt
     return { ...bomb, ticksRemaining: remaining };
   }).filter((b): b is BombState => b !== null);
 
-  let next = { ...state, bombs: ticking };
+  let next = { ...advanced, bombs: ticking };
   if (ready.length > 0) {
     next = explodeBombs(next, ready);
   }
@@ -855,7 +924,8 @@ export function burnInLingeringFlames(state: GameEngineState): GameEngineState {
   const players = state.players.map((player) => {
     if (!player.alive) return player;
     const flame = explosions.find((explosion) => (
-      !explosion.sparedIds.includes(player.id)
+      !explosion.chipDamage
+      && !explosion.sparedIds.includes(player.id)
       && positionOverlapsCell(player, explosion.x, explosion.y, FLAME_HURT_RADIUS)
     ));
     if (!flame) return player;
@@ -880,7 +950,8 @@ export function burnInLingeringFlames(state: GameEngineState): GameEngineState {
 
   const monsters = state.monsters.filter((monster) => {
     const flame = explosions.find((explosion) => (
-      explosion.x === monster.x
+      !explosion.chipDamage
+      && explosion.x === monster.x
       && explosion.y === monster.y
       && !explosion.sparedIds.includes(monster.id)
     ));

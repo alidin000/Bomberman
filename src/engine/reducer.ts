@@ -12,6 +12,7 @@ import {
   burnInLingeringFlames,
   detonatePlayerBombs,
   placeBomb,
+  placeTeleportMarker,
   placeUltimateBomb,
   tickBombs,
   tickExplosions,
@@ -314,6 +315,12 @@ export function gameReducer(
 
     case 'PLACE_OBSTACLE':
       if (!isRoundLive(state)) return state;
+      if (state.players.find((player) => player.id === action.playerId)?.characterId === 'minato') {
+        return withUpdatedFogOfWar(advanceCampaignState(placeTeleportMarker(
+          state,
+          action.playerId
+        )));
+      }
       return withUpdatedFogOfWar(advanceCampaignState(placeObstacle(state, action.playerId)));
 
     case 'TICK':
