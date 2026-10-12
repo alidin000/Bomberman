@@ -479,6 +479,9 @@ export function applyPowerUp(
       case 'BlastRangeUp':
         next.bombRange += 1;
         break;
+      case 'UltimateRangeUp':
+        next.ultimateRangeBonus = (next.ultimateRangeBonus ?? 0) + 1;
+        break;
       case 'Detonator':
         next.powerUps = addUniquePower(next.powerUps, 'Detonator');
         break;

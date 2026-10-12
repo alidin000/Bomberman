@@ -62,9 +62,9 @@ function withPickups(state: GameEngineState, pickups: { x: number; y: number; po
   return { ...state, map };
 }
 
-// The 15 types on a 5x3 grid of cells, two apart.
+// Keep the full pickup catalogue inside the 15x11 fixture, two cells apart.
 const PICKUP_CELLS = powerUpOptions.map((power, index) => ({
-  power, x: 2 + (index % 5) * 2, y: 2 + Math.floor(index / 5) * 3,
+  power, x: 2 + (index % 6) * 2, y: 2 + Math.floor(index / 6) * 3,
 }));
 
 function liveCampaign(stageId: StageId = 'hiddenLeaf'): GameEngineState {

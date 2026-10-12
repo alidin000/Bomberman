@@ -36,6 +36,7 @@ import player3InvincibleImage from '../../assets/player3armor.png';
 const powerUpImgs: Partial<Record<Power, string>> = {
   AddBomb: addBombImage,
   BlastRangeUp: blastRangeUpImage,
+  UltimateRangeUp: blastRangeUpImage,
   Detonator: detonatorImage,
   RollerSkate: rollerSkateImage,
   Invincibility: invincibilityImage,

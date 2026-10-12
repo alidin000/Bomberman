@@ -262,6 +262,37 @@ describe('signature bomb movement and control', () => {
 });
 
 describe('ultimate outer health damage', () => {
+  it('scales ultimate reach without changing basic bomb range', () => {
+    let basicState = liveRound({ selectedCharacters: ['deidara', 'naruto'] });
+    const basicRange = basicState.players[0].bombRange;
+    basicState = applyPowerUp(basicState, 'player1', 'UltimateRangeUp');
+    basicState = gameReducer(basicState, { type: 'DROP_BOMB', playerId: 'player1' })!;
+    expect(basicState.bombs[0].range).toBe(basicRange + 1);
+
+    let ultimateState = liveRound({ selectedCharacters: ['deidara', 'naruto'] });
+    ultimateState = applyPowerUp(ultimateState, 'player1', 'UltimateRangeUp');
+    ultimateState = gameReducer(
+      ultimateState,
+      { type: 'USE_ULTIMATE', playerId: 'player1' }
+    )!;
+    expect(ultimateState.bombs[0].range).toBe(basicRange + 4);
+  });
+
+  it('widens Kirin outer lightning because its core already spans the arena', () => {
+    const setup = (upgraded: boolean) => {
+      let state = liveRound({ selectedCharacters: ['sasuke', 'naruto'] });
+      state = patchPlayer(state, 'player1', { x: 5, y: 5 });
+      if (upgraded) state = applyPowerUp(state, 'player1', 'UltimateRangeUp');
+      state = gameReducer(state, { type: 'USE_ULTIMATE', playerId: 'player1' })!;
+      state = patchPlayer(state, 'player1', { x: 2, y: 7 });
+      state = patchPlayer(state, 'player2', { x: 11, y: 7 });
+      return tickFor(state, 2100);
+    };
+
+    expect(setup(false).players[1]).toMatchObject({ alive: true, health: 3 });
+    expect(setup(true).players[1]).toMatchObject({ alive: true, health: 2 });
+  });
+
   it.each([
     ['gaara', 'sandTsunami', 2600, 11, 5],
     ['sasuke', 'kirin', 2100, 11, 6],

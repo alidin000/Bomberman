@@ -106,7 +106,9 @@ describe('seeded crate drops', () => {
       });
     }
     const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
-    const coreShare = (counts.AddBomb + counts.BlastRangeUp) / total;
+    const coreShare = (
+      counts.AddBomb + counts.BlastRangeUp + counts.UltimateRangeUp
+    ) / total;
 
     genericPowerUpOptions.forEach((power) => expect(counts[power]).toBeGreaterThan(0));
     expect(coreShare).toBeLessThan(0.5);

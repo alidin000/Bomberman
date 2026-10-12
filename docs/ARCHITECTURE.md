@@ -85,10 +85,17 @@ Seeded randomness is the only randomness inside a match. This keeps tests,
 replays, CPU simulations, and online execution reproducible.
 
 Power-up rolls preserve that determinism. Arena crates use one weighted table
-shared by every fighter. Campaign rewards expose the same seven effect
+shared by every fighter. Campaign rewards expose the same eight effect
 categories, replacing equivalent generic entries with the active fighter's
 signature pickup, then add Chakra Scroll. Authored secrets and rare Character
 Fragments remain separate from ordinary random drops.
+
+Basic and ultimate reach are independent player stats. `BlastRangeUp` changes
+ordinary bombs, while `UltimateRangeUp` is added only when the engine creates
+an ultimate bomb. The optional ultimate bonus defaults to zero when an older
+replay or network snapshot does not contain it. Kirin already spans its full
+row and column, so its bonus widens the one-third-health lightning perimeter;
+the other ultimates extend their blast rays.
 
 ## Character Ability Resolution
 

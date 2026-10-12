@@ -140,6 +140,9 @@ class Player {
       case 'BlastRangeUp':
         this.bombRange += 1;
         break;
+      case 'UltimateRangeUp':
+        this.powerUps.push(powerUp);
+        break;
       case 'Detonator':
         if (!this.powerUps.includes('Detonator')) {
           this.powerUps.push(powerUp);

@@ -19,6 +19,7 @@ import {
 export type PickupSilhouette =
   | 'bombPlus'
   | 'arrowBurst'
+  | 'chakraFlare'
   | 'plunger'
   | 'chevrons'
   | 'roundShield'
@@ -65,6 +66,24 @@ function arrowBurst({ main, accent }: PickupColors): TokenPart[] {
   return [p(ball(0.075, 10, 8), accent), ...arrows];
 }
 
+function chakraFlare({ main, accent, paper }: PickupColors): TokenPart[] {
+  const rays = Array.from({ length: 6 }, (_, index) => {
+    const angle = (index / 6) * Math.PI * 2;
+    return p(
+      cone(0.055, 0.14, 5),
+      index % 2 === 0 ? main : accent,
+      [Math.cos(angle) * 0.2, Math.sin(angle) * 0.2, 0],
+      [0, 0, angle - HALF_TURN]
+    );
+  });
+  return [
+    p(ring(0.13, 0.035, 3, 12), paper),
+    p(gem(0.09), main),
+    p(ball(0.035, 7, 5), accent, [0, 0, 0.08]),
+    ...rays,
+  ];
+}
+
 function chevron(tipX: number, color: string): TokenPart[] {
   return [
     p(box(0.18, 0.06, 0.07), color, [tipX - 0.06, 0.06, 0], [0, 0, -Math.PI / 4]),
@@ -98,6 +117,8 @@ export const PICKUP_MODELS: Record<Power, PickupModelDefinition> = {
   },
   // Four arrowheads flying out of a core: a longer blast.
   BlastRangeUp: { silhouette: 'arrowBurst', parts: arrowBurst },
+  // A six-point chakra flare: reach reserved for the ultimate technique.
+  UltimateRangeUp: { silhouette: 'chakraFlare', parts: chakraFlare },
   // A plunger box with a T-handle: manual release.
   Detonator: {
     silhouette: 'plunger',

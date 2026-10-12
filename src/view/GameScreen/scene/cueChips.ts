@@ -13,6 +13,7 @@ import {
 export const PICKUP_LABELS: Record<Power, { label: string; color: string }> = {
   AddBomb: { label: '+Bomb', color: '#f97316' },
   BlastRangeUp: { label: '+Range', color: '#22c55e' },
+  UltimateRangeUp: { label: '+Ultra', color: '#e11d48' },
   Detonator: { label: 'Remote', color: '#dc2626' },
   RollerSkate: { label: '+Speed', color: '#38bdf8' },
   Invincibility: { label: 'Shield', color: '#a855f7' },

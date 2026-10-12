@@ -30,13 +30,14 @@ let bombIdCounter = 0;
 // are rarer than the bomb and fire upgrades the round is built around.
 export const BOX_DROP_CHANCE = 0.45;
 export const BOX_DROP_TABLE: readonly WeightedEntry<GenericPower>[] = [
-  { item: 'AddBomb', weight: 24 },
-  { item: 'BlastRangeUp', weight: 24 },
-  { item: 'RollerSkate', weight: 16 },
+  { item: 'AddBomb', weight: 19 },
+  { item: 'BlastRangeUp', weight: 17 },
+  { item: 'UltimateRangeUp', weight: 12 },
+  { item: 'RollerSkate', weight: 17 },
   { item: 'Obstacle', weight: 12 },
   { item: 'Detonator', weight: 10 },
   { item: 'Ghost', weight: 8 },
-  { item: 'Invincibility', weight: 6 },
+  { item: 'Invincibility', weight: 5 },
 ];
 
 function rollBoxDrop(seed: number): { power: GenericPower | null; seed: number } {
@@ -342,7 +343,9 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
     playerId,
     origin.x,
     origin.y,
-    player.bombRange + (player.characterId === 'minato' ? 1 : 3),
+    player.bombRange
+      + (player.ultimateRangeBonus ?? 0)
+      + (player.characterId === 'minato' ? 1 : 3),
     false,
     ULTIMATE_BOMBS[player.characterId],
     getBombFuse(ULTIMATE_BOMBS[player.characterId]),
@@ -350,6 +353,7 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
   const bomb = {
     ...created,
     id: `bomb-${state.tick}-${player.id}-${created.kind}-${state.bombs.length}`,
+    ultimateRangeBonus: player.ultimateRangeBonus ?? 0,
   };
   const newMap = state.map.map((row) => [...row]);
   newMap[origin.y][origin.x] = {
@@ -442,10 +446,16 @@ function getUltimateOuterPositions(
 ): { x: number; y: number }[] {
   if (!CHIP_DAMAGE_ULTIMATES.has(bomb.kind)) return [];
   const coreKeys = new Set(core.map(({ x, y }) => getCellKey(x, y)));
-  return dedupePositions(core.flatMap(({ x, y }) => CARDINAL_DIRECTIONS.map((direction) => ({
-    x: x + direction.x,
-    y: y + direction.y,
-  })))).filter((point) => (
+  const perimeterWidth = bomb.kind === 'kirin'
+    ? 1 + (bomb.ultimateRangeBonus ?? 0)
+    : 1;
+  const perimeter = core.flatMap(({ x, y }) => CARDINAL_DIRECTIONS.flatMap((direction) => (
+    Array.from({ length: perimeterWidth }, (_, index) => ({
+      x: x + direction.x * (index + 1),
+      y: y + direction.y * (index + 1),
+    }))
+  )));
+  return dedupePositions(perimeter).filter((point) => (
     map[point.y]?.[point.x] !== undefined
     && map[point.y][point.x] !== 'Wall'
     && !coreKeys.has(getCellKey(point.x, point.y))

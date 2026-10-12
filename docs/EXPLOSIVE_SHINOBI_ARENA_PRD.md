@@ -642,7 +642,8 @@ Every character contains:
 Every character can receive the complete shared upgrade set:
 
 * Bomb Capacity
-* Blast Range
+* Basic Blast Range
+* Ultimate Reach
 * Movement Speed
 * Manual Release
 * Chakra Shield

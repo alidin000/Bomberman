@@ -8,34 +8,14 @@ TypeScript, and Three.js.
 
 ![Explosive Shinobi Arena title screen](docs/images/welcome.webp)
 
-## Features
+## Highlights
 
-- **Seven-stage solo campaign:** rescue villagers, defend structures, solve
-  stage objectives, defeat guards, and seal tailed-beast bosses.
-- **Local Arena:** two or three human or CPU players, best-of-1/3/5 matches,
-  gamepads, rebindable controls, and sudden death.
-- **Private online rooms:** two to four players share a room code, ready up, reconnect
-  after a short interruption, and request a rematch.
-- **Six distinct fighters:** each has a unique bomb, ultimate, passive, movement
-  style, and visual effects.
-- **Living stages:** fog of war, hidden rewards, village events, monsters,
-  boss phases, a varied shared power-up pool, and character signature pickups.
-- **Training and accessibility:** four playable dojo lessons, reduced motion,
-  high contrast, HUD scaling, captions, screen-shake controls, and low-scenery
-  mode.
-- **Deterministic simulation:** seeded matches support repeatable tests, CPU
-  simulations, replays, and server-controlled online play.
-
-### Signature Techniques
-
-| Fighter | Basic style | Ultimate |
-| --- | --- | --- |
-| Deidara | Fast clay charges | A slower C3 bomb hunts a nearby opponent |
-| Naruto | One Shadow Clone Bomb | Clones fill the blast area after two seconds and pin every moving unit except their Naruto owner |
-| Sasuke | Chidori lane pressure | Kirin adds an outer lightning strike that removes one health point |
-| Gaara | Sand traps and protection | Sand Tsunami adds an outer sand strike that removes one health point |
-| Minato | Fast Flying Thunder bombs | The bomb appears at his passable kunai mark, or at Minato when no mark exists |
-| Itachi | Crow Clone blast angles | Tsukuyomi adds an outer dark-flame strike that removes one health point |
+- Six fighters with distinct bombs, passives, movement styles, and ultimates.
+- Solo campaign, training dojo, local arena, and private online co-op/versus.
+- Deterministic rules shared by browser matches, CPU play, replays, and the
+  authoritative online server.
+- Procedural cel-shaded characters, enemies, bosses, pickups, and effects.
+- Responsive keyboard, gamepad, and mobile controls with accessibility options.
 
 ## Screens
 
@@ -43,65 +23,32 @@ TypeScript, and Three.js.
 | --- | --- |
 | ![Campaign and local match setup](docs/images/mission-deck.webp) | ![A local match in the 3D arena](docs/images/arena.webp) |
 
-## How The 3D Models Were Made
+The complete modes, characters, missions, bosses, power-ups, and progression
+systems are documented in the [product specification](docs/EXPLOSIVE_SHINOBI_ARENA_PRD.md).
 
-The live characters are **procedural models**, not AI-generated 3D files. They
-are built by the renderer at runtime:
+## Animation And Models
 
-1. A character definition supplies the palette, identity, abilities, and
-   signature details.
-2. Three.js primitives such as capsules, spheres, cones, and boxes form the
-   body, hair, clothing, and accessories.
-3. Repeated monster, boss, pickup, and landmark parts are transformed, merged,
-   and cached. Fighters keep poseable groups and receive one merged outline.
-4. A three-band toon ramp creates the cel-shaded look.
-5. A second, back-facing hull expands in the vertex shader to draw the dark
-   ink line around each fighter.
-6. Render-only pose cues animate movement, bomb placement, hits, ultimates,
-   and knockouts without changing game rules.
+The shipping 3D models are assembled at runtime from poseable Three.js
+primitives. Shared recipes, merged geometry, toon lighting, and back-facing ink
+hulls create the minimal retro-anime look without downloading character meshes.
+A separate cue store animates movement, attacks, hits, ultimates, and knockouts
+without changing deterministic game state.
 
-The AI-assisted art workflow stopped at 2D references and menu assets:
+AI-assisted images were used for visual references and menu artwork, then
+selected, cropped, compressed, and integrated manually. No runtime AI or
+image-to-3D generation is used. See the
+[rendering and model pipeline](docs/ARCHITECTURE.md#rendering).
 
-1. A brief described the minimal retro-anime mood, ink treatment, palette, and
-   required composition.
-2. Image variants were generated, reviewed, and selected by hand.
-3. Selected images were cropped into the hero, roster, and stage artwork,
-   compressed to WebP, and integrated manually.
-4. The 3D silhouettes were then authored and tuned in Three.js from those
-   references. No image-to-3D model or runtime AI is used.
+## Performance
 
-The recipes live in `GameScene3D.tsx` and `src/view/GameScreen/scene/`.
-Archived GLB experiments remain under `public/models/characters/`, but the
-shipping renderer has their loading path disabled and uses procedural figures.
+Production profiling drove the optimization work: fixed-step simulation,
+interpolated motion, selector-based React updates, instanced scenery, cached
+resources, pooled lights, shader warmup, capped pixel ratio, and lazy loading.
 
-## How Performance Was Improved
-
-Optimization followed a repeatable loop: **profile a production build, isolate
-one bottleneck, change one system, measure again, then protect the behavior with
-tests**. Development-mode frame rates were not used as performance evidence.
-
-The largest changes were:
-
-- A fixed 50 ms simulation runs outside React; display frames interpolate
-  movement between simulation steps.
-- Narrow store selectors stop the full scene and HUD from re-rendering on every
-  clock tick.
-- Floor tiles, walls, crates, hazards, tails, and landmarks use instancing.
-  Geometry, materials, textures, and label sprites are shared and cached.
-- Five reusable point lights keep the shader light count stable. All material
-  variants are warmed during the countdown, avoiding shader compilation during
-  combat.
-- The canvas renders on demand while paused, caps device pixel ratio at 1.35,
-  and disables antialiasing.
-- The 3D match is lazy-loaded; the title screen paints before the Three.js
-  bundle is needed.
-- Seeded CPU matches, reducer tests, render tests, and Playwright production
-  smoke tests catch regressions.
-
-Recorded project profiling reduced a versus map from **445 to 115 draw calls**,
-scene updates from roughly **30 to 5-7 components per simulation tick**, and
-removed late shader compiles after a round becomes playable. Exact timings vary
-by browser and hardware.
+Recorded profiling reduced a versus scene from **445 to 115 draw calls** and
+scene updates from roughly **30 to 5-7 components per simulation tick**. Render
+budgets, shader reuse, deterministic rules, and browser flows are protected by
+automated tests. Read the [performance design](docs/ARCHITECTURE.md#performance-constraints).
 
 ## System Design
 
@@ -127,26 +74,31 @@ animation cannot change a match outcome.
 Read [the system design](docs/ARCHITECTURE.md) for state ownership, the online
 room lifecycle, rendering boundaries, and performance constraints.
 
+## Stack
+
+| Area | Technology | Role |
+| --- | --- | --- |
+| UI | React 18, TypeScript, MUI | Screens, HUD, controls, accessibility |
+| 3D | Three.js, React Three Fiber | Arena, models, effects, animation |
+| Game core | Pure reducer, seeded RNG | Deterministic rules shared across modes |
+| Online | Node.js, WebSocket (`ws`) | Authoritative rooms and reconnects |
+| Build | Vite, esbuild | Client bundles and server build |
+| Quality | Vitest, Testing Library, Playwright, ESLint | Logic, rendering, browser, and static checks |
+
 ## Run Locally
 
-Use Node.js 22.
+Requires Node.js 22.
 
 ```bash
 npm install
 npm start
 ```
 
-For private online rooms, run the server in a second terminal:
+Start private online rooms in a second terminal:
 
 ```bash
 npm run server
 ```
-
-Open `/online` in two to four browser windows. The local server listens on
-`ws://127.0.0.1:8787`. Production builds read `VITE_GAME_SERVER_URL`;
-`render.yaml` connects the static site to the WebSocket service.
-
-## Checks
 
 ```bash
 npm run lint
@@ -155,17 +107,11 @@ npm run build
 npm run test:e2e
 ```
 
-## Project Map
+## Documentation
 
-| Path | Purpose |
-| --- | --- |
-| `src/engine/` | Pure simulation, rules, AI hazards, campaign, and seeded randomness |
-| `src/content/` | Fighters, stages, missions, enemies, bosses, and power-ups |
-| `src/hooks/` | Fixed-step loop, state stores, interpolation, and React bridges |
-| `src/network/` | Protocol validation, snapshots, reconnects, and replays |
-| `src/view/GameScreen/` | HUD and React Three Fiber renderer |
-| `server/` | Authoritative 2-4 player rooms and health endpoint |
-| `public/maps/` | Stage layouts |
+- [System design, rendering, networking, and optimization](docs/ARCHITECTURE.md)
+- [Full product and feature specification](docs/EXPLOSIVE_SHINOBI_ARENA_PRD.md)
+- [Archived character model experiments](public/models/characters/README.md)
 
 ## License
 

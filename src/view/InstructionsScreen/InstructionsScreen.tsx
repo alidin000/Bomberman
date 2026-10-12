@@ -115,7 +115,7 @@ const COMBAT_RULES = [
 ];
 
 const POWER_RULES = [
-  'Every fighter can find bomb, blast, speed, shield, phase, manual-release, and cover effects. Campaign replaces matching upgrades with that fighter\'s signature pickup and also drops Chakra Scrolls.',
+  'Every fighter can find bomb, basic blast, ultimate reach, speed, shield, phase, manual-release, and cover effects. Ultimate Reach extends the ultimate blast or its outer attack only. Campaign replaces matching upgrades with that fighter\'s signature pickup and also drops Chakra Scrolls.',
   'Manual bombs require a detonation power-up and can be triggered with the configured detonate key.',
   'Cover creates a temporary blocker in front of you. It can protect space, but it can also be destroyed by blasts.',
   'Naruto\'s ultimate forms clones across its blast area after two seconds. They pin other players, monsters, and bosses, but Naruto can move through his own clones.',

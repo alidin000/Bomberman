@@ -90,6 +90,9 @@ export interface PlayerState {
   maxBombs: number;
   activeBombs: number;
   bombRange: number;
+  // Separate from bombRange so ordinary blast upgrades cannot scale ultimates.
+  // Optional keeps older replays and online snapshots compatible.
+  ultimateRangeBonus?: number;
   powerUps: Power[];
   obstacles: number;
   color: string;
@@ -156,6 +159,9 @@ export interface BombState {
   // Simulation-owned timing keeps transformations and moving bombs deterministic online.
   ageMs?: number;
   movementCooldownMs?: number;
+  // Kirin already spans full rows and columns, so its bonus widens the
+  // surrounding lightning perimeter instead of lengthening those rays.
+  ultimateRangeBonus?: number;
 }
 
 export interface BossState {

@@ -18,6 +18,9 @@ const DEFAULT_POWER_THEMES: Record<Power, CharacterPowerTheme> = {
   BlastRangeUp: {
     label: '+Blast Radius', shortLabel: '+Blast', effect: 'Extends this character\'s blast pattern by one tile.', color: '#22c55e', accent: '#bbf7d0', paper: '#ecfccb'
   },
+  UltimateRangeUp: {
+    label: '+Ultimate Reach', shortLabel: '+Ultra', effect: 'Extends the ultimate blast or its outer attack by one tile.', color: '#e11d48', accent: '#fef08a', paper: '#fff1f2'
+  },
   Detonator: {
     label: 'Manual Release', shortLabel: 'Release', effect: 'Plants manual bombs that can be triggered with the detonate key.', color: '#dc2626', accent: '#fed7aa', paper: '#f9e8d2'
   },
@@ -62,6 +65,7 @@ const DEFAULT_POWER_THEMES: Record<Power, CharacterPowerTheme> = {
 const GENERIC_POWER_ORDER: GenericPower[] = [
   'AddBomb',
   'BlastRangeUp',
+  'UltimateRangeUp',
   'Detonator',
   'RollerSkate',
   'Invincibility',

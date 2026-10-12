@@ -8,7 +8,10 @@ describe('Game Utilities', () => {
       const power = randomPowerUpGenerator();
       expect(power).toBeDefined();
       expect(typeof power).toBe('string');
-      expect(['AddBomb', 'BlastRangeUp', 'Detonator', 'RollerSkate', 'Invincibility', 'Ghost', 'Obstacle']).toContain(power);
+      expect([
+        'AddBomb', 'BlastRangeUp', 'UltimateRangeUp', 'Detonator',
+        'RollerSkate', 'Invincibility', 'Ghost', 'Obstacle',
+      ]).toContain(power);
     });
   });
 

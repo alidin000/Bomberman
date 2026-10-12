@@ -86,6 +86,7 @@ const CHARACTER_POSITIONS: Record<CharacterId, string> = {
 const POWER_LABELS: Record<Power, string> = {
   AddBomb: 'Bomb capacity',
   BlastRangeUp: 'Blast radius',
+  UltimateRangeUp: 'Ultimate reach',
   Detonator: 'Detonation Tag',
   RollerSkate: 'Movement boost',
   Invincibility: 'Shield',

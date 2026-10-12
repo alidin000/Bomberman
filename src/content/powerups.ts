@@ -11,8 +11,15 @@ export const POWERUP_DEFINITIONS: PowerupDefinition[] = [
   {
     id: 'chakraAmplification',
     name: 'Blast Mastery',
-    effect: 'Wider character-specific explosion',
+    effect: 'Wider basic character-specific explosion',
     color: '#22c55e',
+    assetSlots: {},
+  },
+  {
+    id: 'ultimateAmplification',
+    name: 'Ultimate Mastery',
+    effect: 'Wider ultimate technique without changing basic bombs',
+    color: '#e11d48',
     assetSlots: {},
   },
   {

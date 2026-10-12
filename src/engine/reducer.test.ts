@@ -390,7 +390,7 @@ describe('gameReducer', () => {
         seed
       )));
       expect(rolled).toEqual(new Set(pool));
-      expect(pool).toHaveLength(8);
+      expect(pool).toHaveLength(9);
     });
     expect(getCampaignPickupPool('naruto')).not.toContain('Sharingan');
 
@@ -1221,6 +1221,10 @@ describe('gameReducer', () => {
     ]));
 
     state = applyPowerUp(state, 'player1', 'BlastRangeUp');
+    expect(state.players[0].bombRange).toBe(initial.bombRange + 1);
+
+    state = applyPowerUp(state, 'player1', 'UltimateRangeUp');
+    expect(state.players[0].ultimateRangeBonus).toBe(1);
     expect(state.players[0].bombRange).toBe(initial.bombRange + 1);
 
     state = applyPowerUp(state, 'player1', 'Detonator');

@@ -55,6 +55,7 @@ function createPlayer(index: number, config: GameConfig): PlayerState {
     maxBombs: (isClayArtist ? 2 : 1) + extraBombs,
     activeBombs: 0,
     bombRange: (isClayArtist ? 3 : 2) + extraRange,
+    ultimateRangeBonus: 0,
     powerUps: character.id === 'minato' ? ['RollerSkate'] : [],
     obstacles: 0,
     color: character.primaryColor || PLAYER_COLORS[index],

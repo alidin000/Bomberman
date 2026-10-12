@@ -1,6 +1,7 @@
 export type GenericPower =
   | 'AddBomb'
   | 'BlastRangeUp'
+  | 'UltimateRangeUp'
   | 'Detonator'
   | 'RollerSkate'
   | 'Invincibility'
@@ -41,6 +42,7 @@ export type GameMap = gameItem[][];
 export const genericPowerUpOptions: GenericPower[] = [
   'AddBomb',
   'BlastRangeUp',
+  'UltimateRangeUp',
   'Detonator',
   'RollerSkate',
   'Invincibility',
