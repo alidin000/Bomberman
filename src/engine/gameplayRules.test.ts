@@ -96,6 +96,22 @@ describe('seeded crate drops', () => {
     expect(blastCrateRow(98765)).not.toEqual(drops);
   });
 
+  it('varies arena drops without letting bomb and range upgrades dominate', () => {
+    const counts = Object.fromEntries(
+      genericPowerUpOptions.map((power) => [power, 0])
+    ) as Record<(typeof genericPowerUpOptions)[number], number>;
+    for (let seed = 1; seed <= 200; seed += 1) {
+      blastCrateRow(seed).forEach((power) => {
+        if (power) counts[power] += 1;
+      });
+    }
+    const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+    const coreShare = (counts.AddBomb + counts.BlastRangeUp) / total;
+
+    genericPowerUpOptions.forEach((power) => expect(counts[power]).toBeGreaterThan(0));
+    expect(coreShare).toBeLessThan(0.5);
+  });
+
   it('rolls a different, still reproducible seed for a rematch', () => {
     const state = liveRound({ ...versusConfig, seed: 77 });
     const first = gameReducer(state, { type: 'RESTART' })!;

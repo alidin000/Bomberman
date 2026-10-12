@@ -30,13 +30,13 @@ let bombIdCounter = 0;
 // are rarer than the bomb and fire upgrades the round is built around.
 export const BOX_DROP_CHANCE = 0.45;
 export const BOX_DROP_TABLE: readonly WeightedEntry<GenericPower>[] = [
-  { item: 'AddBomb', weight: 26 },
-  { item: 'BlastRangeUp', weight: 26 },
+  { item: 'AddBomb', weight: 24 },
+  { item: 'BlastRangeUp', weight: 24 },
   { item: 'RollerSkate', weight: 16 },
   { item: 'Obstacle', weight: 12 },
-  { item: 'Detonator', weight: 9 },
-  { item: 'Ghost', weight: 6 },
-  { item: 'Invincibility', weight: 5 },
+  { item: 'Detonator', weight: 10 },
+  { item: 'Ghost', weight: 8 },
+  { item: 'Invincibility', weight: 6 },
 ];
 
 function rollBoxDrop(seed: number): { power: GenericPower | null; seed: number } {

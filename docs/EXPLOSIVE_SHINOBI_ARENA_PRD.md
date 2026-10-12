@@ -639,56 +639,57 @@ Every character contains:
 
 # 17. CHARACTER-SPECIFIC POWERUPS
 
-Generic crystals removed.
+Every character can receive the complete shared upgrade set:
 
-Powerups become character themed.
+* Bomb Capacity
+* Blast Range
+* Movement Speed
+* Manual Release
+* Chakra Shield
+* Phase Step
+* Barrier Drop
+
+The effect categories stay consistent, but matching generic entries are
+replaced by the active character's signature pickup. Names, models, colors, and
+pickup feedback match that character. Campaign also drops Chakra Scrolls.
+Character Fragments remain rare rewards instead of ordinary random drops.
 
 ---
 
 Naruto
 
 * Rasengan
-* Sage Scroll
-* Kurama Chakra
-* Clone Training
 
 ---
 
 Sasuke
 
 * Sharingan
-* Chidori Scroll
-* Curse Mark
-* Susanoo Fragment
 
 ---
 
 Minato
 
 * FTG Kunai
-* Yellow Flash Seal
-* Hokage Cloak
 
 ---
 
 Gaara
 
 * Sand Armor
-* Shukaku Fragment
 
 ---
 
 Itachi
 
 * Crow Feather
-* Yata Mirror
+* Sharingan
 
 ---
 
 Deidara
 
-* Explosive Clay
-* Clay Sculpture
+* Clay Spider
 
 ---
 

@@ -19,7 +19,7 @@ TypeScript, and Three.js.
 - **Six distinct fighters:** each has a unique bomb, ultimate, passive, movement
   style, and visual effects.
 - **Living stages:** fog of war, hidden rewards, village events, monsters,
-  boss phases, and character-specific power-ups.
+  boss phases, a varied shared power-up pool, and character signature pickups.
 - **Training and accessibility:** four playable dojo lessons, reduced motion,
   high contrast, HUD scaling, captions, screen-shake controls, and low-scenery
   mode.

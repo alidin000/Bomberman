@@ -69,14 +69,27 @@ const GENERIC_POWER_ORDER: GenericPower[] = [
   'Obstacle',
 ];
 
-const CHARACTER_CAMPAIGN_PICKUP_POOLS: Record<CharacterId, Power[]> = {
-  deidara: ['ClaySpider', 'AddBomb', 'BlastRangeUp', 'Detonator', 'ChakraScroll', 'CharacterFragment'],
-  naruto: ['Rasengan', 'AddBomb', 'BlastRangeUp', 'RollerSkate', 'ChakraScroll', 'CharacterFragment'],
-  sasuke: ['Sharingan', 'BlastRangeUp', 'Detonator', 'RollerSkate', 'ChakraScroll', 'CharacterFragment'],
-  gaara: ['SandArmor', 'BlastRangeUp', 'Obstacle', 'Invincibility', 'ChakraScroll', 'CharacterFragment'],
-  minato: ['FTGKunai', 'RollerSkate', 'Detonator', 'AddBomb', 'ChakraScroll', 'CharacterFragment'],
-  itachi: ['CrowFeather', 'Sharingan', 'Ghost', 'Detonator', 'ChakraScroll', 'CharacterFragment'],
+const CHARACTER_SIGNATURE_REPLACEMENTS: Record<
+CharacterId,
+Partial<Record<GenericPower, Power>>
+> = {
+  deidara: { AddBomb: 'ClaySpider' },
+  naruto: { BlastRangeUp: 'Rasengan' },
+  sasuke: { Detonator: 'Sharingan' },
+  gaara: { Invincibility: 'SandArmor' },
+  minato: { RollerSkate: 'FTGKunai' },
+  itachi: { Detonator: 'Sharingan', Ghost: 'CrowFeather' },
 };
+
+const CHARACTER_CAMPAIGN_PICKUP_POOLS: Record<CharacterId, Power[]> = Object.fromEntries(
+  Object.entries(CHARACTER_SIGNATURE_REPLACEMENTS).map(([characterId, replacements]) => [
+    characterId,
+    [
+      ...GENERIC_POWER_ORDER.map((power) => replacements[power] ?? power),
+      'ChakraScroll',
+    ],
+  ])
+) as Record<CharacterId, Power[]>;
 
 const CHARACTER_POWER_THEMES: Record<
 CharacterId,

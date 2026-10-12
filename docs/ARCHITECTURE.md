@@ -84,6 +84,12 @@ mission.
 Seeded randomness is the only randomness inside a match. This keeps tests,
 replays, CPU simulations, and online execution reproducible.
 
+Power-up rolls preserve that determinism. Arena crates use one weighted table
+shared by every fighter. Campaign rewards expose the same seven effect
+categories, replacing equivalent generic entries with the active fighter's
+signature pickup, then add Chakra Scroll. Authored secrets and rare Character
+Fragments remain separate from ordinary random drops.
+
 ## Character Ability Resolution
 
 Signature abilities are simulation rules, not renderer effects. Bomb creation,

@@ -6,8 +6,11 @@ import { cellKey } from './fogOfWar';
 import { tickMonsters } from './monsters';
 import { parseMapRows } from './mapLoader';
 import { defaultMap } from '../constants/contants';
-import { isObstacle } from '../model/gameItem';
-import { getCampaignPickupPool } from '../content/characterPowerups';
+import { genericPowerUpOptions, isObstacle } from '../model/gameItem';
+import {
+  getCampaignPickupPool,
+  getCampaignPowerUp,
+} from '../content/characterPowerups';
 import { createBomb, explodeBombs } from './bombs';
 import { tickBossEncounter } from './bosses';
 import { resolveZetsuOutcomeKind } from './campaignExploration';
@@ -365,10 +368,31 @@ describe('gameReducer', () => {
   });
 
   it('uses character-specific campaign pickup pools and the PRD Zetsu outcome bands', () => {
-    expect(getCampaignPickupPool('naruto')).toContain('Rasengan');
+    const replacements = {
+      deidara: { AddBomb: 'ClaySpider' },
+      naruto: { BlastRangeUp: 'Rasengan' },
+      sasuke: { Detonator: 'Sharingan' },
+      gaara: { Invincibility: 'SandArmor' },
+      minato: { RollerSkate: 'FTGKunai' },
+      itachi: { Detonator: 'Sharingan', Ghost: 'CrowFeather' },
+    } as const;
+    Object.entries(replacements).forEach(([characterId, characterReplacements]) => {
+      const pool = getCampaignPickupPool(characterId as keyof typeof replacements);
+      genericPowerUpOptions.forEach((power) => {
+        expect(pool).toContain(
+          characterReplacements[power as keyof typeof characterReplacements] ?? power
+        );
+      });
+      expect(pool).toContain('ChakraScroll');
+      expect(pool).not.toContain('CharacterFragment');
+      const rolled = new Set(pool.map((_, seed) => getCampaignPowerUp(
+        characterId as keyof typeof replacements,
+        seed
+      )));
+      expect(rolled).toEqual(new Set(pool));
+      expect(pool).toHaveLength(8);
+    });
     expect(getCampaignPickupPool('naruto')).not.toContain('Sharingan');
-    expect(getCampaignPickupPool('sasuke')).toContain('Sharingan');
-    expect(getCampaignPickupPool('minato')).toContain('FTGKunai');
 
     expect(resolveZetsuOutcomeKind(59)).toBe('nothing');
     expect(resolveZetsuOutcomeKind(60)).toBe('powerUp');
