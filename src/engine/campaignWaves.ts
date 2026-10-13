@@ -10,6 +10,7 @@ import { createShinobiEnemy } from './campaignEnemies';
 import { DifficultyId, getDifficulty } from './difficulty';
 import { nextRandom, normalizeSeed } from './random';
 import { positionsTouch } from './grid';
+import { isInVillageSquare } from './villageSquare';
 import {
   CampaignObjectiveState,
   CampaignRuntimeState,
@@ -213,14 +214,16 @@ export function waveClockMs(objective: CampaignObjectiveState): number {
   return Math.max(0, durationMs - (objective.ticksRemaining ?? durationMs));
 }
 
-// Open floor only: not a crate, bomb, cover, pickup, enemy or player.
+// Open floor only: not a crate, bomb, cover, pickup, enemy or player, and
+// never inside the village square.
 function canSpawnAt(
-  state: Pick<GameEngineState, 'map' | 'players'>,
+  state: Pick<GameEngineState, 'map' | 'players' | 'config'>,
   monsters: MonsterState[],
   x: number,
   y: number
 ) {
   return state.map[y]?.[x] === 'Empty'
+    && !isInVillageSquare(state, x, y)
     && !monsters.some((monster) => monster.x === x && monster.y === y)
     && !state.players.some((player) => (
       player.alive
@@ -232,7 +235,7 @@ function canSpawnAt(
 // The unit's own entry first, then the script's other entries: a player
 // standing on one entry pushes its units to the next instead of blocking.
 function findSpawnCell(
-  state: Pick<GameEngineState, 'map' | 'players'>,
+  state: Pick<GameEngineState, 'map' | 'players' | 'config'>,
   monsters: MonsterState[],
   waves: CampaignWaveRuntimeState,
   entryId: string,

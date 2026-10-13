@@ -47,6 +47,11 @@ describe('online protocol', () => {
       type: 'input', seq: 1, playerId: 'player2', action: 'bomb',
     }),
     JSON.stringify({ type: 'input', seq: -1, action: 'bomb' }),
+    // The village square's board and stall are solo-only: no online command.
+    JSON.stringify({
+      type: 'input', seq: 1, action: { type: 'ACCEPT_REQUEST', playerId: 'player1', requestId: 'x' },
+    }),
+    JSON.stringify({ type: 'input', seq: 1, action: 'purchase' }),
     JSON.stringify({ type: 'selection', characterId: 'not-a-character' }),
     JSON.stringify({
       type: 'create',

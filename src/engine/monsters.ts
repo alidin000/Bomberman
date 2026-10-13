@@ -15,6 +15,13 @@ import { EnemyAbilityKind } from '../content/enemies';
 import { createShinobiEnemy } from './campaignEnemies';
 import { DifficultySettings, getMatchDifficulty } from './difficulty';
 import { isCellVisible } from './fogOfWar';
+import {
+  getActiveVillageSquare,
+  isInVillageSquare,
+  isShelteredInSquare,
+  playersOutsideSquare,
+  squareBlastStop,
+} from './villageSquare';
 
 const DIRECTIONS: Point[] = [
   { x: 0, y: -1 },
@@ -166,7 +173,7 @@ export function createDangerMap(state: GameEngineState): DangerMap {
   ]));
   const rays = new Map(state.bombs.map((bomb) => [
     bomb.id,
-    getExplosionPositions(bomb, state.map),
+    getExplosionPositions(bomb, state.map, squareBlastStop(state)),
   ]));
   const bombsByCell = new Map<string, string[]>();
   state.bombs.forEach((bomb) => {
@@ -705,6 +712,7 @@ function canTeleportTo(state: GameEngineState, x: number, y: number): boolean {
     && cell !== 'Box'
     && !isBomb(cell)
     && !isObstacle(cell)
+    && !isInVillageSquare(state, x, y)
     && !state.monsters.some((monster) => monster.x === x && monster.y === y);
 }
 
@@ -872,7 +880,10 @@ function startMonsterAbility(
   const seen = !difficulty.castOnlyWhenVisible
     || isCellVisible(state.fogOfWar, monster.x, monster.y)
     || state.fogOfWar.sensedEnemies.includes(`${monster.x},${monster.y}`);
-  const targetPlayer = seen ? getNearestPlayer(monster, state.players) : null;
+  // A player in the village square cannot be tracked.
+  const targetPlayer = seen
+    ? getNearestPlayer(monster, playersOutsideSquare(state, state.players))
+    : null;
   if (!targetPlayer) {
     return {
       monster: {
@@ -1009,6 +1020,10 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
     createDangerMap(state),
     difficulty.dodgeHorizonMs,
   );
+  // No enemy steps into the village square.
+  getActiveVillageSquare(state.config)?.cellKeys.forEach((key) => (
+    movementContext.occupiedCells.add(key)
+  ));
   // Where everyone stands so far this tick, so teleports and clones never
   // land on a cell another enemy has just moved into.
   const placed = [...living];
@@ -1045,7 +1060,7 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
       nextMonster,
       state.map,
       movementContext,
-      players,
+      playersOutsideSquare(state, players),
       state.tick,
     );
     nextMonster = {
@@ -1069,7 +1084,7 @@ export function checkMonsterCollisions(state: GameEngineState): PlayerState[] {
   return state.players.map((player) => {
     if (!player.alive) return player;
     const hasInvincibility = isPowerUpActive(state, player.id, 'Invincibility');
-    if (hasInvincibility) return player;
+    if (hasInvincibility || isShelteredInSquare(state, player)) return player;
 
     const hit = state.monsters.find((monster) => positionsTouch(monster, player));
     return hit

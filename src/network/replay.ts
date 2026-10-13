@@ -26,7 +26,13 @@ import { GameEngineState } from '../engine/types';
 // the boss appearing at the arena's centre. SIMULATION_VERSION follows.
 // v9: Normal campaign enemies move and detect like Hard's (Normal keeps its
 // lives and gentler ability timing). SIMULATION_VERSION follows.
-export const REPLAY_VERSION = 9;
+// v10: the village square in every campaign mission: no bombs, blasts,
+// enemies, boss hazards or wave entries inside it, its props block movement,
+// players in it cannot be hurt or tracked; the request board's requests
+// (ACCEPT_REQUEST, marked cells from their own seed) and the stall
+// (CAMPAIGN_PURCHASE), both taken while paused, from config.village.
+// SIMULATION_VERSION follows.
+export const REPLAY_VERSION = 10;
 
 export interface ReplayFrame {
   tick: number;

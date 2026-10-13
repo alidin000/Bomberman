@@ -30,6 +30,12 @@ import { tickSuddenDeath } from './suddenDeath';
 import { regroupFallenPlayers } from './campaignLives';
 import { checkTrainingRoundEnd, isTrainingConfig } from './training';
 import { withoutConsumables } from './campaignLoadout';
+import {
+  acceptVillageRequest,
+  purchaseAtStall,
+  trackVillageRequests,
+  withVillageCarryOver,
+} from './villageSquare';
 import { BOSS_INTRO_MS, BOSS_INTRO_SKIP_LOCK_MS } from './constants';
 
 function getWinnerName(state: GameEngineState, winnerId: string): string {
@@ -265,12 +271,16 @@ function isPlayerInDanger(state: GameEngineState, playerId: string): boolean {
 }
 
 // A retry or restart is a new attempt: fresh seed, and the one-mission
-// consumables were spent on the attempt that just ended.
+// consumables were spent on the attempt that just ended, like the embers
+// spent at the village stall.
 function withFreshMatchSeed(state: GameEngineState): GameEngineState['config'] {
-  return withoutConsumables({ ...state.config, seed: deriveMatchSeed(state.rngSeed) });
+  return withoutConsumables(withVillageCarryOver(
+    { ...state.config, seed: deriveMatchSeed(state.rngSeed) },
+    state.campaign
+  ));
 }
 
-export function gameReducer(
+function reduceAction(
   state: GameEngineState | null,
   action: GameAction,
 ): GameEngineState | null {
@@ -300,6 +310,7 @@ export function gameReducer(
     }
 
     case 'DROP_BOMB':
+      // In the village square this key talks instead: placeBomb refuses there.
       if (!isRoundLive(state)) return state;
       return withUpdatedFogOfWar(advanceCampaignState(placeBomb(state, action.playerId)));
 
@@ -365,7 +376,23 @@ export function gameReducer(
     case 'RESTART':
       return state ? createInitialState(withFreshMatchSeed(state)) : state;
 
+    // The village square's board and stall pause a solo match, so both are
+    // taken while paused (villageSquare.ts).
+    case 'ACCEPT_REQUEST':
+      return state ? acceptVillageRequest(state, action.playerId, action.requestId) : state;
+
+    case 'CAMPAIGN_PURCHASE':
+      return state ? purchaseAtStall(state, action.playerId, action.itemId) : state;
+
     default:
       return state;
   }
+}
+
+export function gameReducer(
+  state: GameEngineState | null,
+  action: GameAction,
+): GameEngineState | null {
+  // Accepted village requests follow what every action and tick did.
+  return trackVillageRequests(state, reduceAction(state, action));
 }

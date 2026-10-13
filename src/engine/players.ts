@@ -21,7 +21,8 @@ import {
   positionsTouch,
   roundToMovementStep,
 } from './grid';
-import { getLoadoutEffects } from './campaignLoadout';
+import { hasLodestone } from './campaignLoadout';
+import { isInVillageSquare, isVillagePropCell } from './villageSquare';
 import { getShadowCloneBlocks, isShadowCloneBlocked } from './characterAbilities';
 
 const MUTUALLY_EXCLUSIVE: Partial<Record<Power, Power | null>> = {
@@ -158,6 +159,10 @@ function isCellValidForPlayer(
   }
 
   const cell = map[cellY][cellX];
+  // The village square's props stand like pillars.
+  if (isVillagePropCell(state, cellX, cellY)) {
+    return isLeavingOverlappedCell(currentX, currentY, nextX, nextY, cellX, cellY);
+  }
   if (isBomb(cell)) {
     if (cell.ownerId === playerId && overlapsCell(currentX, currentY, cellX, cellY)) return true;
     // Someone else's bomb dropped onto a cell you overlap: you may walk out.
@@ -277,7 +282,7 @@ export function movePlayer(
 
   const playerCell = getPlayerCell({ x, y });
   // The Lodestone Charm (a hub consumable) also pulls in the four cells beside.
-  const reach = getLoadoutEffects(state.config).magnet ? MAGNET_REACH : SELF_REACH;
+  const reach = hasLodestone(state) ? MAGNET_REACH : SELF_REACH;
   for (let index = 0; index < reach.length; index += 1) {
     const point = { x: playerCell.x + reach[index].x, y: playerCell.y + reach[index].y };
     const cell = getCell(map, point);
@@ -409,6 +414,8 @@ export function placeObstacle(state: GameEngineState, playerId: string): GameEng
   const targetCell = getCell(state.map, target);
 
   if (targetCell !== 'Empty'
+    // Nothing is built inside the village square.
+    || isInVillageSquare(state, target.x, target.y)
     || actorOverlapsCell(player, target.x, target.y)
     || cellIsOccupiedByActor(state, target.x, target.y, playerId)) {
     return state;

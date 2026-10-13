@@ -24,6 +24,7 @@ import { normalizeSeed } from './random';
 import { getMatchDifficulty } from './difficulty';
 import { createTrainingSentries, isTrainingConfig, placeTrainingCharges } from './training';
 import { applyLoadoutAtInit } from './campaignLoadout';
+import { withVillageVisit } from './villageSquare';
 
 const PLAYER_NAMES = ['player1', 'player2', 'player3', 'player4'];
 const ULTIMATE_COOLDOWN_MS = 12000;
@@ -236,7 +237,8 @@ export function createInitialState(config: GameConfig): GameEngineState {
   // The config keeps the board without the room's charges, so a restart
   // lights them again.
   const { map, bombs } = placeTrainingCharges(config, safeMap);
-  const campaignRuntime = createCampaignRuntimeState(config);
+  // The village square's requests and stall come from config.village.
+  const campaignRuntime = withVillageVisit(createCampaignRuntimeState(config), config);
   const {
     campaign,
     monsters: campaignMonsters,
@@ -292,7 +294,7 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     state.config,
     createSpawnSafeMap(state.config.map, players)
   );
-  const campaignRuntime = createCampaignRuntimeState(state.config);
+  const campaignRuntime = withVillageVisit(createCampaignRuntimeState(state.config), state.config);
   const {
     campaign,
     monsters: campaignMonsters,

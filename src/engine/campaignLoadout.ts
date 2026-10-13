@@ -1,5 +1,6 @@
 import {
   CampaignLoadout,
+  HubConsumableId,
   REGROUP_DRILL_MS_PER_RANK,
   STARTING_GUARD_MS,
   clampUpgradeRank,
@@ -66,6 +67,21 @@ export function getLoadoutEffects(config: Pick<GameConfig, 'mode' | 'loadout'>):
   return effects;
 }
 
+// A Paper Ward's Guard: a timed Guard worn, not picked up (no pickup flash).
+function withGuard(
+  timedPowerUps: GameEngineState['timedPowerUps'],
+  playerId: string,
+  ms: number
+): GameEngineState['timedPowerUps'] {
+  return {
+    ...timedPowerUps,
+    [playerId]: [
+      ...(timedPowerUps[playerId] ?? []).filter((timed) => timed.power !== 'Invincibility'),
+      { power: 'Invincibility', ticksRemaining: ms, flashTicksRemaining: 0 },
+    ],
+  };
+}
+
 /**
  * Applies the loadout to a freshly built match: bomb slots, blast range, the
  * starting guard (a timed Guard that only counts down once the round is
@@ -85,17 +101,8 @@ export function applyLoadoutAtInit(state: GameEngineState): GameEngineState {
   });
   let { timedPowerUps } = state;
   if (effects.startingGuardMs > 0) {
-    timedPowerUps = { ...timedPowerUps };
     players.forEach((player) => {
-      timedPowerUps[player.id] = [
-        ...(timedPowerUps[player.id] ?? []).filter((timed) => timed.power !== 'Invincibility'),
-        {
-          power: 'Invincibility',
-          ticksRemaining: effects.startingGuardMs,
-          // Worn from the start, not picked up: no pickup flash.
-          flashTicksRemaining: 0,
-        },
-      ];
+      timedPowerUps = withGuard(timedPowerUps, player.id, effects.startingGuardMs);
     });
   }
   const campaign = state.campaign && effects.extraLives > 0
@@ -120,4 +127,62 @@ export function applyLoadoutAtInit(state: GameEngineState): GameEngineState {
 export function withoutConsumables(config: GameConfig): GameConfig {
   if (!config.loadout?.consumables || config.loadout.consumables.length === 0) return config;
   return { ...config, loadout: { ...config.loadout, consumables: [] } };
+}
+
+/** The Lodestone Charm pulls pickups in: packed in the hub or bought at the stall. */
+export function hasLodestone(state: Pick<GameEngineState, 'config' | 'campaign'>): boolean {
+  return getLoadoutEffects(state.config).magnet
+    || !!state.campaign?.village?.purchases.includes('lodestone');
+}
+
+/**
+ * A consumable bought at the village square's stall, applied at once with
+ * the same effects as packing it: Paper Ward a Guard from now, Blast Powder
+ * +1 range, Fuse Pouch +1 bomb slot, Second Wind +1 life; the Lodestone works
+ * from the purchase record (hasLodestone). Null when it cannot take effect:
+ * a Guard is refused while Ghost is worn, like a Guard pickup.
+ */
+export function applyStallConsumable(
+  state: GameEngineState,
+  playerId: string,
+  id: HubConsumableId
+): GameEngineState | null {
+  const player = state.players.find((item) => item.id === playerId);
+  if (!player) return null;
+  const update = (change: Partial<typeof player>) => state.players.map((item) => (
+    item.id === playerId ? { ...item, ...change } : item
+  ));
+  switch (id) {
+    case 'fusePouch':
+      return { ...state, players: update({ maxBombs: player.maxBombs + 1 }) };
+    case 'blastPowder':
+      return { ...state, players: update({ bombRange: player.bombRange + 1 }) };
+    case 'paperWard': {
+      const ghost = player.powerUps.includes('Ghost')
+        || (state.timedPowerUps[playerId] ?? []).some((timed) => timed.power === 'Ghost');
+      if (ghost) return null;
+      return {
+        ...state,
+        players: update({
+          powerUps: [...player.powerUps.filter((power) => power !== 'Invincibility'), 'Invincibility'],
+        }),
+        timedPowerUps: withGuard(state.timedPowerUps, playerId, STARTING_GUARD_MS),
+      };
+    }
+    case 'secondWind':
+      return state.campaign
+        ? {
+          ...state,
+          campaign: {
+            ...state.campaign,
+            livesRemaining: (state.campaign.livesRemaining ?? 1) + 1,
+            livesTotal: (state.campaign.livesTotal ?? 1) + 1,
+          },
+        }
+        : null;
+    case 'lodestone':
+      return state;
+    default:
+      return null;
+  }
 }

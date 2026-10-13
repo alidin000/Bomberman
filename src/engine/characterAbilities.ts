@@ -2,6 +2,7 @@ import {
   GameMap, isBomb, isObstacle, isPower,
 } from '../model/gameItem';
 import { BombState, GameEngineState, Point } from './types';
+import { isInVillageSquare } from './villageSquare';
 
 export const SHADOW_CLONE_FORMATION_MS = 2000;
 
@@ -20,6 +21,8 @@ export function shadowCloneHasFormed(bomb: BombState): boolean {
 function canHoldShadowClone(state: GameEngineState, x: number, y: number): boolean {
   const cell = state.map[y]?.[x];
   if (cell === undefined || cell === 'Wall' || cell === 'Box') return false;
+  // The barrage's blast stops at the village square's edge, and so do its clones.
+  if (isInVillageSquare(state, x, y)) return false;
   return !isBomb(cell) && !isObstacle(cell) && (cell === 'Empty' || isPower(cell));
 }
 

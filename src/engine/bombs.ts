@@ -23,6 +23,7 @@ import {
   getShadowCloneBarragePositions,
   getShadowCloneBlocks,
 } from './characterAbilities';
+import { isInVillageSquare, isShelteredInSquare, squareBlastStop } from './villageSquare';
 
 let bombIdCounter = 0;
 
@@ -154,7 +155,20 @@ function getBasicBombPlacements(
   }));
 }
 
-export function getExplosionPositions(bomb: BombState, map: GameMap): { x: number; y: number }[] {
+/**
+ * The cells a bomb's blast reaches. `stop` marks cells no blast enters (the
+ * village square, squareBlastStop): a ray ends at the first one, and the
+ * other shapes leave them out.
+ */
+export function getExplosionPositions(
+  bomb: BombState,
+  map: GameMap,
+  stop?: (x: number, y: number) => boolean
+): { x: number; y: number }[] {
+  if (stop) {
+    return getExplosionPositions(bomb, map).filter(({ x, y }) => !stop(x, y)
+      && !isRayCutByStop(bomb, x, y, stop));
+  }
   if (bomb.kind === 'shadowCloneBarrage') {
     return getShadowCloneBarragePositions(bomb, map);
   }
@@ -261,6 +275,22 @@ export function getExplosionPositions(bomb: BombState, map: GameMap): { x: numbe
   return positions;
 }
 
+// A cell on a straight line out of the bomb lies past a stop cell on that line.
+function isRayCutByStop(
+  bomb: BombState,
+  x: number,
+  y: number,
+  stop: (cellX: number, cellY: number) => boolean
+): boolean {
+  if ((x !== bomb.x && y !== bomb.y) || (x === bomb.x && y === bomb.y)) return false;
+  const dx = Math.sign(x - bomb.x);
+  const dy = Math.sign(y - bomb.y);
+  for (let cx = bomb.x + dx, cy = bomb.y + dy; cx !== x || cy !== y; cx += dx, cy += dy) {
+    if (stop(cx, cy)) return true;
+  }
+  return false;
+}
+
 function getCellKey(x: number, y: number): string {
   return `${x},${y}`;
 }
@@ -290,6 +320,8 @@ export function placeBomb(state: GameEngineState, playerId: string): GameEngineS
   const bombLimit = player.maxBombs;
   if (player.activeBombs >= bombLimit) return state;
   if (currentCell !== 'Empty') return state;
+  // No bomb is ever dropped inside the village square.
+  if (isInVillageSquare(state, origin.x, origin.y)) return state;
 
   const kind = BASIC_BOMBS[player.characterId];
   const bombs = getBasicBombPlacements(state, player, kind, hasDetonator);
@@ -325,6 +357,8 @@ export function placeTeleportMarker(
   if (!player?.alive || player.characterId !== 'minato') return state;
   const origin = getPlayerCell(player);
   if (getCell(state.map, origin) !== 'Empty') return state;
+  // Its ultimate lands on the marker, and no bomb goes off in the square.
+  if (isInVillageSquare(state, origin.x, origin.y)) return state;
   return {
     ...state,
     players: state.players.map((candidate) => (
@@ -341,6 +375,7 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
     ? player.teleportMark ?? getPlayerCell(player)
     : getPlayerCell(player);
   if (getCell(state.map, origin) !== 'Empty') return state;
+  if (isInVillageSquare(state, origin.x, origin.y)) return state;
 
   const created = createBomb(
     playerId,
@@ -470,6 +505,7 @@ function applyUltimateChipDamage(
   bomb: BombState,
 ): PlayerState {
   if (!player.alive || isPowerUpActive(state, player.id, 'Invincibility')) return player;
+  if (isShelteredInSquare(state, player)) return player;
   const health = Math.max(0, (player.health ?? player.maxHealth ?? 3) - 1);
   if (health > 0) return { ...player, health };
   const label = getBombDeathLabel(bomb.kind);
@@ -562,6 +598,8 @@ export function explodeBombs(
   const explosionKeys = new Set(explosions.map((e) => getCellKey(e.x, e.y)));
   const ownerBombCounts = new Map<string, number>();
   const raycastMap = explosionRaycastMap.map((row) => [...row]);
+  // Blasts stop at the village square's edge.
+  const stop = squareBlastStop(state);
   let { rngSeed } = state;
 
   bombsToExplode.forEach((bomb) => {
@@ -587,7 +625,7 @@ export function explodeBombs(
     const owner = players.find((player) => player.id === bomb.ownerId);
     let bossWasHit = false;
 
-    const positions = dedupePositions(getExplosionPositions(bomb, raycastMap));
+    const positions = dedupePositions(getExplosionPositions(bomb, raycastMap, stop));
     positions.forEach(({ x, y }) => {
       const key = getCellKey(x, y);
       const sparedIds = [
@@ -654,7 +692,11 @@ export function explodeBombs(
       }
 
       players.forEach((p, index) => {
-        if (p.alive && positionOverlapsCell(p, x, y, FLAME_HURT_RADIUS)) {
+        if (
+          p.alive
+          && positionOverlapsCell(p, x, y, FLAME_HURT_RADIUS)
+          && !isShelteredInSquare(state, p)
+        ) {
           const invincible = isPowerUpActive(state, p.id, 'Invincibility');
           if (!invincible) {
             players[index] = applyCharacterSurvival(
@@ -676,7 +718,8 @@ export function explodeBombs(
         bossWasHit = true;
       }
     });
-    const outerPositions = getUltimateOuterPositions(bomb, positions, raycastMap);
+    const outerPositions = getUltimateOuterPositions(bomb, positions, raycastMap)
+      .filter((point) => !stop?.(point.x, point.y));
     outerPositions.forEach(({ x, y }) => {
       const key = getCellKey(x, y);
       if (!explosionKeys.has(key)) {
@@ -786,6 +829,7 @@ function getClaySpiderStep(
   return CARDINAL_DIRECTIONS
     .map((direction) => ({ x: bomb.x + direction.x, y: bomb.y + direction.y }))
     .filter((point) => map[point.y]?.[point.x] === 'Empty')
+    .filter((point) => !isInVillageSquare(state, point.x, point.y))
     .filter((point) => !occupied.has(getCellKey(point.x, point.y)))
     .sort((first, second) => (
       distances[first.y][first.x] - distances[second.y][second.x]
@@ -933,7 +977,7 @@ export function burnInLingeringFlames(state: GameEngineState): GameEngineState {
   );
 
   const players = state.players.map((player) => {
-    if (!player.alive) return player;
+    if (!player.alive || isShelteredInSquare(state, player)) return player;
     const flame = explosions.find((explosion) => (
       !explosion.chipDamage
       && !explosion.sparedIds.includes(player.id)

@@ -4,6 +4,7 @@ import { getBossDefinition } from '../content';
 import { applyCharacterSurvival } from './players';
 import { getPlayerCell, positionOverlapsCell } from './grid';
 import { getMatchDifficulty } from './difficulty';
+import { isInVillageSquare, isShelteredInSquare, playersOutsideSquare } from './villageSquare';
 
 const BOSS_ATTACK_MS = 3100;
 const BOSS_MOVE_MS = 950;
@@ -44,7 +45,8 @@ function clampToArena(state: GameEngineState, x: number, y: number): { x: number
 }
 
 function getTargetPlayer(state: GameEngineState): PlayerState | null {
-  const alivePlayers = state.players.filter((player) => player.alive);
+  // A player in the village square cannot be tracked.
+  const alivePlayers = playersOutsideSquare(state, state.players).filter((player) => player.alive);
   if (alivePlayers.length === 0) return null;
   return alivePlayers.reduce((nearest, player) => {
     if (!state.boss) return nearest;
@@ -154,6 +156,7 @@ function addHazardAt(
 ): BossHazard[] {
   const point = clampToArena(state, x, y);
   if (!canBossMoveTo(state, point.x, point.y)) return hazards;
+  if (isInVillageSquare(state, point.x, point.y)) return hazards;
   if (hazards.some((hazard) => hazard.x === point.x && hazard.y === point.y)) {
     return hazards;
   }
@@ -256,12 +259,13 @@ export function hazardIsActive(hazard: BossHazard): boolean {
 function damagePlayersInHazards(
   players: PlayerState[],
   hazards: BossHazard[],
-  timedPowerUps: GameEngineState['timedPowerUps']
+  timedPowerUps: GameEngineState['timedPowerUps'],
+  sheltered: (player: PlayerState) => boolean
 ): { players: PlayerState[]; hazards: BossHazard[] } {
   if (hazards.length === 0) return { players, hazards };
 
   const nextPlayers = players.map((player) => {
-    if (!player.alive) return player;
+    if (!player.alive || sheltered(player)) return player;
     const invincible = timedPowerUps[player.id]?.some(
       (tp) => tp.power === 'Invincibility' && tp.ticksRemaining > 0
     ) || player.powerUps.includes('Invincibility');
@@ -311,7 +315,12 @@ export function tickBossEncounter(state: GameEngineState, deltaMs: number): Game
     : next.hazards
       .map((hazard) => ({ ...hazard, ticksRemaining: hazard.ticksRemaining - deltaMs }))
       .filter((hazard) => hazard.ticksRemaining > 0);
-  const damaged = damagePlayersInHazards(next.players, hazards, next.timedPowerUps);
+  const damaged = damagePlayersInHazards(
+    next.players,
+    hazards,
+    next.timedPowerUps,
+    (player) => isShelteredInSquare(next, player)
+  );
   next = {
     ...next,
     hazards: damaged.hazards,

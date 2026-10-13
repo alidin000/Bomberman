@@ -149,11 +149,12 @@ describe('campaign difficulty', () => {
 
   it('keeps enemies hidden in the fog from striking below Hard', () => {
     const fogged = (difficulty: DifficultyId) => {
-      const base = placePlayer(campaignState('hiddenLeaf', difficulty), 1, 1);
+      // Just past the village square's east way out: nobody is tracked inside it.
+      const base = placePlayer(campaignState('hiddenLeaf', difficulty), 12, 4);
       // Within detection range, but outside Deidara's 3-cell sight.
       const genin: MonsterState = {
         ...createShinobiEnemy({
-          archetype: 'rogueGenin', x: 5, y: 1, id: 'genin',
+          archetype: 'rogueGenin', x: 16, y: 4, id: 'genin',
         }),
         detectionRange: 8,
         abilityCooldown: 0,
@@ -165,7 +166,7 @@ describe('campaign difficulty', () => {
 
     expect(fogged('normal').abilityTarget ?? null).toBeNull();
     expect(fogged('story').abilityTarget ?? null).toBeNull();
-    expect(fogged('hard').abilityTarget).toEqual({ x: 1, y: 1 });
+    expect(fogged('hard').abilityTarget).toEqual({ x: 12, y: 4 });
   });
 });
 
