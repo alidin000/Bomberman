@@ -29,12 +29,12 @@ export type HairStyle =
   | 'lowPonytail' // Itachi
   | 'halfUpLongBang' // Deidara: half-up tail, long bang over the left eye
   | 'gravitySilver' // Kakashi: tilted upward spikes
-  | 'shortBob' // Sakura, Kurotsuchi
+  | 'shortBob' // Sakura, Kurotsuchi, Karui
   | 'fourPonytails' // Temari
   | 'bun' // Chiyo, Konan (with a paper flower)
   | 'longFlowing' // Mei: floor-length with a top knot and a bang over one eye
   | 'shortSpiky' // Chojuro, Obito, enemies
-  | 'shortCrop' // Karui, Omoi, Sai, Yamato
+  | 'shortCrop' // Omoi, Sai, Yamato
   | 'sweptBack' // Darui
   | 'bald' // Onoki (with white tuft and beard), Akatsuchi
   | 'highPonytail' // Iruka, Shikamaru (spiky "pineapple" when spiky)
@@ -240,7 +240,7 @@ export const CAST: Record<CastId, CastMember> = {
     accessories: ['glasses', 'wrappedSword'],
   }),
   karui: member('karui', 'Karui', 'cloud', 'Cloud Kunoichi', {
-    hair: { style: 'shortCrop', color: '#c0302a' },
+    hair: { style: 'shortBob', color: '#c0302a' },
     eyes: { color: '#d69a2d' },
     skin: SKIN_DARK,
     outfit: { style: 'flakJacket', ...CLOUD_VEST },

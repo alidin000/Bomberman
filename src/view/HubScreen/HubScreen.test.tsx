@@ -46,30 +46,31 @@ describe('HubScreen', () => {
 
   it('talks with a villager through a short branch and back', () => {
     renderHub();
-    fireEvent.click(screen.getByRole('button', { name: 'Talk to Wren, Gatewarden' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Talk to Kakashi Hatake, Copy Ninja' }));
 
-    const talk = screen.getByLabelText('Talking to Wren');
-    expect(within(talk).getByRole('heading', { name: /Wren/ })).toHaveFocus();
-    expect(talk).toHaveTextContent('The woods past the gate are crawling tonight.');
+    const talk = screen.getByLabelText('Talking to Kakashi Hatake');
+    expect(within(talk).getByRole('heading', { name: /Kakashi/ })).toHaveFocus();
+    expect(talk).toHaveTextContent('The forest past the gate is crawling with rogues');
+    expect(within(talk).getByRole('img', { name: 'Portrait of Kakashi Hatake' })).toBeInTheDocument();
     fireEvent.click(within(talk).getByRole('button', { name: 'Anything hidden nearby?' }));
     expect(talk).toHaveTextContent('You: Anything hidden nearby?');
-    expect(talk).toHaveTextContent('bricked up by the north wall');
+    expect(talk).toHaveTextContent('north-west, near the outer district, behind a cracked wall');
     // The asked question gives way to the other branch.
     expect(within(talk).queryByRole('button', { name: 'Anything hidden nearby?' })).not.toBeInTheDocument();
     fireEvent.click(within(talk).getByRole('button', { name: 'Who is out there?' }));
     expect(talk).toHaveTextContent('They hunt in pairs.');
 
     fireEvent.click(within(talk).getByRole('button', { name: 'Goodbye' }));
-    expect(screen.queryByLabelText('Talking to Wren')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Talk to Wren, Gatewarden' })).toHaveFocus();
+    expect(screen.queryByLabelText('Talking to Kakashi Hatake')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Talk to Kakashi Hatake, Copy Ninja' })).toHaveFocus();
   });
 
   it('greets differently once the village is cleared', () => {
     storeProgress({ completedStages: ['hiddenLeaf'] });
     renderHub();
     expect(screen.getByText('Village 1 of 7 · Cleared')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Talk to Old Hobb, Tea Seller' }))
-      .toHaveTextContent('The kettle is on');
+    expect(screen.getByRole('button', { name: 'Talk to Sakura Haruno, Medical Ninja' }))
+      .toHaveTextContent('Everyone is home and patched up.');
   });
 
   it('buys from the shop, and says why a purchase it cannot afford is blocked', () => {
@@ -96,26 +97,11 @@ describe('HubScreen', () => {
     expect(loadStoryProgress().upgradeRanks).toEqual({});
   });
 
-  it('shows found lore and keeps the rest unknown', () => {
-    storeProgress({ discoveredSecrets: ['hiddenSand-archive-fragment'] });
-    renderHub();
-    fireEvent.click(screen.getByRole('button', { name: 'Codex' }));
-    expect(screen.getByText('Codex · 1 of 21 found')).toBeInTheDocument();
-    expect(within(screen.getByRole('list', { name: 'Hidden Leaf codex' }))
-      .getAllByText('Unknown entry')).toHaveLength(3);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Hidden Sand' }));
-    const sand = screen.getByRole('list', { name: 'Hidden Sand codex' });
-    expect(within(sand).getByRole('heading', { name: 'Glass Memory' })).toBeInTheDocument();
-    expect(sand).toHaveTextContent('caught mid-stride');
-    expect(within(sand).getAllByText('Unknown entry')).toHaveLength(2);
-  });
-
   it('goes back to the Mission Deck with Escape, after closing a talk first', () => {
     renderHub();
-    fireEvent.click(screen.getByRole('button', { name: 'Talk to Wren, Gatewarden' }));
-    fireEvent.keyDown(screen.getByLabelText('Talking to Wren'), { key: 'Escape' });
-    expect(screen.queryByLabelText('Talking to Wren')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Talk to Kakashi Hatake, Copy Ninja' }));
+    fireEvent.keyDown(screen.getByLabelText('Talking to Kakashi Hatake'), { key: 'Escape' });
+    expect(screen.queryByLabelText('Talking to Kakashi Hatake')).not.toBeInTheDocument();
     expect(screen.getByTestId('location')).toHaveTextContent('/hub/hiddenLeaf');
 
     fireEvent.keyDown(screen.getByRole('button', { name: 'Deploy Mission' }), { key: 'Escape' });

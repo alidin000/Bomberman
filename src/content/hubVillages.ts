@@ -1,11 +1,16 @@
-// The people of each village hub and their short, branching talk. Names and
-// words are original to this game; the hints point at the real hidden areas
-// in campaignMissions.ts (scroll cache in the north-west by the entrance, the
-// archive fragment north of the centre, the burrow in the south-east).
+// The people of each village hub and their short, branching talk: two of the
+// anime's characters per village (animeCast.ts SQUARE_CAST) and Jiraiya on
+// the road (WANDERER_CAST). The words are this game's own, written in
+// character. Their hints at the three secrets are worked out from the map
+// layout (villageSecrets.ts), so they stay true if a map is remapped. The
+// invented villagers of earlier versions are the square's extras now.
 import { StageId } from './types';
 import { CAMPAIGN_VILLAGES, getNextCampaignStageId } from './campaign';
+import { CAST } from './animeCast';
+import type { SquareCastId } from './animeCast';
 import type { ReputationTierId } from './villageSquare';
 import { WANDERING_VILLAGER } from './villageSquare';
+import { SECRET_SET_REWARD, secretHint } from './villageSecrets';
 
 export interface HubDialogueChoice {
   id: string;
@@ -14,6 +19,7 @@ export interface HubDialogueChoice {
 }
 
 export interface HubNpc {
+  // An animeCast.ts id (SQUARE_CAST, or Jiraiya the wanderer).
   id: string;
   name: string;
   role: string;
@@ -23,12 +29,23 @@ export interface HubNpc {
   choices: HubDialogueChoice[];
 }
 
+/** One of the square's extras: they walk about and say one line. */
+export interface HubExtra {
+  id: string;
+  name: string;
+  role: string;
+  bark: string;
+}
+
 export interface HubVillageDefinition {
   stageId: StageId;
   blurb: string;
   // The travelling merchant's word in this village, above the shop.
   merchantLine: string;
+  // The two cast members in the square, in SQUARE_CAST order.
   npcs: HubNpc[];
+  // The village's extras (render-only walkers in the square).
+  extras: HubExtra[];
 }
 
 export const HUB_MERCHANT = {
@@ -36,49 +53,74 @@ export const HUB_MERCHANT = {
   role: 'Merchant of the Painted Cart',
 } as const;
 
+type Lines = Omit<HubNpc, 'id' | 'name' | 'role'>;
+
+function person(id: SquareCastId, lines: Lines): HubNpc {
+  return {
+    id, name: CAST[id].name, role: CAST[id].role, ...lines,
+  };
+}
+
+const hint = secretHint;
+
 export const HUB_VILLAGES: HubVillageDefinition[] = [
   {
     stageId: 'hiddenLeaf',
     blurb: 'Lantern smoke drifts between the training logs. The gate is open, and the forest is not quiet.',
     merchantLine: 'First time in the village? Start small. A ward costs less than a bad morning.',
     npcs: [
-      {
-        id: 'wren',
-        name: 'Wren',
-        role: 'Gatewarden',
-        greeting: 'Keep your fuse short and your eyes up. The woods past the gate are crawling tonight.',
-        clearedGreeting: 'The gate held because of you. I have started sleeping again.',
+      person('kakashi', {
+        greeting: 'Yo. Sorry I am late, I got lost on the road of life. The forest past the gate is crawling with rogues, so keep your fuse short.',
+        clearedGreeting: 'The gate held. That means I can finally get back to my book. Do not tell Lady Tsunade.',
         choices: [
           {
             id: 'hidden',
             prompt: 'Anything hidden nearby?',
-            reply: 'Old supply scrolls were bricked up by the north wall, a few steps from where you come in. Crack the crates there first.',
+            reply: `Look underneath the underneath. Someone sealed a scroll cache ${hint('hiddenLeaf', 'scroll')}.`,
           },
           {
             id: 'threat',
             prompt: 'Who is out there?',
-            reply: 'Students who never finished their training, and worse. They hunt in pairs. Do not let them flank you.',
+            reply: 'Rogue genin who never finished the Academy, and worse. They hunt in pairs. Do not let them flank you, and never leave a teammate behind.',
+          },
+          {
+            id: 'burrow',
+            prompt: 'Anything I should avoid?',
+            reply: `Something has been digging ${hint('hiddenLeaf', 'burrow')}. Go in ready for a fight.`,
           },
         ],
-      },
-      {
-        id: 'hobb',
-        name: 'Old Hobb',
-        role: 'Tea Seller',
-        greeting: 'Tea is free for anyone who brings the villagers home. Two of them are still out there.',
-        clearedGreeting: 'Everyone is home. The kettle is on, and the second cup is yours.',
+      }),
+      person('sakura', {
+        greeting: 'I set up a field clinic by the gate. Two villagers are still out there, so bring them back in one piece. Shannaro!',
+        clearedGreeting: 'Everyone is home and patched up. You can stop flinching. I only punch rogue ninja.',
         choices: [
           {
             id: 'defend',
-            prompt: 'How do I hold the building?',
-            reply: 'Stay close and keep the attackers off its walls. You only have to outlast them for twenty breaths.',
+            prompt: 'How do I hold the Hokage Building?',
+            reply: 'Stay close and keep the attackers off its walls. You only have to outlast them for twenty breaths. I will handle the bandages.',
+          },
+          {
+            id: 'hidden',
+            prompt: 'Are the Hokage records safe?',
+            reply: `Not all of them. Lady Tsunade's archive lost a page, and it turned up ${hint('hiddenLeaf', 'fragment')}.`,
           },
           {
             id: 'boss',
-            prompt: 'Any advice for the big one?',
-            reply: 'Do not trade blows. Bomb, step aside, bomb again. Patience is cheaper than bandages.',
+            prompt: 'Any advice for Kurama?',
+            reply: 'Do not trade blows with a tailed beast. Bomb, step aside, bomb again. Patience costs less than stitches.',
           },
         ],
+      }),
+    ],
+    extras: [
+      {
+        id: 'wren', name: 'Wren', role: 'Gatewarden', bark: 'Keep your eyes up past the gate.',
+      },
+      {
+        id: 'hobb', name: 'Old Hobb', role: 'Tea Seller', bark: 'Tea is on. The second cup is yours.',
+      },
+      {
+        id: 'tamsin', name: 'Tamsin', role: 'Road Teller', bark: 'Every road starts at this gate.',
       },
     ],
   },
@@ -87,43 +129,45 @@ export const HUB_VILLAGES: HubVillageDefinition[] = [
     blurb: 'Wind scours the sandstone. Every well has a guard, and every guard looks tired.',
     merchantLine: 'Sand gets into everything. Except the prices. Those stay put.',
     npcs: [
-      {
-        id: 'saffi',
-        name: 'Saffi',
-        role: 'Well Digger',
-        greeting: 'Mind the drifts. The storm moves the dunes, and the dunes move the enemy.',
-        clearedGreeting: 'The wells are clear and the sand has settled. Even the scorpions went home.',
+      person('temari', {
+        greeting: 'You made it through the storm. Good. Shukaku is loose in the dunes and the wells are drying up, so do not slow me down.',
+        clearedGreeting: 'The wells run clear and my brothers are safe. Not bad. You can stay for dinner.',
         choices: [
-          {
-            id: 'hidden',
-            prompt: 'Seen anything strange?',
-            reply: 'When I dig just north of the village centre I hit hollow stone. Someone sealed a room down there long ago.',
-          },
           {
             id: 'storm',
             prompt: 'How do I fight in a sandstorm?',
-            reply: 'You will not see far. Keep a wall at your back and let them come to you.',
+            reply: 'You will not see far. Keep a wall at your back and make them come to you. Then blow them away.',
+          },
+          {
+            id: 'hidden',
+            prompt: 'Seen anything strange?',
+            reply: `The wind keeps howling through a hollow ${hint('hiddenSand', 'fragment')}. Someone sealed a room down there long ago.`,
           },
         ],
-      },
-      {
-        id: 'doru',
-        name: 'Doru',
-        role: 'Caravan Scout',
-        greeting: 'Puppets on the ridge again. Whoever pulls their strings never shows a face.',
-        clearedGreeting: 'The ridge is empty. The first caravan in weeks leaves at dawn.',
+      }),
+      person('chiyo', {
+        greeting: 'Hmph. Another young one come to save us. In my day we sealed beasts with a puppet and a stern word.',
+        clearedGreeting: 'The raccoon sleeps, and Kankuro remembers his own name. These old bones can rest.',
         choices: [
           {
             id: 'source',
-            prompt: 'Where are they coming from?',
-            reply: 'Three burrows feed the attack: one by the gate, one in the outer streets, one by the old arena.',
+            prompt: 'Where are the puppets coming from?',
+            reply: 'Kankuro has shut himself behind the arena seal, and someone is pulling his strings. Break the puppets, not the boy.',
           },
           {
-            id: 'reward',
-            prompt: 'What does the village offer?',
-            reply: 'The village pays its debts. Clear the arena and someone you know may join you.',
+            id: 'hidden',
+            prompt: 'Any old hiding places?',
+            reply: `I hid armour scrolls ${hint('hiddenSand', 'scroll')} before you were born. And something has been burrowing ${hint('hiddenSand', 'burrow')}.`,
           },
         ],
+      }),
+    ],
+    extras: [
+      {
+        id: 'saffi', name: 'Saffi', role: 'Well Digger', bark: 'Mind the drifts. The dunes move.',
+      },
+      {
+        id: 'doru', name: 'Doru', role: 'Caravan Scout', bark: 'First caravan in weeks leaves at dawn.',
       },
     ],
   },
@@ -132,43 +176,45 @@ export const HUB_VILLAGES: HubVillageDefinition[] = [
     blurb: 'Fog sits on the water like wet paper. Bridges creak somewhere you cannot see.',
     merchantLine: 'Damp crates, dry powder. I check every pouch twice.',
     npcs: [
-      {
-        id: 'ondine',
-        name: 'Ondine',
-        role: 'Ferry Pilot',
-        greeting: 'Fog this thick, you hear them before you see them. Listen for the splash.',
-        clearedGreeting: 'The fog is lifting. I can see the far shore for the first time this season.',
+      person('mei', {
+        greeting: 'Welcome to the Mist. Do forgive the fog. Isobu stirred the lake, and now nobody can see the far shore.',
+        clearedGreeting: 'The fog is lifting at last. You have my thanks, and perhaps a dinner invitation.',
         choices: [
-          {
-            id: 'bearings',
-            prompt: 'How do I find my way?',
-            reply: 'Count the bridges. The gate in the middle marks the centre of the village. Everything else is a guess.',
-          },
           {
             id: 'hunter',
             prompt: 'Who guards the inner gate?',
-            reply: 'Someone quiet and fast who never wastes a step. Do not chase. Make them come through your blast.',
+            reply: 'Haku. Quiet, fast, and someone has convinced him his life depends on that gate. Do not chase him. Let him come through your blast.',
+          },
+          {
+            id: 'hidden',
+            prompt: 'Does the Mist keep secrets?',
+            reply: `Plenty, darling. One of them is a scroll cache ${hint('hiddenMist', 'scroll')}.`,
           },
         ],
-      },
-      {
-        id: 'kell',
-        name: 'Kell',
-        role: 'Net Mender',
-        greeting: 'My nets keep catching strange things. Last week, half a scroll case.',
-        clearedGreeting: 'The nets are full of fish again. Real fish.',
+      }),
+      person('chojuro', {
+        greeting: 'Um, hello. Sorry. My nets, I mean the village nets, keep catching strange things. Last week, half a scroll case.',
+        clearedGreeting: 'The nets are full of fish again. Real fish. Sorry, I am just very relieved.',
         choices: [
           {
             id: 'hidden',
             prompt: 'Where did the scroll case come from?',
-            reply: 'The south-east docks. There is a wall there that sounds wrong when you knock. Be ready when it opens.',
+            reply: `There is a wall ${hint('hiddenMist', 'fragment')} that sounds wrong. And scratching ${hint('hiddenMist', 'burrow')} at night. Please be ready when it opens.`,
           },
           {
-            id: 'help',
-            prompt: 'Can I help?',
-            reply: 'You are helping. Every clone you pop is one less thing tangled in my nets.',
+            id: 'bearings',
+            prompt: 'How do I find my way?',
+            reply: 'Count the bridges. The defence point marks the centre of the village. Everything else is, um, a guess.',
           },
         ],
+      }),
+    ],
+    extras: [
+      {
+        id: 'ondine', name: 'Ondine', role: 'Ferry Pilot', bark: 'Listen for the splash before you see them.',
+      },
+      {
+        id: 'kell', name: 'Kell', role: 'Net Mender', bark: 'Real fish today. Real fish!',
       },
     ],
   },
@@ -177,43 +223,45 @@ export const HUB_VILLAGES: HubVillageDefinition[] = [
     blurb: 'Thunder rolls off the cliffs. The towers hum, and your hair stands up as you pass them.',
     merchantLine: 'Storm season means storm prices. Joking. Mostly.',
     npcs: [
-      {
-        id: 'brisa',
-        name: 'Brisa',
-        role: 'Bell Ringer',
-        greeting: 'When the bell rings twice, lightning is coming. Get off the open stone.',
-        clearedGreeting: 'I rang the bell once today. Just for joy.',
+      person('karui', {
+        greeting: 'Took you long enough! Gyuki is thrashing the cliffs, and the Raikage wants it handled yesterday.',
+        clearedGreeting: 'Gyuki is calm and the towers are standing. Fine. You are not useless. Happy now?',
         choices: [
           {
             id: 'lightning',
             prompt: 'How do I read the lightning?',
-            reply: 'The ground marks the strike before it lands. If the floor is marked under you, step off now.',
+            reply: 'The ground glows before the strike lands. If it is glowing under you, move. Do not think, move!',
           },
           {
             id: 'hidden',
-            prompt: 'What is in the towers?',
-            reply: 'Old wire and older secrets. A courier hid a satchel by the north-west wall when the storm caught him.',
+            prompt: 'Anything hidden around here?',
+            reply: `A courier stashed a kunai satchel ${hint('hiddenCloud', 'scroll')} when the storm caught him. Go get it before Omoi worries it to death.`,
           },
         ],
-      },
-      {
-        id: 'tobin',
-        name: 'Tobin',
-        role: 'Kite Maker',
-        greeting: 'My kites keep getting struck down. That never used to happen.',
-        clearedGreeting: 'I flew one all afternoon. Not a single spark.',
+      }),
+      person('omoi', {
+        greeting: 'What if the lightning hits the towers, and the towers fall on the bridges, and the bridges fall on us? Then there is no village.',
+        clearedGreeting: 'Nobody fell off anything. I did not think that was possible. I need to sit down.',
         choices: [
-          {
-            id: 'storm',
-            prompt: 'Why is the storm so angry?',
-            reply: 'Something big is stirring under the clouds. The storm is only its breath.',
-          },
           {
             id: 'guard',
             prompt: 'Any tips for the gate guard?',
-            reply: 'He hits hard and boasts harder. Keep moving and let him tire himself out.',
+            reply: 'Darui is holding the storm gate, and he is acting way too motivated. That is the scary part. Keep moving and let him tire himself out.',
+          },
+          {
+            id: 'hidden',
+            prompt: 'What else should I worry about?',
+            reply: `Everything. But mostly a sealed room ${hint('hiddenCloud', 'fragment')}, and something digging ${hint('hiddenCloud', 'burrow')}.`,
           },
         ],
+      }),
+    ],
+    extras: [
+      {
+        id: 'brisa', name: 'Brisa', role: 'Bell Ringer', bark: 'Two bells means lightning. Off the stone!',
+      },
+      {
+        id: 'tobin', name: 'Tobin', role: 'Kite Maker', bark: 'Not a single spark on my kites today.',
       },
     ],
   },
@@ -222,43 +270,45 @@ export const HUB_VILLAGES: HubVillageDefinition[] = [
     blurb: 'Boulders lean over every path. Lamplight winks from cave mouths high on the slopes.',
     merchantLine: 'Rock is cheap up here. Fuses are not. Choose well.',
     npcs: [
-      {
-        id: 'marl',
-        name: 'Marl',
-        role: 'Quarry Foreman',
-        greeting: 'We hit a seam of something that is not stone. Then the golems woke up.',
-        clearedGreeting: 'Back to honest digging. Loud, dusty, honest digging.',
+      person('onoki', {
+        greeting: 'Ah, my back! Of all the days for Kokuo to shake the mountain. Well, do not just stand there, youngster.',
+        clearedGreeting: 'The mountain is quiet, and my back only hurts a little. You have earned an old man\'s respect.',
         choices: [
           {
-            id: 'hidden',
-            prompt: 'What did you find?',
-            reply: 'Carved tablets, just north of the middle of the quarry. Writing nobody here can read.',
+            id: 'guard',
+            prompt: 'Who holds the quarry seal?',
+            reply: 'Akatsuchi. Big lump of a lad, good heart. Someone has been whispering to him in the tunnels. Get past him and the seal opens.',
           },
+          {
+            id: 'hidden',
+            prompt: 'What did the quarry dig up?',
+            reply: `Old Tsuchikage records, sealed ${hint('hiddenStone', 'fragment')}. Writing older than me, if you can believe it.`,
+          },
+        ],
+      }),
+      person('kurotsuchi', {
+        greeting: 'Grandpa, sit down before you break something. I will show our guest around. Watch the slopes, the rocks fall where the ground is marked.',
+        clearedGreeting: 'Kokuo is calm and Akatsuchi is sorry. Not bad at all. Grandpa even smiled. Once.',
+        choices: [
           {
             id: 'rockslide',
             prompt: 'How do I survive a rockslide?',
-            reply: 'You do not stop it. You let it pass. Rocks fall where the ground is marked first.',
+            reply: 'You do not stop it. You let it pass. Rocks fall where the ground is marked first, so do not stand there.',
+          },
+          {
+            id: 'hidden',
+            prompt: 'Any hidden caches?',
+            reply: `Grandpa hid a scroll ${hint('hiddenStone', 'scroll')}, and he thinks I do not know. Also, something nests ${hint('hiddenStone', 'burrow')}.`,
           },
         ],
+      }),
+    ],
+    extras: [
+      {
+        id: 'marl', name: 'Marl', role: 'Quarry Foreman', bark: 'Back to honest digging. Loud, dusty, honest.',
       },
       {
-        id: 'ysolde',
-        name: 'Ysolde',
-        role: 'Lamp Miner',
-        greeting: 'Lamps are cheap. Eyes are not. Bring light if you go down the shafts.',
-        clearedGreeting: 'The shafts are quiet. I can hear my own lamp hiss again.',
-        choices: [
-          {
-            id: 'lantern',
-            prompt: 'Do I need a lantern?',
-            reply: 'A bigger flame shows you more of the dark. The merchant sells oil, if you have the Embers.',
-          },
-          {
-            id: 'depths',
-            prompt: 'What lives down there?',
-            reply: 'Spiders the size of carts, and whatever scares the spiders.',
-          },
-        ],
+        id: 'ysolde', name: 'Ysolde', role: 'Lamp Miner', bark: 'Bring light if you go down the shafts.',
       },
     ],
   },
@@ -267,31 +317,9 @@ export const HUB_VILLAGES: HubVillageDefinition[] = [
     blurb: 'Red lanterns burn without heat. The halls smell of ink and old ash.',
     merchantLine: 'I never ask where my customers come from. Here, I really never ask.',
     npcs: [
-      {
-        id: 'ash',
-        name: 'Ash',
-        role: 'Escaped Scribe',
-        greeting: 'They made me copy their plans for a year. I remember every page.',
-        clearedGreeting: 'I burned my copies. The originals went down with the hideout.',
-        choices: [
-          {
-            id: 'plans',
-            prompt: 'What were the plans?',
-            reply: 'Seals, mostly. Long chains of them, meant to hold something that should never be held.',
-          },
-          {
-            id: 'hidden',
-            prompt: 'Where is their archive?',
-            reply: 'Follow the pillars inward. The vault sits just north of the centre floor.',
-          },
-        ],
-      },
-      {
-        id: 'quill',
-        name: 'Quill',
-        role: 'Lookout',
-        greeting: 'Crows at the east window again. Someone is watching us back.',
-        clearedGreeting: 'The crows left. Strange how much quieter a sky can be.',
+      person('yamato', {
+        greeting: 'This is the hideout. Stay close, follow orders, and do not make me use my scary face.',
+        clearedGreeting: 'The rituals are broken and the hideout is ours. Good work. I can put the scary face away.',
         choices: [
           {
             id: 'cult',
@@ -299,11 +327,35 @@ export const HUB_VILLAGES: HubVillageDefinition[] = [
             reply: 'They guard the rituals, not the halls. Go around, and they will come to you one at a time.',
           },
           {
-            id: 'stay',
-            prompt: 'Why do you stay?',
-            reply: 'Someone has to keep watch until it is really over. It might as well be me.',
+            id: 'hidden',
+            prompt: 'Where do they keep their plans?',
+            reply: `Their clay cache is ${hint('akatsukiHideout', 'scroll')}. Their archive is ${hint('akatsukiHideout', 'fragment')}.`,
           },
         ],
+      }),
+      person('sai', {
+        greeting: 'I read that a smile puts allies at ease. Captain Yamato\'s face does the opposite. I am smiling now. Is it working?',
+        clearedGreeting: 'Matatabi is free. I believe this is the moment to say "well done". Well done.',
+        choices: [
+          {
+            id: 'scout',
+            prompt: 'What did your ink birds see?',
+            reply: 'Three rituals, Konan in the inner hall, and a great many White Zetsu. I drew them all, if that helps.',
+          },
+          {
+            id: 'hidden',
+            prompt: 'Anything else down here?',
+            reply: `A burrow ${hint('akatsukiHideout', 'burrow')}. My birds would not go near it. Birds made of ink are usually braver than that.`,
+          },
+        ],
+      }),
+    ],
+    extras: [
+      {
+        id: 'ash', name: 'Ash', role: 'Escaped Scribe', bark: 'I remember every page they made me copy.',
+      },
+      {
+        id: 'quill', name: 'Quill', role: 'Lookout', bark: 'Crows at the east window again.',
       },
     ],
   },
@@ -312,12 +364,25 @@ export const HUB_VILLAGES: HubVillageDefinition[] = [
     blurb: 'Banners lie torn across the field. Every village fights here, side by side, for once.',
     merchantLine: 'Last stop on the road. Everything I have left, at fair prices.',
     npcs: [
-      {
-        id: 'vey',
-        name: 'Vey',
-        role: 'Field Medic',
-        greeting: 'I patch them up and send them back. Try not to be one of them.',
-        clearedGreeting: 'The tents are emptying. The good kind of empty.',
+      person('shikamaru', {
+        greeting: 'What a drag. Masked clones in waves, and Obito holding the gate at the centre. Fine. Here is the plan.',
+        clearedGreeting: 'It is over. Troublesome, all of it, but we pulled it off. I am going to watch clouds for a week.',
+        choices: [
+          {
+            id: 'orders',
+            prompt: 'What are the orders?',
+            reply: 'Hold the command post until the seal completes. Then everyone pushes for the gate at once. Two hundred moves ahead, and every one ends with Kurama.',
+          },
+          {
+            id: 'hidden',
+            prompt: 'Any intelligence on the field?',
+            reply: `Our scouts left a strategy scroll ${hint('greatShinobiWar', 'scroll')}. And something is digging in ${hint('greatShinobiWar', 'burrow')}.`,
+          },
+        ],
+      }),
+      person('tsunade', {
+        greeting: 'I patch them up and send them back. Try not to be one of them. I have put my money on you, and for once I intend to win.',
+        clearedGreeting: 'Every village is still standing. I won a bet. Somebody write that down.',
         choices: [
           {
             id: 'supplies',
@@ -325,30 +390,19 @@ export const HUB_VILLAGES: HubVillageDefinition[] = [
             reply: 'A Second Wind Knot from the merchant has saved more of my patients than I have. Pack one if you can.',
           },
           {
-            id: 'front',
-            prompt: 'What is happening at the front?',
-            reply: 'Masked clones in waves. They do not stop and they do not flinch.',
+            id: 'hidden',
+            prompt: 'Anything lost on the field?',
+            reply: `The war archive dropped a fragment ${hint('greatShinobiWar', 'fragment')}. Bring it back and it is yours.`,
           },
         ],
+      }),
+    ],
+    extras: [
+      {
+        id: 'vey', name: 'Vey', role: 'Field Medic', bark: 'Try not to be my next patient.',
       },
       {
-        id: 'nim',
-        name: 'Nim',
-        role: 'Banner Runner',
-        greeting: 'I carry messages between the camps. Today they all say the same thing: hold.',
-        clearedGreeting: 'Last message of the war: go home. The best one I ever carried.',
-        choices: [
-          {
-            id: 'orders',
-            prompt: 'What are the orders?',
-            reply: 'Hold the line until the gate opens. Then everyone pushes for the centre at once.',
-          },
-          {
-            id: 'fear',
-            prompt: 'Are you scared?',
-            reply: 'Every day. Running helps. So does knowing someone like you is out there.',
-          },
-        ],
+        id: 'nim', name: 'Nim', role: 'Banner Runner', bark: 'The orders today: hold.',
       },
     ],
   },
@@ -360,19 +414,19 @@ export function getHubVillage(stageId: StageId): HubVillageDefinition {
 
 // What each villager says once the story has moved past their village: the
 // next village's mission is cleared too. The last village has no next one.
-export const ONWARD_GREETINGS: Readonly<Record<string, string>> = {
-  wren: 'They say the sand village wells run clear again. Word travels fast through an open gate.',
-  hobb: 'A traveller paid for her tea with sand village coin. You have been busy.',
-  saffi: 'The ferry folk sent a lamp across the desert to thank you. It is on my well now.',
-  doru: 'The mist road is open. My caravan goes further every week because of you.',
-  ondine: 'A kite from the cloud cliffs landed on my deck. A thank-you, I think.',
-  kell: 'Fishermen from the cliffs came down to trade. That has not happened in years.',
-  brisa: 'Quarry dust on the wind, but no rockslides. The stone village sleeps easy.',
-  tobin: 'Ysolde sent me lamp wire for my kites. Best frames I ever built.',
-  marl: 'The red lanterns in the hideout are out. We heard the quiet from here.',
-  ysolde: 'My shafts point east, toward the hideout. They feel lighter now.',
-  ash: 'The war camp sent runners for my maps. The old ink is finally useful.',
-  quill: 'The crows flew west to the battlefield. Then even they stopped watching.',
+export const ONWARD_GREETINGS: Readonly<Partial<Record<SquareCastId, string>>> = {
+  kakashi: 'Word from the Sand: the wells run clear again. You have been busy. I have been reading.',
+  sakura: 'Temari sent a hawk to say thanks. Gaara even signed it. That never happens.',
+  temari: 'The Mizukage sent a lantern across the desert to thank you. It is on my desk now.',
+  chiyo: 'The mist road is open. Even an old woman can hear the caravans again.',
+  mei: 'A kite from the Cloud cliffs landed on my balcony. A thank-you, I think. How sweet.',
+  chojuro: 'Fishermen from the cliffs came down to trade. Um, that has not happened in years.',
+  karui: 'Quarry dust on the wind, but no rockslides. The Stone sleeps easy. Thanks to you. Whatever.',
+  omoi: 'The Stone is safe. So now I only worry about the hideout. Small mercies.',
+  onoki: 'The red lanterns are out. I heard the quiet from here, and my back felt it too.',
+  kurotsuchi: 'The hideout fell. Grandpa pretends he is not impressed. He is.',
+  yamato: 'The war camp asked for our maps of the hideout. The old ink is finally useful.',
+  sai: 'My ink birds flew to the battlefield and came back smiling. I drew them that way.',
 };
 
 /**
@@ -385,44 +439,45 @@ export function villagerGreeting(
   completedStages: readonly StageId[]
 ): string {
   const next = getNextCampaignStageId(stageId);
-  const onward = ONWARD_GREETINGS[npc.id];
+  const onward = ONWARD_GREETINGS[npc.id as SquareCastId];
   if (onward && next && completedStages.includes(next)) return onward;
   return completedStages.includes(stageId) ? npc.clearedGreeting : npc.greeting;
 }
 
-// Tamsin the Road Teller (WANDERING_VILLAGER) walks between the villages
-// and joins every square once your standing reaches Known. Her news follows
-// the story, and she is the one who explains standing and the codex.
+// Jiraiya the Toad Sage (WANDERING_VILLAGER) walks between the villages,
+// researching his next book, and joins every square once standing reaches
+// Known. His news follows the story, and he is the one who explains standing
+// and the secrets.
 export const ROAD_TELLER: HubNpc = {
   id: WANDERING_VILLAGER.id,
   name: WANDERING_VILLAGER.name,
   role: WANDERING_VILLAGER.role,
-  greeting: 'Every road I walk, people say your name now. Sit a moment. I trade in news.',
-  clearedGreeting: 'Another village sleeping soundly. I will have a good story for the next square.',
+  greeting: 'Hold it right there! The gallant Jiraiya, Toad Sage of Mount Myoboku, has arrived. I am collecting stories for my next book. Got any?',
+  clearedGreeting: 'Another village sleeping soundly. That is a fine chapter. Maybe two.',
   choices: [
     {
       id: 'standing',
       prompt: 'What is standing?',
-      reply: 'Every village you help adds to how far your name carries. The more it carries, the more each square opens up to you.',
+      reply: 'Every village you help adds to how far your name carries. The further it carries, the more each square opens up to you. Trust me, I know a thing or two about fame.',
     },
     {
-      id: 'codex',
+      id: 'secrets',
       prompt: 'What is the shrine for?',
-      reply: 'The shrine keeps the Codex: lore you uncover by finding a village\'s secrets. Crack a hidden wall, and its story is written there.',
+      reply: `It keeps count of the village's three secrets. Find all three, then claim the set in the hub: ${SECRET_SET_REWARD.embers} Embers and a scarf in the village's colours. Every good story has a hidden chapter.`,
     },
   ],
 };
 
-// Tamsin's road news, by how many villages are cleared (0 to 7).
+// Jiraiya's road news, by how many villages are cleared (0 to 7).
 export const ROAD_NEWS: readonly string[] = [
-  'Nothing yet but rumours. The leaf village gate is where every road starts.',
-  'The leaf village is safe, and the desert road is open. The wells out there need you next.',
+  'Nothing yet but rumours. The Leaf gate is where every good story starts.',
+  'The Leaf is safe, and the desert road is open. The Sand wells need you next.',
   'Two villages cleared. The fog on the water is thickest just past the dunes.',
-  'Three down. The cliff bells have not rung for joy in a long time.',
-  'Four villages. The quarry folk say the mountain itself is angry.',
+  'Three down. The Cloud bells have not rung for joy in a long time.',
+  'Four villages. The Stone folk say the mountain itself is angry.',
   'Five. Everyone whispers about the hideout now, and nobody whispers loudly.',
   'Six. Every village is marching to the same field. So should you.',
-  'All seven are safe. I will be telling this road for the rest of my life.',
+  'All seven are safe. I will be writing this one for the rest of my life.',
 ];
 
 export function roadNews(completedStages: readonly StageId[]): string {
@@ -431,7 +486,7 @@ export function roadNews(completedStages: readonly StageId[]): string {
   return ROAD_NEWS[Math.min(cleared, ROAD_NEWS.length - 1)];
 }
 
-/** The person a square's villager prop is: one of the village's two, or Tamsin. */
+/** The person a square's villager prop is: one of the village's two, or Jiraiya. */
 export function getSquareVillager(stageId: StageId, villagerId: string | undefined): HubNpc | null {
   if (villagerId === ROAD_TELLER.id) return ROAD_TELLER;
   return getHubVillage(stageId).npcs.find((npc) => npc.id === villagerId) ?? null;
@@ -440,10 +495,10 @@ export function getSquareVillager(stageId: StageId, villagerId: string | undefin
 // What each standing tier brings to every village square.
 export const STANDING_TIER_PERKS: Readonly<Record<ReputationTierId, string>> = {
   stranger: 'Two villagers, the first request on the board, and Pell\'s stall at full price.',
-  known: `${WANDERING_VILLAGER.name} the ${WANDERING_VILLAGER.role} joins every square, and the board offers a second request.`,
+  known: `${WANDERING_VILLAGER.name}, ${WANDERING_VILLAGER.role}, joins every square, and the board offers a second request.`,
   trusted: 'Pell takes a fifth off the stall, and the board offers its hardest request.',
-  honored: 'Your shinobi wears an ember-thread scarf in every mission.',
+  honored: 'The ember-thread scarf: pick it in the hub and your shinobi wears it in every mission.',
 };
 
-// One line on what the Codex is, for the hub and the square's shrine.
-export const CODEX_EXPLAINER = 'The Codex is lore you uncover by finding a village\'s secrets.';
+// One line on what the Secrets are, for the hub and the square's shrine.
+export const SECRETS_EXPLAINER = `Each village hides three secret rooms. Find all three for ${SECRET_SET_REWARD.embers} Embers and the village's scarf.`;

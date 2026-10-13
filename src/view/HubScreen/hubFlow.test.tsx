@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import React from 'react';
 import {
-  act, fireEvent, render, screen, waitFor,
+  act, fireEvent, render, screen, waitFor, within,
 } from '@testing-library/react';
 import {
   MemoryRouter, Route, Routes, useLocation,
@@ -114,10 +114,16 @@ describe('campaign hub flow', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Visit Hidden Leaf hub' }));
       expect(screen.getByTestId('location')).toHaveTextContent('/hub/hiddenLeaf');
 
-      // One press deploys: Deploy Mission holds focus on arrival.
+      // Deploy Mission holds focus on arrival. The first deploy to a village
+      // plays its story scene first; Skip goes straight to the mission.
       const deploy = screen.getByRole('button', { name: 'Deploy Mission' });
       expect(deploy).toHaveFocus();
       fireEvent.click(deploy);
+      const before = screen.getByRole('dialog', { name: 'The Seal Under the Leaf' });
+      expect(within(before).getByRole('button', { name: 'Next' })).toHaveFocus();
+      expect(before).toHaveTextContent('Kakashi Hatake');
+      expect(screen.getByTestId('location')).toHaveTextContent('/hub/hiddenLeaf');
+      fireEvent.click(within(before).getByRole('button', { name: 'Skip scene' }));
       await waitFor(() => {
         expect(screen.getByTestId('location')).toHaveTextContent('/game/1/1/hiddenLeaf');
       });
@@ -147,6 +153,14 @@ describe('campaign hub flow', () => {
       act(() => { vi.advanceTimersByTime(RESULT_INPUT_LOCK_MS); });
       fireEvent.click(onward);
       expect(screen.getByTestId('location')).toHaveTextContent('/hub/hiddenSand');
+      // The first win plays the village's after-victory scene on arrival.
+      const after = screen.getByRole('dialog', { name: 'Sand on the Kunai' });
+      fireEvent.click(within(after).getByRole('button', { name: 'Next' }));
+      fireEvent.click(within(after).getByRole('button', { name: 'Next' }));
+      expect(after).toHaveTextContent('Temari will want to hear this.');
+      fireEvent.click(within(after).getByRole('button', { name: 'Done' }));
+      expect(screen.queryByRole('dialog', { name: 'Sand on the Kunai' })).not.toBeInTheDocument();
+      expect(loadStoryProgress().seenScenes).toEqual(['hiddenLeaf:before', 'hiddenLeaf:after']);
       expect(screen.getByRole('dialog', { name: 'Hidden Sand Hub' })).toBeInTheDocument();
       expect(screen.getByLabelText('124 Embers to spend')).toBeInTheDocument();
       expect(screen.getByText('Hidden Leaf mission: +84 Embers')).toBeInTheDocument();
@@ -154,5 +168,6 @@ describe('campaign hub flow', () => {
     } finally {
       vi.useRealTimers();
     }
-  });
+    // Three screens and two story scenes: slower than one screen's test.
+  }, 20000);
 });

@@ -220,13 +220,13 @@ describe('OnlineGameScreen co-op village square', () => {
     });
     // The square took the press: the room never hears a bomb.
     expect(taken).toBe(true);
-    const shrine = screen.getByRole('dialog', { name: 'Codex Shrine' });
+    const shrine = screen.getByRole('dialog', { name: 'Secrets Shrine' });
     expect(within(shrine).getByText(/This village · 0 of 3 found/)).toBeInTheDocument();
     expect(mocks.useOnlineInput)
       .toHaveBeenLastCalledWith(expect.anything(), false, expect.any(Function));
 
     fireEvent.click(within(shrine).getByRole('button', { name: 'Close' }));
-    expect(screen.queryByRole('dialog', { name: 'Codex Shrine' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Secrets Shrine' })).not.toBeInTheDocument();
     expect(mocks.useOnlineInput)
       .toHaveBeenLastCalledWith(expect.anything(), true, expect.any(Function));
   });

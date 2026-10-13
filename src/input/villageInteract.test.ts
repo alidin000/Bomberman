@@ -37,8 +37,8 @@ describe('the bomb key in a village square', () => {
     expect(squareBombPress(at(state, 11, 4), p1)).toBeNull();
   });
 
-  it('finds Tamsin only from Known', () => {
-    // Co-op and online rooms have no visit: stranger, so no Tamsin to talk to.
+  it('finds Jiraiya only from Known', () => {
+    // Co-op and online rooms have no visit: stranger, so no Jiraiya to talk to.
     const stranger = at(leafMission(), 8, 2);
     expect(squareBombPress(stranger, stranger.players[0].id)).toEqual({ item: null });
     const known = at(leafMission({ reputationTier: 'known', embers: 0, offeredRequestIds: [] }), 8, 2);

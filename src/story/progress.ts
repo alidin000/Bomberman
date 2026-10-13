@@ -20,6 +20,8 @@ import {
   normalizeUpgradeRanks,
 } from '../content/hubShop';
 import { DifficultyId, isDifficultyId } from '../engine/difficulty';
+import { HONORED_COSMETIC_TIER, type ScarfId } from '../content/villageSquare';
+import { reputationTier, totalReputation } from './reputation';
 
 export type StoryUpgradeId =
   | 'extraClay'
@@ -55,12 +57,12 @@ export interface StallSpendRecord {
   amount: number;
 }
 
-export const STORY_PROGRESS_VERSION = 5;
+export const STORY_PROGRESS_VERSION = 6;
 // v4 brought the hub economy; older saves get its back pay.
 const HUB_SAVE_VERSION = 4;
 
 export interface StoryProgress {
-  version: 5;
+  version: 6;
   completedBosses: BossId[];
   completedStages: StageId[];
   unlockedCharacters: CharacterId[];
@@ -94,6 +96,11 @@ export interface StoryProgress {
   // never offered again; the stall's spend is saved as it happens.
   completedRequests: string[];
   stallSpend: StallSpendRecord | null;
+  // v6: secrets, scarves and story. Villages whose three-secret set reward
+  // was claimed; the scarf the player wears (null: none); story scenes seen.
+  claimedSecretSets: StageId[];
+  scarf: ScarfId | null;
+  seenScenes: string[];
 }
 
 export interface StoryUpgradeDefinition {
@@ -133,7 +140,7 @@ export const STORY_UPGRADES: StoryUpgradeDefinition[] = [
 export const STORY_PROGRESS_KEY = 'shinobiArenaStoryProgress';
 
 export const DEFAULT_STORY_PROGRESS: StoryProgress = {
-  version: 5,
+  version: 6,
   completedBosses: [],
   completedStages: [],
   unlockedCharacters: ['deidara'],
@@ -158,9 +165,22 @@ export const DEFAULT_STORY_PROGRESS: StoryProgress = {
   lastMission: null,
   completedRequests: [],
   stallSpend: null,
+  claimedSecretSets: [],
+  scarf: null,
+  seenScenes: [],
 };
 
 const STAGE_IDS = new Set<string>(STAGE_DEFINITIONS.map((stage) => stage.id));
+
+// Story scene ids, as content/storyScenes.ts storySceneId makes them (the
+// scenes' words stay out of the first-load bundle).
+type ScenePart = 'before' | 'after';
+export function sceneKey(stageId: StageId, part: ScenePart): string {
+  return `${stageId}:${part}`;
+}
+const SCENE_IDS = new Set<string>(STAGE_DEFINITIONS.flatMap((stage) => (
+  [sceneKey(stage.id, 'before'), sceneKey(stage.id, 'after')]
+)));
 
 function stageList(value: unknown): StageId[] {
   return Array.isArray(value)
@@ -266,11 +286,44 @@ function migrateHub(
   };
 }
 
+function isScarfId(value: unknown): value is ScarfId {
+  return value === 'ember' || (typeof value === 'string' && STAGE_IDS.has(value));
+}
+
+/**
+ * The v6 fields. A v5 save that already reached Honored keeps wearing the
+ * ember scarf it wore before the scarf became a choice, and the scenes of
+ * villages it already cleared count as seen (they replay from the hub).
+ */
+function migrateStory(
+  stored: Partial<StoryProgress>,
+  base: Pick<StoryProgress, 'completedStages' | 'reputation'>
+): Pick<StoryProgress, 'claimedSecretSets' | 'scarf' | 'seenScenes'> {
+  const storySave = typeof stored.version === 'number' && stored.version >= 6;
+  if (!storySave) {
+    const completed = stageList(base.completedStages);
+    const honored = reputationTier(totalReputation(base.reputation ?? {})).id
+      === HONORED_COSMETIC_TIER;
+    return {
+      claimedSecretSets: [],
+      scarf: honored ? 'ember' : null,
+      seenScenes: completed.flatMap((stageId) => [
+        sceneKey(stageId, 'before'), sceneKey(stageId, 'after'),
+      ]),
+    };
+  }
+  return {
+    claimedSecretSets: stageList(stored.claimedSecretSets),
+    scarf: isScarfId(stored.scarf) ? stored.scarf : null,
+    seenScenes: stringList(stored.seenScenes).filter((id) => SCENE_IDS.has(id)),
+  };
+}
+
 function migrateStoryProgress(stored: Partial<StoryProgress>): StoryProgress {
   const migrated: StoryProgress = {
     ...DEFAULT_STORY_PROGRESS,
     ...stored,
-    version: 5,
+    version: 6,
     completedBosses: stored.completedBosses ?? DEFAULT_STORY_PROGRESS.completedBosses,
     completedStages: stored.completedStages ?? DEFAULT_STORY_PROGRESS.completedStages,
     unlockedCharacters: stored.unlockedCharacters
@@ -287,11 +340,12 @@ function migrateStoryProgress(stored: Partial<StoryProgress>): StoryProgress {
   };
   return {
     ...migrated,
-    version: 5,
+    version: 6,
     ...migrateHub(stored, migrated),
     // v4 and older saves start the village square with no requests done.
     completedRequests: stringList(stored.completedRequests),
     stallSpend: readStallSpend(stored.stallSpend),
+    ...migrateStory(stored, migrated),
   };
 }
 

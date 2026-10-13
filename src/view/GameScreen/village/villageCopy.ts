@@ -15,8 +15,13 @@ import {
   roadNews,
   villagerGreeting,
 } from '../../../content/hubVillages';
-import { HUB_LORE_ENTRIES, getHubLoreEntries, isLoreUnlocked } from '../../../content/hubLore';
-import type { HubLoreEntry } from '../../../content/hubLore';
+import { CAMPAIGN_VILLAGES } from '../../../content/campaign';
+import {
+  getVillageSecrets,
+  secretSetProgress,
+  type SecretSetProgress,
+  type VillageSecret,
+} from '../../../content/villageSecrets';
 import { getVillageRequest } from '../../../content/villageRequests';
 import {
   CampaignRequestDefinition,
@@ -210,23 +215,29 @@ export function stallModel(state: GameEngineState, playerId: string): StallModel
 // ---- Shrine ---------------------------------------------------------------
 
 export interface ShrineModel {
-  entries: { entry: HubLoreEntry; found: boolean }[];
-  villageFound: number;
+  secrets: { secret: VillageSecret; found: boolean }[];
+  set: SecretSetProgress;
   totalFound: number;
   total: number;
 }
 
-/** This village's codex entries and the total, counting secrets found this mission. */
-export function shrineModel(stageId: StageId, discoveredSecrets: readonly string[]): ShrineModel {
-  const secrets = [...discoveredSecrets];
-  const entries = getHubLoreEntries(stageId).map((entry) => ({
-    entry, found: isLoreUnlocked(entry, secrets),
-  }));
+/**
+ * This village's three secrets and its set reward's state, counting secrets
+ * found this mission, plus the count over every village.
+ */
+export function shrineModel(
+  stageId: StageId,
+  discoveredSecrets: readonly string[],
+  claimedSets: readonly StageId[]
+): ShrineModel {
+  const all = CAMPAIGN_VILLAGES.flatMap((village) => getVillageSecrets(village.stageId));
   return {
-    entries,
-    villageFound: entries.filter((item) => item.found).length,
-    totalFound: HUB_LORE_ENTRIES.filter((entry) => isLoreUnlocked(entry, secrets)).length,
-    total: HUB_LORE_ENTRIES.length,
+    secrets: getVillageSecrets(stageId).map((secret) => ({
+      secret, found: discoveredSecrets.includes(secret.id),
+    })),
+    set: secretSetProgress(stageId, discoveredSecrets, claimedSets),
+    totalFound: all.filter((secret) => discoveredSecrets.includes(secret.id)).length,
+    total: all.length,
   };
 }
 

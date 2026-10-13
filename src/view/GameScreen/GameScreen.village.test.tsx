@@ -10,7 +10,7 @@ import { loadCampaignMapRows } from '../../engine/mapLoader';
 import { setTouchMode } from '../../input/touchMode';
 
 // A real solo mission in the leaf village's square, on the real engine. The
-// only stand-in is the 3D scene. Walk beside Wren (4,1), press the bomb key
+// only stand-in is the 3D scene. Walk beside Kakashi (4,1), press the bomb key
 // or A, and her talk opens over a paused match with no bomb dropped.
 
 vi.mock('../routeChunks', async (importOriginal) => {
@@ -58,8 +58,8 @@ function key(type: 'keydown' | 'keyup', name: string) {
   });
 }
 
-// Walk right until the ninja stands on cell x 3, beside Wren.
-function walkBesideWren(press: (down: boolean) => void) {
+// Walk right until the ninja stands on cell x 3, beside Kakashi.
+function walkBesideKakashi(press: (down: boolean) => void) {
   press(true);
   for (let step = 0; step < 60 && Math.round(live().players[0].x) < 3; step += 1) wait(20);
   press(false);
@@ -99,18 +99,18 @@ describe('using the village square in a solo mission', () => {
     expect(live().config.village).toEqual({
       reputationTier: 'stranger', embers: 40, offeredRequestIds: ['leaf-tea-tins'],
     });
-    walkBesideWren((down) => key(down ? 'keydown' : 'keyup', 'd'));
+    walkBesideKakashi((down) => key(down ? 'keydown' : 'keyup', 'd'));
 
     key('keydown', '2');
     key('keyup', '2');
-    expect(screen.getByRole('dialog', { name: 'Wren' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Kakashi Hatake' })).toBeInTheDocument();
     expect(live().paused).toBe(true);
     expect(live().bombs).toHaveLength(0);
     // The pause menu stays out of the way of the talk.
     expect(screen.queryByText('Paused')).not.toBeInTheDocument();
 
     key('keydown', 'Escape');
-    expect(screen.queryByRole('dialog', { name: 'Wren' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Kakashi Hatake' })).not.toBeInTheDocument();
     expect(live().paused).toBe(false);
   });
 
@@ -131,11 +131,11 @@ describe('using the village square in a solo mission', () => {
       pads[0].buttons[button].pressed = pressed;
       wait(20);
     };
-    walkBesideWren((down) => hold(DPAD_RIGHT, down));
+    walkBesideKakashi((down) => hold(DPAD_RIGHT, down));
 
     hold(A, true);
     hold(A, false);
-    const talk = screen.getByRole('dialog', { name: 'Wren' });
+    const talk = screen.getByRole('dialog', { name: 'Kakashi Hatake' });
     expect(live().bombs).toHaveLength(0);
     wait(700); // the menus' hand-off pause
     // The first reply has focus: A asks it.
@@ -144,24 +144,24 @@ describe('using the village square in a solo mission', () => {
     expect(talk).toHaveTextContent('You: Anything hidden nearby?');
     hold(B, true);
     hold(B, false);
-    expect(screen.queryByRole('dialog', { name: 'Wren' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Kakashi Hatake' })).not.toBeInTheDocument();
     expect(live().paused).toBe(false);
   });
 
   it('reaches the square by touch: the bomb button opens the prop, a tap plays on', () => {
     setTouchMode(false);
     startMission();
-    walkBesideWren((down) => key(down ? 'keydown' : 'keyup', 'd'));
+    walkBesideKakashi((down) => key(down ? 'keydown' : 'keyup', 'd'));
     // A touch brings the controls up (a key press would put them away).
     fireEvent.pointerDown(document.body, { pointerType: 'touch', pointerId: 99 });
     fireEvent.pointerUp(document.body, { pointerType: 'touch', pointerId: 99 });
     const bomb = document.querySelector('[data-touch-button="bomb"]') as HTMLElement;
     fireEvent.pointerDown(bomb, { pointerId: 2, pointerType: 'touch' });
     fireEvent.pointerUp(bomb, { pointerId: 2, pointerType: 'touch' });
-    expect(screen.getByRole('dialog', { name: 'Wren' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Kakashi Hatake' })).toBeInTheDocument();
     expect(live().bombs).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Goodbye' }));
-    expect(screen.queryByRole('dialog', { name: 'Wren' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Kakashi Hatake' })).not.toBeInTheDocument();
     expect(live().paused).toBe(false);
     setTouchMode(false);
   });

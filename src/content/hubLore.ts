@@ -1,6 +1,7 @@
-// The lore codex: one entry per hidden area of each village. Finding the
-// area in a mission (a scroll cache, an archive fragment, a burrow) makes its
-// entry readable in the hub. The writing is original to this game.
+// The story pages: one per secret room of each village. Finding the room in
+// a mission (a scroll cache, an archive fragment, a burrow) shows its page as
+// a bonus under that secret in the Secrets tracker (villageSecrets.ts) and at
+// the square's shrine. The writing is original to this game.
 import { CAMPAIGN_VILLAGES } from './campaign';
 import { StageId } from './types';
 
@@ -15,13 +16,6 @@ export interface HubLoreEntry {
   // The campaign secret that unlocks it (see campaignMissions.ts hidden areas).
   secretId: string;
 }
-
-/** What a locked entry says about where it is found. */
-export const HUB_LORE_HINTS: Record<HubLoreKind, string> = {
-  scroll: 'Hidden in a scroll cache',
-  fragment: 'Sealed with an archive fragment',
-  burrow: 'Behind an unstable wall',
-};
 
 const SECRET_SUFFIX: Record<HubLoreKind, string> = {
   scroll: 'scroll-cache',
@@ -146,8 +140,4 @@ export const HUB_LORE_ENTRIES: HubLoreEntry[] = CAMPAIGN_VILLAGES.flatMap((villa
 
 export function getHubLoreEntries(stageId: StageId): HubLoreEntry[] {
   return HUB_LORE_ENTRIES.filter((entry) => entry.stageId === stageId);
-}
-
-export function isLoreUnlocked(entry: HubLoreEntry, discoveredSecrets: string[]): boolean {
-  return discoveredSecrets.includes(entry.secretId);
 }

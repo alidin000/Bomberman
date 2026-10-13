@@ -1,12 +1,14 @@
 import type { HubConsumableId } from './hubShop';
 import type { StageId } from './types';
 import { HUB_CONSUMABLES } from './hubShop';
+import type { SquareCastId } from './animeCast';
 
 // The village square: a safe district inside each campaign map, by the
 // entrance, where the hub lives in the world. Players walk up to villagers,
-// the merchant's stall, the request board and the codex shrine, then head out
+// the merchant's stall, the request board and the secrets shrine, then head out
 // through the village gate into the mission. Positions live in each stage's
-// CampaignStageLayout.square; who the villagers are lives in hubVillages.ts.
+// CampaignStageLayout.square; who the villagers are lives in animeCast.ts
+// (SQUARE_CAST) and what they say in hubVillages.ts.
 
 export type ReputationTierId = 'stranger' | 'known' | 'trusted' | 'honored';
 
@@ -112,12 +114,14 @@ export interface VillageSquareRuntimeState {
 // is inside), boss hazards and wave entries skip it, and every interactable
 // cell blocks movement and blasts like a pillar.
 
-// A villager who joins every square once standing reaches Known; their lines
-// live with the other villagers' (hubVillages.ts).
+// The wanderer who joins every square once standing reaches Known: Jiraiya
+// (animeCast.ts WANDERER_CAST and CAST.jiraiya; literals here keep the cast's
+// looks out of the first-load bundle). His lines live with the other
+// villagers' (hubVillages.ts).
 export const WANDERING_VILLAGER = {
-  id: 'tamsin',
-  name: 'Tamsin',
-  role: 'Road Teller',
+  id: 'jiraiya' as SquareCastId,
+  name: 'Jiraiya',
+  role: 'Toad Sage and Writer',
   minTier: 'known' as ReputationTierId,
 } as const;
 
@@ -131,7 +135,8 @@ export function stallPrice(id: HubConsumableId, tier: ReputationTierId): number 
   return discounted ? Math.floor((base * 4) / 5 / 5) * 5 : base;
 }
 
-// From Honored the player's figure wears an ember-thread scarf (render only).
+// From Honored the player may wear the ember-thread scarf (render only;
+// chosen in the hub, VillageVisitConfig.scarf).
 export const HONORED_COSMETIC_TIER: ReputationTierId = 'honored';
 
 const TIER_RANK: Record<ReputationTierId, number> = {

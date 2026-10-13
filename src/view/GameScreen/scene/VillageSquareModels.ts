@@ -692,7 +692,7 @@ export function promptFor(
     case 'shop':
       return { label: `[Bomb] ${HUB_MERCHANT.name}'s stall`, color };
     case 'shrine':
-      return { label: '[Bomb] Shrine · Codex', color };
+      return { label: '[Bomb] Shrine · Secrets', color };
     default:
       return { label: '[Bomb] Gate · Head out', color };
   }

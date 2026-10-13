@@ -1,5 +1,5 @@
 import React, {
-  useMemo, useRef, useState,
+  useEffect, useMemo, useRef, useState,
 } from 'react';
 import { Button, DialogContent, DialogTitle } from '@mui/material';
 import type { GameAction } from '../../../engine/actions';
@@ -8,10 +8,13 @@ import { EngineSelector, EngineStore, useEngineSelector } from '../../../hooks/e
 import { getStageDefinition } from '../../../content';
 import { formatEmbers } from '../../../content/hubShop';
 import {
-  CODEX_EXPLAINER, HUB_MERCHANT, getHubVillage,
+  HUB_MERCHANT, SECRETS_EXPLAINER, getHubVillage,
 } from '../../../content/hubVillages';
-import { HUB_LORE_HINTS } from '../../../content/hubLore';
 import { getVillageRequest } from '../../../content/villageRequests';
+import { isCastId } from '../../../content/animeCast';
+import { CastPortrait } from '../../portraits/CastPortrait';
+import { SecretEntries, setRewardText } from '../../HubScreen/SecretsPanel';
+import { TalkHead } from '../../HubScreen/HubSecrets.styles';
 import type { VillageInteractable } from '../../../content/villageSquare';
 import { loadStoryProgress } from '../../../story/progress';
 import { squareKindOpen } from '../../../input/villageInteract';
@@ -21,8 +24,6 @@ import {
 import {
   AskedLine,
   ChoiceList,
-  CodexEntry,
-  CodexList,
   EmberBalance,
   EmberGlyph,
   HubAnnouncer,
@@ -83,7 +84,7 @@ const TITLES: Record<VillageInteractable['kind'], string> = {
   villager: 'Villager',
   board: 'Request Board',
   shop: `${HUB_MERCHANT.name}'s Stall`,
-  shrine: 'Codex Shrine',
+  shrine: 'Secrets Shrine',
   gate: 'Village Gate',
 };
 
@@ -94,8 +95,15 @@ export const VillageOverlay = ({
   const contentRef = useRef<HTMLDivElement>(null);
   const [choiceId, setChoiceId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
-  // Read once per visit to the prop: the story so far and the codex.
+  // Read once per visit to the prop: the story so far and the secrets.
   const saved = useMemo(() => loadStoryProgress(), []);
+  // The shrine reads from the top: focus on Close must not scroll it away.
+  const isShrine = item.kind === 'shrine';
+  useEffect(() => {
+    if (!isShrine) return undefined;
+    const frame = window.requestAnimationFrame(() => contentRef.current?.scrollTo?.({ top: 0 }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [isShrine]);
   if (!state?.campaign) return null;
   const { stageId } = state.campaign;
   const { accent } = getStageDefinition(stageId).palette;
@@ -118,7 +126,10 @@ export const VillageOverlay = ({
     const choice = talk.choices.find((option) => option.id === choiceId) ?? null;
     return (
       <>
-        <RoleLine>{talk.npc.role}</RoleLine>
+        <TalkHead>
+          {isCastId(talk.npc.id) && <CastPortrait id={talk.npc.id} />}
+          <RoleLine>{talk.npc.role}</RoleLine>
+        </TalkHead>
         {choice && <AskedLine>{`You: ${choice.prompt}`}</AskedLine>}
         <SpokenLine accent={accent}>{choice?.reply ?? talk.opening}</SpokenLine>
         <ChoiceList role="group" aria-label="replies" data-roving-group>
@@ -276,27 +287,26 @@ export const VillageOverlay = ({
   };
 
   const renderShrine = () => {
-    const shrine = shrineModel(stageId, [
-      ...saved.discoveredSecrets, ...state.campaign!.discoveredSecrets,
-    ]);
+    const found = [...saved.discoveredSecrets, ...state.campaign!.discoveredSecrets];
+    const shrine = shrineModel(stageId, found, saved.claimedSecretSets);
+    let reward = `${shrine.set.found} of ${shrine.set.total} found: find all three to earn it.`;
+    if (shrine.set.state === 'ready') reward = 'All three found. Claim it in the hub\'s Secrets tab after the mission.';
+    if (shrine.set.state === 'claimed') reward = 'Claimed.';
     return (
       <>
-        <OverlayLead>
-          {`${CODEX_EXPLAINER} This shrine keeps the village's three entries: crack its hidden walls to write them in.`}
-        </OverlayLead>
+        <OverlayLead>{SECRETS_EXPLAINER}</OverlayLead>
         <ShopHeading as="p">
-          {`This village · ${shrine.villageFound} of ${shrine.entries.length} found`}
+          {`This village · ${shrine.set.found} of ${shrine.set.total} found`}
           <span>{`${shrine.totalFound} of ${shrine.total} in every village`}</span>
         </ShopHeading>
-        <CodexList aria-label="this village's codex">
-          {shrine.entries.map(({ entry, found }) => (
-            <CodexEntry key={entry.id} locked={!found} accent={accent}>
-              <small>{HUB_LORE_HINTS[entry.kind]}</small>
-              <h4>{found ? entry.title : 'Still hidden'}</h4>
-              {found && <p>{entry.text}</p>}
-            </CodexEntry>
-          ))}
-        </CodexList>
+        <OverlayLead>{`Set reward: ${setRewardText(stageId)}. ${reward}`}</OverlayLead>
+        <SecretEntries
+          stageId={stageId}
+          discovered={found}
+          accent={accent}
+          label="this village's secrets"
+          compact
+        />
       </>
     );
   };

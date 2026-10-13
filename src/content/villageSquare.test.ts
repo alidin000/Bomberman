@@ -3,6 +3,9 @@ import { CAMPAIGN_STAGE_LAYOUTS } from './campaignLayouts';
 import { VILLAGE_REQUESTS, getVillageRequest } from './villageRequests';
 import { HUB_VILLAGES } from './hubVillages';
 import {
+  CAST, SQUARE_CAST, WANDERER_CAST, isCastId,
+} from './animeCast';
+import {
   WANDERING_VILLAGER, presentInteractables, reachableInteractable, stallPrice,
 } from './villageSquare';
 import { repairStageFor, reputationTier, totalReputation } from '../story/reputation';
@@ -43,14 +46,27 @@ describe('village square plan', () => {
     expect([5, 6, 7].some((x) => seen.has(`${x},9`))).toBe(true);
   });
 
-  it('names real villagers of the village it stands in', () => {
+  it('names the anime cast of the village it stands in: SQUARE_CAST, then Jiraiya on the road', () => {
     stageIds.forEach((stageId) => {
+      const villagers = CAMPAIGN_STAGE_LAYOUTS[stageId].square.interactables
+        .filter((item) => item.kind === 'villager');
+      // Prop ids stay stable; who stands there is the canon pair.
+      expect(villagers.map((item) => [item.id, item.villagerId])).toEqual([
+        ['villager-a', SQUARE_CAST[stageId][0]],
+        ['villager-wanderer', WANDERER_CAST],
+        ['villager-b', SQUARE_CAST[stageId][1]],
+      ]);
+      // The hub's people are the same two, named and titled as in CAST.
       const village = HUB_VILLAGES.find((entry) => entry.stageId === stageId);
-      const people = new Set((village?.npcs ?? []).map((npc) => npc.id));
-      people.add(WANDERING_VILLAGER.id);
-      CAMPAIGN_STAGE_LAYOUTS[stageId].square.interactables
-        .filter((item) => item.kind === 'villager')
-        .forEach((item) => expect(people.has(item.villagerId ?? '')).toBe(true));
+      expect(village?.npcs.map((npc) => [npc.id, npc.name, npc.role])).toEqual(
+        SQUARE_CAST[stageId].map((id) => [id, CAST[id].name, CAST[id].role])
+      );
+      // The invented villagers live on as the square's extras.
+      expect(village?.extras.length).toBeGreaterThanOrEqual(2);
+      village?.extras.forEach((extra) => expect(isCastId(extra.id)).toBe(false));
+    });
+    expect(WANDERING_VILLAGER).toMatchObject({
+      id: WANDERER_CAST, name: CAST[WANDERER_CAST].name, role: CAST[WANDERER_CAST].role,
     });
   });
 
@@ -65,7 +81,8 @@ describe('village requests', () => {
   it('are asked by the village\'s own people and point at real secrets', () => {
     stageIds.forEach((stageId) => {
       const village = HUB_VILLAGES.find((entry) => entry.stageId === stageId);
-      const givers = new Set((village?.npcs ?? []).map((npc) => npc.id));
+      const givers = new Set<string>(SQUARE_CAST[stageId]);
+      expect(village?.npcs.map((npc) => npc.id)).toEqual([...SQUARE_CAST[stageId]]);
       VILLAGE_REQUESTS[stageId].forEach((request) => {
         expect(givers.has(request.giverId), request.id).toBe(true);
         expect(getVillageRequest(request.id)).toBe(request);

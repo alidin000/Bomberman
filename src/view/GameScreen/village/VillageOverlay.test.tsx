@@ -95,12 +95,12 @@ describe('village square overlays', () => {
       },
     }), 'board');
     expect(within(dialog).getByRole('heading', { name: 'Request Board' })).toBeInTheDocument();
-    expect(dialog).toHaveTextContent('Old Hobb · +10 Embers · +2 reputation');
+    expect(dialog).toHaveTextContent('Sakura Haruno · +10 Embers · +2 reputation');
     // Taken already: its progress, and no second accept.
-    const logs = within(dialog).getByRole('button', { name: 'Rotten Training Logs: Accepted · 1/4' });
+    const logs = within(dialog).getByRole('button', { name: 'Rotten Training Posts: Accepted · 1/4' });
     fireEvent.click(logs);
     expect(dispatch).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Accept: Lost Tea Tins' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Accept: Lost Field Kits' }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'ACCEPT_REQUEST', playerId: 'player1', requestId: 'leaf-tea-tins' });
   });
 
@@ -151,42 +151,67 @@ describe('village square overlays', () => {
     expect(board.dialog).toHaveTextContent('The board takes requests on solo missions only.');
   });
 
-  it('talks through a villager\'s branch, mentions their request, and says goodbye', () => {
+  it('talks with Kakashi under his portrait, hints at a secret from the map, and says goodbye', () => {
     const { onClose, dialog } = open(leafState({ village: visit() }), 'villager-a');
-    expect(within(dialog).getByRole('heading', { name: 'Wren' })).toBeInTheDocument();
-    expect(dialog).toHaveTextContent('The woods past the gate are crawling tonight.');
+    expect(within(dialog).getByRole('heading', { name: 'Kakashi Hatake' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('img', { name: 'Portrait of Kakashi Hatake' })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('The forest past the gate is crawling with rogues');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Anything hidden nearby?' }));
     expect(dialog).toHaveTextContent('You: Anything hidden nearby?');
-    expect(dialog).toHaveTextContent('bricked up by the north wall');
-    // Wren's own request (Known) is not offered this visit; Hobb's is.
+    // The leaf scroll cache sits at (16, 8), its cracked door at (16, 6).
+    expect(dialog).toHaveTextContent('north-west, near the outer district, behind a cracked wall');
+    // Kakashi's own request (Known) is not offered this visit; Sakura's is.
     expect(within(dialog).queryByRole('button', { name: 'Need a hand?' })).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Goodbye' }));
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('changes a villager\'s words as the story moves on, and Tamsin brings the news', () => {
+  it('changes a villager\'s words as the story moves on, and Jiraiya brings the news', () => {
     saveStoryProgress({ ...loadStoryProgress(), completedStages: ['hiddenLeaf', 'hiddenSand'] });
-    const hobb = open(leafState({ village: visit() }), 'villager-b');
-    expect(hobb.dialog).toHaveTextContent('paid for her tea with sand village coin');
-    fireEvent.click(within(hobb.dialog).getByRole('button', { name: 'Need a hand?' }));
-    expect(hobb.dialog).toHaveTextContent('It is pinned on the board: “Lost Tea Tins”.');
+    const sakura = open(leafState({ village: visit() }), 'villager-b');
+    expect(sakura.dialog).toHaveTextContent('Temari sent a hawk to say thanks.');
+    fireEvent.click(within(sakura.dialog).getByRole('button', { name: 'Need a hand?' }));
+    expect(sakura.dialog).toHaveTextContent('It is pinned on the board: “Lost Field Kits”.');
     cleanup();
 
-    const tamsin = open(leafState({ village: visit({ reputationTier: 'known' }) }), 'villager-wanderer');
-    expect(within(tamsin.dialog).getByRole('heading', { name: 'Tamsin' })).toBeInTheDocument();
-    fireEvent.click(within(tamsin.dialog).getByRole('button', { name: 'Any news from the road?' }));
-    expect(tamsin.dialog).toHaveTextContent('Two villages cleared.');
+    const jiraiya = open(leafState({ village: visit({ reputationTier: 'known' }) }), 'villager-wanderer');
+    expect(within(jiraiya.dialog).getByRole('heading', { name: 'Jiraiya' })).toBeInTheDocument();
+    expect(within(jiraiya.dialog).getByRole('img', { name: 'Portrait of Jiraiya' })).toBeInTheDocument();
+    fireEvent.click(within(jiraiya.dialog).getByRole('button', { name: 'Any news from the road?' }));
+    expect(jiraiya.dialog).toHaveTextContent('Two villages cleared.');
   });
 
-  it('explains the Codex at the shrine, with this village\'s entries and the total', () => {
+  it('tracks the secrets at the shrine: where, what each gives, found or not, and the set reward', () => {
     saveStoryProgress({ ...loadStoryProgress(), discoveredSecrets: ['hiddenSand-scroll-cache'] });
     const { dialog } = open(leafState({ secrets: ['hiddenLeaf-scroll-cache'] }), 'shrine', false);
-    expect(dialog).toHaveTextContent('The Codex is lore you uncover by finding a village\'s secrets.');
+    expect(within(dialog).getByRole('heading', { name: 'Secrets Shrine' })).toBeInTheDocument();
     // Found this mission counts at once; the sand cache counts in the total.
     expect(dialog).toHaveTextContent('This village · 1 of 3 found');
     expect(dialog).toHaveTextContent('2 of 21 in every village');
-    expect(dialog).toHaveTextContent("The Gatewarden's Ledger");
-    expect(within(dialog).getAllByRole('heading', { name: 'Still hidden' })).toHaveLength(2);
+    expect(dialog).toHaveTextContent('Set reward: 30 Embers + the Leaf scarf. 1 of 3 found');
+    const list = within(dialog).getByRole('list', { name: 'this village\'s secrets' });
+    const [scroll, fragment, burrow] = within(list).getAllByRole('listitem');
+    expect(scroll).toHaveTextContent('✓ Found');
+    expect(scroll).toHaveTextContent('North-west, near the outer district');
+    expect(scroll).toHaveTextContent('Rasengan Scroll power-up');
+    // The old Codex page stays as a bonus under a found secret only.
+    expect(scroll).toHaveTextContent("Story page: The Gatewarden's Ledger");
+    expect(fragment).toHaveTextContent('○ Not found');
+    expect(fragment).toHaveTextContent('Through a false wall');
+    expect(fragment).not.toHaveTextContent('Story page');
+    expect(burrow).toHaveTextContent('An elite Black Zetsu ambush');
+  });
+
+  it('sends a finished set to the hub to claim, and says when it is claimed', () => {
+    const all = ['hiddenLeaf-scroll-cache', 'hiddenLeaf-archive-fragment', 'hiddenLeaf-zetsu-burrow'];
+    const ready = open(leafState({ secrets: all }), 'shrine', false);
+    expect(ready.dialog).toHaveTextContent('All three found. Claim it in the hub\'s Secrets tab after the mission.');
+    cleanup();
+    saveStoryProgress({
+      ...loadStoryProgress(), discoveredSecrets: all, claimedSecretSets: ['hiddenLeaf'],
+    });
+    const claimed = open(leafState(), 'shrine', false);
+    expect(claimed.dialog).toHaveTextContent('Set reward: 30 Embers + the Leaf scarf. Claimed.');
   });
 
   it('briefs the mission at the gate and heads out', () => {
@@ -202,7 +227,7 @@ describe('village square overlays', () => {
     }), 'gate');
     const objectives = within(dialog).getByRole('list', { name: 'mission objectives' });
     expect(within(objectives).getAllByRole('listitem').length).toBeGreaterThan(1);
-    expect(dialog).toHaveTextContent('Requests taken: Lost Tea Tins');
+    expect(dialog).toHaveTextContent('Requests taken: Lost Field Kits');
     const headOut = within(dialog).getByRole('button', { name: 'Head out' });
     expect(headOut).toHaveFocus();
     fireEvent.click(headOut);

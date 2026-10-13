@@ -4,6 +4,7 @@ import type {
   CampaignSecretRoomDefinition,
 } from './campaignMissions';
 import { WANDERING_VILLAGER, type VillageSquareLayout } from './villageSquare';
+import type { SquareCastId } from './animeCast';
 
 export interface CampaignCell {
   x: number;
@@ -48,8 +49,10 @@ export interface CampaignStageLayout {
     fragment: CampaignSecretPlacement;
     burrow: CampaignSecretPlacement;
   };
-  // The safe village square around the entrance, where the hub's people,
-  // stall, request board and codex shrine stand inside the map.
+  // The safe village square around the entrance, where the hub's people
+  // (animeCast.ts SQUARE_CAST, named here as literals so the cast's looks
+  // stay out of the first-load bundle), stall, request board and secrets
+  // shrine stand inside the map.
   square: VillageSquareLayout;
 }
 
@@ -59,7 +62,7 @@ export interface CampaignStageLayout {
  * every village square shares one plan. Props stand against the district's
  * edges, clear of the four spawns and both ways out.
  */
-function villageSquare(villagerA: string, villagerB: string): VillageSquareLayout {
+function villageSquare(villagerA: SquareCastId, villagerB: SquareCastId): VillageSquareLayout {
   return {
     bounds: {
       x0: 1, y0: 1, x1: 10, y1: 8
@@ -99,7 +102,7 @@ const LEAF_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
-  square: villageSquare('wren', 'hobb'),
+  square: villageSquare('kakashi', 'sakura'),
   outerDistrict: { x: 20, y: 6 },
   rescueTargets: [{ x: 26, y: 7 }, { x: 12, y: 22 }],
   structure: { x: 24, y: 23 },
@@ -153,7 +156,7 @@ const SAND_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
-  square: villageSquare('saffi', 'doru'),
+  square: villageSquare('temari', 'chiyo'),
   outerDistrict: { x: 20, y: 2 },
   rescueTargets: [{ x: 5, y: 22 }, { x: 40, y: 6 }],
   structure: { x: 24, y: 24 },
@@ -207,7 +210,7 @@ const MIST_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
-  square: villageSquare('ondine', 'kell'),
+  square: villageSquare('mei', 'chojuro'),
   outerDistrict: { x: 20, y: 3 },
   rescueTargets: [{ x: 4, y: 24 }, { x: 36, y: 10 }],
   structure: { x: 22, y: 25 },
@@ -261,7 +264,7 @@ const CLOUD_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
-  square: villageSquare('brisa', 'tobin'),
+  square: villageSquare('karui', 'omoi'),
   outerDistrict: { x: 6, y: 20 },
   rescueTargets: [{ x: 6, y: 28 }, { x: 40, y: 42 }],
   structure: { x: 24, y: 24 },
@@ -315,7 +318,7 @@ const STONE_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
-  square: villageSquare('marl', 'ysolde'),
+  square: villageSquare('onoki', 'kurotsuchi'),
   outerDistrict: { x: 6, y: 14 },
   rescueTargets: [{ x: 4, y: 13 }, { x: 33, y: 6 }],
   structure: { x: 25, y: 22 },
@@ -369,7 +372,7 @@ const AKATSUKI_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
-  square: villageSquare('ash', 'quill'),
+  square: villageSquare('yamato', 'sai'),
   outerDistrict: { x: 17, y: 8 },
   rescueTargets: [{ x: 20, y: 9 }, { x: 26, y: 18 }],
   structure: { x: 21, y: 23 },
@@ -423,7 +426,7 @@ const WAR_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
-  square: villageSquare('vey', 'nim'),
+  square: villageSquare('shikamaru', 'tsunade'),
   outerDistrict: { x: 20, y: 4 },
   rescueTargets: [{ x: 30, y: 6 }, { x: 6, y: 30 }],
   structure: { x: 22, y: 23 },

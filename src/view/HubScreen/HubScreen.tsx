@@ -33,23 +33,24 @@ import {
   getUpgradeCap,
 } from '../../content/hubShop';
 import {
-  CODEX_EXPLAINER,
   HUB_MERCHANT,
   HubNpc,
   ROAD_TELLER,
+  SECRETS_EXPLAINER,
   getHubVillage,
   roadNews,
   villagerGreeting,
 } from '../../content/hubVillages';
-import { WANDERING_VILLAGER } from '../../content/villageSquare';
+import { WANDERING_VILLAGER, type ScarfId } from '../../content/villageSquare';
+import { isCastId } from '../../content/animeCast';
+import { SCARF_LOOKS } from '../../content/scarves';
+import { SECRET_SET_REWARD, getVillageSecrets } from '../../content/villageSecrets';
+import {
+  StoryScenePart, getStoryScene, storySceneId,
+} from '../../content/storyScenes';
 import { tierAtLeast } from '../../story/reputation';
 import { getVillageStanding } from '../../story/villageVisit';
-import {
-  HUB_LORE_ENTRIES,
-  HUB_LORE_HINTS,
-  getHubLoreEntries,
-  isLoreUnlocked,
-} from '../../content/hubLore';
+import { chooseScarf, claimSecretSet, markSceneSeen } from '../../story/villageRewards';
 import { StoryProgress, getStoryUpgrade, loadStoryProgress } from '../../story/progress';
 import {
   PurchaseBlock,
@@ -78,8 +79,6 @@ import GreatWarStage from '../../assets/great-shinobi-war-stage.webp';
 import {
   AskedLine,
   ChoiceList,
-  CodexEntry,
-  CodexList,
   Conversation,
   EmberBalance,
   EmberGlyph,
@@ -102,21 +101,33 @@ import {
   SpokenLine,
   Speaker,
   VillageArt,
-  VillageChip,
-  VillageChips,
   VillageIntro,
 } from './HubScreen.styles';
+import { CardBody, TalkHead } from './HubSecrets.styles';
+import { CastPortrait } from '../portraits/CastPortrait';
+import { SecretsPanel } from './SecretsPanel';
+import { RebuildCard, ScarfPicker, StoryReplay } from './VillageCards';
+import { StoryScene } from './StoryScene';
 import { earningsBreakdown } from './MissionEarnings';
 import { BoardPreview, StandingCard } from './StandingCard';
 import { hubPath } from './missionSettlement';
 
-type HubSection = 'village' | 'shop' | 'codex';
+type HubSection = 'village' | 'shop' | 'secrets';
 
 const SECTIONS: { id: HubSection; label: string }[] = [
   { id: 'village', label: 'Village' },
   { id: 'shop', label: 'Shop' },
-  { id: 'codex', label: 'Codex' },
+  { id: 'secrets', label: 'Secrets' },
 ];
+
+// How many secrets the save has found, of every village's.
+function secretsFound(progress: StoryProgress): { found: number; total: number } {
+  const secrets = CAMPAIGN_VILLAGES.flatMap((village) => getVillageSecrets(village.stageId));
+  return {
+    found: secrets.filter((secret) => progress.discoveredSecrets.includes(secret.id)).length,
+    total: secrets.length,
+  };
+}
 
 // Short of Embers is said in the announcement; that button keeps its price.
 const BLOCK_LABELS: Record<PurchaseBlock, string> = {
@@ -144,10 +155,6 @@ const VILLAGE_ART: Record<StageId, string> = {
   greatShinobiWar: 'center',
 };
 
-function shortName(name: string): string {
-  return name.replace(/ Village$/, '');
-}
-
 // A route to a village that is not open yet goes to the current one.
 function resolveHubStage(requested: string | undefined, progress: StoryProgress): StageId {
   const stage = STAGE_DEFINITIONS.find((item) => item.id === requested);
@@ -157,6 +164,22 @@ function resolveHubStage(requested: string | undefined, progress: StoryProgress)
 }
 
 type Talk = { npcId: string; choiceId: string | null };
+
+// A scene on screen: what plays, and whether the mission deploys after it.
+type SceneShowing = { stageId: StageId; part: StoryScenePart; deploy: boolean; replay: boolean };
+
+/**
+ * The scene a hub arrival plays: right after a won mission, that village's
+ * after-victory scene, the first time (the hub can replay it later).
+ */
+function arrivalScene(progress: StoryProgress): SceneShowing | null {
+  const report = progress.lastMission;
+  if (!report?.success || !progress.completedStages.includes(report.stageId)) return null;
+  if (progress.seenScenes.includes(storySceneId(report.stageId, 'after'))) return null;
+  return {
+    stageId: report.stageId, part: 'after', deploy: false, replay: false,
+  };
+}
 
 export const HubScreen = () => {
   const params = useParams();
@@ -169,17 +192,19 @@ export const HubScreen = () => {
   const { accent } = stage.palette;
   const [section, setSection] = useState<HubSection>('village');
   const [talk, setTalk] = useState<Talk | null>(null);
-  const [codexStage, setCodexStage] = useState<StageId>(stageId);
+  const [secretsStage, setSecretsStage] = useState<StageId>(stageId);
+  const [scene, setScene] = useState<SceneShowing | null>(() => arrivalScene(progress));
   const [announcement, setAnnouncement] = useState('');
   const contentRef = useRef<HTMLDivElement>(null);
   const speakerRef = useRef<HTMLHeadingElement>(null);
   const lastNpcRef = useRef<string | null>(null);
   const deploying = useRef(false);
+  const deployRef = useRef<HTMLButtonElement>(null);
 
   // Each village's hub opens on its people, not on the last one's talk.
   useEffect(() => {
     setTalk(null);
-    setCodexStage(stageId);
+    setSecretsStage(stageId);
   }, [stageId]);
 
   const cleared = progress.completedStages.includes(stageId);
@@ -220,10 +245,9 @@ export const HubScreen = () => {
   const character = getCharacterDefinition(progress.lastCharacter);
   const storyUpgrade = getStoryUpgrade(progress.selectedUpgrade);
   const packNames = progress.pack.map((id) => getHubConsumable(id).name);
-  const loreFound = useMemo(() => HUB_LORE_ENTRIES
-    .filter((entry) => isLoreUnlocked(entry, progress.discoveredSecrets)).length, [progress]);
+  const secrets = useMemo(() => secretsFound(progress), [progress]);
 
-  const deploy = async () => {
+  const launch = async () => {
     // One deploy per visit: a double press must not spend the pack twice.
     if (deploying.current) return;
     deploying.current = true;
@@ -234,8 +258,44 @@ export const HubScreen = () => {
       upgrade: progress.selectedUpgrade,
       players: '1',
       keyBindings: loadStoredKeyBindings(),
-      storyProgress: progress,
+      storyProgress: loadStoryProgress(),
     }, navigate);
+  };
+
+  // The first deploy to a village plays its before-the-mission scene first.
+  const deploy = () => {
+    if (deploying.current || scene) return;
+    if (!progress.seenScenes.includes(storySceneId(stageId, 'before'))) {
+      setScene({
+        stageId, part: 'before', deploy: true, replay: false,
+      });
+      return;
+    }
+    launch();
+  };
+
+  const endScene = () => {
+    if (!scene) return;
+    const showing = scene;
+    setScene(null);
+    // Seen once it is finished or skipped; a replay changes nothing.
+    if (!showing.replay) setProgress(markSceneSeen(storySceneId(showing.stageId, showing.part)));
+    if (showing.deploy) launch();
+    // Back in the hub, a returning player still deploys with one press.
+    else if (!showing.replay) window.setTimeout(() => deployRef.current?.focus(), 0);
+  };
+
+  const claim = (claimStageId: StageId) => {
+    const result = claimSecretSet(claimStageId);
+    setProgress(result.progress);
+    if (result.ok) {
+      setAnnouncement(`Claimed ${formatEmbers(SECRET_SET_REWARD.embers)} and the ${SCARF_LOOKS[claimStageId].name}. ${formatEmbers(result.progress.currency)} to spend.`);
+    }
+  };
+
+  const wear = (scarf: ScarfId | null) => {
+    setProgress(chooseScarf(scarf));
+    setAnnouncement(scarf ? `Wearing the ${SCARF_LOOKS[scarf].name}.` : 'No scarf.');
   };
 
   const endTalk = () => {
@@ -244,7 +304,7 @@ export const HubScreen = () => {
   };
 
   const handleClose = (_event: object, reason: 'backdropClick' | 'escapeKeyDown') => {
-    if (reason === 'backdropClick') return;
+    if (reason === 'backdropClick' || scene) return;
     if (talk) endTalk();
     else navigate('/config');
   };
@@ -308,9 +368,12 @@ export const HubScreen = () => {
       onClick={() => setTalk({ npcId: person.id, choiceId: null })}
       aria-label={`Talk to ${person.name}, ${person.role}`}
     >
-      <strong>{person.name}</strong>
-      <small>{person.role}</small>
-      <span>{greetingOf(person)}</span>
+      <CardBody>
+        {isCastId(person.id) && <CastPortrait id={person.id} labelled={false} />}
+        <strong>{person.name}</strong>
+        <small>{person.role}</small>
+        <span>{greetingOf(person)}</span>
+      </CardBody>
     </NpcButton>
   );
 
@@ -318,10 +381,13 @@ export const HubScreen = () => {
     if (npc) {
       return (
         <Conversation aria-label={`Talking to ${npc.name}`}>
-          <Speaker ref={speakerRef} tabIndex={-1}>
-            {npc.name}
-            <small>{npc.role}</small>
-          </Speaker>
+          <TalkHead>
+            {isCastId(npc.id) && <CastPortrait id={npc.id} />}
+            <Speaker ref={speakerRef} tabIndex={-1}>
+              {npc.name}
+              <small>{npc.role}</small>
+            </Speaker>
+          </TalkHead>
           {choice && <AskedLine>{`You: ${choice.prompt}`}</AskedLine>}
           <SpokenLine accent={accent}>
             {choice?.reply ?? greetingOf(npc)}
@@ -375,10 +441,18 @@ export const HubScreen = () => {
         <NpcGrid role="group" aria-label="villagers" data-roving-group>
           {people.map(renderNpc)}
         </NpcGrid>
+        <StoryReplay
+          cleared={cleared}
+          onReplay={(part) => setScene({
+            stageId, part, deploy: false, replay: true,
+          })}
+        />
         <BoardPreview stageId={stageId} progress={progress} />
         <StandingCard progress={progress} />
+        <RebuildCard progress={progress} stageId={stageId} />
+        <ScarfPicker progress={progress} onChoose={wear} onLocked={setAnnouncement} />
         <MissionGoals>
-          {`Codex: ${loreFound} of ${HUB_LORE_ENTRIES.length} found. ${CODEX_EXPLAINER}`}
+          {`Secrets: ${secrets.found} of ${secrets.total} found. ${SECRETS_EXPLAINER}`}
         </MissionGoals>
       </>
     );
@@ -475,43 +549,13 @@ export const HubScreen = () => {
     </>
   );
 
-  const renderCodex = () => (
-    <>
-      <ShopHeading as="p">
-        {`Codex · ${loreFound} of ${HUB_LORE_ENTRIES.length} found`}
-      </ShopHeading>
-      <MissionGoals>
-        {`${CODEX_EXPLAINER} Every village hides three: crack its walls in a mission, then read them here or at the square's shrine.`}
-      </MissionGoals>
-      <VillageChips role="group" aria-label="codex village" data-roving-group>
-        {CAMPAIGN_VILLAGES.map((item) => (
-          <VillageChip
-            key={item.stageId}
-            type="button"
-            aria-pressed={codexStage === item.stageId}
-            onClick={() => setCodexStage(item.stageId)}
-          >
-            {shortName(item.villageName)}
-          </VillageChip>
-        ))}
-      </VillageChips>
-      <CodexList aria-label={`${getCampaignVillage(codexStage).villageName} codex`}>
-        {getHubLoreEntries(codexStage).map((entry) => {
-          const unlocked = isLoreUnlocked(entry, progress.discoveredSecrets);
-          return (
-            <CodexEntry
-              key={entry.id}
-              locked={!unlocked}
-              accent={getStageDefinition(entry.stageId).palette.accent}
-            >
-              <small>{HUB_LORE_HINTS[entry.kind]}</small>
-              <h4>{unlocked ? entry.title : 'Unknown entry'}</h4>
-              {unlocked && <p>{entry.text}</p>}
-            </CodexEntry>
-          );
-        })}
-      </CodexList>
-    </>
+  const renderSecrets = () => (
+    <SecretsPanel
+      progress={progress}
+      stageId={secretsStage}
+      onSelect={setSecretsStage}
+      onClaim={claim}
+    />
   );
 
   return (
@@ -570,7 +614,7 @@ export const HubScreen = () => {
           <HubBody>
             {section === 'village' && renderVillage()}
             {section === 'shop' && renderShop()}
-            {section === 'codex' && renderCodex()}
+            {section === 'secrets' && renderSecrets()}
           </HubBody>
           <HubAnnouncer role="status" aria-live="polite">{announcement}</HubAnnouncer>
         </DialogContent>
@@ -581,6 +625,7 @@ export const HubScreen = () => {
               // Returning players deploy with one press: it has focus on arrival.
               // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
+              ref={deployRef}
               variant="contained"
               size="large"
               startIcon={<PlayArrowIcon />}
@@ -601,6 +646,16 @@ export const HubScreen = () => {
         </DeckFooter>
         <RovingTabStops root={contentRef} />
       </StyledDialog>
+      {scene && (
+        <StoryScene
+          key={`${scene.stageId}:${scene.part}`}
+          scene={getStoryScene(scene.stageId, scene.part)}
+          villageName={getCampaignVillage(scene.stageId).villageName}
+          accent={getStageDefinition(scene.stageId).palette.accent}
+          finishLabel={scene.deploy ? 'Start mission' : 'Done'}
+          onDone={endScene}
+        />
+      )}
     </WelcomeContainer>
   );
 };

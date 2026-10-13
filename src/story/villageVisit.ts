@@ -1,17 +1,23 @@
 // What the save hands a solo campaign mission about its village square
-// (GameConfig.village): the standing tier, the Embers the stall may take and
-// the requests on the board. Worked out before INIT, so the match replays the
+// (GameConfig.village): the standing tier, the Embers the stall may take, the
+// requests on the board, and (render only) the village's rebuild stage and
+// the scarf the player wears. Worked out before INIT, so the match replays the
 // same way. Shared by the launch path, the hub's previews and the match screen.
 import type { StageId } from '../content/types';
-import type {
-  CampaignRequestDefinition,
-  ReputationTierId,
-  VillageVisitConfig,
+import { CAMPAIGN_VILLAGES } from '../content/campaign';
+import {
+  HONORED_COSMETIC_TIER,
+  type CampaignRequestDefinition,
+  type RepairStage,
+  type ReputationTierId,
+  type ScarfId,
+  type VillageVisitConfig,
 } from '../content/villageSquare';
 import { VILLAGE_REQUESTS } from '../content/villageRequests';
 import {
   ReputationTier,
   nextReputationTier,
+  repairStageFor,
   reputationTier,
   tierAtLeast,
   totalReputation,
@@ -65,12 +71,57 @@ export function getLockedRequests(
   ));
 }
 
+/** The scarves the save can wear: ember from Honored, each claimed village's. */
+export function unlockedScarves(
+  progress: Pick<StoryProgress, 'reputation' | 'claimedSecretSets'>
+): ScarfId[] {
+  const ember = tierAtLeast(getVillageStanding(progress).tier.id, HONORED_COSMETIC_TIER);
+  return [
+    ...(ember ? ['ember' as const] : []),
+    ...CAMPAIGN_VILLAGES
+      .map((village) => village.stageId)
+      .filter((stageId) => progress.claimedSecretSets.includes(stageId)),
+  ];
+}
+
+/** The scarf the next mission wears: the chosen one, while it is unlocked. */
+export function wornScarf(
+  progress: Pick<StoryProgress, 'reputation' | 'claimedSecretSets' | 'scarf'>
+): ScarfId | undefined {
+  return progress.scarf && unlockedScarves(progress).includes(progress.scarf)
+    ? progress.scarf
+    : undefined;
+}
+
+/** How far a village has rebuilt, from its own reputation. */
+export function villageRepairStage(
+  stageId: StageId,
+  progress: Pick<StoryProgress, 'reputation'>
+): RepairStage {
+  return repairStageFor(progress.reputation[stageId] ?? 0);
+}
+
 export function buildVillageVisit(stageId: StageId, progress: StoryProgress): VillageVisitConfig {
+  const scarf = wornScarf(progress);
   return {
     reputationTier: getVillageStanding(progress).tier.id,
     embers: progress.currency,
     offeredRequestIds: getOfferedRequests(stageId, progress).map((request) => request.id),
+    repairStage: villageRepairStage(stageId, progress),
+    ...(scarf ? { scarf } : {}),
   };
+}
+
+const STAGE_IDS = new Set<string>(CAMPAIGN_VILLAGES.map((village) => village.stageId));
+
+function readRepairStage(value: unknown): RepairStage | undefined {
+  return value === 0 || value === 1 || value === 2 || value === 3 ? value : undefined;
+}
+
+function readScarf(value: unknown): ScarfId | undefined {
+  return value === 'ember' || (typeof value === 'string' && STAGE_IDS.has(value))
+    ? value as ScarfId
+    : undefined;
 }
 
 /**
@@ -95,6 +146,10 @@ export function normalizeVillageVisit(
     offeredRequestIds: Array.from(new Set(offered.filter((id): id is string => (
       typeof id === 'string' && ids.has(id)
     )))),
+    ...(readRepairStage(visit.repairStage) !== undefined
+      ? { repairStage: readRepairStage(visit.repairStage) }
+      : {}),
+    ...(readScarf(visit.scarf) ? { scarf: readScarf(visit.scarf) } : {}),
   };
 }
 

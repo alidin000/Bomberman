@@ -1,6 +1,7 @@
 import {
   DEFAULT_STORY_PROGRESS,
   STORY_PROGRESS_KEY,
+  STORY_PROGRESS_VERSION,
   StoryProgress,
   loadStoryProgress,
   saveStoryProgress,
@@ -30,7 +31,7 @@ describe('village square save', () => {
     localStorage.clear();
   });
 
-  it('moves a v4 save to v5 without paying the hub back pay a second time', () => {
+  it('moves a v4 save to the current version without paying the hub back pay a second time', () => {
     localStorage.setItem(STORY_PROGRESS_KEY, JSON.stringify({
       ...DEFAULT_STORY_PROGRESS,
       version: 4,
@@ -39,7 +40,7 @@ describe('village square save', () => {
       currency: 37,
     }));
     const progress = loadStoryProgress();
-    expect(progress.version).toBe(5);
+    expect(progress.version).toBe(STORY_PROGRESS_VERSION);
     // A v4 save already has the hub economy: its balance stays as it was.
     expect(progress.currency).toBe(37);
     expect(progress.completedRequests).toEqual([]);
@@ -113,6 +114,8 @@ describe('village square save', () => {
       reputationTier: 'known',
       embers: 44,
       offeredRequestIds: ['leaf-tea-tins', 'leaf-old-logs'],
+      // Cleared once (+10): rebuilt. No scarf chosen.
+      repairStage: 1,
     });
     const trusted = { ...known, reputation: { hiddenLeaf: 40 }, completedRequests: ['leaf-tea-tins'] };
     expect(buildVillageVisit('hiddenLeaf', trusted).offeredRequestIds)
