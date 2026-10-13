@@ -15,9 +15,15 @@ import {
   StaticTileInstance,
   StaticTileLayerStyle,
   StaticTileShape,
+  WallStyle,
+  wallStyleForPalette,
 } from './staticTiles';
 
-type TileShape = { geometry: THREE.BufferGeometry; elevation: number; vertexColors?: boolean };
+export type TileShape = {
+  geometry: THREE.BufferGeometry;
+  elevation: number;
+  vertexColors?: boolean;
+};
 
 // Faces shaded by their normal (lit top, darker sides), like the walls.
 function normalShade(x: number, y: number, z: number): number {
@@ -32,7 +38,17 @@ type ShadedPart = { geometry: THREE.BufferGeometry; shade?: number };
 
 // Merges parts into one vertex-coloured shape. A part with `shade` is a
 // flat-toned detail (a dark crack or seam); the rest shade by face normal.
-function mergeShaded(parts: ShadedPart[], name: string): THREE.BufferGeometry {
+function mergeShaded(input: ShadedPart[], name: string): THREE.BufferGeometry {
+  // Polyhedra come without an index: then merge everything unindexed.
+  const plain = input.some((part) => !part.geometry.index);
+  const parts = plain
+    ? input.map((part) => {
+      if (!part.geometry.index) return part;
+      const geometry = part.geometry.toNonIndexed();
+      part.geometry.dispose();
+      return { ...part, geometry };
+    })
+    : input;
   parts.forEach(({ geometry, shade }) => {
     const normals = geometry.getAttribute('normal');
     const colors = new Float32Array(normals.count * 3);
@@ -123,6 +139,103 @@ function createGateGeometry() {
   ], 'gate');
 }
 
+// --- Village walls (staticTiles.ts WallStyle) -------------------------------------
+
+function cylinder(top: number, bottom: number, height: number, segments: number, y: number) {
+  const geometry = new THREE.CylinderGeometry(top, bottom, height, segments);
+  geometry.translate(0, y, 0);
+  return geometry;
+}
+
+// A ridge roof along x: a triangular prism of the given width, depth, height.
+function ridge(width: number, depth: number, height: number, y: number) {
+  const geometry = new THREE.CylinderGeometry(1, 1, width, 3, 1);
+  geometry.rotateZ(Math.PI / 2);
+  geometry.rotateX(-Math.PI / 2);
+  geometry.scale(1, height / 1.5, depth / 1.732);
+  geometry.translate(0, y + height / 3, 0);
+  return geometry;
+}
+
+const WALL_BUILDERS: Record<Exclude<WallStyle, 'masonry'>, () => ShadedPart[]> = {
+  // Leaf: a timber-framed block under a little ridged roof.
+  timber: () => [
+    { geometry: box([WALL_SIZE, 0.76, WALL_SIZE], [0, 0.38, 0]) },
+    { geometry: box([0.06, 0.62, 0.02], [-0.3, 0.38, FRONT]), shade: 0.45 },
+    { geometry: box([0.06, 0.62, 0.02], [0.3, 0.38, FRONT]), shade: 0.45 },
+    { geometry: box([0.66, 0.06, 0.02], [0, 0.46, FRONT]), shade: 0.45 },
+    { geometry: box([WALL_SIZE + 0.1, 0.05, WALL_SIZE + 0.1], [0, 0.785, 0]) },
+    { geometry: ridge(WALL_SIZE + 0.08, WALL_SIZE + 0.1, 0.17, 0.81) },
+  ],
+  // Sand: sandstone with a rounded crown and a dark window slot.
+  sandstone: () => [
+    { geometry: box([WALL_SIZE, 0.7, WALL_SIZE], [0, 0.35, 0]) },
+    { geometry: box([WALL_SIZE + 0.05, 0.06, WALL_SIZE + 0.05], [0, 0.7, 0]) },
+    {
+      geometry: new THREE.SphereGeometry(0.43, 8, 3, 0, Math.PI * 2, 0, Math.PI / 2)
+        .scale(1, 0.5, 1).translate(0, 0.72, 0),
+    },
+    { geometry: box([0.14, 0.2, 0.02], [0, 0.42, FRONT]), shade: 0.35 },
+  ],
+  // Mist: a slate block under an overhanging slab, darker where it is wet.
+  slate: () => [
+    { geometry: box([0.8, 0.8, 0.8], [0, 0.4, 0]) },
+    { geometry: box([0.81, 0.14, 0.81], [0, 0.07, 0]), shade: 0.55 },
+    { geometry: box([0.96, 0.09, 0.96], [0, 0.845, 0]) },
+    { geometry: box([0.5, 0.05, 0.5], [0, 0.915, 0]) },
+  ],
+  // Cloud: a white drum with a ringed cap.
+  drum: () => [
+    { geometry: cylinder(0.43, 0.45, 0.8, 8, 0.4) },
+    { geometry: cylinder(0.47, 0.47, 0.09, 8, 0.845) },
+    { geometry: cylinder(0.3, 0.36, 0.08, 8, 0.93) },
+    { geometry: box([0.04, 0.5, 0.02], [0, 0.4, 0.447]), shade: 0.5 },
+  ],
+  // Stone: two layers of strata, a little askew.
+  strata: () => [
+    { geometry: box([0.86, 0.5, 0.84], [0, 0.25, 0]) },
+    { geometry: box([0.8, 0.42, 0.82], [0.02, 0.71, -0.01], 0.12) },
+    { geometry: box([0.87, 0.03, 0.02], [0, 0.5, 0.43]), shade: SEAM_SHADE },
+  ],
+  // Hideout: rough rock with a jagged crown.
+  rough: () => [
+    { geometry: box([0.82, 0.72, 0.82], [0, 0.36, 0]) },
+    { geometry: new THREE.IcosahedronGeometry(0.27, 0).translate(-0.16, 0.76, 0.05) },
+    { geometry: new THREE.IcosahedronGeometry(0.22, 0).translate(0.2, 0.74, -0.08) },
+    { geometry: new THREE.IcosahedronGeometry(0.17, 0).translate(0.05, 0.86, 0.2) },
+  ],
+  // War front: an earth bank topped by a row of sharpened stakes.
+  palisade: () => [
+    { geometry: box([WALL_SIZE, 0.6, WALL_SIZE], [0, 0.3, 0]) },
+    { geometry: box([WALL_SIZE + 0.04, 0.05, 0.06], [0, 0.72, 0.18]), shade: 0.55 },
+    ...[-0.3, -0.1, 0.1, 0.3].map((x) => ({
+      geometry: new THREE.ConeGeometry(0.085, 0.42, 5).translate(x, 0.81, 0.12),
+    })),
+    ...[-0.2, 0, 0.2].map((x) => ({
+      geometry: new THREE.ConeGeometry(0.08, 0.36, 5).translate(x, 0.78, -0.14),
+    })),
+  ],
+};
+
+const WALL_SHAPES = new Map<WallStyle, TileShape>();
+
+/** The wall shape for a village style: built once per style and kept. */
+export function wallShape(style: WallStyle): TileShape {
+  let shape = WALL_SHAPES.get(style);
+  if (!shape) {
+    shape = style === 'masonry'
+      // eslint-disable-next-line no-use-before-define -- only called after module load
+      ? TILE_SHAPES.wall
+      : {
+        geometry: mergeShaded(WALL_BUILDERS[style](), `${style} wall`),
+        elevation: 0,
+        vertexColors: true,
+      };
+    WALL_SHAPES.set(style, shape);
+  }
+  return shape;
+}
+
 // Shared by every layer and every match; never mutated after creation.
 const TILE_SHAPES: Record<StaticTileShape, TileShape> = {
   ground: {
@@ -166,15 +279,17 @@ function StaticTileLayer({
   cells,
   style,
   capacity,
+  shape,
 }: {
   cells: StaticTileInstance[];
   style: StaticTileLayerStyle;
   capacity: number;
+  shape: TileShape;
 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   // What this mesh last received, so a fog step rewrites only what changed.
   const written = useRef<{ mesh: THREE.InstancedMesh; cells: StaticTileInstance[] } | null>(null);
-  const { geometry, elevation, vertexColors } = TILE_SHAPES[style.shape];
+  const { geometry, elevation, vertexColors } = shape;
 
   useLayoutEffect(() => {
     const mesh = ref.current;
@@ -249,6 +364,8 @@ export function StaticTiles({
 }) {
   const capacity = Math.max(1, getMapCellCount(map));
   const styles = useMemo(() => getStaticTileLayerStyles(palette), [palette]);
+  // The village's walls: explored ones keep the shape, only their colour dims.
+  const wall = wallShape(wallStyleForPalette(palette));
   const layers = useMemo(
     () => buildStaticTileLayers(
       map,
@@ -269,6 +386,7 @@ export function StaticTiles({
           cells={layers[id]}
           style={styles[id]}
           capacity={FEATURE_SHAPES.has(styles[id].shape) ? FEATURE_CAPACITY : capacity}
+          shape={styles[id].shape === 'wall' ? wall : TILE_SHAPES[styles[id].shape]}
         />
       ))}
     </>

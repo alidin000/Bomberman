@@ -2930,6 +2930,7 @@ function SceneContentBase({
           readState={readLiveState}
           promptPlayerIds={promptPlayerIds}
           reducedMotion={preferences.reducedMotion}
+          repairStage={state.config.village?.repairStage}
         />
       )}
       {villageMarksCells && (

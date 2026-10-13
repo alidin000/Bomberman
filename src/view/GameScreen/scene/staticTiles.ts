@@ -1,7 +1,9 @@
-import { StageDefinition } from '../../../content/types';
+import { StageDefinition, StageId } from '../../../content/types';
+import { STAGE_DEFINITIONS } from '../../../content/stages';
 import { cellKey } from '../../../engine/fogOfWar';
 import type { CampaignRuntimeState } from '../../../engine/types';
 import { GameMap, isObstacle } from '../../../model/gameItem';
+import { highContrastPalette } from './highContrast';
 
 type StagePalette = StageDefinition['palette'];
 
@@ -96,6 +98,42 @@ export type StaticTileLayerStyle = {
   castShadow: boolean;
   receiveShadow: boolean;
 };
+
+/**
+ * How each village builds its walls (StaticTiles draws one shape per style):
+ * Leaf timber frames under a ridged roof, Sand domed sandstone, Mist slate
+ * slabs, Cloud white drums, Stone layered strata, the hideout's rough rock,
+ * the war front's palisade. Same footprint and height band as the masonry,
+ * so a wall still reads as a wall, and the same material, so no village
+ * compiles a program of its own.
+ */
+export type WallStyle =
+  | 'masonry' | 'timber' | 'sandstone' | 'slate' | 'drum' | 'strata' | 'rough' | 'palisade';
+
+export const STAGE_WALL_STYLE: Record<StageId, WallStyle> = {
+  hiddenLeaf: 'timber',
+  hiddenSand: 'sandstone',
+  hiddenMist: 'slate',
+  hiddenCloud: 'drum',
+  hiddenStone: 'strata',
+  akatsukiHideout: 'rough',
+  greatShinobiWar: 'palisade',
+};
+
+// The scene hands StaticTiles its stage palette (high contrast retones it),
+// and every stage's palette is its own: that is how the tiles know the village.
+const STYLE_BY_PALETTE = new Map<string, WallStyle>();
+const paletteKey = (palette: StagePalette) => `${palette.wall}|${palette.groundA}|${palette.crate}`;
+STAGE_DEFINITIONS.forEach((stage) => {
+  const style = STAGE_WALL_STYLE[stage.id];
+  STYLE_BY_PALETTE.set(paletteKey(stage.palette), style);
+  STYLE_BY_PALETTE.set(paletteKey(highContrastPalette(stage.palette)), style);
+});
+
+/** The wall style of the stage this palette belongs to (masonry for any other). */
+export function wallStyleForPalette(palette: StagePalette): WallStyle {
+  return STYLE_BY_PALETTE.get(paletteKey(palette)) ?? 'masonry';
+}
 
 export const EXPLORED_GROUND_COLOR = '#777e86';
 export const HIDDEN_GROUND_COLOR = '#353942';

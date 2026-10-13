@@ -2,6 +2,32 @@ import { StageId } from './types';
 import { getStageDefinition } from './stages';
 
 /**
+ * The villages' famous places and houses as the anime shows them
+ * (scene/village/heroLandmarks.ts): the Hokage Rock and residence, Leaf
+ * houses, the Kazekage dome, the Sand cliffs and houses, the Mizukage tower
+ * and the marsh bridges, the Raikage tower and the Cloud spires, the
+ * Tsuchikage spire and the rock bridges, the Demonic Statue and the sealed
+ * cave, the alliance tents.
+ */
+export type HeroLandmarkKind =
+  | 'hokageRock'
+  | 'hokageTower'
+  | 'leafHouse'
+  | 'kazekageDome'
+  | 'sandCliff'
+  | 'sandHouse'
+  | 'mizukageTower'
+  | 'mistBridge'
+  | 'raikageTower'
+  | 'cloudSpire'
+  | 'tsuchikageTower'
+  | 'rockBridge'
+  | 'demonStatue'
+  | 'hideoutCave'
+  | 'commandTent'
+  | 'allianceTent';
+
+/**
  * Off-grid landmark shapes. Each one is a single low-poly silhouette drawn
  * outside the playable rectangle, so the grid itself stays as quiet as it is.
  */
@@ -26,7 +52,8 @@ export type StageLandmarkKind =
   | 'cavernArch'
   | 'warBanner'
   | 'paperShard'
-  | 'stakeFence';
+  | 'stakeFence'
+  | HeroLandmarkKind;
 
 /** The far skyline behind the top rows, or the left and right margins. */
 export type StageLandmarkSector = 'far' | 'side';
@@ -41,6 +68,12 @@ export interface StageLandmarkSet {
   weight: number;
   /** Instance scale range. */
   scale: [number, number];
+  /**
+   * A famous place stands once, at this map cell on the far skyline (y is
+   * pushed back until its footprint clears the board), before the scatter
+   * fills in round it. Anchored sets never join the scatter.
+   */
+  anchor?: { x: number; y: number };
 }
 
 /**
@@ -65,13 +98,15 @@ export interface StageLook {
   /** The stage palette's accent, used on landmark cloth, lanterns and tags. */
   accent: string;
   landmarks: StageLandmarkSet[];
+  /** Open water round the arena slab (the Mist's marsh), drawn under the landmarks. */
+  water?: string;
 }
 
 type StageLookData = Omit<StageLook, 'stageId' | 'accent'>;
 
 const STAGE_LOOK_DATA: Record<StageId, StageLookData> = {
   hiddenLeaf: {
-    motif: 'Timber market under giant roots',
+    motif: 'The Hokage Rock over red roofs and cedars',
     sky: { top: '#7fa9b6', horizon: '#cfdcc0', low: '#9fb59a' },
     fog: { color: '#cbd8bd', range: 5 },
     ambient: { color: '#fff8ec', intensity: 0.55 },
@@ -82,15 +117,21 @@ const STAGE_LOOK_DATA: Record<StageId, StageLookData> = {
         kind: 'cedar', sector: 'far', body: '#5a3f31', trim: '#35543f', weight: 2, scale: [0.9, 1.2],
       },
       {
-        kind: 'rootArch', sector: 'far', body: '#6b4a36', trim: '#4a3427', weight: 1.4, scale: [0.9, 1.2],
+        kind: 'leafHouse', sector: 'far', body: '#efe2c4', trim: '#c2452d', weight: 1.4, scale: [0.9, 1.15],
       },
       {
-        kind: 'marketStall', sector: 'side', body: '#8a5a3c', trim: '#3b3346', weight: 1, scale: [0.8, 1],
+        kind: 'leafHouse', sector: 'side', body: '#efe2c4', trim: '#c2452d', weight: 1, scale: [0.85, 1.05],
+      },
+      {
+        kind: 'hokageRock', sector: 'far', body: '#9a8c74', trim: '#7d705b', weight: 0, scale: [1, 1], anchor: { x: 5, y: -4 },
+      },
+      {
+        kind: 'hokageTower', sector: 'far', body: '#d0582c', trim: '#ecdfc2', weight: 0, scale: [1, 1], anchor: { x: -5.5, y: -2.5 },
       },
     ],
   },
   hiddenSand: {
-    motif: 'Kiln terraces and cloth towers',
+    motif: 'Sandstone domes under the Kazekage\'s dome',
     sky: { top: '#b98463', horizon: '#efd2a6', low: '#d6ad84' },
     fog: { color: '#ecd0a4', range: 6 },
     ambient: { color: '#fff1e0', intensity: 0.52 },
@@ -101,15 +142,21 @@ const STAGE_LOOK_DATA: Record<StageId, StageLookData> = {
         kind: 'terraceBlock', sector: 'far', body: '#c4946a', trim: '#8c5f43', weight: 1.6, scale: [0.9, 1.3],
       },
       {
-        kind: 'clothTower', sector: 'far', body: '#7d5640', trim: '#e4d3b4', weight: 1, scale: [0.85, 1.1],
+        kind: 'sandHouse', sector: 'far', body: '#d8b384', trim: '#b88a5c', weight: 1.2, scale: [0.9, 1.2],
       },
       {
-        kind: 'kilnDome', sector: 'side', body: '#b87452', trim: '#4b3429', weight: 1, scale: [0.8, 1],
+        kind: 'sandHouse', sector: 'side', body: '#d8b384', trim: '#b88a5c', weight: 1, scale: [0.8, 1],
+      },
+      {
+        kind: 'kazekageDome', sector: 'far', body: '#d9b788', trim: '#b98b5c', weight: 0, scale: [1, 1], anchor: { x: 4, y: -2.5 },
+      },
+      {
+        kind: 'sandCliff', sector: 'far', body: '#b98663', trim: '#8c5f43', weight: 0, scale: [1, 1], anchor: { x: 14, y: -5.5 },
       },
     ],
   },
   hiddenMist: {
-    motif: 'Marsh docks behind reed screens',
+    motif: 'Misty water, bridges and the Mizukage\'s tower',
     sky: { top: '#5f828c', horizon: '#b6cac8', low: '#88a3a3' },
     fog: { color: '#b2c6c4', range: 3.5 },
     ambient: { color: '#eef6f6', intensity: 0.62 },
@@ -125,10 +172,17 @@ const STAGE_LOOK_DATA: Record<StageId, StageLookData> = {
       {
         kind: 'reedScreen', sector: 'side', body: '#6f8f86', trim: '#2f3f48', weight: 1, scale: [0.8, 1],
       },
+      {
+        kind: 'mizukageTower', sector: 'far', body: '#c9d6d6', trim: '#4f8a7c', weight: 0, scale: [1, 1], anchor: { x: 4.5, y: -2.5 },
+      },
+      {
+        kind: 'mistBridge', sector: 'far', body: '#5b4636', trim: '#3a2c22', weight: 0, scale: [1, 1], anchor: { x: -4.5, y: -2.4 },
+      },
     ],
+    water: '#5d8188',
   },
   hiddenCloud: {
-    motif: 'Snow temples on rope spans',
+    motif: 'White towers on rock peaks',
     sky: { top: '#6f86ad', horizon: '#dfe7f2', low: '#aab8cf' },
     fog: { color: '#e0e8f2', range: 7 },
     ambient: { color: '#f2f6ff', intensity: 0.55 },
@@ -136,10 +190,13 @@ const STAGE_LOOK_DATA: Record<StageId, StageLookData> = {
     directional: { color: '#fbfdff', intensity: 1.75 },
     landmarks: [
       {
-        kind: 'snowPeak', sector: 'far', body: '#5d6880', trim: '#eef3f8', weight: 1.4, scale: [0.9, 1.3],
+        kind: 'snowPeak', sector: 'far', body: '#6a6a72', trim: '#f4f6fa', weight: 1.4, scale: [0.9, 1.3],
       },
       {
-        kind: 'snowTemple', sector: 'far', body: '#5a4e63', trim: '#e8eef5', weight: 1.2, scale: [0.9, 1.15],
+        kind: 'cloudSpire', sector: 'far', body: '#6d6a70', trim: '#eef1f5', weight: 1.3, scale: [0.9, 1.2],
+      },
+      {
+        kind: 'raikageTower', sector: 'far', body: '#66646d', trim: '#eef1f5', weight: 0, scale: [1, 1], anchor: { x: 5, y: -2.5 },
       },
       {
         kind: 'ropeSpan', sector: 'side', body: '#4d5466', trim: '#c9b98f', weight: 1, scale: [0.8, 1],
@@ -147,7 +204,7 @@ const STAGE_LOOK_DATA: Record<StageId, StageLookData> = {
     ],
   },
   hiddenStone: {
-    motif: 'Layered quarry and strata pillars',
+    motif: 'Rock spires, bridges and the Tsuchikage\'s spire',
     sky: { top: '#8e8c7d', horizon: '#d8d3c1', low: '#b2ac98' },
     fog: { color: '#d3cebb', range: 5.5 },
     ambient: { color: '#f5f2ea', intensity: 0.56 },
@@ -163,10 +220,16 @@ const STAGE_LOOK_DATA: Record<StageId, StageLookData> = {
       {
         kind: 'boulder', sector: 'side', body: '#7c7466', trim: '#5a5348', weight: 1, scale: [0.8, 1],
       },
+      {
+        kind: 'tsuchikageTower', sector: 'far', body: '#8f8270', trim: '#6c6252', weight: 0, scale: [1, 1], anchor: { x: 5, y: -2.5 },
+      },
+      {
+        kind: 'rockBridge', sector: 'far', body: '#8a8170', trim: '#5e5648', weight: 0, scale: [1, 1], anchor: { x: -4, y: -3 },
+      },
     ],
   },
   akatsukiHideout: {
-    motif: 'Ink cavern with ruined screens',
+    motif: 'A sealed cave under the Demonic Statue',
     sky: { top: '#231d2b', horizon: '#56475e', low: '#3a3042' },
     fog: { color: '#4b3e54', range: 4 },
     ambient: { color: '#efe6f2', intensity: 0.6 },
@@ -182,10 +245,16 @@ const STAGE_LOOK_DATA: Record<StageId, StageLookData> = {
       {
         kind: 'ruinedScreen', sector: 'side', body: '#2b2230', trim: '#d6ccbd', weight: 1, scale: [0.8, 1],
       },
+      {
+        kind: 'demonStatue', sector: 'far', body: '#6c6477', trim: '#2a2430', weight: 0, scale: [1, 1], anchor: { x: 5, y: -5 },
+      },
+      {
+        kind: 'hideoutCave', sector: 'far', body: '#3a3142', trim: '#251f2b', weight: 0, scale: [1, 1], anchor: { x: -3.5, y: -2.5 },
+      },
     ],
   },
   greatShinobiWar: {
-    motif: 'Scarred paper and a banner field',
+    motif: 'Alliance tents under 忍 banners',
     sky: { top: '#555266', horizon: '#d6b698', low: '#9a8a86' },
     fog: { color: '#c9b09b', range: 5 },
     ambient: { color: '#f6eee8', intensity: 0.56 },
@@ -196,7 +265,10 @@ const STAGE_LOOK_DATA: Record<StageId, StageLookData> = {
         kind: 'warBanner', sector: 'far', body: '#3a3036', trim: '#e3d6c2', weight: 1.6, scale: [0.9, 1.2],
       },
       {
-        kind: 'paperShard', sector: 'far', body: '#e2d8c6', trim: '#2d2629', weight: 1.2, scale: [0.9, 1.3],
+        kind: 'allianceTent', sector: 'far', body: '#5a4a40', trim: '#cfc2a0', weight: 1.2, scale: [0.9, 1.2],
+      },
+      {
+        kind: 'commandTent', sector: 'far', body: '#5a4a40', trim: '#cfc2a0', weight: 0, scale: [1, 1], anchor: { x: 5, y: -2.5 },
       },
       {
         kind: 'stakeFence', sector: 'side', body: '#5a4a40', trim: '#2d2629', weight: 1, scale: [0.8, 1],

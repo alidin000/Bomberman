@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils';
 import { StageLandmarkKind } from '../../../content/stageLooks';
+import { HERO_LANDMARK_PARTS } from './village/heroLandmarks';
+import { glyphGeometries, placeAt } from './village/glyphs';
 
 /**
  * Low-poly landmark silhouettes. Every part is flat-shaded by splitting its
@@ -18,14 +20,17 @@ export type LandmarkColors = {
   pad: string;
 };
 
-type Tone = keyof LandmarkColors;
+export type Tone = keyof LandmarkColors;
 type Vec3 = [number, number, number];
-type Part = {
+export type LandmarkPart = {
   geometry: THREE.BufferGeometry;
   tone: Tone;
   at?: Vec3;
   rotate?: Vec3;
+  /** A fixed colour instead of the tone (painted marks, faces, foliage). */
+  color?: string;
 };
+type Part = LandmarkPart;
 
 const box = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d);
 const cone = (r: number, h: number, segments: number) => new THREE.ConeGeometry(r, h, segments);
@@ -55,6 +60,7 @@ function pad(radius: number, height: number): Part {
 }
 
 const LANDMARK_PARTS: Record<StageLandmarkKind, () => Part[]> = {
+  ...HERO_LANDMARK_PARTS,
   marketStall: () => [
     pad(0.98, 0.45),
     standing(box(1.4, 0.55, 0.8), 'body', 0.55, 0, 0.45, 0),
@@ -166,6 +172,13 @@ const LANDMARK_PARTS: Record<StageLandmarkKind, () => Part[]> = {
     standing(cone(0.85, 3, 5), 'body', 3, 0.62, 0, 0.3, [0, 0.5, -0.08]),
     standing(cone(0.48, 1.4, 5), 'trim', 1.4, 0, 3.92, 0),
     standing(cone(0.32, 0.95, 5), 'trim', 0.95, 0.66, 2.3, 0.3, [0, 0.5, -0.08]),
+    // Cloud banks wrapped round the peak's waist (the Cloud's mountains).
+    {
+      geometry: new THREE.SphereGeometry(0.5, 7, 4).scale(1.4, 0.5, 0.9), tone: 'trim', at: [-0.55, 1.7, 0.45],
+    },
+    {
+      geometry: new THREE.SphereGeometry(0.42, 7, 4).scale(1.3, 0.5, 0.9), tone: 'trim', at: [0.75, 2.5, 0.35],
+    },
   ],
   strataPillar: () => [
     [1.1, 0.8, 1, 0, 'body'], [0.95, 0.7, 0.9, 0.3, 'trim'], [1, 0.85, 0.95, -0.2, 'body'],
@@ -223,6 +236,9 @@ const LANDMARK_PARTS: Record<StageLandmarkKind, () => Part[]> = {
     standing(box(0.66, 0.06, 0.06), 'body', 0.06, 0.29, 3.2, 0),
     standing(box(0.56, 1.95, 0.03), 'trim', 1.95, 0.32, 1.25, 0),
     standing(box(0.56, 0.2, 0.04), 'accent', 0.2, 0.32, 3.0, 0),
+    // The alliance's 忍 painted down the cloth.
+    ...glyphGeometries('endure', { size: 0.46, width: 12, depth: 0.02 }, placeAt(0.32, 2.45, 0.015))
+      .map((geometry): Part => ({ geometry, tone: 'body' })),
   ],
   paperShard: () => [
     [0.9, 1.85, -0.25, 0, 0.18, 0.12],
@@ -268,7 +284,7 @@ function bakePart(part: Part, colors: LandmarkColors): THREE.BufferGeometry {
   source.computeVertexNormals();
   const normals = source.getAttribute('normal');
   const colorsOut = new Float32Array(normals.count * 3);
-  TONE_COLOR.set(colors[part.tone]);
+  TONE_COLOR.set(part.color ?? colors[part.tone]);
   for (let index = 0; index < normals.count; index += 1) {
     const shade = faceShade(normals.getY(index), normals.getX(index), normals.getZ(index));
     colorsOut[index * 3] = TONE_COLOR.r * shade;

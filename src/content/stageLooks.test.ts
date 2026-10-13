@@ -57,8 +57,11 @@ describe('stage looks', () => {
     ].join('|');
     expect(new Set(looks.map(signature)).size).toBe(STAGE_DEFINITIONS.length);
     expect(new Set(looks.map(stageSkyBackground)).size).toBe(STAGE_DEFINITIONS.length);
-    expect(new Set(looks.flatMap((look) => look.landmarks.map((set) => set.kind))).size)
-      .toBe(looks.reduce((total, look) => total + look.landmarks.length, 0));
+    // No two villages share a landmark (a village may use a kind on both the
+    // skyline and the margins: its houses).
+    const kindsPerLook = looks.map((look) => new Set(look.landmarks.map((set) => set.kind)));
+    expect(new Set(kindsPerLook.flatMap((kinds) => [...kinds])).size)
+      .toBe(kindsPerLook.reduce((total, kinds) => total + kinds.size, 0));
   });
 
   it('recolours the lights without dimming the board or flattening its contrast', () => {

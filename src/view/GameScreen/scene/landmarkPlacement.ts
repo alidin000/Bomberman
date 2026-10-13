@@ -14,8 +14,16 @@ import {
  * the camera and anything on the board.
  */
 
-/** Footprint radius and height of each landmark at scale 1, in cells. */
-export const LANDMARK_EXTENTS: Record<StageLandmarkKind, { radius: number; height: number }> = {
+/**
+ * Footprint radius and height of each landmark at scale 1, in cells. Wide,
+ * shallow famous places (the Hokage Rock, cliffs, bridges) also give the
+ * half depth that keeps them off the board; the radius still keeps the
+ * scatter clear of them.
+ */
+export const LANDMARK_EXTENTS: Record<
+  StageLandmarkKind,
+  { radius: number; height: number; halfDepth?: number }
+> = {
   marketStall: { radius: 1.05, height: 1.95 },
   rootArch: { radius: 1.75, height: 2.2 },
   cedar: { radius: 1.25, height: 5.4 },
@@ -37,6 +45,22 @@ export const LANDMARK_EXTENTS: Record<StageLandmarkKind, { radius: number; heigh
   warBanner: { radius: 0.75, height: 3.5 },
   paperShard: { radius: 1.05, height: 2.0 },
   stakeFence: { radius: 1.45, height: 1.4 },
+  hokageRock: { radius: 5.3, height: 5.75, halfDepth: 1.55 },
+  hokageTower: { radius: 1.8, height: 3.8 },
+  leafHouse: { radius: 1.05, height: 2.0 },
+  kazekageDome: { radius: 1.95, height: 3.5 },
+  sandCliff: { radius: 4.3, height: 4.8, halfDepth: 1.15 },
+  sandHouse: { radius: 0.98, height: 2.05 },
+  mizukageTower: { radius: 1.6, height: 4.0 },
+  mistBridge: { radius: 2.4, height: 2.0, halfDepth: 0.55 },
+  raikageTower: { radius: 1.6, height: 5.5 },
+  cloudSpire: { radius: 0.9, height: 3.85 },
+  tsuchikageTower: { radius: 1.6, height: 5.45 },
+  rockBridge: { radius: 2.7, height: 3.75, halfDepth: 0.85 },
+  demonStatue: { radius: 2.7, height: 5.75, halfDepth: 0.95 },
+  hideoutCave: { radius: 2.7, height: 3.9, halfDepth: 1.85 },
+  commandTent: { radius: 1.75, height: 3.4 },
+  allianceTent: { radius: 1.05, height: 1.45 },
 };
 
 export type StagePropSector = 'far' | 'left' | 'right';
@@ -53,8 +77,12 @@ export type StagePropInstance = {
   /** Footprint radius and height after scaling, in cells. */
   radius: number;
   height: number;
+  /** How far the footprint reaches toward the board (radius unless shallow). */
+  halfDepth: number;
   /** Value multiplier for the instance colour: back layers sit darker. */
   shade: number;
+  /** One of the village's famous places (an anchored set). */
+  famous: boolean;
 };
 
 /** Half a cell plus the floor slab's lip (Floor draws width + 1.1). */
@@ -138,8 +166,8 @@ export function placeStageProps(
 ): StagePropInstance[] {
   const random = createRandom(hashSeed(`${look.stageId}:${width}x${height}`));
   const keepOut = propKeepOut(width, height);
-  const farSets = look.landmarks.filter((set) => set.sector === 'far');
-  const sideSets = look.landmarks.filter((set) => set.sector === 'side');
+  const farSets = look.landmarks.filter((set) => set.sector === 'far' && !set.anchor);
+  const sideSets = look.landmarks.filter((set) => set.sector === 'side' && !set.anchor);
   const placed: StagePropInstance[] = [];
 
   const fits = (x: number, y: number, radius: number) => placed.every((other) => (
@@ -158,9 +186,10 @@ export function placeStageProps(
     const [low, high] = set.scale;
     const scale = (low + (high - low) * random()) * grow;
     const radius = extents.radius * scale;
+    const halfDepth = (extents.halfDepth ?? extents.radius) * scale;
     let x = rawX;
     let y = rawY;
-    if (sector === 'far') y = Math.min(y, keepOut.minY - radius);
+    if (sector === 'far') y = Math.min(y, keepOut.minY - halfDepth);
     if (sector === 'left') x = Math.min(x, keepOut.minX - radius);
     if (sector === 'right') x = Math.max(x, keepOut.maxX + radius);
     if (sector !== 'far' && y + radius > (height - 1) * SIDE_DEPTH_SHARE) return;
@@ -171,13 +200,21 @@ export function placeStageProps(
       layer,
       x,
       y,
-      rotation: (random() - 0.5) * 0.9,
+      // Famous places face the camera square on.
+      rotation: set.anchor ? 0 : (random() - 0.5) * 0.9,
       scale,
       radius,
+      halfDepth,
       height: extents.height * scale,
       shade: 1 - layer * 0.07 - random() * 0.05,
+      famous: !!set.anchor,
     });
   };
+
+  // The famous places first, where the village has them; the scatter fills in round.
+  look.landmarks.forEach((set) => {
+    if (set.anchor) tryPlace(set, 'far', 0, set.anchor.x, set.anchor.y, 1);
+  });
 
   FAR_LAYERS.forEach((band, layer) => {
     for (let x = -FAR_OVERHANG; x <= width - 1 + FAR_OVERHANG; x += band.step) {

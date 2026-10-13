@@ -8,10 +8,11 @@ import type { GameEngineState } from '../../../engine/types';
 import type { GameMap } from '../../../model/gameItem';
 import type { StageId } from '../../../content/types';
 import {
-  ReputationTierId, VillageInteractable, VillageSquareLayout, presentInteractables,
+  RepairStage, ReputationTierId, VillageInteractable, VillageSquareLayout, presentInteractables,
   reachableInteractable,
 } from '../../../content/villageSquare';
 import { isCastId } from '../../../content/animeCast';
+import { VillageDressing } from './village/VillageDressing';
 import { FIGHTER_INK_MATERIAL } from './fighterInk';
 import { CastFigure } from './cast/CastFigure';
 import { castFigureMesh } from './cast/castGeometry';
@@ -176,10 +177,14 @@ function VillageSquareBase({
   readState,
   promptPlayerIds,
   reducedMotion,
+  repairStage = 1,
 }: {
   square: VillageSquareLayout;
   stageId: StageId;
   tier: ReputationTierId;
+  /** How far the village has rebuilt (config.village.repairStage); missing draws 1. */
+  // eslint-disable-next-line react/require-default-props -- defaulted in the signature
+  repairStage?: RepairStage;
   /** closedCellsKey(square, map) */
   closedCells: string;
   groundTint: string;
@@ -315,6 +320,8 @@ function VillageSquareBase({
 
   return (
     <group userData={{ villageSquare: true }}>
+      {/* eslint-disable-next-line max-len -- one-line mount (scene/village) */}
+      <VillageDressing square={square} stageId={stageId} repairStage={repairStage} closedCells={closedCells} present={present} readState={readState} reducedMotion={reducedMotion} />
       {paving && (
         <mesh geometry={paving} material={TOKEN_MATERIAL} receiveShadow userData={PAVING_MARK} />
       )}

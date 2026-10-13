@@ -35,12 +35,12 @@ function allStageProps(MAP: number): { stageId: string; props: StagePropInstance
   }));
 }
 
-// A prop's world-space box: its footprint circle's square, base to top.
+// A prop's world-space box: its footprint (radius wide, half depth deep), base to top.
 function propBox(prop: StagePropInstance): THREE.Box3 {
   const [x, , z] = toWorld(prop.x, prop.y);
   return new THREE.Box3(
-    new THREE.Vector3(x - prop.radius, PROP_BASE_Y, z - prop.radius),
-    new THREE.Vector3(x + prop.radius, PROP_BASE_Y + prop.height, z + prop.radius)
+    new THREE.Vector3(x - prop.radius, PROP_BASE_Y, z - prop.halfDepth),
+    new THREE.Vector3(x + prop.radius, PROP_BASE_Y + prop.height, z + prop.halfDepth)
   );
 }
 
@@ -96,11 +96,11 @@ describe.each(SIZES)('stage landmarks on a %i-cell board', (MAP) => {
     const keepOut = propKeepOut(MAP, MAP);
     allStageProps(MAP).forEach(({ props }) => {
       props.forEach((prop, index) => {
-        const outside = prop.y + prop.radius <= keepOut.minY + 1e-9
+        const outside = prop.y + prop.halfDepth <= keepOut.minY + 1e-9
           || prop.x + prop.radius <= keepOut.minX + 1e-9
           || prop.x - prop.radius >= keepOut.maxX - 1e-9;
         expect(outside).toBe(true);
-        if (prop.sector === 'far') expect(prop.y + prop.radius).toBeLessThanOrEqual(keepOut.minY + 1e-9);
+        if (prop.sector === 'far') expect(prop.y + prop.halfDepth).toBeLessThanOrEqual(keepOut.minY + 1e-9);
         else expect(prop.y + prop.radius).toBeLessThanOrEqual((MAP - 1) * SIDE_DEPTH_SHARE + 1e-9);
         props.slice(index + 1).forEach((other) => {
           expect(Math.hypot(other.x - prop.x, other.y - prop.y))
@@ -140,6 +140,45 @@ describe.each(SIZES)('stage landmarks on a %i-cell board', (MAP) => {
     });
   });
 
+  it('stands each village\'s famous places on the skyline above the square', () => {
+    const famous: Record<string, string[]> = {
+      hiddenLeaf: ['hokageRock', 'hokageTower'],
+      hiddenSand: ['kazekageDome', 'sandCliff'],
+      hiddenMist: ['mizukageTower', 'mistBridge'],
+      hiddenCloud: ['raikageTower'],
+      hiddenStone: ['tsuchikageTower', 'rockBridge'],
+      akatsukiHideout: ['demonStatue', 'hideoutCave'],
+      greatShinobiWar: ['commandTent'],
+    };
+    // Where the camera stands for a player at the square's spawn (1,1).
+    const camera = cameraFor(VIEWS[0], {
+      minX: 1, maxX: 1, minY: 1, maxY: 1,
+    });
+    const view = new THREE.PerspectiveCamera(48, VIEWS[0].width / VIEWS[0].height, 0.1, 200);
+    view.position.copy(camera);
+    view.lookAt(new THREE.Vector3(toWorld(1, 1)[0], 0, toWorld(1, 1)[2]));
+    view.updateMatrixWorld();
+    allStageProps(MAP).forEach(({ stageId, props }) => {
+      famous[stageId].forEach((kind) => {
+        const placed = props.filter((prop) => prop.kind === kind);
+        expect({ stageId, kind, count: placed.length }).toEqual({ stageId, kind, count: 1 });
+        const [prop] = placed;
+        expect(prop.sector).toBe('far');
+        expect(prop.rotation).toBe(0);
+        const anchor = getStageLook(stageId).landmarks.find((set) => set.kind === kind)!.anchor!;
+        expect(prop.x).toBe(anchor.x);
+      });
+      // All of a village's famous places cost one draw together.
+      expect(stagePropLayers(props).filter((layer) => layer.famous)).toHaveLength(1);
+      // The first famous place faces the square's opening view.
+      const [first] = props.filter((prop) => prop.kind === famous[stageId][0]);
+      const [wx, , wz] = toWorld(first.x, first.y);
+      const seen = new THREE.Vector3(wx, PROP_BASE_Y + first.height * 0.6, wz).project(view);
+      expect({ stageId, onScreen: Math.abs(seen.x) < 1 && Math.abs(seen.y) < 1 })
+        .toEqual({ stageId, onScreen: true });
+    });
+  });
+
   it('costs at most six instanced draws a stage', () => {
     allStageProps(MAP).forEach(({ props }) => {
       expect(stagePropLayers(props).length).toBeLessThanOrEqual(6);
@@ -151,15 +190,19 @@ describe.each(SIZES)('stage landmarks on a %i-cell board', (MAP) => {
       const geometry = buildLandmarkGeometry(kind, COLORS);
       const positions = geometry.getAttribute('position');
       let reach = 0;
+      let depth = 0;
       let top = -Infinity;
       let bottom = Infinity;
       for (let index = 0; index < positions.count; index += 1) {
         reach = Math.max(reach, Math.hypot(positions.getX(index), positions.getZ(index)));
+        depth = Math.max(depth, Math.abs(positions.getZ(index)));
         top = Math.max(top, positions.getY(index));
         bottom = Math.min(bottom, positions.getY(index));
       }
       expect({ kind, fits: reach <= LANDMARK_EXTENTS[kind].radius }).toEqual({ kind, fits: true });
       expect({ kind, fits: top <= LANDMARK_EXTENTS[kind].height }).toEqual({ kind, fits: true });
+      const { halfDepth } = LANDMARK_EXTENTS[kind];
+      expect({ kind, fits: depth <= (halfDepth ?? Infinity) }).toEqual({ kind, fits: true });
       expect(bottom).toBeGreaterThan(-0.15);
       // Flat-shaded faces and one colour per vertex, ready for one draw.
       expect(geometry.getAttribute('color').count).toBe(positions.count);
