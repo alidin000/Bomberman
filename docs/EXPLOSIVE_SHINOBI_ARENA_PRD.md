@@ -2,7 +2,7 @@
 
 # PRODUCT REQUIREMENTS DOCUMENT (PRD)
 
-# VERSION 2.0
+# VERSION 2.1 (status updated October 2026)
 
 ---
 
@@ -56,7 +56,31 @@ Architecture:
 * src/network
 * src/view
 
-Future online multiplayer must remain compatible with current deterministic architecture.
+Online multiplayer runs the same deterministic engine on an authoritative server.
+
+---
+
+# DELIVERY STATUS (OCTOBER 2026)
+
+The live game at https://bomberman-zuqb.onrender.com implements this document as follows. The sections below keep the original requirements; where the shipped design differs, the section says so.
+
+| Area | Status |
+| --- | --- |
+| Campaign (§3.1, §5, §8, §9) | Shipped: seven villages in order, each with its objectives, defense waves, mini-boss gate and boss. |
+| Arena (§3.2) | Shipped: local battles for 2–3 players with Human or CPU slots. |
+| Online (§3.3) | Shipped: private rooms, online co-op campaign, and arena versus for up to four players. Boss raids are not built. |
+| Fog of war (§6) | Shipped, with each fighter's vision radius and special vision effects. |
+| Map size (§7) | Shipped: bespoke 50x50 campaign maps with districts, secret rooms and an in-map boss arena. Arena maps stay 35x35. |
+| Enemies, Zetsu, respawns (§10–§12) | Shipped. |
+| Mini-bosses, bosses, tailed beasts (§13–§15) | Shipped: every village ends with a tailed beast. |
+| Characters, powerups, themes, transformations (§16–§19) | Shipped: six fighters with signature bombs, ultimates and HUD themes. |
+| Village hub (§20) | Shipped both ways: a hub between missions, and a village square inside every mission map. |
+| Random events (§21) | Shipped: one event per village. |
+| Hidden areas (§22) | Shipped: three secrets per village, tracked on the hub's Secrets tab with a set reward. |
+| Character fragments (§23) | Partial: fragments are found and saved. Characters unlock by clearing their village, not yet by fragment count. |
+| Reputation (§24) | Shipped: per-village reputation, standing tiers, requests, a stall discount, a new villager, and cosmetic scarves. |
+| 3D assets (§25) | Shipped another way: every model is built in code from shared recipes. See §25. |
+| Save system (§26) | Shipped: a versioned local save with migrations. |
 
 ---
 
@@ -102,7 +126,9 @@ No story progression.
 
 ---
 
-## 3.3 Online Mode (Future)
+## 3.3 Online Mode
+
+Status: shipped as private rooms with online co-op campaign and arena versus (up to four players). Boss raids are not built yet.
 
 Friend rooms.
 
@@ -251,9 +277,9 @@ Explosions temporarily reveal territory.
 
 # 7. MAP SIZE
 
-Current maps are small arena maps.
+Status: shipped. Each village has a bespoke 50x50 campaign map with districts, secret rooms and a walled boss arena that opens when the mini-boss gate is cleared. Arena maps are 35x35.
 
-Campaign maps should become:
+Original requirement: campaign maps should become:
 
 35x35 minimum
 
@@ -804,6 +830,11 @@ Stat Buffs
 
 # 20. VILLAGE HUB SYSTEM
 
+Status: shipped in two places.
+
+* Between missions, the hub shows the village's people, the shop, the standing card, the requests on offer and the Secrets tab. You can deploy from it, and replay the village's story scenes.
+* Inside every mission, the village square at the entrance is safe ground. The village's canon people stand there (for example Kakashi and Sakura in the Leaf, with Jiraiya wandering in from Known standing). It also holds the request board, the merchant's stall, a Secrets shrine and the gate. The square visibly rebuilds as the village's reputation grows: damaged, rebuilt, thriving, festival.
+
 Between missions players enter village hubs.
 
 Players can:
@@ -867,6 +898,8 @@ Events modify gameplay.
 
 # 22. HIDDEN AREAS
 
+Status: shipped. Every village hides three secrets in real rooms: a scroll cache, an archive fragment and an elite Zetsu burrow. You enter them through cracked walls or hidden passages. The hub's Secrets tab lists each one with a rough location and what it gives. Finding all three pays Embers and unlocks that village's scarf.
+
 Destroyable walls can reveal:
 
 Secret Rooms
@@ -885,6 +918,8 @@ Hidden Mini Bosses
 
 # 23. CHARACTER FRAGMENT SYSTEM
 
+Status: partial. Fragments are found in secret rooms and saved per character. Characters currently unlock by clearing their village; unlocking by fragment count is not built.
+
 Characters unlock through fragments.
 
 Example:
@@ -900,6 +935,13 @@ Progress persists.
 ---
 
 # 24. REPUTATION SYSTEM
+
+Status: shipped.
+
+* Each village's reputation rises with mission clears, new secrets and finished requests.
+* Standing (the sum across villages) has tiers: Stranger, Known at 15, Trusted at 40, Honored at 80.
+* The tiers bring a new villager (Jiraiya) to every square, more requests, a stall discount and the ember-thread scarf.
+* A village's own reputation sets how far its square has rebuilt.
 
 Every village has reputation.
 
@@ -918,6 +960,14 @@ New Cosmetics
 ---
 
 # 25. 3D ASSET STRATEGY
+
+Status: shipped another way. No Blender models or downloaded meshes are used.
+
+* Every fighter, enemy, mini-boss and villager is a cast figure. One look per character lives in `src/content/animeCast.ts`: hair, outfit, headband mark, face marks and accessories. It is built into one merged cel-shaded body and one ink outline.
+* Tailed beasts, jutsu effects, pickups, objectives and village landmarks use the same shared-recipe approach.
+* Animation comes from a render-only pose and cue system.
+
+This keeps load time, draw calls and silhouettes predictable. The original plan follows.
 
 Use Blender.
 
@@ -983,6 +1033,8 @@ Hidden Area Props
 
 # 26. SAVE SYSTEM
 
+Status: shipped as a versioned local save (version 6) that migrates older saves. Besides the list below, it keeps Embers, packed consumables and upgrades, finished requests, claimed secret sets, the chosen scarf, and the story scenes seen.
+
 Persist:
 
 Campaign Progress
@@ -1006,6 +1058,8 @@ Character Progress
 ---
 
 # 27. AGENTIC AI IMPLEMENTATION PRIORITY
+
+Status: phases 1 to 4 are delivered. From phase 5, online multiplayer, friend lobbies (private rooms) and co-op campaign are delivered; boss raids remain.
 
 PHASE 1
 

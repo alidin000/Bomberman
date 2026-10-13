@@ -1,8 +1,8 @@
 # Explosive Shinobi Arena
 
-A fast 3D grid-bomber game with a shinobi-inspired campaign, couch battles,
-CPU opponents, and private online rooms. Built for the browser with React,
-TypeScript, and Three.js.
+A fast 3D grid-bomber game set in the world of Naruto: a seven-village
+campaign, couch battles, CPU opponents, and private online rooms. Built for the
+browser with React, TypeScript, and Three.js.
 
 **[Play the game](https://bomberman-zuqb.onrender.com)**
 
@@ -10,28 +10,45 @@ TypeScript, and Three.js.
 
 ## Highlights
 
-- Six fighters with distinct bombs, passives, movement styles, and ultimates.
-- Solo campaign, training dojo, local arena, and private online co-op/versus.
+- Six fighters (Naruto, Sasuke, Gaara, Minato, Itachi, Deidara) with their own
+  bombs, passives, movement styles and signature jutsu.
+- A seven-village campaign on 50x50 maps with secret rooms, defense waves,
+  mini-bosses and a tailed beast in every boss arena.
+- Each mission starts in a living village square. Talk to Kakashi, Sakura,
+  Temari, Mei, Jiraiya and more, take requests from the board, and shop
+  mid-mission. Each square rebuilds from ruins to a festival as you help.
+- Story scenes with portraits, a Secrets tracker with set rewards, standing
+  tiers and village scarves.
+- Training dojo, local arena with CPU opponents, and private online co-op and
+  versus rooms.
 - Deterministic rules shared by browser matches, CPU play, replays, and the
   authoritative online server.
-- Procedural cel-shaded characters, enemies, bosses, pickups, and effects.
-- Responsive keyboard, gamepad, and mobile controls with accessibility options.
+- Anime cel-shaded characters, tailed beasts, jutsu effects and village
+  landmarks, all drawn in code.
+- Responsive keyboard, gamepad, and touch controls with accessibility options:
+  reduced motion, high contrast, and flash-safe effects.
 
 ## Screens
 
-| Mission Deck | Live arena |
+| Mission Deck | Story scene |
 | --- | --- |
-| ![Campaign and local match setup](docs/images/mission-deck.webp) | ![A local match in the 3D arena](docs/images/arena.webp) |
+| ![Campaign and local match setup](docs/images/mission-deck.webp) | ![Kakashi and Sakura brief the mission](docs/images/story-scene.webp) |
+| **Village square** | **Village hub** |
+| ![The Hidden Leaf square at the start of a mission](docs/images/village-square.webp) | ![The hub with the village's people, standing and requests](docs/images/hub.webp) |
+| **Live arena** | |
+| ![A local match in the 3D arena](docs/images/arena.webp) | |
 
 The complete modes, characters, missions, bosses, power-ups, and progression
 systems are documented in the [product specification](docs/EXPLOSIVE_SHINOBI_ARENA_PRD.md).
 
 ## Animation And Models
 
-The shipping 3D models are assembled at runtime from poseable Three.js
-primitives. Shared recipes, merged geometry, toon lighting, and back-facing ink
-hulls create the minimal retro-anime look without downloading character meshes.
-A separate cue store animates movement, attacks, hits, ultimates, and knockouts
+Every character is built at runtime from one look in
+`src/content/animeCast.ts`: hair, outfit, headband mark, face marks and
+accessories. The game turns it into one merged cel-shaded body and one ink
+outline. The tailed beasts, jutsu effects and village landmarks are built the
+same way, from shared recipes, so no character meshes are downloaded. A
+separate cue store animates movement, attacks, hits, ultimates and knockouts
 without changing deterministic game state.
 
 AI-assisted images were used for visual references and menu artwork, then
@@ -45,8 +62,9 @@ Production profiling drove the optimization work: fixed-step simulation,
 interpolated motion, selector-based React updates, instanced scenery, cached
 resources, pooled lights, shader warmup, capped pixel ratio, and lazy loading.
 
-Recorded profiling reduced a versus scene from **445 to 115 draw calls** and
-scene updates from roughly **30 to 5-7 components per simulation tick**. Render
+Recorded profiling reduced a versus scene from **445 to 67 draw calls** and
+scene updates from roughly **30 to 5-7 components per simulation tick**. No
+shader compiles after a match starts. Render
 budgets, shader reuse, deterministic rules, and browser flows are protected by
 automated tests. Read the [performance design](docs/ARCHITECTURE.md#performance-constraints).
 
@@ -102,17 +120,30 @@ npm run server
 
 ```bash
 npm run lint
+npm run typecheck
 npm test
 npm run build
 npm run test:e2e
 ```
+
+CI runs all of these on every push and pull request to `main`.
 
 ## Documentation
 
 - [System design, rendering, networking, and optimization](docs/ARCHITECTURE.md)
 - [Full product and feature specification](docs/EXPLOSIVE_SHINOBI_ARENA_PRD.md)
 
+## Credits
+
+- Fonts: [Bangers](https://github.com/googlefonts/bangers) and a 16-kanji subset
+  of [Yuji Boku](https://github.com/Kinutafontfactory/Yuji), both under the SIL
+  Open Font License 1.1. The licences are in [public/fonts](public/fonts).
+- Characters, villages, models, effects and portraits are drawn in code by the
+  game. No art, models, logos, music or voices from the show or its games are
+  included.
+
 ## License
 
-MIT. This is an independent fan project; no affiliation or endorsement is
-implied.
+MIT for the code. This is an independent, non-commercial fan project. Naruto
+and its characters, names and village marks belong to Masashi Kishimoto,
+Shueisha and their licensees. No affiliation or endorsement is implied.

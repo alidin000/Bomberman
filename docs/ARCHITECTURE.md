@@ -136,6 +136,48 @@ When the boss unlocks, the reducer opens the arena gates, and the boss enters
 at the arena's centre. The renderer draws doors and gates by shape with the
 wall material, so they compile no new shader.
 
+## Village Square
+
+Every campaign mission starts in its village's square: the open 10x8
+entrance district that all seven campaign maps share. The square is the hub
+inside the map. `content/villageSquare.ts` holds its contract and
+`engine/villageSquare.ts` its rules:
+
+- No bomb can be dropped inside it, blasts stop at its edge, enemies never
+  enter it and lose track of a player inside, and boss hazards and wave
+  entries skip it. Its props (the two villagers, the request board, the
+  merchant's stall, the shrine and the gate) block movement like pillars.
+- Next to a prop, the bomb key, pad A or the touch bomb button talks, trades or
+  reads instead of dropping a bomb. In solo play an open panel pauses the match.
+- The request board offers optional goals (collect marked keepsakes, break
+  marked crates, find a secret, defeat enemies, finish without a fall). The
+  stall sells the hub's consumables mid-mission. Both are engine actions
+  (`ACCEPT_REQUEST`, `CAMPAIGN_PURCHASE`) that work while paused, so a
+  recorded match replays the same way.
+- Requests and the stall exist only in solo campaign. The app builds
+  `GameConfig.village` from the save before `INIT` (standing tier, Embers,
+  offered requests, rebuild stage, scarf). Co-op and online rooms have no
+  `village` config, so they get the square's rules and people but not its board
+  or stall. Online clients cannot send either action.
+
+Progression lives in `src/story/`. Each village's reputation rises with
+mission clears, new secrets and finished requests. **Standing** is the sum over
+all villages. Its tier (Stranger, Known 15, Trusted 40, Honored 80) brings
+Jiraiya to every square, a stall discount, more requests and an ember-thread
+scarf. A village's own reputation sets its **rebuild stage**: damaged until
+first cleared, then rebuilt, thriving and festival. Between missions the hub
+(`view/HubScreen`) has three tabs:
+
+- **Village:** the canon villagers, standing, rebuild stage and the board.
+- **Shop:** the shop.
+- **Secrets:** each village's three secrets with a rough location and reward.
+  Finding all three pays Embers and unlocks that village's scarf.
+
+The first deploy to a village, from the hub or the Mission Deck, plays a short
+story scene with portraits. The scene can be skipped and replayed from the
+hub. The save is versioned (`STORY_PROGRESS_VERSION`, now 6) and migrates
+older saves forward.
+
 ## Online Room Flow
 
 ```mermaid
@@ -187,9 +229,24 @@ look continuous while collisions remain deterministic.
 
 ### Model Pipeline
 
-Fighters are assembled from poseable Three.js primitives. Hair, clothing, and
-accessories vary by fighter. Monsters and bosses use reusable part recipes;
-their transformed pieces are merged once and cached. Each tailed beast
+Every humanoid is a **cast figure**. That covers the six fighters, the seven
+enemy kinds, the mini-boss gate guards, the square's canon villagers and
+Naruto's shadow clones. `content/animeCast.ts` describes each character once:
+
+- hair and outfit presets;
+- colours;
+- the headband's village mark and how it is worn;
+- face marks, eye marks and accessories.
+
+`scene/cast/` turns a look into one merged, vertex-coloured body plus one welded
+ink line, so each figure costs two draw calls, cached per look. Faces, headband
+plates (the marks in `content/villageSymbols.ts`) and prints such as the
+Akatsuki clouds come from one canvas atlas, painted once. `CastPrewarm` builds
+every look a match can need during the countdown. Shadow clones reuse Naruto's
+figure with a chakra glow, a uniform on a pooled material, so they need no new
+shader.
+
+Each tailed beast
 (`scene/beasts/`) is drawn as the anime shows it, with the right number of
 tails, and wears the fighters' toon bands and ink line. Pickups and objectives
 use merged vertex-colored bodies.
@@ -207,9 +264,41 @@ The cel-shaded finish has two passes:
 2. One welded, back-facing hull per fighter expands along vertex normals to
    create a stable dark outline.
 
-Archived GLB experiments are disabled in the shipping renderer. Keeping the
-procedural path as the default gives predictable scale, silhouettes, animation,
-load time, and draw-call cost.
+No mesh files are downloaded. Everything is built in code from shared
+recipes, which keeps scale, silhouettes, animation, load time and draw-call
+cost predictable. Nothing is copied from the show or its games. The look is
+drawn by the game from the cast data.
+
+### Villages
+
+Each village has its famous places on the skyline, built by
+`scene/village/heroLandmarks.ts`:
+
+- **Hidden Leaf:** the Hokage Rock faces and the round residence with 火.
+- **Hidden Sand:** the Kazekage dome.
+- **Hidden Mist:** the water and the tower.
+- **Hidden Cloud:** the tower on its peak.
+- **Hidden Stone:** the spire.
+- **Akatsuki hideout:** the Demonic Statue.
+- **War front:** the alliance tents.
+
+The kanji are the game's own brush strokes, drawn as geometry, not text. The
+square's dressing follows the rebuild stage: rubble and soot, then fresh
+timber, then banners and lit lanterns, then a festival. The walking extras are
+render only. They step aside for players and never block anything. Wall shapes
+vary by village but share one material.
+
+### Portraits and UI
+
+Story scenes, the talk panel and the hub's villager cards use SVG portraits
+(`view/portraits/`) drawn from the same cast looks. The menus and HUD use the
+theme tokens in `src/index.css`:
+
+- scroll-paper panels, brush headers and village marks;
+- two bundled OFL fonts: Bangers, plus a Yuji Boku subset of 16 kanji. See
+  `public/fonts/`.
+
+The HUD keeps fixed band sizes, so camera framing is unchanged.
 
 ## Performance Constraints
 
@@ -223,10 +312,23 @@ load time, and draw-call cost.
   static first paint.
 - Camera: gameplay is framed against measured HUD safe areas.
 
+Measured on production builds (versus, 1366x768): draw calls fell from 117
+to 67 when every figure became one merged body and one ink line. Frame time
+stayed level, and no shader compiles after the match starts.
+
 Performance work is checked on production builds. Useful signals are draw calls,
 triangles, shader programs, late compiles, main-thread long tasks, React render
 counts, and first-load timing. Reducer tests verify rules; scene tests verify
 resource and rendering contracts; Playwright exercises real browser flows.
+
+## Quality
+
+CI runs on every push and pull request to `main`: lint, type check, unit and
+scene tests, the client build, the server build, and Playwright browser tests
+against the built client and server. Every rule change bumps
+`REPLAY_VERSION` (now 10), and `SIMULATION_VERSION` follows it. The online
+server rejects clients on another simulation version, so old tabs cannot join
+rooms with different rules.
 
 ## Main Modules
 
@@ -234,7 +336,8 @@ resource and rendering contracts; Playwright exercises real browser flows.
 | --- | --- |
 | `src/engine/` | State, reducer, character abilities, hazards, campaign, and seeded randomness |
 | `src/ai/` | CPU decision-making through ordinary engine actions |
-| `src/content/` | Data-driven stages, fighters, missions, enemies, and bosses |
+| `src/content/` | Data-driven stages, fighters, missions, enemies, bosses, the anime cast, village marks, the square, requests, secrets, and story scenes |
+| `src/story/` | Save, migrations, Embers, rewards, standing and rebuild stages |
 | `src/hooks/engineLoop.ts` | Local fixed-step scheduler |
 | `src/hooks/engineStore.ts` | State publication and selector subscriptions |
 | `src/hooks/motionStore.ts` | Display interpolation tracks |
@@ -243,6 +346,12 @@ resource and rendering contracts; Playwright exercises real browser flows.
 | `server/` | Authoritative rooms, ticks, rate limits, and health check |
 | `src/view/GameScreen/` | Match shell, HUD, camera, and 3D renderer |
 | `src/view/GameScreen/scene/` | Instancing, lights, warmup, models, ink, and telegraphs |
+| `src/view/GameScreen/scene/cast/` | Cast figures: atlas, merged bodies, ink lines, prewarm, scarves |
+| `src/view/GameScreen/scene/beasts/`, `jutsu/` | Tailed beasts and signature jutsu effects |
+| `src/view/GameScreen/scene/village/` | Landmarks, the square's dressing and rebuild stages, extras |
+| `src/view/GameScreen/village/` | The square's talk, board, stall, shrine and gate panels |
+| `src/view/HubScreen/`, `src/view/portraits/` | Hub tabs, story scenes and SVG portraits |
+| `src/theme/`, `src/index.css` | Theme tokens, fonts and village marks for menus and HUD |
 
 ## Deployment
 
