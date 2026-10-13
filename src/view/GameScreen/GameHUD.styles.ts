@@ -3,7 +3,13 @@ import { Box, LinearProgress } from '@mui/material';
 
 const PANEL_SURFACE = 'rgba(255, 248, 231, 0.94)';
 const PANEL_EDGE = 'var(--anime-ink)';
-const PANEL_SHADOW = '3px 3px 0 rgba(33, 29, 26, 0.88)';
+const PANEL_SHADOW = '3px 3px 0 rgba(23, 18, 15, 0.9)';
+// Display numerals and names (index.css --font-display). Every use sets its
+// line height so a panel stays the height hudInsets expects.
+const DISPLAY = 'var(--font-display)';
+// Two slanted orange slashes at a card's right edge, like a manga panel.
+const CARD_SLASHES = 'linear-gradient(105deg, transparent 0 80%, rgba(245,130,31,0.22) 80% 82%, '
+  + 'transparent 82% 85%, rgba(245,130,31,0.22) 85% 86%, transparent 86%)';
 
 // Text floor: nothing in the HUD is smaller than 12 px (0.75rem) at 100%
 // HUD, and the numbers players read mid-fight are at least 1.1rem. The
@@ -67,7 +73,7 @@ export const MissionStrip = styled(Box)({
   gap: 1,
   padding: 3,
   border: '2px solid var(--anime-ink)',
-  background: 'var(--anime-mustard)',
+  background: 'var(--anime-orange)',
   boxShadow: '3px 3px 0 var(--anime-ink)',
   pointerEvents: 'none',
   // Phones: the strip is the clock cell alone (GameHUD renders only that),
@@ -87,7 +93,7 @@ export const MissionStatus = styled(Box)({
   padding: '6px 10px 6px 12px',
   background: 'var(--anime-ink)',
   '& strong': {
-    color: 'var(--anime-mustard)',
+    color: 'var(--anime-orange)',
     fontSize: LABEL,
     fontWeight: 900,
     textTransform: 'uppercase',
@@ -95,8 +101,11 @@ export const MissionStatus = styled(Box)({
   '& > span': {
     overflow: 'hidden',
     color: 'var(--anime-paper-light)',
-    fontSize: '0.92rem',
-    fontWeight: 900,
+    fontFamily: DISPLAY,
+    fontSize: '1.05rem',
+    fontWeight: 400,
+    lineHeight: 1.02,
+    letterSpacing: '0.05em',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
@@ -121,8 +130,11 @@ export const MissionNode = styled(Box)({
     maxWidth: '100%',
     overflow: 'hidden',
     color: 'var(--anime-ink)',
+    fontFamily: DISPLAY,
     fontSize: NUMBER,
-    fontWeight: 900,
+    fontWeight: 400,
+    lineHeight: 1.16,
+    letterSpacing: '0.04em',
     fontVariantNumeric: 'tabular-nums',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -369,7 +381,7 @@ export const PlayerCardPaper = styled('section', {
   minWidth: 0,
   width: 248,
   padding: '6px 8px 7px 7px',
-  background: alive ? PANEL_SURFACE : 'rgba(226, 216, 194, 0.94)',
+  background: alive ? `${CARD_SLASHES}, ${PANEL_SURFACE}` : 'rgba(226, 216, 194, 0.94)',
   color: 'var(--anime-ink)',
   border: `2px solid ${PANEL_EDGE}`,
   borderTop: `4px solid ${slotColor}`,
@@ -417,8 +429,10 @@ export const SlotBadge = styled(Box, {
   color: textColor,
   background: slotColor,
   border: '2px solid var(--anime-ink)',
-  fontSize: '0.8rem',
-  fontWeight: 900,
+  fontFamily: DISPLAY,
+  fontSize: '0.95rem',
+  fontWeight: 400,
+  letterSpacing: '0.04em',
   lineHeight: 1,
   [PHONE]: {
     minHeight: 0,
@@ -453,14 +467,17 @@ export const PlayerIdentity = styled(Box)({
   '& > strong': {
     overflow: 'hidden',
     color: 'var(--anime-ink)',
-    fontSize: '0.92rem',
-    fontWeight: 900,
-    lineHeight: 1.1,
+    fontFamily: DISPLAY,
+    fontSize: '1.05rem',
+    fontWeight: 400,
+    // The old 0.92rem x 1.1 line box (about 16 px), so the card keeps its height.
+    lineHeight: 0.965,
+    letterSpacing: '0.05em',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
   [PHONE]: {
-    '& > strong': { fontSize: '0.82rem' },
+    '& > strong': { fontSize: '0.94rem', lineHeight: 0.96 },
   },
 });
 
@@ -542,8 +559,10 @@ export const StatCell = styled(Box)({
     flex: '0 0 auto',
   },
   '& strong': {
+    fontFamily: DISPLAY,
     fontSize: NUMBER,
-    fontWeight: 900,
+    fontWeight: 400,
+    letterSpacing: '0.03em',
     fontVariantNumeric: 'tabular-nums',
     lineHeight: 1.05,
   },

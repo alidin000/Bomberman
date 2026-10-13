@@ -209,7 +209,7 @@ export const InstructionsScreen = () => {
           <ManualIntro>
             Start with the four-step loop. Use the guide rail to jump to the detailed rule you need mid-match.
             {' '}
-            <Link to={DOJO_PATH} style={{ color: 'var(--action)', fontWeight: 900 }}>
+            <Link to={DOJO_PATH} style={{ color: 'var(--accent)', fontWeight: 900 }}>
               {`Rather learn by playing? Try the ${DOJO_NAME}.`}
             </Link>
           </ManualIntro>

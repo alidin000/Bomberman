@@ -96,6 +96,8 @@ import {
   getStageDefinition,
 } from '../../content';
 import { DOJO_PATH } from '../../content/dojo';
+import { STAGE_SYMBOL } from '../../content/villageSymbols';
+import { villageMarkImage } from '../../theme/VillageMark';
 import {
   loadStoryProgress,
   selectStoryLoadout,
@@ -719,7 +721,10 @@ export const ConfigScreen = () => {
               )}
 
               {mode === 'solo' && selectedMission && (
-                <MissionBriefing accent={selectedStageDefinition.palette.accent}>
+                <MissionBriefing
+                  accent={selectedStageDefinition.palette.accent}
+                  mark={villageMarkImage(STAGE_SYMBOL[selectedStage], '#17120f', 0.13)}
+                >
                   <MissionBriefingPreview>
                     <StagePreviewImage
                       image={StageAtlas}
@@ -806,6 +811,7 @@ export const ConfigScreen = () => {
                           completed={completed}
                           locked={locked}
                           accent={accent}
+                          markImage={villageMarkImage(STAGE_SYMBOL[village.stageId], '#17120f', locked ? 0.12 : 0.3)}
                           disabled={locked}
                           onClick={() => {
                             if (!locked) setSelectedStage(village.stageId);

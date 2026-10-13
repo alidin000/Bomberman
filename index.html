@@ -27,6 +27,9 @@
       href="/src/assets/ninja-bomber-hero-leaf.webp"
       fetchpriority="high"
     />
+    <!-- The title's display face (SIL OFL, public/fonts): fetched with the
+         page so the static title below is set in it, not swapped later. -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/bangers-latin.woff2" crossorigin />
     <!-- Static first paint: the title screen's frame, art and copy, drawn
          before the JS arrives. React replaces #root's content on mount.
          Mirrors the hero in src/view/WelcomeScreen/WelcomeScreen.styles.ts;
@@ -42,8 +45,14 @@
         overflow: hidden;
         padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
           max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
-        background-color: #18292f;
+        background-color: #120d0b;
+        background-image: radial-gradient(ellipse at 50% 120%, rgba(245, 130, 31, 0.38), rgba(245, 130, 31, 0) 62%);
         font-family: "Trebuchet MS", "Arial Narrow", Arial, sans-serif;
+      }
+      @font-face {
+        font-family: "Bangers";
+        src: url("/fonts/bangers-latin.woff2") format("woff2");
+        font-display: swap;
       }
       .boot::before,
       .boot::after {
@@ -53,13 +62,15 @@
       }
       .boot::before {
         inset: 0;
-        opacity: 0.2;
-        background-image: radial-gradient(rgba(255, 255, 255, 0.22) 0.6px, transparent 0.6px);
-        background-size: 7px 7px;
+        background-image: repeating-conic-gradient(from 0deg at 50% 50%, rgba(255, 248, 231, 0) 0deg 2.2deg,
+          rgba(255, 248, 231, 0.13) 2.2deg 3deg, rgba(255, 248, 231, 0) 3deg 5.1deg, rgba(255, 248, 231, 0.07) 5.1deg 5.6deg);
+        -webkit-mask-image: radial-gradient(ellipse at 50% 50%, transparent 0 28%, #000 70%);
+        mask-image: radial-gradient(ellipse at 50% 50%, transparent 0 28%, #000 70%);
       }
       .boot::after {
         inset: 10px;
-        border: 1px solid rgba(255, 248, 231, 0.22);
+        border: 1px solid rgba(245, 130, 31, 0.45);
+        box-shadow: inset 0 0 0 3px rgba(18, 13, 11, 0.9), inset 0 0 0 4px rgba(255, 248, 231, 0.12);
       }
       .boot-hero {
         position: relative;
@@ -67,22 +78,22 @@
         width: min(1120px, calc(100vw - 40px));
         min-height: min(760px, calc(100dvh - 40px));
         overflow: hidden;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 248, 231, 0.32);
-        box-shadow: 0 30px 80px rgba(6, 15, 19, 0.34);
+        border-radius: 4px;
+        border: 3px solid #17120f;
+        box-shadow: 0 0 0 2px rgba(245, 130, 31, 0.85), 10px 10px 0 2px rgba(0, 0, 0, 0.55);
       }
       .boot-scene {
         position: absolute;
         inset: 0;
         background: #bd6a70 url(/src/assets/ninja-bomber-hero-leaf.webp) 0 0 / cover no-repeat;
-        filter: saturate(0.8) contrast(0.95) brightness(0.88);
+        filter: saturate(0.9) contrast(1.02) brightness(0.86);
         transform: scale(1.015);
       }
       .boot-scene::after {
         content: "";
         position: absolute;
         inset: 0;
-        background: linear-gradient(90deg, rgba(14, 22, 25, 0.78) 0%, rgba(14, 22, 25, 0.56) 46%, rgba(20, 29, 32, 0.3) 100%);
+        background: linear-gradient(90deg, rgba(14, 9, 7, 0.86) 0%, rgba(20, 11, 6, 0.62) 46%, rgba(60, 24, 6, 0.26) 100%);
       }
       .boot-copy {
         position: relative;
@@ -95,28 +106,47 @@
         color: #fff8e7;
       }
       .boot-title {
-        max-width: 540px;
+        max-width: 600px;
         margin: 0;
-        font-size: 4.4rem;
-        font-weight: 900;
-        line-height: 0.9;
+        color: #f5821f;
+        font-family: "Bangers", Impact, "Arial Narrow Bold", "Arial Black", sans-serif;
+        font-size: 5.4rem;
+        font-weight: 400;
+        line-height: 0.86;
+        letter-spacing: 0.035em;
         text-transform: uppercase;
-        text-shadow: 0 3px 18px rgba(8, 16, 20, 0.52);
+        -webkit-text-stroke: 1.5px #17120f;
+        text-shadow: 3px 0 0 #17120f, -3px 0 0 #17120f, 0 3px 0 #17120f, 0 -3px 0 #17120f,
+          2px 2px 0 #17120f, -2px -2px 0 #17120f, 2px -2px 0 #17120f, -2px 2px 0 #17120f,
+          7px 7px 0 #17120f, 0 0 26px rgba(245, 130, 31, 0.45);
         overflow-wrap: anywhere;
+      }
+      .boot-title::after {
+        content: "";
+        display: block;
+        width: min(420px, 82%);
+        height: 14px;
+        margin-top: 14px;
+        background: #f5821f;
       }
       .boot-subtitle {
         max-width: 520px;
-        margin: 16px 0 0;
-        color: rgba(255, 248, 231, 0.86);
+        margin: 14px 0 0;
+        color: rgba(255, 248, 231, 0.92);
         font-size: 1.25rem;
         font-weight: 800;
         line-height: 1.36;
       }
       .boot-meta {
+        width: fit-content;
         margin-top: 10px;
-        color: rgba(255, 248, 231, 0.84);
-        font-size: 0.78rem;
-        font-weight: 800;
+        padding: 3px 14px 3px 10px;
+        color: #fff8e7;
+        background: rgba(18, 13, 11, 0.86);
+        border-left: 5px solid #f5821f;
+        font-family: "Bangers", Impact, "Arial Narrow Bold", sans-serif;
+        font-size: 0.95rem;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
       }
       .boot-actions {
@@ -125,7 +155,7 @@
       }
       @media (max-width: 720px) {
         .boot-scene::after {
-          background: linear-gradient(180deg, rgba(14, 22, 25, 0.3) 0%, rgba(14, 22, 25, 0.66) 45%, rgba(14, 22, 25, 0.86) 100%);
+          background: linear-gradient(180deg, rgba(14, 9, 7, 0.3) 0%, rgba(14, 9, 7, 0.7) 45%, rgba(14, 9, 7, 0.9) 100%);
         }
       }
       @media (max-width: 640px) {
@@ -140,8 +170,8 @@
           padding: 28px 22px;
         }
         .boot-title {
-          font-size: 2.35rem;
-          line-height: 0.94;
+          font-size: 3.25rem;
+          line-height: 0.9;
         }
         .boot-actions {
           height: 223px;
@@ -152,8 +182,8 @@
           padding: 20px;
         }
         .boot-title {
-          font-size: 2.5rem;
-          line-height: 0.94;
+          font-size: 3rem;
+          line-height: 0.9;
         }
       }
     </style>

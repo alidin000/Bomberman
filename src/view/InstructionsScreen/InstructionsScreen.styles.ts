@@ -8,7 +8,6 @@ import {
 
 const panelCut = 'none';
 const chipCut = 'none';
-const bannerCut = 'polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%)';
 
 export const InstructionsBackground = styled('div')({
   position: 'relative',
@@ -21,16 +20,17 @@ export const InstructionsBackground = styled('div')({
   padding: 'max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) '
     + 'max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left))',
   overflow: 'hidden',
-  backgroundColor: 'var(--anime-paper)',
-  backgroundImage: 'radial-gradient(rgba(33,29,26,0.12) 0.7px, transparent 0.7px)',
-  backgroundSize: '5px 5px',
+  // The house backdrop: ink night, an orange dusk and speed lines.
+  backgroundColor: 'var(--anime-night)',
+  backgroundImage: 'radial-gradient(ellipse at 50% 120%, rgba(245,130,31,0.38), rgba(245,130,31,0) 62%)',
   '&::before': {
     content: "''",
     position: 'absolute',
     inset: 0,
     pointerEvents: 'none',
-    opacity: 1,
-    border: '10px solid var(--anime-teal)',
+    backgroundImage: 'var(--speed-lines)',
+    WebkitMaskImage: 'var(--speed-lines-mask)',
+    maskImage: 'var(--speed-lines-mask)',
   },
 });
 
@@ -45,35 +45,56 @@ export const StyledDialog = styled(Dialog)({
     maxWidth: 'min(1180px, 96vw)',
     margin: 8,
     maxHeight: '92vh',
-    padding: '18px 18px 0',
+    padding: '27px 18px 0',
     overflow: 'hidden',
     color: 'var(--anime-ink)',
     clipPath: panelCut,
-    background: 'var(--anime-paper-light)',
+    // An unrolled scroll: its wooden rod across the top (the actions bar
+    // carries the bottom one).
+    backgroundColor: 'var(--anime-paper-light)',
+    backgroundImage: 'var(--scroll-rod), var(--scroll-paper)',
+    backgroundSize: '100% 11px, 100% 100%, auto, 100% 100%',
+    backgroundRepeat: 'no-repeat, no-repeat, repeat, no-repeat',
     border: '3px solid var(--anime-ink)',
     boxShadow: 'var(--shadow-frame)',
     borderRadius: 'var(--radius)',
   },
 });
 
+// Display type on a ragged brush stroke of ink.
 export const StyledDialogTitle = styled(DialogTitle)({
+  position: 'relative',
+  isolation: 'isolate',
   width: 'fit-content',
   minWidth: 300,
   margin: '0 auto 14px',
-  padding: '8px 36px 9px',
-  clipPath: bannerCut,
+  padding: '6px 44px 7px',
   color: 'var(--anime-paper-light)',
-  background: 'var(--anime-teal)',
+  background: 'transparent',
   textAlign: 'center',
   textTransform: 'uppercase',
-  fontWeight: 900,
-  letterSpacing: 0,
-  boxShadow: '4px 4px 0 var(--anime-ink)',
+  fontFamily: 'var(--font-display)',
+  fontSize: '1.75rem',
+  fontWeight: 400,
+  lineHeight: 1.15,
+  letterSpacing: '0.07em',
+  textShadow: '2px 2px 0 var(--accent)',
+  '&::before': {
+    content: "''",
+    position: 'absolute',
+    inset: 0,
+    zIndex: -1,
+    background: 'var(--anime-ink)',
+    WebkitMaskImage: 'var(--brush-swash)',
+    maskImage: 'var(--brush-swash)',
+    WebkitMaskSize: '100% 100%',
+    maskSize: '100% 100%',
+  },
   '@media (max-width: 520px)': {
     minWidth: 0,
     width: '100%',
-    padding: '8px 18px 9px',
-    fontSize: '1rem',
+    padding: '6px 18px 7px',
+    fontSize: '1.35rem',
   },
 });
 
@@ -90,7 +111,8 @@ export const DialogActions = styled(MuiDialogActions)({
   minHeight: 64,
   display: 'flex',
   alignItems: 'center',
-  background: 'var(--anime-paper-light)',
+  paddingBottom: 27,
+  background: 'var(--scroll-rod) bottom / 100% 11px no-repeat, var(--anime-paper-light)',
 });
 
 export const BackButton = styled('button')({
@@ -103,11 +125,14 @@ export const BackButton = styled('button')({
   border: '2px solid var(--anime-ink)',
   borderRadius: 2,
   clipPath: chipCut,
-  color: 'var(--anime-paper-light)',
+  color: 'var(--on-action)',
   background: 'var(--action)',
-  boxShadow: 'var(--shadow-1)',
+  boxShadow: 'var(--shadow-2)',
   cursor: 'pointer',
-  fontWeight: 900,
+  fontFamily: 'var(--font-display)',
+  fontSize: '1.1rem',
+  fontWeight: 400,
+  letterSpacing: '0.07em',
   textTransform: 'uppercase',
   '&:hover': {
     background: 'var(--action-deep)',
@@ -150,9 +175,13 @@ export const ManualHeroTitle = styled('div')({
   gap: 6,
   '& strong': {
     color: 'var(--anime-ink)',
-    fontSize: '1.35rem',
-    fontWeight: 900,
+    fontFamily: 'var(--font-display)',
+    fontSize: '2rem',
+    fontWeight: 400,
+    lineHeight: 1.05,
+    letterSpacing: '0.05em',
     textTransform: 'uppercase',
+    textShadow: '2px 2px 0 var(--anime-orange)',
   },
   '& p': {
     maxWidth: 720,
@@ -317,19 +346,34 @@ export const ManualSection = styled('section', {
   border: '2px solid var(--anime-ink)',
 }));
 
+// A brush stroke of the deep accent (paper-light type, 6.3:1).
 export const ManualSectionTitle = styled('h2')({
+  position: 'relative',
+  isolation: 'isolate',
   width: 'fit-content',
   margin: '0 auto 10px',
-  padding: '5px 26px 6px',
-  clipPath: bannerCut,
+  padding: '4px 30px 5px',
   color: 'var(--anime-paper-light)',
-  background: 'var(--anime-teal)',
+  background: 'transparent',
   textAlign: 'center',
   textTransform: 'uppercase',
-  fontSize: '0.82rem',
-  fontWeight: 900,
-  letterSpacing: 0,
+  fontFamily: 'var(--font-display)',
+  fontSize: '1.2rem',
+  fontWeight: 400,
+  lineHeight: 1.15,
+  letterSpacing: '0.07em',
   textShadow: 'none',
+  '&::before': {
+    content: "''",
+    position: 'absolute',
+    inset: 0,
+    zIndex: -1,
+    background: 'var(--accent)',
+    WebkitMaskImage: 'var(--brush-swash)',
+    maskImage: 'var(--brush-swash)',
+    WebkitMaskSize: '100% 100%',
+    maskSize: '100% 100%',
+  },
 });
 
 export const ManualList = styled('div', {

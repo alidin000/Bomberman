@@ -11,8 +11,11 @@ import {
   ResultPips,
   ResultPip,
   ResultRow,
+  ResultStamp,
   ResultTone,
   RESULT_TONE_ACCENTS,
+  RESULT_TONE_TEXT,
+  resultSeal,
   StyledResultDialog,
 } from './RoundResultDialog.styles';
 import { GameEngineState } from '../../engine/types';
@@ -91,7 +94,8 @@ export const RoundResultDialog = (
   if (versus) winnerSlot = isGameOver ? matchWinnerSlot(state) : lastRoundWinnerSlot(state);
   const title = versus ? roundOverBanner(state) : getResultTitle(isGameOver, tone);
   const accent = winnerSlot !== null ? playerSlotColor(winnerSlot) : RESULT_TONE_ACCENTS[tone];
-  const accentText = winnerSlot !== null ? playerSlotTextColor(winnerSlot) : 'var(--anime-ink)';
+  const accentText = winnerSlot !== null ? playerSlotTextColor(winnerSlot) : RESULT_TONE_TEXT[tone];
+  const seal = resultSeal(tone, versus, winnerSlot);
   const wins = winsBySlot(state);
   const needed = winsNeeded(state.totalRounds);
   const completedObjectives = state.campaign?.objectives.filter(
@@ -125,6 +129,7 @@ export const RoundResultDialog = (
       aria-labelledby="round-result-title"
       betweenRounds={versus && !isGameOver}
     >
+      {seal && <ResultStamp aria-hidden="true" data-seal={seal}>{seal}</ResultStamp>}
       <ResultBanner id="round-result-title" accent={accent} textColor={accentText}>
         {title}
       </ResultBanner>

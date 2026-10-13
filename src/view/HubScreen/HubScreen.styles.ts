@@ -73,16 +73,20 @@ export const VillageIntro = styled.div`
   & h3 {
     margin: 0 0 4px;
     color: var(--anime-ink);
-    font-size: 1.2rem;
-    font-weight: 900;
-    line-height: 1.2;
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    font-weight: 400;
+    line-height: 1.05;
+    letter-spacing: 0.05em;
   }
 
   & h3 small {
     display: block;
     color: var(--anime-teal-deep);
+    font-family: var(--font-body);
     font-size: 0.72rem;
     font-weight: 900;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
   }
 
@@ -91,7 +95,7 @@ export const VillageIntro = styled.div`
     gap: 10px;
 
     & h3 {
-      font-size: 1rem;
+      font-size: 1.35rem;
     }
   }
 `;
@@ -106,8 +110,9 @@ export const MissionGoals = styled.p`
 export const VillageArt = styled.div`
   height: 112px;
   overflow: hidden;
-  border: 1px solid var(--ink-1);
+  border: 2px solid var(--anime-ink);
   border-radius: var(--radius);
+  box-shadow: 4px 4px 0 var(--anime-orange);
 
   @media (max-width: 620px) {
     height: 72px;
@@ -143,8 +148,11 @@ export const NpcButton = styled.button<{ accent: string }>`
   cursor: pointer;
 
   & strong {
-    font-size: 0.95rem;
-    font-weight: 900;
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: 0.05em;
   }
 
   & small {
@@ -163,6 +171,7 @@ export const NpcButton = styled.button<{ accent: string }>`
   &:hover {
     border-color: var(--anime-ink);
     border-left-color: ${(props) => props.accent};
+    box-shadow: 3px 3px 0 var(--anime-orange);
   }
 
   &:focus-visible {
@@ -179,14 +188,18 @@ export const Conversation = styled.div`
 export const Speaker = styled.h3`
   margin: 0;
   color: var(--anime-ink);
-  font-size: 1rem;
-  font-weight: 900;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
 
   & small {
     margin-left: 8px;
     color: var(--ink-2);
+    font-family: var(--font-body);
     font-size: 0.72rem;
     font-weight: 800;
+    letter-spacing: 0;
     text-transform: uppercase;
   }
 
@@ -241,14 +254,18 @@ export const ShopHeading = styled.h3`
   gap: 4px 12px;
   margin: 12px 0 4px;
   color: var(--anime-ink);
-  font-size: 0.82rem;
-  font-weight: 900;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 
   & span {
     color: var(--ink-2);
+    font-family: var(--font-body);
     font-size: 0.75rem;
     font-weight: 800;
+    letter-spacing: 0;
     text-transform: none;
   }
 `;
@@ -339,7 +356,7 @@ export const VillageChip = styled.button`
   cursor: pointer;
 
   &[aria-pressed='true'] {
-    color: var(--anime-paper-light);
+    color: var(--on-action);
     background: var(--action);
     border-color: var(--anime-ink);
   }

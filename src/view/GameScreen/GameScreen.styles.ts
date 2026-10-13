@@ -159,7 +159,9 @@ export const PauseOverlay = styled.div({
   // A tall card (three players on a phone) scrolls instead of being cut off
   // above the viewport; on phones it also starts below the top controls.
   overflowY: 'auto',
-  background: 'rgba(33,29,26,0.72)',
+  // Ink over the frozen arena, with static speed lines toward the card.
+  background: 'repeating-conic-gradient(from 0deg at 50% 50%, rgba(255,248,231,0) 0deg 2.6deg, '
+    + 'rgba(255,248,231,0.07) 2.6deg 3.3deg), rgba(18,13,11,0.74)',
   pointerEvents: 'auto',
   color: 'var(--anime-ink)',
   '@media (max-width: 640px)': {
@@ -173,28 +175,21 @@ export const PauseMenuCard = styled.div({
   width: 'min(620px, 92vw)',
   display: 'grid',
   gap: 14,
-  padding: 20,
+  padding: '29px 20px 20px',
   borderRadius: 2,
-  background: 'var(--anime-paper-light)',
+  backgroundColor: 'var(--anime-paper-light)',
+  backgroundImage: 'var(--scroll-paper)',
   border: '3px solid var(--anime-ink)',
-  boxShadow: '8px 8px 0 var(--anime-vermilion)',
+  boxShadow: '8px 8px 0 var(--anime-orange)',
+  // The scroll's wooden rod across the top.
   '&::before': {
     content: '""',
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 4,
-    background: 'var(--anime-teal)',
-  },
-  '&::after': {
-    content: '""',
-    position: 'absolute',
-    inset: 0,
-    pointerEvents: 'none',
-    background: 'radial-gradient(rgba(33,29,26,0.12) 0.6px, transparent 0.6px)',
-    backgroundSize: '5px 5px',
-    opacity: 0.3,
+    height: 11,
+    background: 'var(--scroll-rod)',
   },
 });
 
@@ -203,12 +198,16 @@ export const PauseMenuTitle = styled.div({
   gap: 3,
   '& strong': {
     color: 'var(--anime-ink)',
-    fontSize: '1.32rem',
-    fontWeight: 900,
+    fontFamily: 'var(--font-display)',
+    fontSize: '2rem',
+    fontWeight: 400,
+    lineHeight: 1.05,
+    letterSpacing: '0.06em',
     textTransform: 'uppercase',
+    textShadow: '2px 2px 0 var(--anime-orange)',
   },
   '& span': {
-    color: 'rgba(33,29,26,0.72)',
+    color: 'rgba(23,18,15,0.72)',
     fontSize: '0.86rem',
     fontWeight: 700,
   },
@@ -226,7 +225,10 @@ export const PauseMenuActions = styled.div({
 export const PauseMenuButton = styled(Button)({
   minHeight: 42,
   borderRadius: 2,
-  fontWeight: 900,
+  fontFamily: 'var(--font-display)',
+  fontSize: '1.1rem',
+  fontWeight: 400,
+  letterSpacing: '0.07em',
   textTransform: 'uppercase',
 });
 
@@ -247,7 +249,7 @@ export const ControlsGuide = styled.aside({
   color: 'var(--anime-ink)',
   background: 'rgba(255,248,231,0.95)',
   border: '2px solid var(--anime-ink)',
-  boxShadow: '4px 4px 0 var(--anime-teal)',
+  boxShadow: '4px 4px 0 var(--anime-orange)',
 });
 
 export const ControlsGuideHeader = styled.div({
@@ -257,8 +259,10 @@ export const ControlsGuideHeader = styled.div({
   gap: 10,
   '& strong': {
     color: 'var(--anime-teal)',
-    fontSize: '0.84rem',
-    fontWeight: 900,
+    fontFamily: 'var(--font-display)',
+    fontSize: '1.1rem',
+    fontWeight: 400,
+    letterSpacing: '0.06em',
     textTransform: 'uppercase',
   },
 });

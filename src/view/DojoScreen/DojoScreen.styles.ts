@@ -2,15 +2,17 @@ import styled from '@emotion/styled';
 
 const PHONE = '@media (max-width: 640px)';
 
-// The Mission Deck's button roles: teal is the action colour, ink outlines
-// the rest (vermilion stays for danger).
+// The Mission Deck's button roles: orange (ink type) is the action colour,
+// ink outlines the rest (vermilion stays for danger).
 export const DOJO_BUTTON_RULES = {
   '& .MuiButton-root': {
-    fontWeight: 900,
+    fontFamily: 'var(--font-display)',
+    fontWeight: 400,
+    letterSpacing: '0.06em',
     textTransform: 'uppercase' as const,
   },
   '& .MuiButton-contained, & .MuiButton-contained.Mui-focusVisible': {
-    color: 'var(--anime-paper-light)',
+    color: 'var(--on-action)',
     background: 'var(--action)',
     border: '2px solid var(--anime-ink)',
     boxShadow: 'var(--shadow-1)',
@@ -26,7 +28,7 @@ export const DOJO_BUTTON_RULES = {
     borderColor: 'transparent',
   },
   '& .MuiButton-outlined:hover, & .MuiButton-text:hover': {
-    background: 'rgba(53,111,107,0.1)',
+    background: 'rgba(245,130,31,0.16)',
   },
 };
 
@@ -68,11 +70,14 @@ export const DojoRoomCard = styled('li', {
   background: status === 'cleared' ? 'rgba(102, 113, 88, 0.14)' : 'var(--anime-paper)',
   border: '2px solid var(--anime-ink)',
   borderTop: `6px solid ${status === 'cleared' ? 'var(--anime-olive)' : 'var(--anime-mustard)'}`,
-  boxShadow: current ? '4px 4px 0 var(--anime-teal)' : 'var(--shadow-1)',
+  boxShadow: current ? '4px 4px 0 var(--anime-orange)' : 'var(--shadow-1)',
   '& h3': {
     margin: 0,
-    fontSize: '1.05rem',
-    fontWeight: 900,
+    fontFamily: 'var(--font-display)',
+    fontSize: '1.35rem',
+    fontWeight: 400,
+    lineHeight: 1.1,
+    letterSpacing: '0.05em',
   },
   '& p': {
     margin: 0,

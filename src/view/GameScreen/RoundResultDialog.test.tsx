@@ -318,4 +318,50 @@ describe('RoundResultDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change setup' }));
     expect(screen.getByText('Mission Deck')).toBeInTheDocument();
   });
+  it('stamps the outcome as a seal: a win, a solo loss, never a draw, and out of the accessible name', () => {
+    const solo = {
+      mode: 'solo' as const,
+      numPlayers: 1,
+      totalRounds: 1,
+      selectedMap: 'hiddenLeaf',
+      stageId: 'hiddenLeaf' as const,
+      selectedCharacters: ['deidara' as const],
+      map: parseMapRows(defaultMap),
+    };
+    const lost = { ...createInitialState(solo), phase: 'game_over' as const };
+    const versus = createInitialState({
+      numPlayers: 2, totalRounds: 2, selectedMap: 'map1', map: parseMapRows(defaultMap),
+    });
+    const won = { ...versus, phase: 'game_over' as const, roundWinners: ['player2', 'player2'] };
+    const tied = { ...versus, phase: 'game_over' as const, roundWinners: ['player1', 'player2'] };
+    const seal = () => document.querySelector('[data-seal]');
+    const show = (state: typeof lost, tone: 'victory' | 'defeat' | 'neutral') => render(
+      <MemoryRouter>
+        <RoundResultDialog
+          open
+          onClose={vi.fn()}
+          onRestart={vi.fn()}
+          resultMessage="Over."
+          isGameOver
+          tone={tone}
+          state={state}
+        />
+      </MemoryRouter>
+    );
+
+    const defeat = show(lost, 'defeat');
+    expect(seal()).toHaveTextContent('敗');
+    expect(seal()).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Mission Failed');
+    defeat.unmount();
+
+    const victory = show(won, 'neutral');
+    expect(seal()).toHaveTextContent('勝');
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('P2 Deidara wins 2–0');
+    victory.unmount();
+
+    show(tied, 'neutral');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Draw · 1–1');
+    expect(seal()).toBeNull();
+  });
 });

@@ -7,44 +7,62 @@ type PlayerControlsRowProps = {
 
 const panelCut = 'none';
 const chipCut = 'none';
-const bannerCut = 'polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%)';
 
 export const StyledDialog = styled(Dialog)({
   '& .MuiBackdrop-root': {
-    backgroundColor: 'rgba(33, 29, 26, 0.78)',
+    backgroundColor: 'rgba(18, 13, 11, 0.82)',
   },
-  // The house dialog frame (shared with Settings): paper, ink keyline and a
-  // hard teal offset. The footer sits below the scrolling content, never on it.
+  // The house dialog frame (shared with Settings): an unrolled scroll, its
+  // wooden rod across the top (the footer carries the bottom one), an ink
+  // keyline and a hard orange offset. The footer sits below the scrolling
+  // content, never on it.
   '& .MuiDialog-paper': {
     width: '980px',
     maxWidth: 'calc(100vw - 16px)',
     minHeight: 'min(760px, calc(100dvh - 16px))',
     maxHeight: 'calc(100dvh - 16px)',
     margin: 8,
-    padding: '16px 20px 0',
+    padding: '25px 20px 0',
     overflow: 'hidden',
     borderRadius: 'var(--radius)',
     clipPath: panelCut,
     color: 'var(--anime-ink)',
     backgroundColor: 'var(--anime-paper-light)',
-    backgroundImage: 'none',
+    backgroundImage: 'var(--scroll-rod), var(--scroll-paper)',
+    backgroundSize: '100% 11px, 100% 100%, auto, 100% 100%',
+    backgroundRepeat: 'no-repeat, no-repeat, repeat, no-repeat',
     border: '3px solid var(--anime-ink)',
     boxShadow: 'var(--shadow-frame)',
   },
+  // The title: display type on a ragged brush stroke of ink.
   '& .MuiDialogTitle-root': {
     position: 'relative',
+    isolation: 'isolate',
     width: 'fit-content',
     minWidth: 280,
     margin: '0 auto 8px',
-    padding: '6px 34px 7px',
-    clipPath: bannerCut,
+    padding: '5px 44px 6px',
     color: 'var(--anime-paper-light)',
-    background: 'var(--anime-ink)',
-    fontSize: '1.1rem',
-    fontWeight: 900,
-    letterSpacing: 0,
+    background: 'transparent',
+    fontFamily: 'var(--font-display)',
+    fontSize: '1.65rem',
+    fontWeight: 400,
+    lineHeight: 1.15,
+    letterSpacing: '0.07em',
     textAlign: 'center',
     textTransform: 'uppercase',
+    textShadow: '2px 2px 0 var(--accent)',
+    '&::before': {
+      content: "''",
+      position: 'absolute',
+      inset: 0,
+      zIndex: -1,
+      background: 'var(--anime-ink)',
+      WebkitMaskImage: 'var(--brush-swash)',
+      maskImage: 'var(--brush-swash)',
+      WebkitMaskSize: '100% 100%',
+      maskSize: '100% 100%',
+    },
     // Focused by script when a step opens, so screen readers announce it.
     // It is not a control, so it shows no focus ring.
     '&:focus': {
@@ -91,26 +109,33 @@ export const StyledDialog = styled(Dialog)({
   '& .MuiStepIcon-root.Mui-active, & .MuiStepIcon-root.Mui-completed': {
     color: 'var(--action)',
   },
+  // Ink digits on the orange step (7.2:1).
+  '& .MuiStepIcon-root.Mui-active .MuiStepIcon-text, & .MuiStepIcon-root.Mui-completed .MuiStepIcon-text': {
+    fill: 'var(--on-action)',
+  },
   '& .MuiTypography-colorTextSecondary': {
     color: 'var(--ink-2)',
   },
   '& .MuiButton-root': {
     borderRadius: 'var(--radius)',
     clipPath: chipCut,
-    fontWeight: 900,
-    letterSpacing: 0,
+    fontFamily: 'var(--font-display)',
+    fontWeight: 400,
+    fontSize: '1.02rem',
+    letterSpacing: '0.06em',
     textTransform: 'uppercase',
   },
-  // The one primary call-to-action look: teal, ink keyline, hard shadow.
+  // The one primary call-to-action look: ninja orange with ink type, an
+  // ink keyline and a hard ink offset.
   '& .MuiButton-contained, & .MuiButton-contained.Mui-focusVisible': {
     background: 'var(--action)',
-    color: 'var(--anime-paper-light)',
+    color: 'var(--on-action)',
     border: '2px solid var(--anime-ink)',
-    boxShadow: 'var(--shadow-1)',
+    boxShadow: 'var(--shadow-2)',
   },
   '& .MuiButton-contained:hover': {
     background: 'var(--action-deep)',
-    boxShadow: 'var(--shadow-1)',
+    boxShadow: 'var(--shadow-2)',
   },
   '& .MuiButton-contained.Mui-disabled': {
     color: 'var(--ink-2)',
@@ -123,13 +148,13 @@ export const StyledDialog = styled(Dialog)({
     borderColor: 'transparent',
   },
   '& .MuiButton-text:hover': {
-    background: 'rgba(33,29,26,0.08)',
+    background: 'rgba(245,130,31,0.14)',
   },
   '& .MuiButtonBase-root.Mui-focusVisible': {
     outline: 'var(--focus-ring)',
     outlineOffset: 2,
   },
-  // The teal ring is the focus mark; MUI's pulsing focus ripple would be a second one.
+  // The chakra ring is the focus mark; MUI's pulsing focus ripple would be a second one.
   '& .MuiTouchRipple-ripplePulsate': {
     display: 'none',
   },
@@ -138,8 +163,8 @@ export const StyledDialog = styled(Dialog)({
     borderColor: 'var(--anime-ink)',
   },
   '& .MuiButton-outlined:hover': {
-    borderColor: 'var(--action)',
-    background: 'rgba(53,111,107,0.1)',
+    borderColor: 'var(--accent)',
+    background: 'rgba(245,130,31,0.14)',
   },
   '& .MuiStepButton-root': {
     padding: '4px 8px',
@@ -150,12 +175,17 @@ export const StyledDialog = styled(Dialog)({
     color: 'var(--anime-ink)',
     borderColor: 'var(--ink-1)',
     background: 'rgba(255,255,255,0.42)',
-    fontWeight: 900,
+    fontFamily: 'var(--font-display)',
+    fontWeight: 400,
+    fontSize: '1.05rem',
+    letterSpacing: '0.06em',
+    lineHeight: 1.2,
     clipPath: chipCut,
   },
   '& .MuiToggleButton-root.Mui-selected': {
-    color: 'var(--anime-paper-light)',
+    color: 'var(--on-action)',
     background: 'var(--action)',
+    boxShadow: 'inset 0 -3px 0 var(--anime-ink)',
   },
   '& .MuiToggleButton-root.Mui-selected:hover': {
     background: 'var(--action-deep)',
@@ -169,17 +199,18 @@ export const StyledDialog = styled(Dialog)({
   },
   '@media (max-width: 680px)': {
     '& .MuiDialog-paper': {
-      padding: '12px 12px 0',
+      padding: '20px 12px 0',
     },
     // Keep the footer actions on one row on phones.
     '& .MuiButton-sizeLarge': {
       minWidth: 0,
       padding: '8px 10px',
-      fontSize: '0.8rem',
+      fontSize: '0.98rem',
     },
     '& .MuiDialogTitle-root': {
       minWidth: 0,
-      fontSize: '0.95rem',
+      padding: '4px 30px 5px',
+      fontSize: '1.3rem',
     },
   },
   // Narrow phones: drop the play icon so the three footer actions share one row.
@@ -191,7 +222,7 @@ export const StyledDialog = styled(Dialog)({
   // Landscape phones: a small title and a slim footer leave room for the setup.
   '@media (max-height: 560px)': {
     '& .MuiDialog-paper': {
-      padding: '6px 14px 0',
+      padding: '14px 14px 0',
     },
     '& .MuiDialogTitle-root': {
       margin: '0 auto 2px',
@@ -209,7 +240,7 @@ export const StyledDialog = styled(Dialog)({
     '& .MuiButton-sizeLarge': {
       minWidth: 0,
       padding: '4px 14px',
-      fontSize: '0.84rem',
+      fontSize: '0.98rem',
     },
   },
 });
@@ -231,18 +262,20 @@ export const DeckFooter = styled.div`
   align-items: center;
   gap: 4px;
   margin: 0 -20px;
-  padding: 10px 20px 12px;
-  background: var(--anime-paper-light);
+  padding: 10px 20px 21px;
+  /* The scroll's bottom rod runs under the footer. */
+  background: var(--scroll-rod) bottom / 100% 11px no-repeat, var(--anime-paper-light);
   border-top: 2px solid var(--anime-ink);
 
   @media (max-width: 680px) {
     margin: 0 -12px;
-    padding: 8px 12px 10px;
+    padding: 8px 12px 19px;
   }
 
   @media (max-height: 560px) {
     margin: 0 -14px;
-    padding: 5px 14px 6px;
+    padding: 5px 14px 14px;
+    background-size: 100% 8px, auto;
   }
 `;
 
@@ -300,8 +333,10 @@ export const ModeToggleText = styled.span`
   line-height: 1.15;
 
   & small {
+    font-family: var(--font-body);
     font-size: 0.72rem;
     font-weight: 700;
+    letter-spacing: 0;
     text-transform: none;
     opacity: 0.9;
   }
@@ -541,8 +576,13 @@ export const ConfigIntro = styled.div`
   }
 `;
 
-/** The one framed panel on the mission step: picture, title and goals. */
-export const MissionBriefing = styled.div<{ accent: string }>`
+/**
+ * The one framed panel on the mission step: picture, title and goals, with
+ * the village's mark watermarked at the right (`mark`: a CSS image).
+ */
+export const MissionBriefing = styled('div', {
+  shouldForwardProp: (prop) => prop !== 'accent' && prop !== 'mark',
+})<{ accent: string; mark?: string | null }>`
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
   gap: 14px;
@@ -551,7 +591,9 @@ export const MissionBriefing = styled.div<{ accent: string }>`
   clip-path: ${panelCut};
   border: 2px solid var(--anime-ink);
   border-radius: var(--radius);
-  background: color-mix(in srgb, ${(props) => props.accent} 8%, var(--anime-paper));
+  background: ${(props) => (props.mark ? `${props.mark} right 10px center / 120px 120px no-repeat, ` : '')}
+    color-mix(in srgb, ${(props) => props.accent} 8%, var(--anime-paper));
+  box-shadow: 4px 4px 0 var(--anime-orange);
 
   @media (max-width: 620px) {
     grid-template-columns: 1fr;
@@ -580,13 +622,16 @@ export const MissionBriefingDetails = styled.div`
 
   & .MuiTypography-overline {
     color: var(--anime-teal-deep);
-    letter-spacing: 0;
+    letter-spacing: 0.04em;
     line-height: 1.6;
   }
 
   & .MuiTypography-h5 {
-    font-size: 1.35rem;
-    line-height: 1.2;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.85rem;
+    line-height: 1.05;
+    letter-spacing: 0.05em;
   }
 `;
 
@@ -631,11 +676,15 @@ export const CampaignRoute = styled.div`
   }
 `;
 
-export const CampaignRouteCard = styled.button<{
+// Each village card carries its mark, faint in the corner (`markImage`: a CSS image).
+export const CampaignRouteCard = styled('button', {
+  shouldForwardProp: (prop) => !['active', 'completed', 'locked', 'accent', 'markImage'].includes(String(prop)),
+})<{
   active: boolean;
   completed: boolean;
   locked: boolean;
   accent: string;
+  markImage?: string | null;
 }>`
   position: relative;
   min-height: 56px;
@@ -650,6 +699,10 @@ export const CampaignRouteCard = styled.button<{
     if (props.completed) return `color-mix(in srgb, ${props.accent} 18%, var(--anime-paper-light))`;
     return 'var(--anime-paper-light)';
   }};
+  background-image: ${(props) => props.markImage ?? 'none'};
+  background-repeat: no-repeat;
+  background-position: right 5px bottom 5px;
+  background-size: 30px 30px;
   color: ${(props) => (props.locked ? 'var(--ink-2)' : 'var(--anime-ink)')};
   text-align: left;
   cursor: ${(props) => (props.locked ? 'not-allowed' : 'pointer')};
@@ -761,12 +814,30 @@ export const SectionTitle = styled(Typography)`
   padding: 0;
   color: var(--anime-ink);
   background: transparent;
-  font-size: 0.82rem;
-  font-weight: 900;
-  line-height: 1.4;
-  letter-spacing: 0;
+  font-family: var(--font-display);
+  font-size: 1.12rem;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   text-align: left;
+
+  /* An orange brush stroke behind the lower half of the words. */
+  &::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    left: -10px;
+    right: -10px;
+    bottom: 1px;
+    height: 0.55em;
+    background: var(--anime-orange);
+    -webkit-mask-image: var(--brush-swash);
+    mask-image: var(--brush-swash);
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    opacity: 0.85;
+  }
 
   @media (max-height: 560px) {
     margin: 8px auto 4px;

@@ -16,6 +16,8 @@ import {
   HeroCopy,
   HeroScene,
   HeroMeta,
+  HeroKanji,
+  HeroMark,
   QuickPlayPanel,
   QuickPlayDoors,
   QuickPlaySummary,
@@ -32,6 +34,7 @@ import { moveFocusWithArrows } from '../ConfigScreen/menuNavigation';
 import { DojoSuggestion } from '../DojoScreen/DojoSuggestion';
 import { useTouchMode } from '../../input/touchMode';
 import { useTouchPreferences } from '../../input/touchPreferences';
+import { VillageMark } from '../../theme/VillageMark';
 
 type Door = {
   id: 'quick' | 'cpu';
@@ -77,7 +80,11 @@ export const WelcomeScreen = () => {
     <WelcomeContainer>
       <HeroSection>
         <HeroScene role="img" aria-label="Hidden Leaf arena" />
+        <HeroMark aria-hidden="true">
+          <VillageMark id="leaf" color="#fff8e7" />
+        </HeroMark>
         <HeroCopy>
+          <HeroKanji aria-hidden="true">忍</HeroKanji>
           <Typography variant="h2" component="h1" gutterBottom fontWeight={900}>
             Explosive Shinobi Arena
           </Typography>

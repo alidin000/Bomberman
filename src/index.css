@@ -1,46 +1,115 @@
 /*
- * The palette is art-directed (ivory paper, charcoal ink) and the game draws
- * its own scene, so the page opts out of browser auto-dark ("only light").
- * index.html also carries the matching meta tags for Chrome's Auto Dark Theme
- * and the Dark Reader extension, which otherwise darken the paper panels.
+ * The palette is art-directed (scroll paper, ink black, ninja orange) and the
+ * game draws its own scene, so the page opts out of browser auto-dark ("only
+ * light"). index.html also carries the matching meta tags for Chrome's Auto
+ * Dark Theme and the Dark Reader extension, which otherwise darken the paper.
  */
+
+/*
+ * Two open-licence (SIL OFL 1.1) faces, subset and bundled under
+ * public/fonts (licences beside them). Bangers sets titles, headers and the
+ * HUD's numbers; Yuji Boku draws the few brush kanji the menus use. Neither
+ * is the show's logo face. unicode-range keeps the kanji file from loading
+ * until a kanji is on screen.
+ */
+@font-face {
+  font-family: "Bangers";
+  src: url("/fonts/bangers-latin.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+0020-007E, U+00A0-00FF, U+2013-2014, U+2018-201D, U+2022, U+2026,
+    U+2190-2193, U+2713, U+2715;
+}
+
+@font-face {
+  font-family: "Yuji Boku";
+  src: url("/fonts/yuji-boku-kanji.woff2") format("woff2");
+  font-display: swap;
+  unicode-range: U+706B, U+98A8, U+6C34, U+96F7, U+571F, U+6681, U+5FCD, U+7206, U+5F71,
+    U+52DD, U+6557, U+8853, U+9053, U+5834, U+91CC, U+5DFB;
+}
+
 :root {
   color-scheme: only light;
-  --anime-ink: #211d1a;
-  --anime-paper: #efe3c4;
+  --font-body: "Trebuchet MS", "Arial Narrow", Arial, sans-serif;
+  /* Titles, headers, buttons and HUD numbers: a heavy comic-book face. */
+  --font-display: "Bangers", Impact, "Arial Narrow Bold", "Arial Black", sans-serif;
+  /* Brush kanji (watermarks, stamps): falls back to the system's CJK serif. */
+  --font-brush: "Yuji Boku", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif CJK JP", serif;
+  --anime-mono: "Courier New", Courier, monospace;
+
+  --anime-ink: #17120f;
+  --anime-paper: #f2e4c4;
   --anime-paper-light: #fff8e7;
-  --anime-vermilion: #bd3f32;
-  /* Hover/pressed vermilion: keeps 6.7:1 against --anime-paper-light text. */
-  --anime-vermilion-deep: #9e3328;
-  --anime-teal: #356f6b;
-  --anime-mustard: #d4a33f;
-  --anime-olive: #667158;
+  /* Light text on dark panels (night, ink plates): 15:1 on night. */
+  --anime-paper-muted: rgba(255, 248, 231, 0.84);
+  --anime-vermilion: #b8281d;
+  /* Hover/pressed vermilion: keeps 7.6:1 against --anime-paper-light text. */
+  --anime-vermilion-deep: #93201a;
+  /* Ninja orange: fills and decoration with ink on top (7.2:1). Never text on paper. */
+  --anime-orange: #f5821f;
+  --anime-orange-deep: #e06a0c;
+  /*
+   * The accent for text, lines and light-on-dark fills on paper: a deep
+   * orange (5.1:1 on paper, 6.3:1 under paper-light text). Its historic name
+   * is --anime-teal; both names give the same colour.
+   */
+  --accent: #a4400a;
+  --accent-deep: #82320a;
+  --anime-teal: var(--accent);
+  --anime-teal-deep: var(--accent-deep);
+  --anime-mustard: #e0a526;
+  --anime-olive: #5d6b4a;
   --anime-sky: #789aa3;
-  --anime-night: #272b35;
-  --anime-line: rgba(33, 29, 26, 0.78);
-  --anime-shadow: 4px 4px 0 rgba(33, 29, 26, 0.8);
-  /* Hover/pressed teal: keeps 7.2:1 against --anime-paper-light text. */
-  --anime-teal-deep: #2b5c58;
+  --anime-night: #120d0b;
+  --anime-line: rgba(23, 18, 15, 0.78);
+  --anime-shadow: 4px 4px 0 rgba(23, 18, 15, 0.85);
+  /* Chakra blue: the focus colour. The deep shade is 3.9:1 on paper and on night. */
+  --chakra: #39a7ff;
+  --chakra-deep: #1f6fd1;
 
   /*
-   * Colour roles. Teal is the normal action and focus colour; vermilion is
-   * kept for danger and destructive actions only.
+   * Colour roles. Orange is the normal action (ink text on it); vermilion
+   * is kept for danger and destructive actions only; chakra blue is focus.
    */
-  --action: var(--anime-teal);
-  --action-deep: var(--anime-teal-deep);
+  --action: var(--anime-orange);
+  --action-deep: var(--anime-orange-deep);
+  --on-action: var(--anime-ink);
   --danger: var(--anime-vermilion);
-  --focus-ring: 3px solid var(--anime-teal);
+  --focus-ring: 3px solid var(--chakra-deep);
+  /* The chakra aura around a focused control, on top of the solid ring. */
+  --focus-glow: drop-shadow(0 0 4px rgba(57, 167, 255, 0.95)) drop-shadow(0 0 9px rgba(57, 167, 255, 0.55));
 
   /* Shape: one corner radius, and hard ink offsets instead of soft blurs. */
   --radius: 2px;
   --shadow-1: 2px 2px 0 var(--anime-ink);
   --shadow-2: 4px 4px 0 var(--anime-ink);
-  --shadow-frame: 8px 8px 0 var(--anime-teal);
+  --shadow-frame: 8px 8px 0 var(--anime-orange);
 
   /* Ink strengths on paper, instead of one-off alphas. */
-  --ink-1: rgba(33, 29, 26, 0.16); /* hairlines and quiet borders */
-  --ink-2: rgba(33, 29, 26, 0.72); /* secondary text: 5.8:1 or better on paper */
-  --ink-3: rgba(33, 29, 26, 0.82); /* labels: 7.9:1 or better on paper */
+  --ink-1: rgba(23, 18, 15, 0.16); /* hairlines and quiet borders */
+  --ink-2: rgba(23, 18, 15, 0.72); /* secondary text: 6:1 or better on paper */
+  --ink-3: rgba(23, 18, 15, 0.82); /* labels: 8:1 or better on paper */
+
+  /*
+   * Manga speed lines radiating from the middle, faded out of the centre.
+   * Static: one gradient, no animation.
+   */
+  --speed-lines: repeating-conic-gradient(from 0deg at 50% 50%,
+      rgba(255, 248, 231, 0) 0deg 2.2deg, rgba(255, 248, 231, 0.13) 2.2deg 3deg,
+      rgba(255, 248, 231, 0) 3deg 5.1deg, rgba(255, 248, 231, 0.07) 5.1deg 5.6deg);
+  --speed-lines-mask: radial-gradient(ellipse at 50% 50%, transparent 0 28%, #000 70%);
+  /* Scroll paper: warm fibres and a darker, sun-worn rim. */
+  --scroll-paper:
+    radial-gradient(ellipse at 50% 40%, rgba(255, 252, 240, 0.9), rgba(255, 252, 240, 0) 70%),
+    repeating-linear-gradient(94deg, rgba(120, 82, 40, 0.035) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, #f6ead0, #efe0bd);
+  /* A wooden scroll rod, drawn across the top or bottom of a scroll panel. */
+  --scroll-rod: linear-gradient(180deg, #3a2414 0, #7a4b26 30%, #a8713f 48%, #6b3f1f 70%, #2c1a0e 100%);
+  /*
+   * Brush swash behind a header: a ragged ink stroke, wider than tall, drawn
+   * as one SVG path (stretched to the header box).
+   */
+  --brush-swash: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 60' preserveAspectRatio='none'%3E%3Cpath d='M6 14 C40 6 90 9 140 6 C200 3 260 8 320 5 C350 4 376 6 394 10 L388 19 L397 24 L386 31 L396 38 L384 45 C340 52 280 49 220 53 C160 57 100 52 50 55 C30 56 16 54 4 50 L12 42 L2 35 L10 28 L3 21 Z' fill='%2317120f'/%3E%3C/svg%3E");
 }
 
 /*
@@ -53,13 +122,21 @@
   --anime-ink: #000000;
   --anime-paper: #f7f0dd;
   --anime-paper-light: #ffffff;
+  --anime-paper-muted: #ffffff;
   /* 7.3:1 under white text, 6.4:1 as text on paper. */
   --anime-vermilion: #a3271c;
   --anime-vermilion-deep: #7f1d15;
-  --anime-teal: #1f4f4b;
+  /* 8:1 under white text and as text on paper. */
+  --accent: #7a2e05;
+  --accent-deep: #5c2203;
   --anime-olive: #464f3b;
   --anime-line: #000000;
   --anime-shadow: 4px 4px 0 #000000;
+  /* No glow, no texture: a thick solid ring and flat paper. */
+  --focus-ring: 4px solid var(--chakra-deep);
+  --focus-glow: none;
+  --scroll-paper: linear-gradient(#f7f0dd, #f7f0dd);
+  --speed-lines: none;
 }
 
 :root[data-motion="reduce"] *,
@@ -113,7 +190,9 @@ body {
   margin: 0;
   color: var(--anime-ink);
   background: var(--anime-night);
-  font-family: "Trebuchet MS", "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-body);
+  /* The display and brush faces have one weight: never fake a bold. */
+  font-synthesis: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -127,10 +206,29 @@ textarea {
 
 code,
 kbd {
-  font-family: "Courier New", Courier, monospace;
+  font-family: var(--anime-mono);
 }
 
+/*
+ * Chakra focus: every focused control keeps its solid blue ring (set by
+ * each screen, 3:1 or better on paper and on night) and gains a blue aura.
+ * Only controls glow, never a large surface such as the arena canvas.
+ */
+:is(button, a, input, select, textarea, [role="button"], [role="tab"], [role="radio"],
+  [role="switch"], [role="option"], [role="menuitem"], [role="checkbox"], .MuiSlider-thumb):focus-visible,
+.MuiButtonBase-root.Mui-focusVisible,
+.MuiSlider-thumb.Mui-focusVisible,
+[data-pad-focus]:focus-within {
+  filter: var(--focus-glow);
+}
+
+/* The chakra ring is the focus mark; MUI's pulsing focus ripple would be a second one. */
+.MuiTouchRipple-ripplePulsate {
+  display: none;
+}
+
+
 ::selection {
-  color: var(--anime-paper-light);
-  background: var(--anime-vermilion);
+  color: var(--anime-ink);
+  background: var(--anime-orange);
 }

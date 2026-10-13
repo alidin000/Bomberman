@@ -1,10 +1,31 @@
 import { Box, Button, styled } from '@mui/material';
 
+// The house backdrop: ink night with an orange dusk. Buttons here sit on
+// ink, so outlined ones carry paper type (the theme's ink type is for paper).
 export const OnlinePage = styled(Box)({
   minHeight: '100dvh',
   color: 'var(--anime-paper-light)',
-  background: 'var(--anime-night)',
+  backgroundColor: 'var(--anime-night)',
+  backgroundImage: 'radial-gradient(ellipse at 50% 115%, rgba(245,130,31,0.3), rgba(245,130,31,0) 60%)',
   padding: 'clamp(20px, 5vw, 56px) 20px',
+  '& .MuiButton-root': {
+    fontFamily: 'var(--font-display)',
+    fontWeight: 400,
+    fontSize: '1.02rem',
+    letterSpacing: '0.06em',
+  },
+  '& .MuiButton-outlined': {
+    color: 'var(--anime-paper-light)',
+    borderColor: 'rgba(255,248,231,0.6)',
+  },
+  '& .MuiButton-outlined:hover': {
+    borderColor: 'var(--anime-orange)',
+    background: 'rgba(245,130,31,0.14)',
+  },
+  '& .MuiButtonBase-root.Mui-focusVisible': {
+    outline: '3px solid var(--chakra)',
+    outlineOffset: 3,
+  },
 });
 
 export const OnlineShell = styled(Box)({
@@ -18,7 +39,16 @@ export const OnlineHeader = styled('header')({
   gap: 20,
   paddingBottom: 18,
   borderBottom: '1px solid color-mix(in srgb, var(--anime-paper-light) 24%, transparent)',
-  '& h1': { margin: 0, fontSize: 'clamp(1.8rem, 5vw, 3rem)', letterSpacing: 0 },
+  '& h1': {
+    margin: 0,
+    color: 'var(--anime-orange)',
+    fontFamily: 'var(--font-display)',
+    fontWeight: 400,
+    fontSize: 'clamp(2.2rem, 6vw, 3.6rem)',
+    lineHeight: 1,
+    letterSpacing: '0.05em',
+    textShadow: '3px 3px 0 #000',
+  },
   '& p': { margin: '6px 0 0', color: 'var(--anime-paper-muted)', maxWidth: 560 },
 });
 
@@ -45,9 +75,14 @@ export const ExperienceChoice = styled(Button)({
   '& .MuiButton-startIcon': { alignSelf: 'flex-start', marginTop: 2 },
   '& .MuiButton-endIcon + *, & .MuiButton-startIcon + *': { minWidth: 0 },
   '& strong, & span': { display: 'block', letterSpacing: 0 },
-  '& strong': { fontSize: '.88rem' },
+  '& strong': { fontSize: '1.02rem' },
   '& span': {
-    marginTop: 3, fontSize: '.72rem', lineHeight: 1.35, opacity: 0.78,
+    marginTop: 3,
+    fontFamily: 'var(--font-body)',
+    fontSize: '.72rem',
+    lineHeight: 1.35,
+    opacity: 0.85,
+    textTransform: 'none',
   },
 });
 
@@ -58,7 +93,13 @@ export const OnlinePanel = styled('section')({
   borderRadius: 6,
   display: 'grid',
   gap: 16,
-  '& h2': { margin: 0, fontSize: '1.05rem', letterSpacing: 0 },
+  '& h2': {
+    margin: 0,
+    fontFamily: 'var(--font-display)',
+    fontWeight: 400,
+    fontSize: '1.35rem',
+    letterSpacing: '0.06em',
+  },
 });
 
 export const Field = styled('label')({

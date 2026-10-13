@@ -23,13 +23,15 @@ export const CountdownPlate = styled.strong({
   justifyContent: 'center',
   padding: '0 14px',
   borderRadius: 2,
-  color: 'var(--anime-paper-light)',
-  background: 'var(--anime-vermilion)',
-  border: '3px solid var(--anime-ink)',
-  boxShadow: '6px 6px 0 var(--anime-mustard)',
-  textShadow: '3px 3px 0 var(--anime-ink)',
-  fontSize: '3.2rem',
-  fontWeight: 900,
+  color: 'var(--anime-orange)',
+  background: 'var(--anime-ink)',
+  border: '3px solid var(--anime-orange)',
+  boxShadow: '6px 6px 0 var(--anime-ink)',
+  // Comic digits: orange with an ink keyline, offset like a print.
+  textShadow: '3px 3px 0 var(--accent)',
+  fontFamily: 'var(--font-display)',
+  fontSize: '3.6rem',
+  fontWeight: 400,
   lineHeight: 1,
   '@media (max-height: 560px) and (min-width: 641px)': {
     minWidth: 56,
@@ -40,9 +42,11 @@ export const CountdownPlate = styled.strong({
 
 export const GoPlate = styled(CountdownPlate)({
   color: 'var(--anime-ink)',
-  background: 'var(--anime-mustard)',
-  boxShadow: '6px 6px 0 var(--anime-teal)',
-  textShadow: 'none',
+  background: 'var(--anime-orange)',
+  borderColor: 'var(--anime-ink)',
+  boxShadow: '6px 6px 0 var(--anime-ink)',
+  textShadow: '2px 2px 0 var(--anime-paper-light)',
+  letterSpacing: '0.06em',
 });
 
 // One line, set once per round: "Round 2 · P1 Gaara leads 1–0".
@@ -52,9 +56,11 @@ export const BeatLine = styled.span({
   borderRadius: 2,
   color: 'var(--anime-paper-light)',
   background: 'var(--anime-ink)',
-  border: '2px solid var(--anime-mustard)',
-  fontSize: '0.95rem',
-  fontWeight: 900,
+  border: '2px solid var(--anime-orange)',
+  fontFamily: 'var(--font-display)',
+  fontSize: '1.05rem',
+  fontWeight: 400,
+  letterSpacing: '0.06em',
   lineHeight: 1.25,
   textAlign: 'center',
 });
@@ -71,9 +77,11 @@ export const RoundOverPlate = styled('strong', {
   border: '3px solid var(--anime-ink)',
   borderTop: `8px solid ${accent}`,
   boxShadow: '6px 6px 0 var(--anime-ink)',
-  fontSize: '1.35rem',
-  fontWeight: 900,
-  lineHeight: 1.2,
+  fontFamily: 'var(--font-display)',
+  fontSize: '1.6rem',
+  fontWeight: 400,
+  letterSpacing: '0.05em',
+  lineHeight: 1.15,
   textAlign: 'center',
 }));
 
