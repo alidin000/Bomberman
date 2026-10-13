@@ -35,11 +35,14 @@ type MatchSceneProps = {
   advanceFrame: ((timestamp: number) => void) | undefined;
   liveState: (() => GameEngineState | null) | undefined;
   idle: boolean;
+  /** Online: this browser's seat, so only its player sees village prompts. */
+  // eslint-disable-next-line react/require-default-props -- defaulted to null in the signature
+  localSeat?: number | null;
 };
 
 /** The 3D arena: re-renders when something on the board changes, never for clocks. */
 export function MatchScene({
-  store, motion, preferences, impact, advanceFrame, liveState, idle,
+  store, motion, preferences, impact, advanceFrame, liveState, idle, localSeat = null,
 }: MatchSceneProps) {
   const select = useMemo(() => sceneStateSelector(motion), [motion]);
   const state = useEngineSelector(store, select);
@@ -52,6 +55,7 @@ export function MatchScene({
       advanceFrame={advanceFrame}
       liveState={liveState}
       idle={idle}
+      localSeat={localSeat}
     />
   );
 }

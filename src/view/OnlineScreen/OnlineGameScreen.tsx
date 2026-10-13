@@ -124,6 +124,7 @@ export function OnlineGameScreen() {
           advanceFrame={engine.advanceFrame}
           liveState={engine.getState}
           idle={!online.connected || state.paused}
+          localSeat={online.seat}
         />
       </GameSceneContainer>
       <MatchAnnouncer store={engine.store} caption={feedback.caption} eventId={feedback.eventId} roundOver={roundOver} held={state.paused || state.phase !== 'playing'} hudScale={preferences.hudScale} campaign={state.campaign} />

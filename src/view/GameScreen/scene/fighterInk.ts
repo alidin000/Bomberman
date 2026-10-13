@@ -89,6 +89,11 @@ function createInkMaterial(): THREE.MeshBasicMaterial {
 
 export const FIGHTER_INK_MATERIAL = createInkMaterial();
 
+/** A fresh copy of the ink look, for ShaderWarmup's instanced variant. */
+export function createInkWarmupMaterial(): THREE.MeshBasicMaterial {
+  return createInkMaterial();
+}
+
 const FIGHTER_GHOST_OPACITY = 0.55;
 
 type ToonOptions = {

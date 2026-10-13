@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { createFighterWarmupMaterials } from './fighterInk';
+import { createFighterWarmupMaterials, createInkWarmupMaterial } from './fighterInk';
 import { createTokenWarmupMaterial } from './inkedToken';
 
 function instancedWarmup(material: THREE.Material): THREE.Material {
@@ -28,6 +28,20 @@ export function createBossWarmupMaterials(): THREE.Material[] {
 }
 
 /**
+ * The village square's request marks (scene/VillageSquare): keepsakes are an
+ * instanced token with an instanced ink line. Instancing is its own program,
+ * and the keepsakes mount mid-mission as fog lifts, so every campaign match
+ * compiles both in the countdown. The square's other pieces use the plain
+ * token, ink, sprite and instanced see-through floor-mark programs.
+ */
+export function createVillageWarmupMaterials(): THREE.Material[] {
+  return [
+    instancedWarmup(createTokenWarmupMaterial()),
+    instancedWarmup(createInkWarmupMaterial()),
+  ];
+}
+
+/**
  * One material per shader variant that entities mount and unmount mid-match:
  * bombs, pickups, hazards, objective markers, warnings and text labels. three.js deletes
  * a program when the last material using it is disposed, so without a
@@ -38,10 +52,11 @@ export function createBossWarmupMaterials(): THREE.Material[] {
  * Ghost look (see-through toon) only shows mid-match, so the fighter looks,
  * ink line included, are compiled here too.
  */
-export function createWarmupMaterials(withBoss = false): THREE.Material[] {
+export function createWarmupMaterials(withBoss = false, withVillage = false): THREE.Material[] {
   const labelMap = new THREE.Texture();
   return [
     ...(withBoss ? createBossWarmupMaterials() : []),
+    ...(withVillage ? createVillageWarmupMaterials() : []),
     new THREE.MeshStandardMaterial(),
     // Flat-shaded standard: monster and boss figures and the route puzzle
     // pieces (PuzzleMarkers), which mount as fog of war lifts.
@@ -83,14 +98,21 @@ function disposeWarmupMaterials(materials: THREE.Material[]) {
  * the scene unmounts. Mount it inside the LightPool, next to the scene lights,
  * so the light count it compiles against matches the one used to render.
  */
-// eslint-disable-next-line react/require-default-props -- defaulted in the signature
-export function ShaderWarmup({ withBoss = false }: { withBoss?: boolean }) {
+/* eslint-disable react/require-default-props -- defaulted in the signature */
+export function ShaderWarmup({
+  withBoss = false,
+  withVillage = false,
+}: {
+  withBoss?: boolean;
+  withVillage?: boolean;
+}) {
+/* eslint-enable react/require-default-props */
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
   const camera = useThree((state) => state.camera);
 
   useEffect(() => {
-    const materials = createWarmupMaterials(withBoss);
+    const materials = createWarmupMaterials(withBoss, withVillage);
     const warmScene = new THREE.Scene();
     const geometry = new THREE.BoxGeometry(0.01, 0.01, 0.01);
     materials.forEach((material) => warmScene.add(warmObject(material, geometry)));
@@ -112,7 +134,7 @@ export function ShaderWarmup({ withBoss = false }: { withBoss?: boolean }) {
       disposeWarmupMaterials(materials);
       geometry.dispose();
     };
-  }, [camera, gl, scene, withBoss]);
+  }, [camera, gl, scene, withBoss, withVillage]);
 
   return null;
 }

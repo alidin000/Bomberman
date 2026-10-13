@@ -134,6 +134,12 @@ import { PULSE_HZ, pulseRate } from './scene/flashSafety';
 import {
   HighContrastOverride, highContrastPalette, useHighContrastMaterials,
 } from './scene/highContrast';
+import { HONORED_COSMETIC_TIER } from '../../content/villageSquare';
+import { VillageRequestMarks, VillageSquare, closedCellsKey } from './scene/VillageSquare';
+import {
+  activeSquareLayout, squareBlastStop, villageMarks, villageMarksFromKey, villageMarksKey,
+} from './scene/VillageSquareModels';
+import { HonoredScarf } from './scene/VillageSquareScarf';
 
 const ENTITY_LERP_SPEED = 7.2;
 const ENTITY_SNAP_EPSILON = 0.0016;
@@ -150,6 +156,19 @@ const BombClockContext = React.createContext<React.MutableRefObject<BombClock> |
 // move clocks: a mesh that animates a timer, a cooldown or the exact ultimate
 // charge must read it here, per frame, not from its props.
 const LiveStateContext = React.createContext<() => GameEngineState | null>(() => null);
+// The seat this browser plays in an online room; null plays every human seat
+// here (solo and local matches). Only the village square's prompts read it.
+const LocalSeatContext = React.createContext<number | null>(null);
+const NO_PLAYER_IDS: readonly string[] = [];
+
+/** The players who see the village square's prompt: this browser's humans. */
+function promptPlayersKey(state: GameEngineState, localSeat: number | null): string {
+  if (localSeat !== null) return state.players[localSeat]?.id ?? '';
+  return state.players
+    .filter((_, index) => !isCpuSlot(state.config, index))
+    .map((player) => player.id)
+    .join('|');
+}
 
 function lerpAngle(from: number, to: number, alpha: number): number {
   const turn = Math.PI * 2;
@@ -1490,12 +1509,15 @@ function PlayerMesh({
   slot,
   cpu = false,
   pickupChips,
+  scarf = false,
 }: {
   player: PlayerState;
   state: GameEngineState;
   slot?: number;
   cpu?: boolean;
   pickupChips?: Map<Power, PlayerTagSprite>;
+  /** Honored standing (village square): the ember-thread scarf. */
+  scarf?: boolean;
 }) {
   const ref = useRef<THREE.Group>(null);
   // Everything that falls with the fighter; the pickup label stays outside.
@@ -1745,6 +1767,7 @@ function PlayerMesh({
                 <cylinderGeometry args={[0.075, 0.075, 0.42, 12]} />
               </mesh>
             </group>
+            {scarf && <HonoredScarf hidden={ghost} />}
             {/* The ink line; Ghost drops it with the solid look. */}
             {inkHull && (
               <mesh
@@ -2582,6 +2605,8 @@ type MapTilesProps = {
   fogOfWar: GameEngineState['fogOfWar'];
   features: StaticTileFeatures;
   powerTheme?: CharacterId;
+  /** The village square's blast stop: Naruto's clones never form inside it. */
+  blastStop?: (x: number, y: number) => boolean;
 };
 
 // Per-cell objects re-render only when their own props change: a bomb placed
@@ -2642,6 +2667,7 @@ function MapTilesBase({
   fogOfWar,
   features,
   powerTheme,
+  blastStop,
 }: MapTilesProps) {
   // Keyed on positions, not the array: a crate's break timer ticks every frame,
   // and rebuilding all eight instanced tile layers for that is wasted work.
@@ -2687,10 +2713,12 @@ function MapTilesBase({
     } else if (isBomb(cell)) {
       const bomb = bombByCell.get(`${x},${y}`);
       const cloneOffsets = bomb?.kind === 'shadowCloneBarrage'
-        ? getShadowCloneFormationCells(bomb, map).map((point) => ({
-          x: point.x - bomb.x,
-          y: point.y - bomb.y,
-        }))
+        ? getShadowCloneFormationCells(bomb, map)
+          .filter((point) => !blastStop?.(point.x, point.y))
+          .map((point) => ({
+            x: point.x - bomb.x,
+            y: point.y - bomb.y,
+          }))
         : [];
       cellObjects.push(
         <BombMeshMemo
@@ -2727,6 +2755,7 @@ const MapTiles = React.memo(MapTilesBase, (prev, next) => (
   && sameFogCells(prev.fogOfWar, next.fogOfWar)
   && prev.features === next.features
   && prev.powerTheme === next.powerTheme
+  && prev.blastStop === next.blastStop
 ));
 
 const HazardMeshMemo = React.memo(HazardMesh);
@@ -3039,6 +3068,7 @@ function BombBlastPreviews({ visibleCells }: { visibleCells: Set<string> }) {
       clock.map,
       clock.detonationMs,
       (x, y) => cellVisibleInSet(visibleCells, x, y),
+      clock.stop,
     );
     const signature = previewSignature(cells);
     if (signature === drawn.signature) return;
@@ -3104,6 +3134,7 @@ const PlayerMeshMemo = React.memo(PlayerMesh, (previous, next) => (
   && previous.slot === next.slot
   && previous.cpu === next.cpu
   && previous.pickupChips === next.pickupChips
+  && previous.scarf === next.scarf
   && sameStateExcept(previous.state, next.state, PLAYER_MESH_SKIPPED_STATE)
 ));
 
@@ -3233,10 +3264,22 @@ function SceneContentBase({
   const readLiveState = React.useContext(LiveStateContext);
   const puzzleObjective = state.campaign?.objectives.find((objective) => objective.kind === 'puzzle');
   const cueChips = useCueChips(multiplayer ? state.players.length : 0);
+  // The village square every campaign mission starts in (content/villageSquare).
+  const villageSquare = activeSquareLayout(state.config);
+  const villageTier = state.config.village?.reputationTier ?? 'stranger';
+  const localSeat = React.useContext(LocalSeatContext);
+  const promptKey = villageSquare ? promptPlayersKey(state, localSeat) : '';
+  const promptPlayerIds = useMemo(
+    () => (promptKey ? promptKey.split('|') : NO_PLAYER_IDS),
+    [promptKey],
+  );
+  const villageMarksCells = villageMarksKey(villageMarks(state.campaign));
+  const requestMarks = useMemo(() => villageMarksFromKey(villageMarksCells), [villageMarksCells]);
+  const honoredScarf = !!villageSquare && villageTier === HONORED_COSMETIC_TIER;
 
   return (
     <LightPool>
-      <ShaderWarmupMemo withBoss={state.config.mode === 'solo'} />
+      <ShaderWarmupMemo withBoss={state.config.mode === 'solo'} withVillage={!!villageSquare} />
       <CameraRigMemo state={state} preferences={preferences} impact={impact} />
       <StageAtmosphere look={look} farEdgeZ={toWorld(0, -BOARD_LIP)[2]} />
       <FloorMemo
@@ -3258,6 +3301,7 @@ function SceneContentBase({
         fogOfWar={state.fogOfWar}
         features={tileFeatures}
         powerTheme={state.players[0]?.characterId}
+        blastStop={squareBlastStop(state.config)}
       />
       {state.players.map((player) => player.teleportMark && (
         <FlyingThunderMarker
@@ -3293,6 +3337,27 @@ function SceneContentBase({
         />
       )}
       <WaveTelegraphs waves={state.campaign?.waves ?? null} readLive={readLiveState} motion={motion} />
+      {villageSquare && state.campaign && (
+        <VillageSquare
+          square={villageSquare}
+          stageId={state.campaign.stageId}
+          tier={villageTier}
+          closedCells={closedCellsKey(villageSquare, state.map)}
+          groundTint={palette.groundA}
+          readState={readLiveState}
+          promptPlayerIds={promptPlayerIds}
+          reducedMotion={preferences.reducedMotion}
+        />
+      )}
+      {villageMarksCells && (
+        <VillageRequestMarks
+          marks={requestMarks}
+          visibleCells={visibleCellSet}
+          explored={state.fogOfWar.explored}
+          reducedMotion={preferences.reducedMotion}
+          highContrast={highContrast}
+        />
+      )}
       {getUpcomingPressureCells(state).map((cell, order) => (
         <PressureBlockWarningMemo
           key={`pressure-${cell.x}-${cell.y}`}
@@ -3309,6 +3374,7 @@ function SceneContentBase({
           slot={multiplayer ? index + 1 : undefined}
           cpu={multiplayer && isCpuSlot(state.config, index)}
           pickupChips={cueChips.pickups}
+          scarf={honoredScarf && index === 0}
         />
       ))}
       <KoMarkers players={state.players} chips={cueChips.ko} />
@@ -3367,6 +3433,8 @@ type GameScene3DProps = {
    * on change. Defaults to "paused or the round is over".
    */
   idle?: boolean;
+  /** Online: the seat this browser plays. Left out, every human seat is local. */
+  localSeat?: number | null;
 };
 
 /**
@@ -3452,10 +3520,11 @@ type SceneCanvasProps = {
   bombClock: React.MutableRefObject<BombClock>;
   // The stage's sky gradient, drawn behind the transparent canvas.
   sky: string;
+  localSeat: number | null;
 };
 
 const SceneCanvas = React.memo(({
-  store, readState, preferences, impact, motion, idle, bombClock, sky,
+  store, readState, preferences, impact, motion, idle, bombClock, sky, localSeat,
 }: SceneCanvasProps) => {
   const viewport = useViewportSize();
   const lowEnd = useMemo(() => isLikelyLowEndDevice(), []);
@@ -3496,7 +3565,9 @@ const SceneCanvas = React.memo(({
           <MotionContext.Provider value={motion}>
             <BombClockContext.Provider value={bombClock}>
               <LiveStateContext.Provider value={readState}>
-                <SceneFromStore store={store} preferences={preferences} impact={impact} />
+                <LocalSeatContext.Provider value={localSeat}>
+                  <SceneFromStore store={store} preferences={preferences} impact={impact} />
+                </LocalSeatContext.Provider>
               </LiveStateContext.Provider>
             </BombClockContext.Provider>
           </MotionContext.Provider>
@@ -3509,7 +3580,7 @@ const SceneCanvas = React.memo(({
 SceneCanvas.displayName = 'SceneCanvas';
 
 export function GameScene3D({
-  state, preferences, impact = 0, motion = null, advanceFrame, liveState, idle,
+  state, preferences, impact = 0, motion = null, advanceFrame, liveState, idle, localSeat = null,
 }: GameScene3DProps) {
   const sky = useMemo(
     () => stageSkyBackground(getStageLook(state.config.stageId)),
@@ -3540,6 +3611,7 @@ export function GameScene3D({
       idle={idle ?? isSceneIdle(state)}
       bombClock={bombClockRef}
       sky={sky}
+      localSeat={localSeat}
     />
   );
 }

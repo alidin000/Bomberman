@@ -5,6 +5,21 @@ import { PULSE_HZ, pulseRate } from './flashSafety';
 // Read-only view helpers for bomb timing: when each bomb will really go off
 // (chain reactions included) and how to draw that on the field.
 
+/** Cells no blast enters (the village square: VillageSquareModels squareBlastStop). */
+export type BlastStop = (x: number, y: number) => boolean;
+
+/**
+ * The cells a bomb's blast burns, as the engine resolves them: with a stop,
+ * no blast enters a stop cell and a ray ends at the first one.
+ */
+export function blastCells(
+  bomb: BombState,
+  map: GameEngineState['map'],
+  stop?: BlastStop
+): { x: number; y: number }[] {
+  return getExplosionPositions(bomb, map, stop);
+}
+
 /** Last stretch of a fuse drawn as "about to blow": a reaction plus a step out. */
 export const FUSE_URGENT_MS = 800;
 
@@ -26,7 +41,8 @@ export function isHeldRemote(bomb: BombState, players: GameEngineState['players'
 export function bombDetonationTimes(
   bombs: GameEngineState['bombs'],
   map: GameEngineState['map'],
-  players: GameEngineState['players']
+  players: GameEngineState['players'],
+  stop?: BlastStop
 ): Map<string, number> {
   const times = new Map<string, number>();
   if (bombs.length === 0) return times;
@@ -35,7 +51,7 @@ export function bombDetonationTimes(
     times.set(bomb.id, isHeldRemote(bomb, players) ? Infinity : Math.max(0, bomb.ticksRemaining));
     byCell.set(`${bomb.x},${bomb.y}`, bomb);
   });
-  const reaches = bombs.map((bomb) => getExplosionPositions(bomb, map)
+  const reaches = bombs.map((bomb) => blastCells(bomb, map, stop)
     .map((point) => byCell.get(`${point.x},${point.y}`))
     .filter((hit): hit is BombState => !!hit && hit.id !== bomb.id));
   // Relax until no time drops; each pass settles one more link of a chain.
@@ -111,7 +127,8 @@ export function bombPulseScale(
 export type BlastPreviewCell = { x: number; y: number; imminent: boolean };
 
 /**
- * Every visible cell some live bomb will burn, for the whole fuse. A cell is
+ * Every visible cell some live bomb will burn, for the whole fuse (never one
+ * in the village square: blasts stop at its edge). A cell is
  * imminent when the earliest bomb reaching it (chains included) has at most
  * FUSE_URGENT_MS left.
  */
@@ -119,12 +136,13 @@ export function blastPreviewCells(
   bombs: GameEngineState['bombs'],
   map: GameEngineState['map'],
   detonationMs: Map<string, number>,
-  isVisible: (x: number, y: number) => boolean
+  isVisible: (x: number, y: number) => boolean,
+  stop?: BlastStop
 ): BlastPreviewCell[] {
   const soonest = new Map<string, { x: number; y: number; at: number }>();
   bombs.forEach((bomb) => {
     const at = detonationMs.get(bomb.id) ?? bomb.ticksRemaining;
-    getExplosionPositions(bomb, map).forEach((point) => {
+    blastCells(bomb, map, stop).forEach((point) => {
       if (!isVisible(point.x, point.y)) return;
       const key = `${point.x},${point.y}`;
       const current = soonest.get(key);
