@@ -76,4 +76,31 @@ describe('launchGame', () => {
     expect(loadStoryProgress().upgradeRanks).toEqual({ lanternOil: 1 });
     expect(loadStoryProgress().currency).toBe(12);
   });
+
+  it('hands a campaign mission its village square from the save: tier, Embers and board', async () => {
+    localStorage.setItem(STORY_PROGRESS_KEY, JSON.stringify({
+      ...DEFAULT_STORY_PROGRESS,
+      currency: 80,
+      pack: ['paperWard'],
+      reputation: { hiddenLeaf: 12, hiddenSand: 4 },
+      completedRequests: ['leaf-tea-tins'],
+    }));
+    const navigate = vi.fn() as unknown as NavigateFunction;
+    await launchGame({
+      mode: 'solo',
+      stageId: 'hiddenLeaf',
+      characters: ['deidara'],
+      upgrade: DEFAULT_STORY_PROGRESS.selectedUpgrade,
+      players: '1',
+      keyBindings: DEFAULT_KEY_BINDINGS,
+      storyProgress: loadStoryProgress(),
+    }, navigate);
+    const setup = JSON.parse(localStorage.getItem('gameSetup') as string);
+    // Standing 16 is Known; the finished tea tins are not offered again.
+    expect(setup.village).toEqual({
+      reputationTier: 'known',
+      embers: 80,
+      offeredRequestIds: ['leaf-old-logs'],
+    });
+  });
 });

@@ -65,8 +65,19 @@ export function useOnlineStatusSnapshot(
   return useSyncExternalStore(session.subscribe, getSnapshot, getSnapshot);
 }
 
-export function useOnlineInput(session: OnlineSession, enabled: boolean): void {
+/**
+ * `squareBomb` sees the bomb key first: it returns true when the press was
+ * taken by the village square (a prop opened, or no bombs in the square),
+ * so the room never hears it.
+ */
+export function useOnlineInput(
+  session: OnlineSession,
+  enabled: boolean,
+  squareBomb?: () => boolean
+): void {
   const heldRef = useRef<{ key: string; direction: Direction }[]>([]);
+  const squareBombRef = useRef(squareBomb);
+  squareBombRef.current = squareBomb;
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -85,8 +96,9 @@ export function useOnlineInput(session: OnlineSession, enabled: boolean): void {
       }
       if (event.repeat) return;
       const input = getInputStateForKey(key, DEFAULT_KEY_BINDINGS['1']);
-      if (input.bomb) session.input(undefined, 'bomb');
-      else if (input.detonate) session.input(undefined, 'detonate');
+      if (input.bomb) {
+        if (!squareBombRef.current?.()) session.input(undefined, 'bomb');
+      } else if (input.detonate) session.input(undefined, 'detonate');
       else if (input.special) session.input(undefined, 'ultimate');
       else if (input.cover) session.input(undefined, 'cover');
     };

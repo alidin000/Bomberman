@@ -6,6 +6,7 @@ import {
 import { getDifficulty } from '../../engine/difficulty';
 import type { GameEngineState } from '../../engine/types';
 import type { MissionSettlement } from '../../story/hubEconomy';
+import { stallSpendKey } from '../../story/villageVisit';
 
 export function hubPath(stageId: StageId): string {
   return `/hub/${stageId}`;
@@ -26,6 +27,17 @@ export function getMissionSettlement(state: GameEngineState): MissionSettlement 
     objectivesCompleted: campaign.objectives
       .filter((objective) => objective.status === 'complete').length,
     secretIds: campaign.discoveredSecrets,
+    completedRequestIds: (campaign.village?.requests ?? [])
+      .filter((request) => request.status === 'complete')
+      .map((request) => request.id),
+    ...(campaign.village?.embersSpent
+      ? {
+        stallSpend: {
+          key: stallSpendKey(config.stageId, config.seed ?? 0),
+          amount: campaign.village.embersSpent,
+        },
+      }
+      : {}),
   };
 }
 

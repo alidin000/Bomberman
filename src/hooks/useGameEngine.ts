@@ -26,6 +26,8 @@ import {
   createEngineLoop,
 } from './engineLoop';
 import { useGamepadInput } from './useGamepadInput';
+import { squareBombPress } from '../input/villageInteract';
+import type { VillageInteractable } from '../content/villageSquare';
 import { isCpuSlot } from '../ai/controllers';
 import { EngineStore, createEngineStore, PublishingEngineStore } from './engineStore';
 
@@ -60,12 +62,24 @@ function pruneInactiveMovement(
   );
 }
 
+export interface GameEngineOptions {
+  // The bomb key next to a village square prop (villageInteract.ts): the
+  // screen opens the prop's overlay. In the square the key never bombs.
+  onSquareUse?: (playerId: string, item: VillageInteractable) => void;
+}
+
 /**
  * Runs a match. The simulation is reduced synchronously in the engine loop;
  * views get a published snapshot through `store`, at most once per frame,
  * and subscribe to just what they draw. Nothing here re-renders the caller.
  */
-export function useGameEngineStore(config: GameConfig | null, keyBindings: KeyBindings) {
+export function useGameEngineStore(
+  config: GameConfig | null,
+  keyBindings: KeyBindings,
+  options: GameEngineOptions = {}
+) {
+  const onSquareUseRef = useRef(options.onSquareUse);
+  onSquareUseRef.current = options.onSquareUse;
   const loopRef = useRef<EngineLoop | null>(null);
   if (!loopRef.current) loopRef.current = createEngineLoop();
   const loop = loopRef.current;
@@ -235,9 +249,14 @@ export function useGameEngineStore(config: GameConfig | null, keyBindings: KeyBi
           handledDirectionalInput = true;
           continue;
         }
-        if (!event.repeat) {
-          humanControllerRef.current.getActions(player, input).forEach(dispatch);
+        if (event.repeat) return;
+        // In a village square the bomb key uses the prop in reach instead.
+        const square = input.bomb ? squareBombPress(current, player.id) : null;
+        if (square) {
+          if (square.item) onSquareUseRef.current?.(player.id, square.item);
+          return;
         }
+        humanControllerRef.current.getActions(player, input).forEach(dispatch);
         return;
       }
     }
@@ -380,8 +399,12 @@ export function useGameEngineStore(config: GameConfig | null, keyBindings: KeyBi
  * every publish. For tests and small tools; the game screen subscribes to
  * slices instead (useGameEngineStore + useEngineSelector).
  */
-export function useGameEngine(config: GameConfig | null, keyBindings: KeyBindings) {
-  const engine = useGameEngineStore(config, keyBindings);
+export function useGameEngine(
+  config: GameConfig | null,
+  keyBindings: KeyBindings,
+  options?: GameEngineOptions
+) {
+  const engine = useGameEngineStore(config, keyBindings, options);
   const state = useSyncExternalStore(engine.store.subscribe, engine.store.getState);
   return { ...engine, state };
 }

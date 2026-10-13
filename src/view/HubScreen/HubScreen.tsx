@@ -32,7 +32,18 @@ import {
   getPackSlots,
   getUpgradeCap,
 } from '../../content/hubShop';
-import { HUB_MERCHANT, HubNpc, getHubVillage } from '../../content/hubVillages';
+import {
+  CODEX_EXPLAINER,
+  HUB_MERCHANT,
+  HubNpc,
+  ROAD_TELLER,
+  getHubVillage,
+  roadNews,
+  villagerGreeting,
+} from '../../content/hubVillages';
+import { WANDERING_VILLAGER } from '../../content/villageSquare';
+import { tierAtLeast } from '../../story/reputation';
+import { getVillageStanding } from '../../story/villageVisit';
 import {
   HUB_LORE_ENTRIES,
   HUB_LORE_HINTS,
@@ -96,6 +107,7 @@ import {
   VillageIntro,
 } from './HubScreen.styles';
 import { earningsBreakdown } from './MissionEarnings';
+import { BoardPreview, StandingCard } from './StandingCard';
 import { hubPath } from './missionSettlement';
 
 type HubSection = 'village' | 'shop' | 'codex';
@@ -171,7 +183,20 @@ export const HubScreen = () => {
   }, [stageId]);
 
   const cleared = progress.completedStages.includes(stageId);
-  const npc = talk ? hub.npcs.find((item) => item.id === talk.npcId) ?? null : null;
+  // From Known, Tamsin the Road Teller travels with you: in every square,
+  // and here, with the news of the road so far.
+  const people = useMemo<HubNpc[]>(() => (
+    tierAtLeast(getVillageStanding(progress).tier.id, WANDERING_VILLAGER.minTier)
+      ? [...hub.npcs, {
+        ...ROAD_TELLER,
+        choices: [
+          { id: 'road', prompt: 'Any news from the road?', reply: roadNews(progress.completedStages) },
+          ...ROAD_TELLER.choices,
+        ],
+      }]
+      : hub.npcs
+  ), [hub, progress]);
+  const npc = talk ? people.find((item) => item.id === talk.npcId) ?? null : null;
   const choice = npc && talk?.choiceId
     ? npc.choices.find((item) => item.id === talk.choiceId) ?? null
     : null;
@@ -270,7 +295,9 @@ export const HubScreen = () => {
   const { lastMission: report } = progress;
   const reportVillage = report ? getCampaignVillage(report.stageId).villageName : '';
 
-  const greetingOf = (person: HubNpc) => (cleared ? person.clearedGreeting : person.greeting);
+  const greetingOf = (person: HubNpc) => (person.id === ROAD_TELLER.id
+    ? person.greeting
+    : villagerGreeting(person, stageId, progress.completedStages));
 
   const renderNpc = (person: HubNpc) => (
     <NpcButton
@@ -346,8 +373,13 @@ export const HubScreen = () => {
           </div>
         </VillageIntro>
         <NpcGrid role="group" aria-label="villagers" data-roving-group>
-          {hub.npcs.map(renderNpc)}
+          {people.map(renderNpc)}
         </NpcGrid>
+        <BoardPreview stageId={stageId} progress={progress} />
+        <StandingCard progress={progress} />
+        <MissionGoals>
+          {`Codex: ${loreFound} of ${HUB_LORE_ENTRIES.length} found. ${CODEX_EXPLAINER}`}
+        </MissionGoals>
       </>
     );
   };
@@ -448,6 +480,9 @@ export const HubScreen = () => {
       <ShopHeading as="p">
         {`Codex · ${loreFound} of ${HUB_LORE_ENTRIES.length} found`}
       </ShopHeading>
+      <MissionGoals>
+        {`${CODEX_EXPLAINER} Every village hides three: crack its walls in a mission, then read them here or at the square's shrine.`}
+      </MissionGoals>
       <VillageChips role="group" aria-label="codex village" data-roving-group>
         {CAMPAIGN_VILLAGES.map((item) => (
           <VillageChip

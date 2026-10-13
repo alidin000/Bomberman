@@ -1,20 +1,22 @@
 import React from 'react';
 import { formatEmbers, getHubConsumable, normalizePack } from '../../content/hubShop';
-import type { CampaignLoadout, MissionEarnings } from '../../content/hubShop';
+import type { CampaignLoadout } from '../../content/hubShop';
+import type { MissionReportEarnings } from '../../story/progress';
 import { EarningsLine, EmberGlyph } from './HubScreen.styles';
 
-/** "Clear 50 · Objectives 18 · Secrets 20": only the parts that paid. */
-export function earningsBreakdown(earnings: MissionEarnings): string {
+/** "Clear 50 · Objectives 18 · Secrets 20 · Requests 10": only the parts that paid. */
+export function earningsBreakdown(earnings: MissionReportEarnings): string {
   return [
     earnings.clear > 0 ? `Clear ${earnings.clear}` : '',
     earnings.objectives > 0 ? `Objectives ${earnings.objectives}` : '',
     earnings.secrets > 0 ? `Secrets ${earnings.secrets}` : '',
+    (earnings.requests ?? 0) > 0 ? `Requests ${earnings.requests}` : '',
   ].filter(Boolean).join(' · ');
 }
 
 /** The mission's pay on the result dialog, and the hub items it used up. */
 export const MissionEarningsLine = (
-  { earnings, loadout }: { earnings: MissionEarnings; loadout: CampaignLoadout | undefined }
+  { earnings, loadout }: { earnings: MissionReportEarnings; loadout: CampaignLoadout | undefined }
 ) => {
   const breakdown = earningsBreakdown(earnings);
   const used = normalizePack(loadout?.consumables, loadout?.upgrades)

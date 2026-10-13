@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback, useEffect, useMemo, useState,
+} from 'react';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import ReplayIcon from '@mui/icons-material/Replay';
 import { Button } from '@mui/material';
@@ -14,6 +16,9 @@ import { applyDocumentPreferences, loadGamePreferences } from '../GameScreen/gam
 import { MatchAnnouncer, MatchHud, MatchScene } from '../GameScreen/MatchLeaves';
 import { GameBackground, GameSceneContainer, LoadingMessage } from '../GameScreen/GameScreen.styles';
 import { TouchControls } from '../GameScreen/TouchControls';
+import { VillageOverlay } from '../GameScreen/village/VillageOverlay';
+import { squareBombPress } from '../../input/villageInteract';
+import type { VillageInteractable } from '../../content/villageSquare';
 import { StyledBackground } from '../WelcomeScreen/WelcomeScreen.styles';
 import {
   CompactButton, ConnectionCurtain, MatchNetworkBar, ResultPanel
@@ -40,6 +45,8 @@ const selectOnlineMatchStatus: EngineSelector<OnlineMatchStatus> = (state, previ
   };
 };
 
+type SquareUse = { playerId: string; item: VillageInteractable };
+
 export function OnlineGameScreen() {
   const navigate = useNavigate();
   const { roomId = '' } = useParams();
@@ -51,6 +58,21 @@ export function OnlineGameScreen() {
   const feedback = useEngineFeedback(engine.store, preferences);
   const touchMode = useTouchMode();
   const canPlay = online.connected && !!state && state.phase === 'playing' && !state.paused;
+  // A co-op square's villagers, shrine and gate: the room plays on (no
+  // pause), and this seat stands still while its overlay is open.
+  const [squareUse, setSquareUse] = useState<SquareUse | null>(null);
+  const { seat } = online;
+  const squareBomb = useCallback(() => {
+    const live = engine.getState();
+    const player = live && seat !== null ? live.players[seat] : undefined;
+    const press = live && player ? squareBombPress(live, player.id) : null;
+    if (!press || !player) return false;
+    if (press.item) setSquareUse({ playerId: player.id, item: press.item });
+    return true;
+  }, [engine, seat]);
+  useEffect(() => {
+    if (!canPlay) setSquareUse(null);
+  }, [canPlay]);
 
   useEffect(() => applyDocumentPreferences(preferences), [preferences]);
   useEffect(() => {
@@ -63,7 +85,7 @@ export function OnlineGameScreen() {
     }
   }, [navigate, online.connected, roomId, session]);
 
-  useOnlineInput(session, canPlay);
+  useOnlineInput(session, canPlay && !squareUse, squareBomb);
 
   const leave = () => {
     session.leave();
@@ -112,7 +134,16 @@ export function OnlineGameScreen() {
           store={engine.store}
           slot={online.seat}
           keys={DEFAULT_KEY_BINDINGS['1']}
-          enabled={canPlay}
+          enabled={canPlay && !squareUse}
+        />
+      )}
+      {squareUse && (
+        <VillageOverlay
+          store={engine.store}
+          item={squareUse.item}
+          playerId={squareUse.playerId}
+          onClose={() => setSquareUse(null)}
+          closeOnEscape
         />
       )}
       {online.error && state.phase === 'playing' && <ConnectionCurtain role="status"><strong>{online.error}</strong></ConnectionCurtain>}

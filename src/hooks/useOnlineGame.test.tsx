@@ -1,11 +1,12 @@
 import { act } from '@testing-library/react';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { renderHook } from '@testing-library/react-hooks';
+import { vi } from 'vitest';
 import { createInitialState } from '../engine/initialState';
 import { parseMapRows } from '../engine/mapLoader';
 import { GameEngineState } from '../engine/types';
 import { OnlineSession, OnlineSessionSnapshot } from '../network/onlineSession';
-import { useOnlineEngine, useOnlineStatusSnapshot } from './useOnlineGame';
+import { useOnlineEngine, useOnlineInput, useOnlineStatusSnapshot } from './useOnlineGame';
 
 const openArena = parseMapRows([
   'WWWWWWWWWWWWWWW',
@@ -102,5 +103,26 @@ describe('online render subscriptions', () => {
     act(() => fake.publish({ connected: false, error: 'Reconnecting' }));
     expect(renders).toBeGreaterThan(initialRenders);
     expect(result.current).toMatchObject({ connected: false, error: 'Reconnecting' });
+  });
+});
+
+describe('online input in a village square', () => {
+  it('never sends the bomb the square took, and sends it everywhere else', () => {
+    const input = vi.fn();
+    const session = { input } as unknown as OnlineSession;
+    let inSquare = true;
+    const squareBomb = vi.fn(() => inSquare);
+    renderHook(() => useOnlineInput(session, true, squareBomb));
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '2' }));
+    });
+    expect(squareBomb).toHaveBeenCalledTimes(1);
+    expect(input).not.toHaveBeenCalledWith(undefined, 'bomb');
+    inSquare = false;
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: '2' }));
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '2' }));
+    });
+    expect(input).toHaveBeenCalledWith(undefined, 'bomb');
   });
 });

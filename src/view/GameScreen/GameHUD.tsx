@@ -73,6 +73,8 @@ import {
 } from './matchCopy';
 import { WaveLineModel, waveLineModel, waveShortText } from './waveCopy';
 import { WaveLine } from './WaveLine';
+import { RequestLine, requestChipText } from './village/RequestTracker';
+import { TrackedRequest, trackedRequests } from './village/villageCopy';
 
 const CHARACTER_POSITIONS: Record<CharacterId, string> = {
   deidara: '0% 0%',
@@ -524,6 +526,7 @@ type CampaignModel = {
   }[];
   patrols: { name: string; kind: MonsterKind; count: number }[];
   wave: WaveLineModel | null;
+  requests: TrackedRequest[];
 };
 
 function toPatrols(state: GameEngineState): CampaignModel['patrols'] {
@@ -576,6 +579,7 @@ function toCampaignModel(
     })),
     patrols: toPatrols(state),
     wave: waveLineModel(campaign),
+    requests: trackedRequests(state),
   };
 }
 
@@ -622,6 +626,7 @@ const CampaignSummary = React.memo(({ model }: { model: CampaignModel }) => (
       })}
     </ObjectiveList>
     {model.wave && <WaveLine model={model.wave} />}
+    {model.requests.length > 0 && <RequestLine requests={model.requests} />}
     <IntelLine>
       <span>
         <strong>{model.stageReputation}</strong>
@@ -658,12 +663,15 @@ type MissionLineModel = {
   progress: number;
   boss: boolean;
   lives: string | null;
+  // A village request in progress, in the same line (no new band).
+  request: string | null;
 };
 
 function toMissionLineModel(state: GameEngineState): MissionLineModel | null {
   const { campaign, boss } = state;
   if (!campaign) return null;
   const lives = livesText(campaign);
+  const request = requestChipText(trackedRequests(state));
   if (boss && boss.health > 0) {
     return {
       label: boss.name,
@@ -671,6 +679,7 @@ function toMissionLineModel(state: GameEngineState): MissionLineModel | null {
       progress: (boss.health / boss.maxHealth) * 100,
       boss: true,
       lives,
+      request,
     };
   }
   const active = campaign.objectives.find((objective) => objective.status === 'active');
@@ -681,6 +690,7 @@ function toMissionLineModel(state: GameEngineState): MissionLineModel | null {
       progress: 100,
       boss: false,
       lives,
+      request,
     };
   }
   const wave = active.kind === 'defense' ? waveLineModel(campaign) : null;
@@ -690,6 +700,7 @@ function toMissionLineModel(state: GameEngineState): MissionLineModel | null {
     progress: getObjectiveProgress(active),
     boss: false,
     lives,
+    request,
   };
 }
 
@@ -701,6 +712,7 @@ const CampaignLine = React.memo(({ model }: { model: MissionLineModel }) => (
     <div>
       <strong>{model.label}</strong>
       {model.progressText && <span>{model.progressText}</span>}
+      {model.request && <span aria-label="village request">{model.request}</span>}
       {model.lives && <em>{`Lives ${model.lives}`}</em>}
     </div>
     <MissionLineProgress

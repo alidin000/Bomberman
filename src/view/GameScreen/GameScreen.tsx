@@ -89,6 +89,10 @@ import { clearDeployedConsumables } from '../ConfigScreen/launchGame';
 import { getHubReturn, getMissionSettlement, hubPath } from '../HubScreen/missionSettlement';
 import { BOSS_SEAL_HOLD_MS, bossSealOf } from './bossBeats';
 import { BossTitleCard } from './BossBeats';
+import { VillageOverlay } from './village/VillageOverlay';
+import { useStallSpendSaver } from './village/useStallSpendSaver';
+import type { VillageInteractable } from '../../content/villageSquare';
+import { normalizeVillageVisit } from '../../story/villageVisit';
 
 const CONTROLS_GUIDE_SEEN_KEY = 'shinobiControlsGuideSeen';
 
@@ -312,6 +316,8 @@ export type GameScreenMatch = {
   renderResult?: (props: MatchResultProps) => React.ReactNode;
 };
 
+type SquareUse = { playerId: string; item: VillageInteractable };
+
 type GameScreenProps = {
   // eslint-disable-next-line react/require-default-props -- absent for routed matches
   match?: GameScreenMatch;
@@ -361,6 +367,10 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
       controllers: mode === 'local' ? normalizeControllers(setup.controllers, players) : undefined,
       // The hub pack and upgrades this campaign mission deployed with.
       loadout: mode === 'solo' ? setup.loadout : undefined,
+      // Its village square: standing, the stall's Embers and the board.
+      village: mode === 'solo'
+        ? normalizeVillageVisit(setup.village, setup.stageId ?? DEFAULT_STAGE_ID)
+        : undefined,
     };
   }, [matchConfig, numOfPlayers, numOfRounds, selectedMap]);
 
@@ -369,6 +379,16 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
     clearDeployedConsumables();
   }, []);
 
+  // The bomb key beside a village square prop opens it; in solo that pauses
+  // the match (the engine's pause lands with the overlay, in one event).
+  const [squareUse, setSquareUse] = useState<SquareUse | null>(null);
+  const pauseRef = useRef<() => void>();
+  const engineOptions = useMemo(() => ({
+    onSquareUse: (playerId: string, item: VillageInteractable) => {
+      setSquareUse({ playerId, item });
+      pauseRef.current?.();
+    },
+  }), []);
   const {
     store,
     motion,
@@ -379,7 +399,13 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
     resume,
     restart,
     dismissDialog,
-  } = useGameEngineStore(config, keyBindings);
+  } = useGameEngineStore(config, keyBindings, engineOptions);
+  pauseRef.current = pause;
+  const closeSquare = useCallback(() => {
+    setSquareUse(null);
+    resume();
+  }, [resume]);
+  useStallSpendSaver(store);
   // Only what changes with menus, pauses and round ends: the HUD, the
   // countdown and the scene subscribe to their own slices (MatchLeaves).
   const view = useEngineSelector(store, selectMatchView);
@@ -460,6 +486,11 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
   }, [discoveries]);
 
   const isPaused = view.paused;
+  // A restart, a round end or a lost match closes the square's overlay.
+  const squareLive = view.loaded && view.phase === 'playing';
+  useEffect(() => {
+    if (!squareLive) setSquareUse(null);
+  }, [squareLive]);
   // The round is over (and the engine paused) from the deciding tick; the
   // result dialog itself opens RESULT_HOLD_MS later.
   const dialogOpen = view.phase === 'round_end' || view.phase === 'game_over';
@@ -640,6 +671,12 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
         return;
       }
 
+      // Esc, pad B or Start leaves the square's overlay and plays on.
+      if (squareUse) {
+        closeSquare();
+        return;
+      }
+
       if (showControlsGuide) {
         handleDismissControlsGuide();
         return;
@@ -664,6 +701,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [
     bossIntro,
+    closeSquare,
     dialogOpen,
     handleCancelConfirm,
     handleCloseMenus,
@@ -675,6 +713,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
     pendingConfirm,
     showControlsGuide,
     skipBossIntro,
+    squareUse,
   ]);
 
   // Pads steer menus whenever no round is live, and play it otherwise.
@@ -797,7 +836,17 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
             : <ControlsTable rows={controlRows} label="controls" />}
         </ControlsGuide>
       )}
-      {isPaused && menuState && !showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
+      {squareUse && (
+        <VillageOverlay
+          store={store}
+          item={squareUse.item}
+          playerId={squareUse.playerId}
+          dispatch={dispatch}
+          onClose={closeSquare}
+          closeOnEscape={false}
+        />
+      )}
+      {isPaused && menuState && !squareUse && !showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
         // Tab stays inside the menu; pads treat it as their menu.
         <FocusTrap open disableRestoreFocus isEnabled={pauseTrapEnabled}>
           <PauseOverlay

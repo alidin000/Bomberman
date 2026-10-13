@@ -1,10 +1,12 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import {
+  act, fireEvent, render, screen, within,
+} from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { vi } from 'vitest';
 import { createInitialState } from '../../engine/initialState';
-import { parseMapRows } from '../../engine/mapLoader';
+import { loadCampaignMapRows, parseMapRows } from '../../engine/mapLoader';
 import { GameEngineState } from '../../engine/types';
 import { createEngineStore, PublishingEngineStore } from '../../hooks/engineStore';
 import { setTouchMode } from '../../input/touchMode';
@@ -148,7 +150,8 @@ describe('OnlineGameScreen touch play', () => {
     // P1 is defeated in this fixture. An active bomb button proves the
     // controls read P2, the seat assigned by the online server.
     expect(document.querySelector('[data-touch-button="bomb"]')).not.toHaveAttribute('data-out');
-    expect(mocks.useOnlineInput).toHaveBeenCalledWith(expect.anything(), true);
+    expect(mocks.useOnlineInput)
+      .toHaveBeenCalledWith(expect.anything(), true, expect.any(Function));
   });
 
   it('suggests landscape without blocking portrait play and remembers dismissal', () => {
@@ -159,5 +162,72 @@ describe('OnlineGameScreen touch play', () => {
     fireEvent.click(screen.getByRole('button', { name: 'dismiss orientation suggestion' }));
     expect(screen.queryByText('Rotate for a wider arena')).not.toBeInTheDocument();
     expect(localStorage.getItem(LANDSCAPE_HINT_DISMISSED_KEY)).toBe('true');
+  });
+});
+
+describe('OnlineGameScreen co-op village square', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    // A co-op room runs as 'solo' on the server, with no village visit.
+    const start = createInitialState({
+      mode: 'solo',
+      numPlayers: 2,
+      totalRounds: 1,
+      selectedMap: 'hiddenLeaf',
+      stageId: 'hiddenLeaf',
+      map: parseMapRows(loadCampaignMapRows('hiddenLeaf')),
+      selectedCharacters: ['sasuke', 'naruto'],
+      seed: 9,
+    });
+    // P2 (this seat) stands beside the shrine at 2,8.
+    const state = {
+      ...start,
+      roundStartTicksRemaining: 0,
+      players: start.players.map((player, slot) => (
+        slot === 1 ? { ...player, x: 2, y: 7 } : player
+      )),
+    };
+    const store = createEngineStore();
+    store.publish(state);
+    mocks.engine = {
+      store, motion: null, getState: () => state, advanceFrame: vi.fn(),
+    };
+    mocks.snapshot = {
+      status: 'playing',
+      connected: true,
+      roomId: 'ABC234',
+      seat: 1,
+      playerId: 'player2',
+      token: 'resume-token',
+      players: [],
+      roomMode: 'coop',
+      stageId: 'hiddenLeaf',
+      capacity: 4,
+      totalRounds: 1,
+      gameState: state,
+      ack: 1,
+      error: '',
+    };
+    mocks.useOnlineInput.mockClear();
+  });
+
+  it('opens the shrine on the bomb key without pausing, and this seat stands still while it is open', () => {
+    renderOnlineGame();
+    const squareBomb = mocks.useOnlineInput.mock.calls.at(-1)?.[2] as () => boolean;
+    let taken = false;
+    act(() => {
+      taken = squareBomb();
+    });
+    // The square took the press: the room never hears a bomb.
+    expect(taken).toBe(true);
+    const shrine = screen.getByRole('dialog', { name: 'Codex Shrine' });
+    expect(within(shrine).getByText(/This village · 0 of 3 found/)).toBeInTheDocument();
+    expect(mocks.useOnlineInput)
+      .toHaveBeenLastCalledWith(expect.anything(), false, expect.any(Function));
+
+    fireEvent.click(within(shrine).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Codex Shrine' })).not.toBeInTheDocument();
+    expect(mocks.useOnlineInput)
+      .toHaveBeenLastCalledWith(expect.anything(), true, expect.any(Function));
   });
 });

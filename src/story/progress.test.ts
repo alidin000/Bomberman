@@ -1,5 +1,6 @@
 import {
   STORY_PROGRESS_KEY,
+  STORY_PROGRESS_VERSION,
   completeCampaignStage,
   loadStoryProgress,
   recordCampaignDiscoveries,
@@ -17,7 +18,7 @@ describe('story progress', () => {
     expect(progress.lastStage).toBe('hiddenLeaf');
     expect(progress.unlockedStages).toEqual(['hiddenLeaf']);
     expect(progress.unlockedCharacters).toEqual(['deidara']);
-    expect(progress.version).toBe(4);
+    expect(progress.version).toBe(STORY_PROGRESS_VERSION);
     expect(progress.objectiveProgress).toEqual({});
     expect(progress.missionResults).toEqual({});
     expect(progress.fragments).toEqual({});
@@ -76,7 +77,7 @@ describe('story progress', () => {
     expect(progress.completedStages).toEqual([]);
     expect(progress.currentFlowStep).toBe('exploration');
     expect(progress.completedBosses).toEqual(['shukaku']);
-    expect(progress.version).toBe(4);
+    expect(progress.version).toBe(STORY_PROGRESS_VERSION);
     expect(progress.objectiveProgress).toEqual({});
     expect(progress.missionResults).toEqual({});
     expect(progress.fragments).toEqual({});
@@ -138,7 +139,7 @@ describe('story progress v4 (village hub)', () => {
 
     const progress = loadStoryProgress();
 
-    expect(progress.version).toBe(4);
+    expect(progress.version).toBe(STORY_PROGRESS_VERSION);
     // Everything the old save held is still there.
     expect(progress.completedStages).toEqual(['hiddenLeaf', 'hiddenSand']);
     expect(progress.unlockedCharacters).toEqual(['deidara', 'naruto', 'gaara']);

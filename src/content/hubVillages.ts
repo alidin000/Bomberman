@@ -3,6 +3,9 @@
 // in campaignMissions.ts (scroll cache in the north-west by the entrance, the
 // archive fragment north of the centre, the burrow in the south-east).
 import { StageId } from './types';
+import { CAMPAIGN_VILLAGES, getNextCampaignStageId } from './campaign';
+import type { ReputationTierId } from './villageSquare';
+import { WANDERING_VILLAGER } from './villageSquare';
 
 export interface HubDialogueChoice {
   id: string;
@@ -354,3 +357,93 @@ export const HUB_VILLAGES: HubVillageDefinition[] = [
 export function getHubVillage(stageId: StageId): HubVillageDefinition {
   return HUB_VILLAGES.find((village) => village.stageId === stageId) ?? HUB_VILLAGES[0];
 }
+
+// What each villager says once the story has moved past their village: the
+// next village's mission is cleared too. The last village has no next one.
+export const ONWARD_GREETINGS: Readonly<Record<string, string>> = {
+  wren: 'They say the sand village wells run clear again. Word travels fast through an open gate.',
+  hobb: 'A traveller paid for her tea with sand village coin. You have been busy.',
+  saffi: 'The ferry folk sent a lamp across the desert to thank you. It is on my well now.',
+  doru: 'The mist road is open. My caravan goes further every week because of you.',
+  ondine: 'A kite from the cloud cliffs landed on my deck. A thank-you, I think.',
+  kell: 'Fishermen from the cliffs came down to trade. That has not happened in years.',
+  brisa: 'Quarry dust on the wind, but no rockslides. The stone village sleeps easy.',
+  tobin: 'Ysolde sent me lamp wire for my kites. Best frames I ever built.',
+  marl: 'The red lanterns in the hideout are out. We heard the quiet from here.',
+  ysolde: 'My shafts point east, toward the hideout. They feel lighter now.',
+  ash: 'The war camp sent runners for my maps. The old ink is finally useful.',
+  quill: 'The crows flew west to the battlefield. Then even they stopped watching.',
+};
+
+/**
+ * What a villager opens with: the onward line once the next village is
+ * cleared, the cleared line once this one is, else the first greeting.
+ */
+export function villagerGreeting(
+  npc: HubNpc,
+  stageId: StageId,
+  completedStages: readonly StageId[]
+): string {
+  const next = getNextCampaignStageId(stageId);
+  const onward = ONWARD_GREETINGS[npc.id];
+  if (onward && next && completedStages.includes(next)) return onward;
+  return completedStages.includes(stageId) ? npc.clearedGreeting : npc.greeting;
+}
+
+// Tamsin the Road Teller (WANDERING_VILLAGER) walks between the villages
+// and joins every square once your standing reaches Known. Her news follows
+// the story, and she is the one who explains standing and the codex.
+export const ROAD_TELLER: HubNpc = {
+  id: WANDERING_VILLAGER.id,
+  name: WANDERING_VILLAGER.name,
+  role: WANDERING_VILLAGER.role,
+  greeting: 'Every road I walk, people say your name now. Sit a moment. I trade in news.',
+  clearedGreeting: 'Another village sleeping soundly. I will have a good story for the next square.',
+  choices: [
+    {
+      id: 'standing',
+      prompt: 'What is standing?',
+      reply: 'Every village you help adds to how far your name carries. The more it carries, the more each square opens up to you.',
+    },
+    {
+      id: 'codex',
+      prompt: 'What is the shrine for?',
+      reply: 'The shrine keeps the Codex: lore you uncover by finding a village\'s secrets. Crack a hidden wall, and its story is written there.',
+    },
+  ],
+};
+
+// Tamsin's road news, by how many villages are cleared (0 to 7).
+export const ROAD_NEWS: readonly string[] = [
+  'Nothing yet but rumours. The leaf village gate is where every road starts.',
+  'The leaf village is safe, and the desert road is open. The wells out there need you next.',
+  'Two villages cleared. The fog on the water is thickest just past the dunes.',
+  'Three down. The cliff bells have not rung for joy in a long time.',
+  'Four villages. The quarry folk say the mountain itself is angry.',
+  'Five. Everyone whispers about the hideout now, and nobody whispers loudly.',
+  'Six. Every village is marching to the same field. So should you.',
+  'All seven are safe. I will be telling this road for the rest of my life.',
+];
+
+export function roadNews(completedStages: readonly StageId[]): string {
+  const cleared = CAMPAIGN_VILLAGES
+    .filter((village) => completedStages.includes(village.stageId)).length;
+  return ROAD_NEWS[Math.min(cleared, ROAD_NEWS.length - 1)];
+}
+
+/** The person a square's villager prop is: one of the village's two, or Tamsin. */
+export function getSquareVillager(stageId: StageId, villagerId: string | undefined): HubNpc | null {
+  if (villagerId === ROAD_TELLER.id) return ROAD_TELLER;
+  return getHubVillage(stageId).npcs.find((npc) => npc.id === villagerId) ?? null;
+}
+
+// What each standing tier brings to every village square.
+export const STANDING_TIER_PERKS: Readonly<Record<ReputationTierId, string>> = {
+  stranger: 'Two villagers, the first request on the board, and Pell\'s stall at full price.',
+  known: `${WANDERING_VILLAGER.name} the ${WANDERING_VILLAGER.role} joins every square, and the board offers a second request.`,
+  trusted: 'Pell takes a fifth off the stall, and the board offers its hardest request.',
+  honored: 'Your shinobi wears an ember-thread scarf in every mission.',
+};
+
+// One line on what the Codex is, for the hub and the square's shrine.
+export const CODEX_EXPLAINER = 'The Codex is lore you uncover by finding a village\'s secrets.';

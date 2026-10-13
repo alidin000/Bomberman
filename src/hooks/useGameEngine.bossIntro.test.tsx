@@ -20,6 +20,9 @@ vi.mock('../engine/initialState', async (importOriginal) => {
       return {
         ...state,
         roundStartTicksRemaining: 0,
+        // Out in the arena, past the village square (where the bomb key
+        // never bombs).
+        players: state.players.map((player) => ({ ...player, x: 17, y: 20 })),
         monsters: [],
         boss: actual.createBossForConfig({ ...config, map: state.map }),
         // Past the first moment, which cannot be skipped.

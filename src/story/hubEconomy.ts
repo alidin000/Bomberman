@@ -14,12 +14,22 @@ import {
 } from '../content/hubShop';
 import type { StageId } from '../content';
 import type { DifficultyId } from '../engine/difficulty';
+import { VILLAGE_REQUESTS, getVillageRequest } from '../content/villageRequests';
 import {
   LastMissionReport,
+  MissionRequestReward,
+  StallSpendRecord,
   StoryProgress,
   loadStoryProgress,
   saveStoryProgress,
 } from './progress';
+
+// Which village asks each board request.
+const VILLAGE_REQUEST_STAGE = new Map<string, StageId>(
+  (Object.keys(VILLAGE_REQUESTS) as StageId[]).flatMap((stageId) => (
+    VILLAGE_REQUESTS[stageId].map((request) => [request.id, stageId] as [string, StageId])
+  ))
+);
 
 export type PurchaseBlock = 'funds' | 'packFull' | 'packed' | 'maxed';
 
@@ -108,6 +118,48 @@ export interface MissionSettlement {
   objectivesCompleted: number;
   // Every secret found during the mission.
   secretIds: string[];
+  // Board requests the mission finished; they pay only on success.
+  completedRequestIds?: string[];
+  // What the village square's stall took this attempt (already saved as it
+  // happened; settling catches up anything the save missed).
+  stallSpend?: StallSpendRecord;
+}
+
+/**
+ * The stall's spend for one attempt, saved the moment the match shows it:
+ * only the part not saved before for this attempt leaves the balance, so
+ * saving the same total twice changes nothing. A reload keeps the deduction.
+ */
+export function applyStallSpend(progress: StoryProgress, spend: StallSpendRecord): StoryProgress {
+  const amount = Math.max(0, Math.floor(spend.amount));
+  const before = progress.stallSpend?.key === spend.key ? progress.stallSpend.amount : 0;
+  if (amount <= before) return progress;
+  return {
+    ...progress,
+    currency: Math.max(0, progress.currency - (amount - before)),
+    stallSpend: { key: spend.key, amount },
+  };
+}
+
+export function recordStallSpend(spend: StallSpendRecord): StoryProgress {
+  const progress = loadStoryProgress();
+  const next = applyStallSpend(progress, spend);
+  if (next !== progress) saveStoryProgress(next);
+  return next;
+}
+
+/** This village's finished requests not paid before, with their rewards. */
+function newRequestRewards(
+  progress: StoryProgress,
+  stageId: StageId,
+  requestIds: readonly string[]
+): MissionRequestReward[] {
+  return Array.from(new Set(requestIds)).flatMap((id) => {
+    const request = getVillageRequest(id);
+    if (!request || progress.completedRequests.includes(id)) return [];
+    if (VILLAGE_REQUEST_STAGE.get(id) !== stageId) return [];
+    return [{ id, embers: request.reward.embers, reputation: request.reward.reputation }];
+  });
 }
 
 /**
@@ -118,10 +170,17 @@ export interface MissionSettlement {
 export function settleCampaignMission(
   settlement: MissionSettlement
 ): { progress: StoryProgress; report: LastMissionReport } {
-  const progress = loadStoryProgress();
-  if (progress.lastMission?.key === settlement.key) {
-    return { progress, report: progress.lastMission };
+  const stored = loadStoryProgress();
+  if (stored.lastMission?.key === settlement.key) {
+    return { progress: stored, report: stored.lastMission };
   }
+  const progress = settlement.stallSpend ? applyStallSpend(stored, settlement.stallSpend) : stored;
+  // Requests pay their Embers and village reputation on a won mission only.
+  const requests = settlement.success
+    ? newRequestRewards(progress, settlement.stageId, settlement.completedRequestIds ?? [])
+    : [];
+  const requestEmbers = requests.reduce((sum, item) => sum + item.embers, 0);
+  const requestReputation = requests.reduce((sum, item) => sum + item.reputation, 0);
   const newSecrets = Array.from(new Set(settlement.secretIds))
     .filter((secretId) => !progress.paidSecrets.includes(secretId));
   const firstClear = !progress.paidClears.includes(settlement.stageId);
@@ -138,11 +197,23 @@ export function settleCampaignMission(
     stageId: settlement.stageId,
     difficulty: settlement.difficulty,
     success: settlement.success,
-    earnings,
+    earnings: requestEmbers > 0
+      ? { ...earnings, requests: requestEmbers, total: earnings.total + requestEmbers }
+      : earnings,
+    ...(requests.length ? { requests } : {}),
   };
   const next: StoryProgress = {
     ...progress,
-    currency: progress.currency + earnings.total,
+    currency: progress.currency + report.earnings.total,
+    completedRequests: requests.length
+      ? [...progress.completedRequests, ...requests.map((item) => item.id)]
+      : progress.completedRequests,
+    reputation: requestReputation > 0
+      ? {
+        ...progress.reputation,
+        [settlement.stageId]: (progress.reputation[settlement.stageId] ?? 0) + requestReputation,
+      }
+      : progress.reputation,
     paidClears: settlement.success && firstClear
       ? [...progress.paidClears, settlement.stageId]
       : progress.paidClears,

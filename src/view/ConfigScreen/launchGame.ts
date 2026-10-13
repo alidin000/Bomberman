@@ -18,6 +18,8 @@ import {
   takeMissionLoadout,
 } from '../../story/progress';
 import type { CampaignLoadout } from '../../content/hubShop';
+import type { VillageVisitConfig } from '../../content/villageSquare';
+import { buildVillageVisit } from '../../story/villageVisit';
 import { PlayerSlotController, loadCampaignMapRows, loadStageMapRows } from '../../engine';
 import { getControllerLabel, normalizeControllers } from '../../ai/controllers';
 
@@ -88,8 +90,11 @@ export async function launchGame(
     : null;
   // A campaign mission deploys with the hub pack (spent now) and upgrades.
   let loadout: CampaignLoadout | undefined;
+  // ...and its village square: standing, the stall's Embers, the board.
+  let village: VillageVisitConfig | undefined;
   if (mode === 'solo') {
     ({ progress, loadout } = takeMissionLoadout());
+    village = buildVillageVisit(stageDefinition.id, progress);
   }
   localStorage.setItem('selectedMap', JSON.stringify(mapData));
   localStorage.setItem('playerKeyBindings', JSON.stringify(normalizeKeyBindings(keyBindings)));
@@ -103,6 +108,7 @@ export async function launchGame(
       ? normalizeControllers(controllers, safeCharacters.length)
       : undefined,
     loadout,
+    village,
   }));
   navigate(`/game/${players}/${rounds}/${stageDefinition.mapId}`);
   return progress;
@@ -119,6 +125,23 @@ export function clearDeployedConsumables(): void {
     localStorage.setItem(GAME_SETUP_KEY, JSON.stringify({
       ...stored,
       loadout: { ...stored.loadout, consumables: [] },
+    }));
+  } catch {
+    // Without storage there is no setup to reload either.
+  }
+}
+
+/**
+ * The village stall took Embers (saved at once): a page reload starts the
+ * mission with what is left, the way a deployed pack stays spent.
+ */
+export function storeVillageEmbers(embers: number): void {
+  try {
+    const stored = JSON.parse(localStorage.getItem(GAME_SETUP_KEY) ?? 'null');
+    if (!stored?.village) return;
+    localStorage.setItem(GAME_SETUP_KEY, JSON.stringify({
+      ...stored,
+      village: { ...stored.village, embers: Math.max(0, Math.floor(embers)) },
     }));
   } catch {
     // Without storage there is no setup to reload either.

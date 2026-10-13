@@ -27,6 +27,16 @@ export type StoryUpgradeId =
   | 'quickUltimate'
   | 'sandGuard';
 
+/** A board request the mission finished, and what it paid (on success only). */
+export interface MissionRequestReward {
+  id: string;
+  embers: number;
+  reputation: number;
+}
+
+/** A mission's pay: the hub's breakdown, plus finished board requests (v5). */
+export type MissionReportEarnings = MissionEarnings & { requests?: number };
+
 /** What the last finished campaign mission paid, for the result and the hub. */
 export interface LastMissionReport {
   // The finished attempt (seed and tick): a mission is never paid twice.
@@ -34,13 +44,23 @@ export interface LastMissionReport {
   stageId: StageId;
   difficulty: DifficultyId;
   success: boolean;
-  earnings: MissionEarnings;
+  earnings: MissionReportEarnings;
+  // v5: board requests finished in a won mission.
+  requests?: MissionRequestReward[];
 }
 
-export const STORY_PROGRESS_VERSION = 4;
+/** Embers paid at a village square's stall in one mission attempt. */
+export interface StallSpendRecord {
+  key: string;
+  amount: number;
+}
+
+export const STORY_PROGRESS_VERSION = 5;
+// v4 brought the hub economy; older saves get its back pay.
+const HUB_SAVE_VERSION = 4;
 
 export interface StoryProgress {
-  version: 4;
+  version: 5;
   completedBosses: BossId[];
   completedStages: StageId[];
   unlockedCharacters: CharacterId[];
@@ -70,6 +90,10 @@ export interface StoryProgress {
   paidClears: StageId[];
   paidSecrets: string[];
   lastMission: LastMissionReport | null;
+  // v5: the village square. Board requests finished in a won mission are
+  // never offered again; the stall's spend is saved as it happens.
+  completedRequests: string[];
+  stallSpend: StallSpendRecord | null;
 }
 
 export interface StoryUpgradeDefinition {
@@ -109,7 +133,7 @@ export const STORY_UPGRADES: StoryUpgradeDefinition[] = [
 export const STORY_PROGRESS_KEY = 'shinobiArenaStoryProgress';
 
 export const DEFAULT_STORY_PROGRESS: StoryProgress = {
-  version: 4,
+  version: 5,
   completedBosses: [],
   completedStages: [],
   unlockedCharacters: ['deidara'],
@@ -132,6 +156,8 @@ export const DEFAULT_STORY_PROGRESS: StoryProgress = {
   paidClears: [],
   paidSecrets: [],
   lastMission: null,
+  completedRequests: [],
+  stallSpend: null,
 };
 
 const STAGE_IDS = new Set<string>(STAGE_DEFINITIONS.map((stage) => stage.id));
@@ -180,9 +206,16 @@ function readLastMission(value: unknown): LastMissionReport | null {
   if (typeof report.key !== 'string' || !report.stageId || !STAGE_IDS.has(report.stageId)) {
     return null;
   }
-  const earnings = report.earnings ?? {
+  const earnings: Partial<MissionReportEarnings> = report.earnings ?? {
     clear: 0, objectives: 0, secrets: 0, total: 0
   };
+  const requests = Array.isArray(report.requests)
+    ? report.requests.filter((item) => typeof item?.id === 'string').map((item) => ({
+      id: item.id,
+      embers: wholeAmount(item.embers),
+      reputation: wholeAmount(item.reputation),
+    }))
+    : [];
   return {
     key: report.key,
     stageId: report.stageId,
@@ -192,16 +225,24 @@ function readLastMission(value: unknown): LastMissionReport | null {
       clear: wholeAmount(earnings.clear),
       objectives: wholeAmount(earnings.objectives),
       secrets: wholeAmount(earnings.secrets),
+      ...(earnings.requests ? { requests: wholeAmount(earnings.requests) } : {}),
       total: wholeAmount(earnings.total),
     },
+    ...(requests.length ? { requests } : {}),
   };
+}
+
+function readStallSpend(value: unknown): StallSpendRecord | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const record = value as Partial<StallSpendRecord>;
+  return typeof record.key === 'string' ? { key: record.key, amount: wholeAmount(record.amount) } : null;
 }
 
 function migrateHub(
   stored: Partial<StoryProgress>,
   base: Pick<StoryProgress, 'completedStages' | 'discoveredSecrets'>
 ): Pick<StoryProgress, 'currency' | 'pack' | 'upgradeRanks' | 'paidClears' | 'paidSecrets' | 'lastMission'> {
-  const hubSave = typeof stored.version === 'number' && stored.version >= STORY_PROGRESS_VERSION;
+  const hubSave = typeof stored.version === 'number' && stored.version >= HUB_SAVE_VERSION;
   if (!hubSave) {
     const completed = stageList(base.completedStages);
     const secrets = stringList(base.discoveredSecrets);
@@ -229,7 +270,7 @@ function migrateStoryProgress(stored: Partial<StoryProgress>): StoryProgress {
   const migrated: StoryProgress = {
     ...DEFAULT_STORY_PROGRESS,
     ...stored,
-    version: 4,
+    version: 5,
     completedBosses: stored.completedBosses ?? DEFAULT_STORY_PROGRESS.completedBosses,
     completedStages: stored.completedStages ?? DEFAULT_STORY_PROGRESS.completedStages,
     unlockedCharacters: stored.unlockedCharacters
@@ -246,8 +287,11 @@ function migrateStoryProgress(stored: Partial<StoryProgress>): StoryProgress {
   };
   return {
     ...migrated,
-    version: 4,
+    version: 5,
     ...migrateHub(stored, migrated),
+    // v4 and older saves start the village square with no requests done.
+    completedRequests: stringList(stored.completedRequests),
+    stallSpend: readStallSpend(stored.stallSpend),
   };
 }
 
