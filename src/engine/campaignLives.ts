@@ -28,7 +28,11 @@ function getCheckpointAnchor(campaign: CampaignRuntimeState): { point: Point; la
   const last = cleared[cleared.length - 1];
   const district = campaign.districts.find((item) => item.id === last?.districtId);
   if (!last) {
-    return { point: PLAYER_SPAWNS[0], label: campaign.districts[0]?.label ?? 'the entrance' };
+    const entrance = campaign.districts[0];
+    return {
+      point: entrance ? { x: entrance.x, y: entrance.y } : PLAYER_SPAWNS[0],
+      label: entrance?.label ?? 'the entrance',
+    };
   }
   const rescued = last.targets?.filter((target) => target.rescued) ?? [];
   const point = rescued.length > 0

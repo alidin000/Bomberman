@@ -22,12 +22,13 @@ import {
 import { PROP_BASE_Y, stagePropLayers } from './StageLandmarks';
 import { buildLandmarkGeometry } from './landmarkGeometry';
 
-const MAP = 35;
+// The 35x35 arena maps and the 50x50 campaign maps.
+const SIZES = [35, 50];
 const COLORS = {
   body: '#777777', trim: '#555555', accent: '#ff8800', pad: '#666666',
 };
 
-function allStageProps(): { stageId: string; props: StagePropInstance[] }[] {
+function allStageProps(MAP: number): { stageId: string; props: StagePropInstance[] }[] {
   return STAGE_DEFINITIONS.map((stage) => ({
     stageId: stage.id,
     props: placeStageProps(getStageLook(stage.id), MAP, MAP),
@@ -73,17 +74,17 @@ const VIEWS = [{ width: 1366, height: 768 }, { width: 390, height: 844 }];
 // Player spreads the engine allows: the two-player spawn corner, the widest
 // escape spread pressed into the top-left corner, and a lone player on the
 // right edge in the middle rows (where side landmarks stand).
-const SPREADS = [
+const spreadsFor = (MAP: number) => [
   [[1, 1], [3, 1]],
   [[1, 1], [1 + WIDEST_SPREAD.halfWidth * 2, 1 + WIDEST_SPREAD.halfDepth * 2]],
   [[MAP - 2, 12]],
   [[1, MAP - 2], [MAP - 2, MAP - 2]],
 ];
 
-describe('stage landmarks', () => {
+describe.each(SIZES)('stage landmarks on a %i-cell board', (MAP) => {
   it('places the same landmarks every time, and different ones per stage', () => {
-    const first = allStageProps();
-    expect(allStageProps()).toEqual(first);
+    const first = allStageProps(MAP);
+    expect(allStageProps(MAP)).toEqual(first);
     first.forEach(({ props }) => expect(props.length).toBeGreaterThan(8));
     const layouts = new Set(first.map(({ props }) => (
       JSON.stringify(props.map((prop) => [prop.kind, prop.x, prop.y]))
@@ -93,7 +94,7 @@ describe('stage landmarks', () => {
 
   it('keeps every footprint off the board and off the near rows', () => {
     const keepOut = propKeepOut(MAP, MAP);
-    allStageProps().forEach(({ props }) => {
+    allStageProps(MAP).forEach(({ props }) => {
       props.forEach((prop, index) => {
         const outside = prop.y + prop.radius <= keepOut.minY + 1e-9
           || prop.x + prop.radius <= keepOut.minX + 1e-9
@@ -110,10 +111,10 @@ describe('stage landmarks', () => {
   });
 
   it('never stands between the camera and a player at any legal framing', () => {
-    allStageProps().forEach(({ props }) => {
+    allStageProps(MAP).forEach(({ props }) => {
       const boxes = props.map(propBox);
       VIEWS.forEach((view) => {
-        SPREADS.forEach((players) => {
+        spreadsFor(MAP).forEach((players) => {
           const xs = players.map(([x]) => x);
           const ys = players.map(([, y]) => y);
           const camera = cameraFor(view, {
@@ -140,7 +141,7 @@ describe('stage landmarks', () => {
   });
 
   it('costs at most six instanced draws a stage', () => {
-    allStageProps().forEach(({ props }) => {
+    allStageProps(MAP).forEach(({ props }) => {
       expect(stagePropLayers(props).length).toBeLessThanOrEqual(6);
     });
   });

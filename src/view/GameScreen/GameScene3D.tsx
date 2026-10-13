@@ -12,7 +12,6 @@ import {
   BossHazard,
   CampaignObjectiveState,
   CampaignRescueTargetState,
-  CellVisibility,
   ExplosionCell,
   GameEngineState,
   HazardKind,
@@ -45,6 +44,11 @@ import {
   MAP_OFFSET_X, MAP_OFFSET_Z, TILE_SIZE, toWorld
 } from './scene/sceneSpace';
 import { StaticTiles } from './scene/StaticTiles';
+import {
+  StaticTileFeatures,
+  campaignTileFeatureKey,
+  tileFeaturesFromKey,
+} from './scene/staticTiles';
 import {
   framingScaleFor,
   groupShift,
@@ -162,18 +166,6 @@ function getMapDimensions(map: GameMap): { width: number; height: number } {
 
 function getMapWorldCenter(width: number, height: number): [number, number, number] {
   return toWorld((width - 1) / 2, (height - 1) / 2);
-}
-
-function getVisibilityFromSets(
-  visibleCells: Set<string>,
-  exploredCells: Set<string>,
-  x: number,
-  y: number
-): CellVisibility {
-  const key = cellKey(x, y);
-  if (visibleCells.has(key)) return 'visible';
-  if (exploredCells.has(key)) return 'explored';
-  return 'hidden';
 }
 
 function cellVisibleInSet(visibleCells: Set<string>, x: number, y: number): boolean {
@@ -2588,6 +2580,7 @@ type MapTilesProps = {
   destroyedBoxes: GameEngineState['destroyedBoxes'];
   palette: StageDefinition['palette'];
   fogOfWar: GameEngineState['fogOfWar'];
+  features: StaticTileFeatures;
   powerTheme?: CharacterId;
 };
 
@@ -2626,6 +2619,7 @@ function sameTimedCells(
 }
 
 function sameCellKeys(prev: string[] = [], next: string[] = []): boolean {
+  if (prev === next) return true;
   return prev.length === next.length
     && prev.every((cell, index) => cell === next[index]);
 }
@@ -2646,6 +2640,7 @@ function MapTilesBase({
   destroyedBoxes,
   palette,
   fogOfWar,
+  features,
   powerTheme,
 }: MapTilesProps) {
   // Keyed on positions, not the array: a crate's break timer ticks every frame,
@@ -2659,10 +2654,6 @@ function MapTilesBase({
     () => new Map(bombs.map((bomb) => [`${bomb.x},${bomb.y}`, bomb])),
     [bombs],
   );
-  const sensedWallSet = useMemo(
-    () => new Set(fogOfWar.sensedWalls ?? []),
-    [fogOfWar.sensedWalls],
-  );
   const visibleCellSet = useMemo(
     () => new Set(fogOfWar.visible ?? []),
     [fogOfWar.visible],
@@ -2673,20 +2664,22 @@ function MapTilesBase({
   );
 
   // Walls, crates and ground are instanced in StaticTiles; only animated
-  // per-cell objects stay as their own React elements.
+  // per-cell objects stay as their own React elements. Those draw only on
+  // visible cells (power-ups, bombs) or sensed hidden ones (Gaara's walls),
+  // so walk those short lists instead of every cell of a 50x50 map.
   const cellObjects: React.ReactElement[] = [];
-  map.forEach((row, y) => row.forEach((cell, x) => {
-    const visibility = getVisibilityFromSets(visibleCellSet, exploredCellSet, x, y);
-    if (visibility === 'hidden') {
-      if (
-        sensedWallSet.has(cellKey(x, y))
-        && (cell === 'Wall' || cell === 'Box' || isObstacle(cell))
-      ) {
-        cellObjects.push(<SensedWallMarkerMemo key={`sensed-wall-${x}-${y}`} x={x} y={y} />);
-      }
-      return;
+  (fogOfWar.sensedWalls ?? []).forEach((key) => {
+    if (visibleCellSet.has(key) || exploredCellSet.has(key)) return;
+    const [x, y] = key.split(',').map(Number);
+    const cell = map[y]?.[x];
+    if (cell === 'Wall' || cell === 'Box' || (cell !== undefined && isObstacle(cell))) {
+      cellObjects.push(<SensedWallMarkerMemo key={`sensed-wall-${x}-${y}`} x={x} y={y} />);
     }
-    if (visibility !== 'visible') return;
+  });
+  visibleCellSet.forEach((key) => {
+    const [x, y] = key.split(',').map(Number);
+    const cell = map[y]?.[x];
+    if (cell === undefined) return;
     if (isPower(cell)) {
       cellObjects.push(
         <PowerUpMeshMemo key={`power-${x}-${y}`} x={x} y={y} power={cell} characterId={powerTheme} />
@@ -2709,7 +2702,7 @@ function MapTilesBase({
         />
       );
     }
-  }));
+  });
 
   return (
     <>
@@ -2719,6 +2712,7 @@ function MapTilesBase({
         visibleCells={visibleCellSet}
         exploredCells={exploredCellSet}
         destroyedCells={destroyedSet}
+        features={features}
       />
       {cellObjects}
     </>
@@ -2731,6 +2725,7 @@ const MapTiles = React.memo(MapTilesBase, (prev, next) => (
   && sameBombCells(prev.bombs, next.bombs)
   && sameTimedCells(prev.destroyedBoxes, next.destroyedBoxes)
   && sameFogCells(prev.fogOfWar, next.fogOfWar)
+  && prev.features === next.features
   && prev.powerTheme === next.powerTheme
 ));
 
@@ -3182,6 +3177,8 @@ function SceneContentBase({
   );
   useHighContrastMaterials(highContrast, HIGH_CONTRAST_MATERIALS);
   const mapDimensions = useMemo(() => getMapDimensions(state.map), [state.map]);
+  const tileFeatureKey = campaignTileFeatureKey(state.campaign);
+  const tileFeatures = useMemo(() => tileFeaturesFromKey(tileFeatureKey), [tileFeatureKey]);
   const visibleCellSet = useMemo(
     () => new Set(state.fogOfWar.visible ?? []),
     [state.fogOfWar.visible],
@@ -3259,6 +3256,7 @@ function SceneContentBase({
         destroyedBoxes={state.destroyedBoxes}
         palette={palette}
         fogOfWar={state.fogOfWar}
+        features={tileFeatures}
         powerTheme={state.players[0]?.characterId}
       />
       {state.players.map((player) => player.teleportMark && (

@@ -145,19 +145,9 @@ function getMatchVisionRadius(state: GameEngineState, characterId: CharacterId):
 // Arrays this module produced: sorted, without duplicates. Only these take
 // the incremental path; anything else is recomputed from scratch as before.
 const sortedKeyArrays = new WeakSet<string[]>();
-const keySetCache = new WeakMap<string[], Set<string>>();
 // The vision sources (cell and radius of every eye) a fog state was computed
 // from. Same sources mean the same visible cells, and explored already holds them.
 const visionSourcesCache = new WeakMap<FogOfWarState, number[]>();
-
-function getKeySet(keys: string[]): Set<string> {
-  let set = keySetCache.get(keys);
-  if (!set) {
-    set = new Set(keys);
-    keySetCache.set(keys, set);
-  }
-  return set;
-}
 
 function sameCellKeys(prev: string[] = [], next: string[] = []): boolean {
   if (prev === next) return true;
@@ -172,6 +162,42 @@ function sortedKeys(keys: Set<string>, previous?: string[]): string[] {
   return next;
 }
 
+// Both inputs are sorted and unique: one linear pass merges them, so a step
+// that reveals a few cells costs O(explored) instead of a re-sort of the
+// whole (up to 50x50) map. Same order as Array#sort's default comparison.
+function mergeSortedUnique(previous: string[], visible: string[]): string[] | null {
+  const merged: string[] = [];
+  let i = 0;
+  let j = 0;
+  let added = false;
+  while (i < previous.length && j < visible.length) {
+    const a = previous[i];
+    const b = visible[j];
+    if (a === b) {
+      merged.push(a);
+      i += 1;
+      j += 1;
+    } else if (a < b) {
+      merged.push(a);
+      i += 1;
+    } else {
+      merged.push(b);
+      j += 1;
+      added = true;
+    }
+  }
+  while (i < previous.length) {
+    merged.push(previous[i]);
+    i += 1;
+  }
+  while (j < visible.length) {
+    merged.push(visible[j]);
+    j += 1;
+    added = true;
+  }
+  return added ? merged : null;
+}
+
 // explored = previous explored + visible, sorted. Reuses the previous array
 // when nothing new was revealed, and never re-sorts or copies it otherwise.
 function mergeExplored(previous: string[], visible: string[]): string[] {
@@ -183,10 +209,11 @@ function mergeExplored(previous: string[], visible: string[]): string[] {
     sortedKeyArrays.add(result);
     return result;
   }
-  const known = getKeySet(previous);
-  const revealed = visible.filter((key) => !known.has(key));
-  if (revealed.length === 0) return previous;
-  const merged = previous.concat(revealed).sort();
+  // `visible` comes from sortedKeys(), so it is sorted and unique too.
+  const merged = sortedKeyArrays.has(visible) || visible.length < 2
+    ? mergeSortedUnique(previous, visible)
+    : mergeSortedUnique(previous, Array.from(new Set(visible)).sort());
+  if (!merged) return previous;
   sortedKeyArrays.add(merged);
   return merged;
 }

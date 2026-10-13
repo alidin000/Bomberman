@@ -62,6 +62,9 @@ describe('launchGame', () => {
     }, navigate);
 
     expect(navigate).toHaveBeenCalledWith('/game/1/1/hiddenLeaf');
+    // The mission plays the village's 50x50 campaign map, not its arena map.
+    expect(JSON.parse(localStorage.getItem('selectedMap') as string))
+      .toEqual(authoredRows('campaign/hiddenLeaf'));
     const setup = JSON.parse(localStorage.getItem('gameSetup') as string);
     expect(setup.loadout).toEqual({
       consumables: ['secondWind'],

@@ -1,5 +1,6 @@
 /* eslint-disable comma-dangle */
 import { GameMap } from '../model/gameItem';
+import type { CampaignBossArenaDefinition } from '../content/campaignMissions';
 import {
   GameConfig, GameEngineState, MonsterState, PlayerState,
 } from './types';
@@ -11,6 +12,7 @@ import { getDetectionRange, resetMonsterHazardIdCounter } from './monsters';
 import {
   DEFAULT_CHARACTER_ID,
   STAGE_DEFINITIONS,
+  getCampaignMission,
   getBossDefinition,
   getCharacterDefinition,
   getStageDefinition,
@@ -34,8 +36,16 @@ const SPAWN_CLEAR_OFFSETS = [
   { x: 0, y: -1 },
 ];
 
+// A campaign mission (solo or co-op) starts at its village's own spawns.
+function getPlayerSpawn(index: number, config: GameConfig): { x: number; y: number } {
+  const spawn = config.mode === 'solo'
+    ? getCampaignMission(config.stageId)?.playerSpawns[index]
+    : undefined;
+  return spawn && config.map[spawn.y]?.[spawn.x] !== undefined ? spawn : PLAYER_SPAWNS[index];
+}
+
 function createPlayer(index: number, config: GameConfig): PlayerState {
-  const spawn = PLAYER_SPAWNS[index];
+  const spawn = getPlayerSpawn(index, config);
   const characterId = config.selectedCharacters?.[index] ?? DEFAULT_CHARACTER_ID;
   const character = getCharacterDefinition(characterId);
   const isClayArtist = character.id === 'deidara';
@@ -146,9 +156,13 @@ function placeVersusMonsters(
   });
 }
 
-function getBossSpawn(config: GameConfig): { x: number; y: number } {
-  const centerX = Math.floor(config.map[0].length / 2);
-  const centerY = Math.floor(config.map.length / 2);
+type BossArenaSpot = Pick<CampaignBossArenaDefinition, 'x' | 'y' | 'bounds'>;
+
+function getBossSpawn(config: GameConfig, arena?: BossArenaSpot): { x: number; y: number } {
+  // A walled campaign arena centres the boss in it; otherwise the map centre.
+  const inArena = !!arena?.bounds && config.map[arena.y]?.[arena.x] !== undefined;
+  const centerX = arena && inArena ? arena.x : Math.floor(config.map[0].length / 2);
+  const centerY = arena && inArena ? arena.y : Math.floor(config.map.length / 2);
   const candidates = [
     { x: centerX, y: centerY },
     { x: centerX - 1, y: centerY },
@@ -163,11 +177,14 @@ function getBossSpawn(config: GameConfig): { x: number; y: number } {
     ?? { x: centerX, y: centerY };
 }
 
-export function createBossForConfig(config: GameConfig): GameEngineState['boss'] {
+export function createBossForConfig(
+  config: GameConfig,
+  arena?: BossArenaSpot
+): GameEngineState['boss'] {
   if (config.mode !== 'solo') return null;
   const stage = getStageDefinition(config.stageId);
   const boss = getBossDefinition(stage.bossId);
-  const spawn = getBossSpawn(config);
+  const spawn = getBossSpawn(config, arena);
   const stageIndex = Math.max(
     0,
     STAGE_DEFINITIONS.findIndex((item) => item.id === stage.id)
@@ -237,7 +254,7 @@ export function createInitialState(config: GameConfig): GameEngineState {
     campaign,
     boss: campaign && !campaign.bossUnlocked
       ? null
-      : createBossForConfig({ ...config, map }),
+      : createBossForConfig({ ...config, map }, campaign?.bossArena),
     fogOfWar: {
       visible: [],
       explored: [],
@@ -294,7 +311,7 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     campaign,
     boss: campaign && !campaign.bossUnlocked
       ? null
-      : createBossForConfig({ ...state.config, map }),
+      : createBossForConfig({ ...state.config, map }, campaign?.bossArena),
     fogOfWar: {
       visible: [],
       explored: [],

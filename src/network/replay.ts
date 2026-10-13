@@ -20,7 +20,11 @@ import { GameEngineState } from '../engine/types';
 // loadouts from the village hub (config.loadout) apply at INIT, and a retry
 // or restart drops the one-mission consumables; the campaign boss's entrance
 // freezes the arena for BOSS_INTRO_MS (SKIP_BOSS_INTRO ends it early).
-export const REPLAY_VERSION = 7;
+// v8: campaign stage layouts: per-village player spawns; secret rooms (a
+// room's cracked wall drops nothing, walking into the room reveals its
+// secret); a walled boss arena whose gates open when the boss unlocks, with
+// the boss appearing at the arena's centre. SIMULATION_VERSION follows.
+export const REPLAY_VERSION = 8;
 
 export interface ReplayFrame {
   tick: number;

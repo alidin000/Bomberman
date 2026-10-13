@@ -4,6 +4,7 @@ import { snapshotForDelivery, startOnlineServer } from './onlineServer';
 import { defaultMap } from '../src/constants/contants';
 import { gameReducer } from '../src/engine/reducer';
 import { gameItem } from '../src/model/gameItem';
+import { CAMPAIGN_STAGE_LAYOUTS } from '../src/content/campaignLayouts';
 import {
   PROTOCOL_VERSION, SIMULATION_VERSION, ServerMessage,
 } from '../src/network/protocol';
@@ -434,7 +435,13 @@ describe('online room server', () => {
         .toBe('hiddenSand');
       expect(snapshot.type === 'snapshot' && snapshot.state?.campaign?.villageName)
         .toBe('Hidden Sand');
-      expect(snapshot.type === 'snapshot' && snapshot.state?.map).toHaveLength(35);
+      // The room plays the village's own map, with both seats on its spawns.
+      const layout = CAMPAIGN_STAGE_LAYOUTS.hiddenSand;
+      expect(snapshot.type === 'snapshot' && snapshot.state?.map).toHaveLength(layout.size);
+      expect(snapshot.type === 'snapshot' && snapshot.state?.players.map(({ x, y }) => ({ x, y })))
+        .toEqual(layout.playerSpawns.slice(0, 2));
+      expect(snapshot.type === 'snapshot' && snapshot.state?.campaign?.bossArena.gates)
+        .toEqual(layout.bossArena.gates);
     } finally {
       host.socket.close();
       guest.socket.close();

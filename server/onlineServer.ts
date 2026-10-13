@@ -5,7 +5,7 @@ import { createServer, Server as HttpServer } from 'node:http';
 import WebSocket, { RawData, WebSocketServer } from 'ws';
 import { GameAction } from '../src/engine/actions';
 import { TICK_MS } from '../src/engine/constants';
-import { loadStageMapRows, parseMapRows } from '../src/engine/mapLoader';
+import { loadCampaignMapRows, loadStageMapRows, parseMapRows } from '../src/engine/mapLoader';
 import { gameReducer } from '../src/engine/reducer';
 import {
   Direction, GameConfig, GameEngineState, PlayerState,
@@ -193,7 +193,10 @@ function createConfig(room: Room): GameConfig {
     totalRounds: room.roomMode === 'coop' ? 1 : room.totalRounds,
     selectedMap: stage.mapId,
     stageId: stage.id,
-    map: parseMapRows(loadStageMapRows(stage.mapId)),
+    // Co-op missions play the campaign map; arena rooms the arena map.
+    map: parseMapRows(room.roomMode === 'coop'
+      ? loadCampaignMapRows(stage.mapId)
+      : loadStageMapRows(stage.mapId)),
     selectedCharacters: room.seats.map((seat) => seat.characterId),
     playerNames: room.seats.map((seat) => seat.name),
     seed: randomInt(1, 2_147_483_646),

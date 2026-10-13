@@ -4,7 +4,7 @@ import { GameConfig, GameEngineState, MonsterState } from './types';
 import { applyPowerUp } from './players';
 import { cellKey } from './fogOfWar';
 import { tickMonsters } from './monsters';
-import { parseMapRows } from './mapLoader';
+import { loadCampaignMapRows, parseMapRows } from './mapLoader';
 import { defaultMap } from '../constants/contants';
 import { genericPowerUpOptions, isObstacle } from '../model/gameItem';
 import {
@@ -17,6 +17,8 @@ import { resolveZetsuOutcomeKind } from './campaignExploration';
 import { STAGE_DEFINITIONS } from '../content/stages';
 import { CAMPAIGN_MISSIONS, getCampaignMission } from '../content/campaignMissions';
 import { solvePuzzle } from './campaignPuzzles.testutil';
+import { CAMPAIGN_STAGE_LAYOUTS } from '../content/campaignLayouts';
+import type { StageId } from '../content/types';
 
 // Most tests exercise a live round; the "Ready... GO" freeze has its own tests.
 function createInitialState(config: GameConfig): GameEngineState {
@@ -98,6 +100,20 @@ const hiddenLeafCampaignConfig: GameConfig = {
   selectedCharacters: ['naruto'],
   map: hiddenLeafCampaignMap,
 };
+
+// The real stage map, for the tests that walk the mission's own places.
+function stageCampaignConfig(stageId: StageId): GameConfig {
+  const stage = STAGE_DEFINITIONS.find((item) => item.id === stageId)!;
+  return {
+    ...hiddenLeafCampaignConfig,
+    selectedMap: stage.mapId,
+    stageId,
+    map: parseMapRows(loadCampaignMapRows(stage.mapId)),
+  };
+}
+const leafMission = getCampaignMission('hiddenLeaf')!;
+const leafLayout = CAMPAIGN_STAGE_LAYOUTS.hiddenLeaf;
+const [leafRescueA, leafRescueB] = leafLayout.rescueTargets;
 
 const campaignStageIds = STAGE_DEFINITIONS.map((stage) => stage.id);
 
@@ -221,10 +237,10 @@ describe('gameReducer', () => {
   });
 
   it('gates the Hidden Leaf boss behind campaign objectives', () => {
-    const state = createInitialState(hiddenLeafCampaignConfig);
+    const state = createInitialState(stageCampaignConfig('hiddenLeaf'));
 
-    expect(state.map).toHaveLength(35);
-    expect(state.map[0]).toHaveLength(35);
+    expect(state.map).toHaveLength(leafLayout.size);
+    expect(state.map[0]).toHaveLength(leafLayout.size);
     expect(state.campaign?.title).toBe('Hidden Leaf Emergency');
     expect(state.campaign?.event?.name).toBe('Nine Tails Alert');
     expect(state.campaign?.missionStep).toBe('rescue');
@@ -239,8 +255,7 @@ describe('gameReducer', () => {
     // The first village refills slowly (26 s, x1.25 on Normal) and holds two.
     expect(state.campaign?.spawnPoints[0]).toMatchObject({
       id: 'hiddenLeaf-main-gate',
-      x: 6,
-      y: 5,
+      ...leafLayout.spawnPoints.mainGate,
       respawnMs: 32500,
       maxActive: 2,
     });
@@ -303,11 +318,7 @@ describe('gameReducer', () => {
 
   it('lets every campaign stage complete Phase 1 objectives and unlock its boss', () => {
     STAGE_DEFINITIONS.forEach((stage) => {
-      let state = createInitialState({
-        ...hiddenLeafCampaignConfig,
-        selectedMap: stage.mapId,
-        stageId: stage.id,
-      });
+      let state = createInitialState(stageCampaignConfig(stage.id));
       const mission = state.campaign;
       expect(mission?.stageId).toBe(stage.id);
       expect(state.boss).toBeNull();
@@ -763,11 +774,11 @@ describe('gameReducer', () => {
   });
 
   it('rescues villagers, clears Iruka gate, and spawns Kurama', () => {
-    let state = createInitialState(hiddenLeafCampaignConfig);
+    let state = createInitialState(stageCampaignConfig('hiddenLeaf'));
 
     state = {
       ...state,
-      players: state.players.map((player) => ({ ...player, x: 3, y: 1 })),
+      players: state.players.map((player) => ({ ...player, ...leafRescueA })),
     };
     state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
     expect(state.campaign?.objectives[0]).toMatchObject({
@@ -779,7 +790,7 @@ describe('gameReducer', () => {
 
     state = {
       ...state,
-      players: state.players.map((player) => ({ ...player, x: 10, y: 6 })),
+      players: state.players.map((player) => ({ ...player, ...leafRescueB })),
     };
     state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
     expect(state.campaign?.objectives[0].status).toBe('complete');
@@ -828,8 +839,7 @@ describe('gameReducer', () => {
         ...player,
         alive: true,
         deathReason: undefined,
-        x: 29,
-        y: 29,
+        ...leafLayout.miniBossGate,
       })),
       monsters: state.monsters.filter((monster) => monster.id !== 'confrontIruka-guard'),
     };
@@ -840,26 +850,28 @@ describe('gameReducer', () => {
     expect(state.campaign?.bossArena.unlocked).toBe(true);
     expect(state.campaign?.bossUnlocked).toBe(true);
     expect(state.boss?.name).toBe('Kurama');
-    expect(state.boss).toMatchObject({ x: 17, y: 17 });
+    // Kurama appears in the middle of the walled arena, whose gates open.
+    expect(state.boss).toMatchObject({ x: leafMission.bossArena.x, y: leafMission.bossArena.y });
+    leafMission.bossArena.gates?.forEach((gate) => expect(state.map[gate.y][gate.x]).toBe('Empty'));
   });
 
   it('fails the Hidden Leaf mission when Hokage Building is destroyed', () => {
     // Hard has a single life, so the fallen structure ends the mission.
-    let state = createInitialState({ ...hiddenLeafCampaignConfig, difficulty: 'hard' });
+    let state = createInitialState({ ...stageCampaignConfig('hiddenLeaf'), difficulty: 'hard' });
     state = {
       ...state,
-      players: state.players.map((player) => ({ ...player, x: 3, y: 1 })),
+      players: state.players.map((player) => ({ ...player, ...leafRescueA })),
     };
     state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
     state = {
       ...state,
-      players: state.players.map((player) => ({ ...player, x: 10, y: 6 })),
+      players: state.players.map((player) => ({ ...player, ...leafRescueB })),
     };
     state = gameReducer(state, { type: 'TICK', deltaMs: 0 })!;
 
     state = {
       ...state,
-      explosions: [{ x: 17, y: 16, ticksRemaining: 300 }],
+      explosions: [{ ...leafLayout.structure, ticksRemaining: 300 }],
       campaign: state.campaign
         ? {
           ...state.campaign,
@@ -1665,7 +1677,10 @@ describe('gameReducer', () => {
   });
 
   it('gates campaign stage bosses behind village objectives', () => {
-    const state = createInitialState(soloConfig);
+    const state = createInitialState({
+      ...stageCampaignConfig('hiddenSand'),
+      selectedCharacters: ['deidara'],
+    });
     expect(state.boss).toBeNull();
     expect(state.campaign?.stageId).toBe('hiddenSand');
     expect(state.campaign?.bossUnlocked).toBe(false);

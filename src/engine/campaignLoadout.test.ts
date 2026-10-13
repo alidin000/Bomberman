@@ -12,7 +12,7 @@ import { INVINCIBILITY_POWER_MS } from './constants';
 import { DifficultyId } from './difficulty';
 
 function stageMap(stageId: StageId) {
-  return parseMapRows(readFileSync(`public/maps/${stageId}.txt`, 'utf8')
+  return parseMapRows(readFileSync(`public/maps/campaign/${stageId}.txt`, 'utf8')
     .trim()
     .split(/\r?\n/)
     .map((row) => row.split('')));

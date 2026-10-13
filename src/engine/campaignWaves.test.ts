@@ -11,11 +11,12 @@ import { getCampaignEvent } from '../content/campaignEvents';
 import { StageId } from '../content/types';
 import { getWaveTelegraphCells } from './campaignWaves';
 
-// An open 35x35 stage: every cell is floor, so spawns never fall back to
-// another entry and nothing but the waves blocks or moves.
-const width = 35;
-const openStage = parseMapRows(Array.from({ length: 35 }, (_, y) => (
-  y === 0 || y === 34
+// An open stage as big as the largest village map (50x50): every cell is
+// floor, so spawns never fall back to another entry and nothing but the
+// waves blocks or moves.
+const width = 50;
+const openStage = parseMapRows(Array.from({ length: width }, (_, y) => (
+  y === 0 || y === width - 1
     ? 'W'.repeat(width)
     : `W${' '.repeat(width - 2)}W`
 ).split('')));

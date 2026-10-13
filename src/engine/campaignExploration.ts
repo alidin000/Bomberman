@@ -2,12 +2,15 @@
 import { getCampaignPowerUp } from '../content/characterPowerups';
 import { EnemyArchetype } from '../content/enemies';
 import { isBomb, isObstacle } from '../model/gameItem';
+import type { CampaignHiddenAreaDefinition, CampaignSecretRoomDefinition } from '../content/campaignMissions';
 import {
   CampaignDestructionOutcome,
   CampaignDestructionOutcomeKind,
   DestroyedBox,
   GameEngineState,
+  Point,
 } from './types';
+import { getPlayerCell } from './grid';
 import { createShinobiEnemy } from './campaignEnemies';
 import { getDifficulty } from './difficulty';
 
@@ -45,6 +48,33 @@ function getRewardCharacter(state: GameEngineState, ownerId?: string) {
     ?.characterId;
 }
 
+function authoredOutcome(area: CampaignHiddenAreaDefinition): CampaignDestructionOutcome {
+  if (area.enemyArchetype) {
+    return {
+      kind: area.enemyArchetype === 'blackZetsu' ? 'eliteZetsu' : 'whiteZetsu',
+      enemyArchetype: area.enemyArchetype,
+      secretId: area.id,
+      label: area.label,
+    };
+  }
+
+  if (area.rewardPowerUp === 'CharacterFragment') {
+    return {
+      kind: 'rareReward',
+      powerUp: area.rewardPowerUp,
+      secretId: area.id,
+      label: area.label,
+    };
+  }
+
+  return {
+    kind: 'powerUp',
+    powerUp: area.rewardPowerUp,
+    secretId: area.id,
+    label: area.label,
+  };
+}
+
 function hiddenAreaOutcome(
   state: GameEngineState,
   x: number,
@@ -52,37 +82,17 @@ function hiddenAreaOutcome(
 ): CampaignDestructionOutcome | null {
   const { campaign } = state;
   if (!campaign) return null;
+  // A secret room's cracked wall only crumbles: the room itself is the secret.
+  if (campaign.hiddenAreas.some((area) => area.room?.door.x === x && area.room.door.y === y)) {
+    return { kind: 'nothing' };
+  }
   const hiddenArea = campaign.hiddenAreas.find((area) => (
-    area.x === x
+    !area.room
+    && area.x === x
     && area.y === y
     && !campaign.discoveredSecrets.includes(area.id)
   ));
-  if (!hiddenArea) return null;
-
-  if (hiddenArea.enemyArchetype) {
-    return {
-      kind: hiddenArea.enemyArchetype === 'blackZetsu' ? 'eliteZetsu' : 'whiteZetsu',
-      enemyArchetype: hiddenArea.enemyArchetype,
-      secretId: hiddenArea.id,
-      label: hiddenArea.label,
-    };
-  }
-
-  if (hiddenArea.rewardPowerUp === 'CharacterFragment') {
-    return {
-      kind: 'rareReward',
-      powerUp: hiddenArea.rewardPowerUp,
-      secretId: hiddenArea.id,
-      label: hiddenArea.label,
-    };
-  }
-
-  return {
-    kind: 'powerUp',
-    powerUp: hiddenArea.rewardPowerUp,
-    secretId: hiddenArea.id,
-    label: hiddenArea.label,
-  };
+  return hiddenArea ? authoredOutcome(hiddenArea) : null;
 }
 
 export function getCampaignDestructionOutcome(
@@ -144,12 +154,13 @@ function getDiscoveredSecrets(
     : [...state.campaign.discoveredSecrets, outcome.secretId];
 }
 
-export function resolveCampaignDestroyedBox(
+function applyCampaignOutcome(
   state: GameEngineState,
-  box: DestroyedBox,
+  x: number,
+  y: number,
+  outcome: CampaignDestructionOutcome,
 ): GameEngineState {
-  const outcome = box.pendingOutcome;
-  if (!state.campaign || !outcome) return state;
+  if (!state.campaign) return state;
 
   const discoveredSecrets = getDiscoveredSecrets(state, outcome);
   const campaign = {
@@ -165,23 +176,23 @@ export function resolveCampaignDestroyedBox(
   }
 
   if ((outcome.kind === 'powerUp' || outcome.kind === 'rareReward') && outcome.powerUp) {
-    if (!canRevealAt(state, box.x, box.y)) return { ...state, campaign };
+    if (!canRevealAt(state, x, y)) return { ...state, campaign };
     const map = state.map.map((row) => [...row]);
-    map[box.y][box.x] = outcome.powerUp;
+    map[y][x] = outcome.powerUp;
     return { ...state, map, campaign };
   }
 
   if (outcome.kind === 'whiteZetsu' || outcome.kind === 'eliteZetsu') {
-    if (!canRevealAt(state, box.x, box.y)) return { ...state, campaign };
+    if (!canRevealAt(state, x, y)) return { ...state, campaign };
     const archetype: EnemyArchetype = outcome.enemyArchetype
       ?? (outcome.kind === 'eliteZetsu' ? 'blackZetsu' : 'whiteZetsu');
     const monster = createShinobiEnemy({
       archetype,
-      x: box.x,
-      y: box.y,
+      x,
+      y,
       id: outcome.secretId
         ? `${outcome.secretId}-enemy`
-        : `zetsu-${state.tick}-${box.x}-${box.y}`,
+        : `zetsu-${state.tick}-${x}-${y}`,
       difficulty: getDifficulty(state.campaign.difficulty),
     });
     return {
@@ -192,4 +203,75 @@ export function resolveCampaignDestroyedBox(
   }
 
   return { ...state, campaign };
+}
+
+export function resolveCampaignDestroyedBox(
+  state: GameEngineState,
+  box: DestroyedBox,
+): GameEngineState {
+  const outcome = box.pendingOutcome;
+  if (!state.campaign || !outcome) return state;
+  return applyCampaignOutcome(state, box.x, box.y, outcome);
+}
+
+export function isInsideSecretRoom(
+  room: CampaignSecretRoomDefinition,
+  x: number,
+  y: number
+): boolean {
+  return x >= room.x && x < room.x + room.width && y >= room.y && y < room.y + room.height;
+}
+
+// An ambush appears at least this many steps from every player.
+const AMBUSH_CLEARANCE = 2;
+
+// Where a found room shows its secret: the authored floor cell when it is
+// clear, else the nearest clear cell of the room. An ambush keeps its distance.
+function findRevealCell(
+  state: GameEngineState,
+  area: CampaignHiddenAreaDefinition,
+  room: CampaignSecretRoomDefinition
+): Point | null {
+  const cells: Point[] = Array.from({ length: room.width * room.height }, (_, index) => ({
+    x: room.x + (index % room.width),
+    y: room.y + Math.floor(index / room.width),
+  }));
+  const distance = (cell: Point) => Math.abs(cell.x - area.x) + Math.abs(cell.y - area.y);
+  cells.sort((a, b) => distance(a) - distance(b) || a.y - b.y || a.x - b.x);
+  const clearance = area.enemyArchetype ? AMBUSH_CLEARANCE : 1;
+  return cells.find((cell) => (
+    canRevealAt(state, cell.x, cell.y)
+    && !state.monsters.some((monster) => (
+      Math.round(monster.x) === cell.x && Math.round(monster.y) === cell.y
+    ))
+    && state.players.every((player) => {
+      if (!player.alive) return true;
+      const at = getPlayerCell(player);
+      return Math.abs(at.x - cell.x) + Math.abs(at.y - cell.y) >= clearance;
+    })
+  )) ?? null;
+}
+
+/**
+ * Secret rooms: the first player to stand on a room's floor finds it. Its
+ * scroll or fragment appears on the room floor, or its elite Zetsu wakes at
+ * the far end. Each room gives its secret once per attempt.
+ */
+export function discoverSecretRooms(state: GameEngineState): GameEngineState {
+  const { campaign } = state;
+  if (!campaign || campaign.missionResult !== 'in_progress') return state;
+  let next = state;
+  campaign.hiddenAreas.forEach((area) => {
+    const { room } = area;
+    if (!room || next.campaign?.discoveredSecrets.includes(area.id)) return;
+    const entered = next.players.some((player) => {
+      if (!player.alive) return false;
+      const cell = getPlayerCell(player);
+      return isInsideSecretRoom(room, cell.x, cell.y);
+    });
+    if (!entered) return;
+    const cell = findRevealCell(next, area, room);
+    if (cell) next = applyCampaignOutcome(next, cell.x, cell.y, authoredOutcome(area));
+  });
+  return next;
 }

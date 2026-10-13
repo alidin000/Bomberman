@@ -2,7 +2,7 @@ import { CAMPAIGN_WAVE_SCRIPTS, getCampaignWaveScript } from './campaignWaves';
 import { getCampaignMission } from './campaignMissions';
 import { STAGE_DEFINITIONS } from './stages';
 import { getCampaignEvent } from './campaignEvents';
-import { loadStageMapRows } from '../engine/mapLoader';
+import { loadCampaignMapRows } from '../engine/mapLoader';
 
 // Steps over open floor from (x, y): crates block every walking enemy, and
 // the leash that walks wave enemies to the seal paths over open floor only.
@@ -29,7 +29,7 @@ describe('campaign wave scripts', () => {
       const script = getCampaignWaveScript(stage.id);
       expect({ stage: stage.id, script: !!script }).toEqual({ stage: stage.id, script: true });
       const seal = getCampaignMission(stage.id)!.objectives.find((item) => item.kind === 'defense')!;
-      const map = loadStageMapRows(stage.mapId);
+      const map = loadCampaignMapRows(stage.mapId);
       const steps = openSteps(map, { x: seal.x!, y: seal.y! });
       script!.entries.forEach((entry) => {
         // Far enough that the marks give warning, near enough to matter, and

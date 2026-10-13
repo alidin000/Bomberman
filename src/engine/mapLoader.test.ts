@@ -1,10 +1,11 @@
 import { vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  loadMapFromStorage, loadStageMapRows, parseMapRows, parseMapText,
+  loadCampaignMapRows, loadMapFromStorage, loadStageMapRows, parseMapRows, parseMapText,
 } from './mapLoader';
 import { defaultMap } from '../constants/contants';
 import { STAGE_DEFINITIONS } from '../content/stages';
+import { CAMPAIGN_STAGE_LAYOUTS } from '../content/campaignLayouts';
 
 function readCampaignMapRows(mapId: string): string[][] {
   return readFileSync(`public/maps/${mapId}.txt`, 'utf8')
@@ -35,6 +36,8 @@ describe('mapLoader', () => {
 
     STAGE_DEFINITIONS.forEach((stage) => {
       expect(loadStageMapRows(stage.mapId)).toEqual(readCampaignMapRows(stage.mapId));
+      expect(loadCampaignMapRows(stage.mapId))
+        .toEqual(readCampaignMapRows(`campaign/${stage.mapId}`));
     });
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(() => loadStageMapRows('noSuchStage')).toThrow(/Unknown stage map/);
@@ -56,23 +59,36 @@ describe('mapLoader', () => {
     expect(first[2][2]).toBe(second[2][2]);
   });
 
-  it('keeps every authored campaign map at 35x35', () => {
+  it('keeps the 35x35 arena maps for Local Arena', () => {
     STAGE_DEFINITIONS.forEach((stage) => {
       const rows = readCampaignMapRows(stage.mapId);
-      const map = parseMapRows(rows);
-
       expect(rows).toHaveLength(35);
       expect(rows.every((row) => row.length === 35)).toBe(true);
-      expect(map).toHaveLength(35);
-      expect(map[0]).toHaveLength(35);
+      // Arena maps carry no campaign marks (secret doors, arena gates).
+      expect(rows.flat().filter((cell) => 'CHG'.includes(cell))).toEqual([]);
+    });
+  });
+
+  it('keeps every campaign map square, at the size its layout is placed for', () => {
+    STAGE_DEFINITIONS.forEach((stage) => {
+      const rows = readCampaignMapRows(`campaign/${stage.mapId}`);
+      const map = parseMapRows(rows);
+      const { size } = CAMPAIGN_STAGE_LAYOUTS[stage.id];
+
+      expect([35, 50]).toContain(size);
+      expect(rows).toHaveLength(size);
+      expect(rows.every((row) => row.length === size)).toBe(true);
+      expect(map).toHaveLength(size);
+      expect(map[0]).toHaveLength(size);
     });
   });
 
   it('keeps campaign maps dense and individually authored', () => {
     const signatures = new Set<string>();
 
-    STAGE_DEFINITIONS.forEach((stage) => {
-      const rows = readCampaignMapRows(stage.mapId);
+    STAGE_DEFINITIONS.flatMap((stage) => [stage.mapId, `campaign/${stage.mapId}`]).forEach((mapId) => {
+      const rows = readCampaignMapRows(mapId);
+      const edge = rows.length - 1;
       signatures.add(rows.map((row) => row.join('')).join('\n'));
       const interiorWallCount = rows.flatMap((row, y) => row.map((cell, x) => ({
         cell,
@@ -82,8 +98,8 @@ describe('mapLoader', () => {
         cell === 'W'
         && x > 0
         && y > 0
-        && x < 34
-        && y < 34
+        && x < edge
+        && y < edge
       )).length;
       const boxCount = rows.flat().filter((cell) => cell === 'B').length;
 
@@ -91,7 +107,7 @@ describe('mapLoader', () => {
       expect(boxCount).toBeGreaterThanOrEqual(200);
     });
 
-    expect(signatures.size).toBe(STAGE_DEFINITIONS.length);
+    expect(signatures.size).toBe(STAGE_DEFINITIONS.length * 2);
   });
 });
 

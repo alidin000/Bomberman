@@ -2,6 +2,7 @@ import { StageId } from './types';
 import { EnemyArchetype } from './enemies';
 import { Power } from '../model/gameItem';
 import type { DifficultyId } from '../engine/difficulty';
+import { CAMPAIGN_STAGE_LAYOUTS } from './campaignLayouts';
 
 export type CampaignMissionId = `${StageId}Opening`;
 
@@ -147,22 +148,53 @@ export type CampaignHiddenAreaKind =
   | 'zetsuBurrow'
   | 'rareReward';
 
+// How a secret room is entered: blast its cracked wall, or walk through the
+// false wall of a hidden passage.
+export type CampaignSecretEntry = 'crackedWall' | 'hiddenPassage';
+
+/** A walled chamber built into the map: its floor rectangle and its one way in. */
+export interface CampaignSecretRoomDefinition {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  entry: CampaignSecretEntry;
+  // The cell in the room's wall: a crate-strength cracked wall, or open floor
+  // drawn as a false wall until the room is found.
+  door: { x: number; y: number };
+}
+
 export interface CampaignHiddenAreaDefinition {
   id: string;
   label: string;
   description: string;
+  // Without a room: the crate that hides the secret. With one: the room-floor
+  // cell where the reward (or the ambush) appears once someone walks in.
   x: number;
   y: number;
   kind: CampaignHiddenAreaKind;
   rewardPowerUp?: Power;
   enemyArchetype?: EnemyArchetype;
+  room?: CampaignSecretRoomDefinition;
+}
+
+/** A walled arena's floor rectangle (inclusive cells). */
+export interface CampaignBossArenaBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface CampaignBossArenaDefinition {
   label: string;
+  // Where the boss appears.
   x: number;
   y: number;
   requires: CampaignObjectiveId[];
+  // An arena walled into the map; its gates are walls until it opens.
+  bounds?: CampaignBossArenaBounds;
+  gates?: { x: number; y: number }[];
 }
 
 export interface CampaignMissionDefinition {
@@ -170,6 +202,8 @@ export interface CampaignMissionDefinition {
   stageId: StageId;
   title: string;
   villageName: string;
+  // Player one first, then the co-op seats.
+  playerSpawns: { x: number; y: number }[];
   districts: CampaignDistrictDefinition[];
   spawnPoints: CampaignSpawnPointDefinition[];
   hiddenAreas: CampaignHiddenAreaDefinition[];
@@ -399,7 +433,7 @@ type PuzzleCell = { x: number; y: number };
 type PuzzleLayout = { anchor: PuzzleCell; cells: PuzzleCell[] };
 
 /**
- * Where each village's puzzle pieces stand on its 35x35 map, in piece order
+ * Where each village's puzzle pieces stand on its campaign map, in piece order
  * (see PUZZLE_RULES). Remapping a stage to a bigger map only means new cells
  * here: names and rules stay. campaignPuzzles.test.ts checks every cell
  * against the authored map (open floor, reachable, clear of other objectives).
@@ -407,42 +441,46 @@ type PuzzleLayout = { anchor: PuzzleCell; cells: PuzzleCell[] };
 export const CAMPAIGN_PUZZLE_LAYOUTS: Record<StageId, PuzzleLayout> = {
   // South-west grove: three lanterns a short walk apart.
   hiddenLeaf: {
-    anchor: { x: 8, y: 24 },
-    cells: [{ x: 7, y: 18 }, { x: 3, y: 25 }, { x: 13, y: 26 }],
+    anchor: { x: 7, y: 38 },
+    cells: [{ x: 4, y: 34 }, { x: 11, y: 36 }, { x: 7, y: 41 }],
   },
   // One market row, five cells apart: blasting one clears the way to the next.
   hiddenSand: {
-    anchor: { x: 26, y: 6 },
-    cells: [{ x: 21, y: 6 }, { x: 26, y: 6 }, { x: 31, y: 6 }],
+    anchor: { x: 29, y: 6 },
+    cells: [{ x: 24, y: 6 }, { x: 29, y: 6 }, { x: 34, y: 6 }],
   },
   // Levers around the canal crossing east of the centre, spans in between,
   // so every span is in sight from every lever.
   hiddenMist: {
-    anchor: { x: 22, y: 17 },
+    anchor: { x: 36, y: 22 },
     cells: [
-      { x: 20, y: 16 }, { x: 22, y: 18 }, { x: 24, y: 16 },
-      { x: 21, y: 17 }, { x: 22, y: 17 }, { x: 23, y: 17 },
+      { x: 35, y: 21 },
+      { x: 36, y: 23 },
+      { x: 37, y: 21 },
+      { x: 35, y: 22 },
+      { x: 36, y: 22 },
+      { x: 37, y: 22 },
     ],
   },
   // North-east storm terraces; the order zig-zags across them.
   hiddenCloud: {
-    anchor: { x: 23, y: 10 },
-    cells: [{ x: 18, y: 6 }, { x: 30, y: 1 }, { x: 23, y: 10 }, { x: 33, y: 11 }],
+    anchor: { x: 19, y: 12 },
+    cells: [{ x: 17, y: 3 }, { x: 31, y: 2 }, { x: 19, y: 12 }, { x: 31, y: 11 }],
   },
   // South-west boulder lanes around the cairn.
   hiddenStone: {
-    anchor: { x: 10, y: 23 },
-    cells: [{ x: 3, y: 17 }, { x: 2, y: 30 }, { x: 16, y: 27 }, { x: 10, y: 23 }],
+    anchor: { x: 10, y: 35 },
+    cells: [{ x: 3, y: 28 }, { x: 3, y: 42 }, { x: 17, y: 41 }, { x: 10, y: 35 }],
   },
   // Each pair four cells apart on one open line: a bomb in the middle reaches both.
   akatsukiHideout: {
-    anchor: { x: 32, y: 12 },
-    cells: [{ x: 23, y: 2 }, { x: 27, y: 2 }, { x: 32, y: 10 }, { x: 32, y: 14 }],
+    anchor: { x: 30, y: 5 },
+    cells: [{ x: 26, y: 4 }, { x: 30, y: 4 }, { x: 34, y: 3 }, { x: 34, y: 7 }],
   },
   // A loop around the southern front, about 50 steps once the crates are gone.
   greatShinobiWar: {
-    anchor: { x: 22, y: 17 },
-    cells: [{ x: 22, y: 17 }, { x: 31, y: 21 }, { x: 19, y: 27 }, { x: 11, y: 21 }],
+    anchor: { x: 22, y: 30 },
+    cells: [{ x: 22, y: 30 }, { x: 31, y: 32 }, { x: 22, y: 34 }, { x: 11, y: 32 }],
   },
 };
 
@@ -636,27 +674,25 @@ function districtId(stageId: StageId, suffix: string): string {
 }
 
 function createDistricts(config: VillageMissionConfig): CampaignDistrictDefinition[] {
+  const layout = CAMPAIGN_STAGE_LAYOUTS[config.stageId];
   return [
     {
       id: districtId(config.stageId, 'entrance'),
       label: 'Village Entrance',
       description: `The first safe lane into ${config.villageName}.`,
-      x: 1,
-      y: 1,
+      ...layout.entrance,
     },
     {
       id: districtId(config.stageId, 'outer-district'),
       label: 'Outer District',
       description: `Scattered cover and evacuees near ${config.villageName}.`,
-      x: 3,
-      y: 1,
+      ...layout.outerDistrict,
     },
     {
       id: districtId(config.stageId, 'center'),
       label: 'Village Center',
       description: `The central defense point around ${config.structureLabel}.`,
-      x: 17,
-      y: 16,
+      ...layout.structure,
     },
     {
       id: districtId(config.stageId, 'puzzle'),
@@ -669,19 +705,18 @@ function createDistricts(config: VillageMissionConfig): CampaignDistrictDefiniti
       id: districtId(config.stageId, 'boss-gate'),
       label: 'Boss Gate',
       description: `${config.miniBossLabel} guards the seal to ${config.bossArenaLabel}.`,
-      x: 29,
-      y: 29,
+      ...layout.miniBossGate,
     },
   ];
 }
 
 function createSpawnPoints(config: VillageMissionConfig): CampaignSpawnPointDefinition[] {
+  const { spawnPoints } = CAMPAIGN_STAGE_LAYOUTS[config.stageId];
   return [
     {
       id: `${config.stageId}-main-gate`,
       label: 'Main Gate',
-      x: 6,
-      y: 5,
+      ...spawnPoints.mainGate,
       archetypes: config.spawnArchetypes[0],
       respawnMs: config.pressure.respawnMs,
       maxActive: config.pressure.maxActive[0],
@@ -690,8 +725,7 @@ function createSpawnPoints(config: VillageMissionConfig): CampaignSpawnPointDefi
     {
       id: `${config.stageId}-outer-burrow`,
       label: 'Outer District Burrow',
-      x: 13,
-      y: 8,
+      ...spawnPoints.outerBurrow,
       archetypes: config.spawnArchetypes[1],
       respawnMs: config.pressure.respawnMs,
       maxActive: config.pressure.maxActive[1],
@@ -700,8 +734,7 @@ function createSpawnPoints(config: VillageMissionConfig): CampaignSpawnPointDefi
     {
       id: `${config.stageId}-boss-gate-burrow`,
       label: 'Boss Gate Burrow',
-      x: 28,
-      y: 28,
+      ...spawnPoints.bossGateBurrow,
       archetypes: config.spawnArchetypes[2],
       respawnMs: config.pressure.respawnMs,
       maxActive: config.pressure.maxActive[2],
@@ -711,13 +744,13 @@ function createSpawnPoints(config: VillageMissionConfig): CampaignSpawnPointDefi
 }
 
 function createHiddenAreas(config: VillageMissionConfig): CampaignHiddenAreaDefinition[] {
+  const { secrets } = CAMPAIGN_STAGE_LAYOUTS[config.stageId];
   return [
     {
       id: `${config.stageId}-scroll-cache`,
       label: config.hiddenScrollLabel,
       description: `A hidden scroll cache buried in ${config.villageName}.`,
-      x: 3,
-      y: 2,
+      ...secrets.scroll,
       kind: 'scroll',
       rewardPowerUp: config.hiddenRewardPowerUp,
     },
@@ -725,8 +758,7 @@ function createHiddenAreas(config: VillageMissionConfig): CampaignHiddenAreaDefi
       id: `${config.stageId}-archive-fragment`,
       label: config.hiddenFragmentLabel,
       description: `A rare character fragment sealed in ${config.villageName}.`,
-      x: 18,
-      y: 12,
+      ...secrets.fragment,
       kind: 'fragment',
       rewardPowerUp: 'CharacterFragment',
     },
@@ -734,8 +766,7 @@ function createHiddenAreas(config: VillageMissionConfig): CampaignHiddenAreaDefi
       id: `${config.stageId}-zetsu-burrow`,
       label: config.hiddenBurrowLabel,
       description: `An unstable wall hiding an elite Zetsu ambush in ${config.villageName}.`,
-      x: 28,
-      y: 31,
+      ...secrets.burrow,
       kind: 'zetsuBurrow',
       enemyArchetype: 'blackZetsu',
     },
@@ -743,6 +774,7 @@ function createHiddenAreas(config: VillageMissionConfig): CampaignHiddenAreaDefi
 }
 
 function createObjectives(config: VillageMissionConfig): CampaignObjectiveDefinition[] {
+  const layout = CAMPAIGN_STAGE_LAYOUTS[config.stageId];
   const objectives = config.objectiveIds ?? defaultObjectiveIds(config.stageId);
   const puzzle = {
     id: puzzleObjectiveId(config),
@@ -760,14 +792,12 @@ function createObjectives(config: VillageMissionConfig): CampaignObjectiveDefini
         {
           id: `${config.stageId}-rescue-west`,
           label: config.rescueTargets[0],
-          x: 3,
-          y: 1,
+          ...layout.rescueTargets[0],
         },
         {
           id: `${config.stageId}-rescue-east`,
           label: config.rescueTargets[1],
-          x: 10,
-          y: 6,
+          ...layout.rescueTargets[1],
         },
       ],
     },
@@ -780,8 +810,7 @@ function createObjectives(config: VillageMissionConfig): CampaignObjectiveDefini
       durationMs: 20000,
       structureLabel: config.structureLabel,
       structureHp: 100,
-      x: 17,
-      y: 16,
+      ...layout.structure,
       requires: [objectives.rescue],
     },
     // The route puzzle unseals the mini boss gate.
@@ -804,8 +833,7 @@ function createObjectives(config: VillageMissionConfig): CampaignObjectiveDefini
       districtId: districtId(config.stageId, 'boss-gate'),
       miniBossLabel: config.miniBossLabel,
       gateLabel: config.miniBossGateLabel,
-      x: 29,
-      y: 29,
+      ...layout.miniBossGate,
       requires: [puzzle.id],
     },
   ];
@@ -813,11 +841,14 @@ function createObjectives(config: VillageMissionConfig): CampaignObjectiveDefini
 
 function createMission(config: VillageMissionConfig): CampaignMissionDefinition {
   const objectives = config.objectiveIds ?? defaultObjectiveIds(config.stageId);
+  const layout = CAMPAIGN_STAGE_LAYOUTS[config.stageId];
+  const { bounds, gates, ...arenaCell } = layout.bossArena;
   return {
     id: missionId(config.stageId),
     stageId: config.stageId,
     title: config.title,
     villageName: config.villageName,
+    playerSpawns: layout.playerSpawns.map((cell) => ({ ...cell })),
     districts: createDistricts(config),
     spawnPoints: createSpawnPoints(config),
     hiddenAreas: createHiddenAreas(config),
@@ -826,9 +857,10 @@ function createMission(config: VillageMissionConfig): CampaignMissionDefinition 
     bossGateLabel: config.bossGateLabel,
     bossArena: {
       label: config.bossArenaLabel,
-      x: 17,
-      y: 17,
+      ...arenaCell,
       requires: [objectives.miniBoss],
+      ...(bounds ? { bounds: { ...bounds } } : {}),
+      ...(gates ? { gates: gates.map((cell) => ({ ...cell })) } : {}),
     },
     objectives: createObjectives(config),
   };

@@ -9,10 +9,9 @@ import { CampaignEventId } from './campaignEvents';
 // so one row shows the whole curve. A unit count of 0 drops that group on
 // that difficulty, and a wave left with no units is skipped there.
 //
-// Entry points are cells on the 35x35 maps, 7 to 12 open steps from the
-// structure (campaignWaves.test.ts walks every map to keep it so). For the
-// 50x50 maps, remap `entries` and the structure; the waves name entries by
-// id only.
+// Entry points are cells on the 50x50 campaign maps, 6 to 12 open steps from
+// the structure (campaignWaves.test.ts walks every map to keep it so). A new
+// map remaps `entries` and the structure; the waves name entries by id only.
 
 export type DifficultyTuple<T> = readonly [story: T, normal: T, hard: T];
 
@@ -101,16 +100,16 @@ export const CAMPAIGN_WAVE_SCRIPTS: readonly CampaignWaveScriptDefinition[] = [
     stageId: 'hiddenLeaf',
     entries: [
       {
-        id: 'north', label: 'Academy Road', x: 17, y: 8
+        id: 'north', label: 'Academy Road', x: 24, y: 15
       },
       {
-        id: 'east', label: 'Market Lane', x: 25, y: 17
+        id: 'east', label: 'Market Lane', x: 33, y: 23
       },
       {
-        id: 'south', label: 'Training Yard', x: 18, y: 20
+        id: 'south', label: 'Training Yard', x: 24, y: 32
       },
       {
-        id: 'west', label: 'Old Well Alley', x: 13, y: 19
+        id: 'west', label: 'Old Well Alley', x: 16, y: 22
       },
     ],
     // The first village teaches the loop: three small waves, no chasers.
@@ -156,16 +155,16 @@ export const CAMPAIGN_WAVE_SCRIPTS: readonly CampaignWaveScriptDefinition[] = [
     stageId: 'hiddenSand',
     entries: [
       {
-        id: 'north', label: 'Dune Road', x: 17, y: 7
+        id: 'north', label: 'Dune Road', x: 21, y: 16
       },
       {
-        id: 'east', label: 'Bazaar Lane', x: 24, y: 17
+        id: 'east', label: 'Bazaar Lane', x: 31, y: 22
       },
       {
-        id: 'south', label: 'Cistern Yard', x: 19, y: 19
+        id: 'south', label: 'Cistern Yard', x: 24, y: 33
       },
       {
-        id: 'west', label: 'Wind Gap', x: 14, y: 14
+        id: 'west', label: 'Wind Gap', x: 15, y: 22
       },
     ],
     waves: [
@@ -213,16 +212,16 @@ export const CAMPAIGN_WAVE_SCRIPTS: readonly CampaignWaveScriptDefinition[] = [
     stageId: 'hiddenMist',
     entries: [
       {
-        id: 'north', label: 'Fog Bridge', x: 17, y: 8
+        id: 'north', label: 'Fog Bridge', x: 22, y: 16
       },
       {
-        id: 'east', label: 'Canal Walk', x: 24, y: 17
+        id: 'east', label: 'Canal Walk', x: 30, y: 27
       },
       {
-        id: 'south', label: 'Dock Steps', x: 19, y: 19
+        id: 'south', label: 'Dock Steps', x: 22, y: 33
       },
       {
-        id: 'west', label: 'Reed Path', x: 13, y: 13
+        id: 'west', label: 'Reed Path', x: 15, y: 22
       },
     ],
     waves: [
@@ -276,13 +275,13 @@ export const CAMPAIGN_WAVE_SCRIPTS: readonly CampaignWaveScriptDefinition[] = [
     stageId: 'hiddenCloud',
     entries: [
       {
-        id: 'north', label: 'Cliff Stair', x: 17, y: 8
+        id: 'north', label: 'Cliff Stair', x: 24, y: 16
       },
       {
-        id: 'east', label: 'Thunder Walk', x: 24, y: 16
+        id: 'east', label: 'Thunder Walk', x: 32, y: 24
       },
       {
-        id: 'farEast', label: 'Storm Ledge', x: 28, y: 17
+        id: 'farEast', label: 'Storm Ledge', x: 35, y: 24
       },
     ],
     waves: [
@@ -333,13 +332,13 @@ export const CAMPAIGN_WAVE_SCRIPTS: readonly CampaignWaveScriptDefinition[] = [
     stageId: 'hiddenStone',
     entries: [
       {
-        id: 'north', label: 'Quarry Road', x: 17, y: 9
+        id: 'north', label: 'Quarry Road', x: 25, y: 14
       },
       {
-        id: 'east', label: 'Boulder Lane', x: 23, y: 16
+        id: 'east', label: 'Boulder Lane', x: 33, y: 22
       },
       {
-        id: 'west', label: 'Slate Pass', x: 13, y: 16
+        id: 'west', label: 'Slate Pass', x: 16, y: 22
       },
     ],
     waves: [
@@ -388,13 +387,13 @@ export const CAMPAIGN_WAVE_SCRIPTS: readonly CampaignWaveScriptDefinition[] = [
     stageId: 'akatsukiHideout',
     entries: [
       {
-        id: 'north', label: 'Upper Tunnel', x: 17, y: 9
+        id: 'north', label: 'Upper Tunnel', x: 17, y: 15
       },
       {
-        id: 'east', label: 'Ritual Hall', x: 24, y: 16
+        id: 'east', label: 'Ritual Hall', x: 29, y: 23
       },
       {
-        id: 'west', label: 'Cistern Passage', x: 13, y: 16
+        id: 'west', label: 'Cistern Passage', x: 12, y: 23
       },
     ],
     waves: [
@@ -448,13 +447,13 @@ export const CAMPAIGN_WAVE_SCRIPTS: readonly CampaignWaveScriptDefinition[] = [
     stageId: 'greatShinobiWar',
     entries: [
       {
-        id: 'north', label: 'Ridge Line', x: 17, y: 9
+        id: 'north', label: 'Ridge Line', x: 22, y: 15
       },
       {
-        id: 'east', label: 'Supply Road', x: 24, y: 16
+        id: 'east', label: 'Supply Road', x: 29, y: 25
       },
       {
-        id: 'south', label: 'Crater Field', x: 21, y: 20
+        id: 'south', label: 'Crater Field', x: 22, y: 32
       },
     ],
     waves: [

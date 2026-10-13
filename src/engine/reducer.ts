@@ -22,6 +22,8 @@ import { getOverlappedCells } from './grid';
 import { tickBossEncounter } from './bosses';
 import { withUpdatedFogOfWar } from './fogOfWar';
 import { advanceCampaignObjectives } from './campaignObjectives';
+import { discoverSecretRooms } from './campaignExploration';
+import { openBossArenaGates } from './campaignArena';
 import { tickCampaignRespawns } from './campaignEnemies';
 import { deriveMatchSeed } from './random';
 import { tickSuddenDeath } from './suddenDeath';
@@ -76,7 +78,7 @@ function getSoloDefeatMessage(state: GameEngineState): string {
 
 function spawnUnlockedCampaignBoss(state: GameEngineState): GameEngineState {
   if (!state.campaign?.bossUnlocked || state.boss) return state;
-  const boss = createBossForConfig({ ...state.config, map: state.map });
+  const boss = createBossForConfig({ ...state.config, map: state.map }, state.campaign.bossArena);
   return {
     ...state,
     boss,
@@ -98,7 +100,9 @@ function advanceCampaignState(
   state: GameEngineState,
   deltaMs = 0
 ): GameEngineState {
-  return spawnUnlockedCampaignBoss(advanceCampaignObjectives(state, deltaMs));
+  return spawnUnlockedCampaignBoss(openBossArenaGates(discoverSecretRooms(
+    advanceCampaignObjectives(state, deltaMs)
+  )));
 }
 
 function checkRoundEnd(state: GameEngineState): GameEngineState {

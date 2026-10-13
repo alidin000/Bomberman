@@ -18,7 +18,7 @@ import {
   takeMissionLoadout,
 } from '../../story/progress';
 import type { CampaignLoadout } from '../../content/hubShop';
-import { PlayerSlotController, loadStageMapRows } from '../../engine';
+import { PlayerSlotController, loadCampaignMapRows, loadStageMapRows } from '../../engine';
 import { getControllerLabel, normalizeControllers } from '../../ai/controllers';
 
 export const SINGLE_MATCH_ROUNDS = '1';
@@ -78,7 +78,10 @@ export async function launchGame(
     ))
     : characters;
   const stageDefinition = getStageDefinition(safeStageId);
-  const mapData = loadStageMapRows(stageDefinition.mapId);
+  // Missions play the village's campaign map; Local Arena keeps its arena map.
+  const mapData = mode === 'solo'
+    ? loadCampaignMapRows(stageDefinition.mapId)
+    : loadStageMapRows(stageDefinition.mapId);
   const characterId = safeCharacters[0] ?? DEFAULT_CHARACTER_ID;
   let progress = mode === 'solo'
     ? selectStoryLoadout(characterId, stageDefinition.id, upgrade)

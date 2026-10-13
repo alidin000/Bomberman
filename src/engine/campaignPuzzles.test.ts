@@ -253,7 +253,8 @@ describe('twin paper wards (pairs)', () => {
 
   it.each(CHARACTERS)('lets %s seal a pair with one bomb midway between the wards', (character) => {
     let state = reachPuzzle(campaignState('akatsukiHideout', 'hard', character));
-    state = bombCells(state, [{ x: 25, y: 2 }]);
+    const [west, east] = CAMPAIGN_PUZZLE_LAYOUTS.akatsukiHideout.cells;
+    state = bombCells(state, [{ x: (west.x + east.x) / 2, y: (west.y + east.y) / 2 }]);
     expect(puzzleObjective(state).current).toBe(1);
   });
 

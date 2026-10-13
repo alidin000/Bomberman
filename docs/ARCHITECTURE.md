@@ -118,6 +118,24 @@ uses Minato's current cell. Because both mechanics live in serializable state
 and the shared reducer, local and server-authoritative matches use identical
 rules.
 
+## Campaign Maps
+
+Each village has two authored maps, bundled with the client and the server.
+Local Arena and online arena rooms play the 35x35 arena map in
+`public/maps`. Solo and co-op missions play the 50x50 campaign map in
+`public/maps/campaign`. `content/campaignLayouts.ts` places the mission on
+that map: player spawns, rescue targets, the defense structure, enemy
+burrows, the mini-boss gate, the boss arena and the three secret rooms.
+
+Campaign maps use three extra cell marks. A cracked wall (`C`) is a secret
+room's door: it breaks like a crate but drops nothing. A hidden passage (`H`)
+is open floor drawn as a seamed false wall. An arena gate (`G`) stays a wall
+until the mini-boss gate is cleared. The first player to step into a secret
+room reveals its scroll or fragment, or wakes its elite Zetsu at the far end.
+When the boss unlocks, the reducer opens the arena gates, and the boss enters
+at the arena's centre. The renderer draws doors and gates by shape with the
+wall material, so they compile no new shader.
+
 ## Online Room Flow
 
 ```mermaid

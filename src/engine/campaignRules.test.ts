@@ -11,7 +11,7 @@ import {
 import { StageId } from '../content/types';
 
 function stageMap(stageId: StageId) {
-  return parseMapRows(readFileSync(`public/maps/${stageId}.txt`, 'utf8')
+  return parseMapRows(readFileSync(`public/maps/campaign/${stageId}.txt`, 'utf8')
     .trim()
     .split(/\r?\n/)
     .map((row) => row.split('')));
