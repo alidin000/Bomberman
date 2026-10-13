@@ -1,4 +1,5 @@
 import type { HubConsumableId } from './hubShop';
+import type { StageId } from './types';
 import { HUB_CONSUMABLES } from './hubShop';
 
 // The village square: a safe district inside each campaign map, by the
@@ -72,6 +73,11 @@ export interface CampaignRequestState {
   cells?: { x: number; y: number }[];
 }
 
+// 0 damaged (never cleared), 1 rebuilt, 2 thriving, 3 festival.
+export type RepairStage = 0 | 1 | 2 | 3;
+
+export type ScarfId = 'ember' | StageId;
+
 // What the app hands a solo campaign mission about the village (GameConfig
 // .village), worked out from the save before INIT so the match replays the
 // same way. Co-op and online rooms leave it out: their square has villagers
@@ -82,6 +88,13 @@ export interface VillageVisitConfig {
   embers: number;
   // Requests on the board this visit, in board order (villageRequests.ts ids).
   offeredRequestIds: string[];
+  // Render only: how far this village has rebuilt (repairStageFor in
+  // story/reputation.ts). Missing (co-op, online) draws stage 1.
+  repairStage?: RepairStage;
+  // Render only: the scarf the player chose to wear (none when missing). The
+  // ember scarf comes with Honored standing, a village's scarf with finding
+  // all three of its secrets.
+  scarf?: ScarfId;
 }
 
 // What the square did this mission (CampaignRuntimeState.village). The save

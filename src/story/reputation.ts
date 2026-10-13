@@ -1,4 +1,4 @@
-import type { ReputationTierId } from '../content/villageSquare';
+import type { RepairStage, ReputationTierId } from '../content/villageSquare';
 import type { StageId } from '../content/types';
 
 // A village's reputation (StoryProgress.reputation) grows by 10 for each
@@ -38,6 +38,18 @@ export function reputationTier(standing: number): ReputationTier {
 /** The tier after the one this standing reached, or null at the top. */
 export function nextReputationTier(standing: number): ReputationTier | null {
   return REPUTATION_TIERS.find((tier) => standing < tier.from) ?? null;
+}
+
+/**
+ * How far a village has rebuilt, from its own reputation: damaged until its
+ * mission is first cleared (+10), thriving from 20, a festival from 30
+ * (replays, requests and secrets add to it).
+ */
+export function repairStageFor(villageReputation: number): RepairStage {
+  if (villageReputation >= 30) return 3;
+  if (villageReputation >= 20) return 2;
+  if (villageReputation >= 10) return 1;
+  return 0;
 }
 
 /** True once `reached` is at least `needed` (stranger < known < trusted < honored). */

@@ -5,7 +5,7 @@ import { HUB_VILLAGES } from './hubVillages';
 import {
   WANDERING_VILLAGER, presentInteractables, reachableInteractable, stallPrice,
 } from './villageSquare';
-import { reputationTier, totalReputation } from '../story/reputation';
+import { repairStageFor, reputationTier, totalReputation } from '../story/reputation';
 import { STAGE_DEFINITIONS } from './stages';
 import { loadCampaignMapRows } from '../engine/mapLoader';
 import type { StageId } from './types';
@@ -92,5 +92,11 @@ describe('standing', () => {
     expect(stallPrice('paperWard', 'known')).toBe(15);
     expect(stallPrice('paperWard', 'trusted')).toBe(10);
     expect(stallPrice('secondWind', 'honored')).toBe(40);
+  });
+});
+
+describe('village rebuilding', () => {
+  it('stays damaged until the first clear, then thrives at 20 and holds a festival at 30', () => {
+    expect([0, 9, 10, 19, 20, 29, 30, 99].map(repairStageFor)).toEqual([0, 0, 1, 1, 2, 2, 3, 3]);
   });
 });
