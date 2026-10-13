@@ -1,6 +1,6 @@
 /* eslint-disable react/no-array-index-key */
 import React, {
-  useEffect, useMemo, useRef, useState,
+  Suspense, lazy, useEffect, useMemo, useRef, useState,
 } from 'react';
 import {
   DialogTitle,
@@ -100,6 +100,7 @@ import { STAGE_SYMBOL } from '../../content/villageSymbols';
 import { villageMarkImage } from '../../theme/VillageMark';
 import {
   loadStoryProgress,
+  sceneKey,
   selectStoryLoadout,
   STORY_UPGRADES,
   StoryUpgradeId,
@@ -113,6 +114,10 @@ import {
 } from './PlayerSlotsSelector';
 import type { PlayerSlotController } from '../../engine/types';
 import { playerSlotLabel } from '../GameScreen/playerSlots';
+
+// A village's first deploy plays its story scene; its words and portraits
+// load only then.
+const FirstMissionScene = lazy(() => import('../HubScreen/FirstMissionScene'));
 
 type KeyErrors = {
   [key: string]: boolean;
@@ -322,19 +327,21 @@ export const ConfigScreen = () => {
     setKeyErrors({});
   };
 
-  const startGame = async ({
-    nextMode = mode,
-    stageId = selectedStage,
-    characters = selectedCharacters,
-    upgrade = selectedUpgrade,
-    players = numOfPlayers,
-  }: {
-    nextMode?: GameMode;
-    stageId?: StageId;
-    characters?: CharacterId[];
-    upgrade?: StoryUpgradeId;
-    players?: string;
-  } = {}) => {
+  type StartRequest = {
+    nextMode: GameMode;
+    stageId: StageId;
+    characters: CharacterId[];
+    upgrade: StoryUpgradeId;
+    players: string;
+  };
+  // A campaign deploy waiting on its village's first story scene.
+  const [sceneDeploy, setSceneDeploy] = useState<
+    { sceneStage: StageId; request: StartRequest } | null
+  >(null);
+
+  const launch = async ({
+    nextMode, stageId, characters, upgrade, players,
+  }: StartRequest) => {
     const progress = await launchGame({
       mode: nextMode,
       stageId,
@@ -347,6 +354,29 @@ export const ConfigScreen = () => {
       controllers: slotControllers,
     }, navigate);
     if (progress) setStoryProgress(progress);
+  };
+
+  const startGame = async ({
+    nextMode = mode,
+    stageId = selectedStage,
+    characters = selectedCharacters,
+    upgrade = selectedUpgrade,
+    players = numOfPlayers,
+  }: Partial<StartRequest> = {}) => {
+    const request = {
+      nextMode, stageId, characters, upgrade, players,
+    };
+    // A mission deploys to the village launchGame picks (the saved one when
+    // this one is still locked); its before-scene plays the first time.
+    const sceneStage = storyProgress.unlockedStages.includes(stageId)
+      ? stageId
+      : storyProgress.lastStage;
+    const seen = loadStoryProgress().seenScenes.includes(sceneKey(sceneStage, 'before'));
+    if (nextMode === 'solo' && !seen) {
+      setSceneDeploy({ sceneStage, request });
+      return;
+    }
+    await launch(request);
   };
 
   const handlePlay = async () => {
@@ -988,6 +1018,18 @@ export const ConfigScreen = () => {
         </DeckFooter>
         <RovingTabStops root={contentRef} />
       </StyledDialog>
+      {sceneDeploy && (
+        <Suspense fallback={null}>
+          <FirstMissionScene
+            stageId={sceneDeploy.sceneStage}
+            onDone={() => {
+              const { request } = sceneDeploy;
+              setSceneDeploy(null);
+              launch(request);
+            }}
+          />
+        </Suspense>
+      )}
     </WelcomeContainer>
   );
 };

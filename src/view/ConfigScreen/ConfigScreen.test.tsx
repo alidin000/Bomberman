@@ -6,7 +6,7 @@ import {
 } from '@testing-library/react';
 import { BrowserRouter, useNavigate, NavigateFunction } from 'react-router-dom';
 import { ConfigScreen } from './ConfigScreen';
-import { STORY_PROGRESS_KEY } from '../../story/progress';
+import { STORY_PROGRESS_KEY, loadStoryProgress } from '../../story/progress';
 
 vi.mock('react-router-dom', async () => {
   const originalModule = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -298,6 +298,9 @@ describe('ConfigScreen', () => {
 
     const [continueButton] = screen.getAllByText('Continue Campaign');
     fireEvent.click(continueButton);
+    // The Mist's first deploy plays its scene first.
+    const scene = await screen.findByRole('dialog', { name: 'The Hunter at the Gate' });
+    fireEvent.click(within(scene).getByRole('button', { name: 'Skip scene' }));
 
     await waitFor(() => {
       expect(localStorage.getItem('selectedMap')).not.toBeNull();
@@ -306,16 +309,36 @@ describe('ConfigScreen', () => {
     });
   });
 
-  it('should start the selected campaign mission directly from the briefing', async () => {
+  it('plays the village\'s first story scene, then starts the selected mission from the briefing', async () => {
     setup();
 
     fireEvent.click(screen.getByText('Deploy Mission'));
+    // A new player's first deploy opens on the village's scene; it can be skipped.
+    const scene = await screen.findByRole('dialog', { name: 'The Seal Under the Leaf' });
+    expect(mockNavigate).not.toHaveBeenCalledWith('/game/1/1/hiddenLeaf');
+    fireEvent.click(within(scene).getByRole('button', { name: 'Skip scene' }));
 
     await waitFor(() => {
       expect(localStorage.getItem('selectedMap')).not.toBeNull();
       expect(localStorage.getItem('gameSetup')).toContain('hiddenLeaf');
       expect(mockNavigate).toHaveBeenCalledWith('/game/1/1/hiddenLeaf');
     });
+    expect(JSON.parse(localStorage.getItem(STORY_PROGRESS_KEY) as string).seenScenes)
+      .toEqual(['hiddenLeaf:before']);
+  });
+
+  it('starts the mission at once once the village\'s scene has been seen', async () => {
+    localStorage.setItem(STORY_PROGRESS_KEY, JSON.stringify({
+      ...loadStoryProgress(), seenScenes: ['hiddenLeaf:before'],
+    }));
+    setup();
+
+    fireEvent.click(screen.getByText('Deploy Mission'));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/game/1/1/hiddenLeaf');
+    });
+    expect(screen.queryByRole('dialog', { name: 'The Seal Under the Leaf' })).not.toBeInTheDocument();
   });
 
   it('does not carry a locked local stage into solo campaign', async () => {
@@ -324,6 +347,9 @@ describe('ConfigScreen', () => {
     fireEvent.click(screen.getByLabelText('Akatsuki Hideout'));
     fireEvent.click(screen.getByText('Solo Campaign'));
     fireEvent.click(screen.getByText('Deploy Mission'));
+    // The scene is the leaf's, the village the mission really deploys to.
+    const scene = await screen.findByRole('dialog', { name: 'The Seal Under the Leaf' });
+    fireEvent.click(within(scene).getByRole('button', { name: 'Skip scene' }));
 
     await waitFor(() => {
       expect(localStorage.getItem('gameSetup')).toContain('hiddenLeaf');
@@ -470,6 +496,7 @@ describe('ConfigScreen', () => {
   it('should save configuration and navigate to game screen on play', async () => {
     setup(2);
     fireEvent.click(screen.getByRole('button', { name: /deploy mission/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Skip scene' }));
     await waitFor(() => {
       expect(localStorage.getItem('playerKeyBindings')).not.toBeNull();
       expect(localStorage.getItem('gameSetup')).not.toBeNull();

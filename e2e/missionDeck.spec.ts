@@ -36,6 +36,10 @@ test('Mission Deck: Solo Campaign → Deploy Mission opens the mission', async (
   await openMissionDeck(page);
   await pickMode(page, 'Solo Campaign');
   await page.getByRole('button', { name: 'Deploy Mission' }).click();
+  // A first deploy plays the village's story scene; Skip goes to the match.
+  const scene = page.getByRole('dialog', { name: 'The Seal Under the Leaf' });
+  await expect(scene).toBeVisible();
+  await scene.getByRole('button', { name: 'Skip scene' }).click();
 
   await expect(page).toHaveURL(GAME_URL);
   await expect(page).toHaveURL(/\/game\/1\/1\//);

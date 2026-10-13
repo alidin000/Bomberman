@@ -77,7 +77,7 @@ describe('launchGame', () => {
     expect(loadStoryProgress().currency).toBe(12);
   });
 
-  it('hands a campaign mission its village square from the save: tier, Embers and board', async () => {
+  it('hands a campaign mission its village square from the save: tier, Embers, board and rebuild', async () => {
     localStorage.setItem(STORY_PROGRESS_KEY, JSON.stringify({
       ...DEFAULT_STORY_PROGRESS,
       currency: 80,
@@ -101,6 +101,8 @@ describe('launchGame', () => {
       reputationTier: 'known',
       embers: 80,
       offeredRequestIds: ['leaf-old-logs'],
+      // Leaf reputation 12: rebuilt (render only). No scarf chosen.
+      repairStage: 1,
     });
   });
 });
