@@ -2,6 +2,7 @@ import React from 'react';
 import { act, render } from '@testing-library/react';
 import { _roots, advance } from '@react-three/fiber';
 import * as THREE from 'three';
+import { castFigureMesh } from './cast/castGeometry';
 import { GameScene3D } from '../GameScene3D';
 import { DEFAULT_GAME_PREFERENCES, GamePreferences } from '../gamePreferences';
 import { createInitialState } from '../../../engine/initialState';
@@ -424,14 +425,13 @@ describe('village square scene', () => {
     // A barrage about to blow: its clones stand round it, none in the square.
     const barrage = await renderScene(armed('shadowCloneBarrage', 4));
     barrage.frame();
+    // Clones are Naruto's cast figure lit with chakra (the player is not).
+    const naruto = castFigureMesh('naruto').body;
     const clones = barrage.find((object) => (
-      object.type === 'Group' && object.parent?.children.length !== undefined
-      && object.children.some((child) => (
-        (child as THREE.Mesh).geometry?.type === 'CapsuleGeometry'
-        && ((child as THREE.Mesh).geometry as THREE.CapsuleGeometry).parameters.radius === 0.11
-      ))
-    )).map((group) => {
-      const at = group.getWorldPosition(new THREE.Vector3());
+      (object as THREE.Mesh).geometry === naruto
+      && ((object as THREE.Mesh).material as THREE.MeshToonMaterial).emissiveIntensity > 0
+    )).map((clone) => {
+      const at = clone.getWorldPosition(new THREE.Vector3());
       return `${Math.round(at.x + 7)},${Math.round(at.z + 4.5)}`;
     });
     expect(clones.length).toBeGreaterThan(0);
