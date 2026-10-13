@@ -38,7 +38,7 @@ export function VillageMark({
       d={mark.d}
       fill={mark.mode === 'fill' ? ink : 'none'}
       stroke={mark.mode === 'fill' ? '#f8fafc' : ink}
-      strokeWidth={mark.mode === 'fill' ? 5 : 9}
+      strokeWidth={mark.strokeWidth ?? (mark.mode === 'fill' ? 5 : 9)}
       strokeLinecap="round"
       strokeLinejoin="round"
     />

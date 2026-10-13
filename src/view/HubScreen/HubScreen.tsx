@@ -111,6 +111,8 @@ import { StoryScene } from './StoryScene';
 import { earningsBreakdown } from './MissionEarnings';
 import { BoardPreview, StandingCard } from './StandingCard';
 import { hubPath } from './missionSettlement';
+import { VillageMark } from '../../theme/VillageMark';
+import { STAGE_SYMBOL } from '../../content/villageSymbols';
 
 type HubSection = 'village' | 'shop' | 'secrets';
 
@@ -581,6 +583,7 @@ export const HubScreen = () => {
         <DialogContent ref={contentRef}>
           <HubHeader>
             <HubStatusLine id="hub-status">
+              <VillageMark id={STAGE_SYMBOL[stageId]} size={18} />
               {`Village ${village.order} of ${CAMPAIGN_VILLAGES.length} · ${cleared ? 'Cleared' : 'Mission ready'}`}
             </HubStatusLine>
             <EmberBalance aria-label={`${formatEmbers(progress.currency)} to spend`}>

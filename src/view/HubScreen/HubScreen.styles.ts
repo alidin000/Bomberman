@@ -14,6 +14,9 @@ export const HubHeader = styled.div`
 `;
 
 export const HubStatusLine = styled.p`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   color: var(--ink-3);
   font-size: 0.8rem;
