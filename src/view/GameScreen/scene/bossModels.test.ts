@@ -11,9 +11,11 @@ import {
   getBossFaceGeometry,
   getBossFigureGeometries,
   getBossFigureMaterials,
+  getBossToneGeometry,
   getBossTailGeometry,
 } from './BossFigure';
 import { CAMERA_BACK, CAMERA_FOV_DEG, CAMERA_HEIGHT } from './cameraFraming';
+import { FIGHTER_TOON_RAMP } from './fighterInk';
 
 // Each boss is its own creature: its base silhouette, its own features, and
 // a fan of tails (as many as it has, in its own shape). The model must keep
@@ -82,7 +84,7 @@ describe('boss models', () => {
     IDS.forEach((id) => {
       const posed = POSES.flatMap(({ sway, flare, droop }) => tailVertices(id, sway, flare, droop));
       const all = [...baseVertices(id), ...posed];
-      const reach = Math.max(...all.map((point) => Math.hypot(point.x, point.z)));
+      const reach = all.reduce((most, point) => Math.max(most, Math.hypot(point.x, point.z)), 0);
       const box = new THREE.Box3().setFromPoints(all);
       expect({
         id, reach: reach <= radius, top: box.max.y <= top, bottom: box.min.y >= bottom,
@@ -101,10 +103,10 @@ describe('boss models', () => {
       .map((angle) => new THREE.Vector3(0, Math.sin(angle), Math.cos(angle)));
     const raycaster = new THREE.Raycaster();
     IDS.forEach((id) => {
-      const geometries = getBossFigureGeometries(id);
       const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-      const blockers = (['body', 'trim', 'veil'] as const)
-        .map((tone) => geometries[tone])
+      // The pupils drawn over the eyes are part of them, so they never count.
+      const blockers = (['body', 'trim', 'mark', 'veil'] as const)
+        .map((tone) => getBossToneGeometry(id, tone))
         .filter((geometry): geometry is THREE.BufferGeometry => !!geometry)
         .map((geometry) => new THREE.Mesh(geometry, material));
       const tails = new THREE.InstancedMesh(getBossTailGeometry(id), material, bossTailCount(id));
@@ -138,17 +140,20 @@ describe('boss models', () => {
     });
   });
 
-  it('shares one material set per boss, its see-through twins on transparent programs', () => {
+  it('shares one cel-shaded material set per boss, its see-through twins on transparent programs', () => {
     IDS.forEach((id) => {
       const first = getBossFigureMaterials(id);
       expect(getBossFigureMaterials(id)).toBe(first);
       expect(first.core.emissiveIntensity).toBeGreaterThan(0.5);
-      (['body', 'trim', 'core'] as const).forEach((tone) => {
+      (['body', 'trim', 'mark', 'core'] as const).forEach((tone) => {
         const twin = first.seeThrough[tone];
         expect(first[tone].transparent).toBe(false);
         expect(twin.transparent).toBe(true);
-        // Same flat-shaded program family ShaderWarmup compiles.
-        expect(twin.flatShading).toBe(first[tone].flatShading);
+        // The fighters' toon program family (one ramp), which ShaderWarmup compiles.
+        expect(first[tone]).toBeInstanceOf(THREE.MeshToonMaterial);
+        expect(twin).toBeInstanceOf(THREE.MeshToonMaterial);
+        expect(twin.gradientMap).toBe(FIGHTER_TOON_RAMP);
+        expect(first[tone].gradientMap).toBe(FIGHTER_TOON_RAMP);
       });
     });
   });

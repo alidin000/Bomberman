@@ -176,4 +176,58 @@ describe('GameScene3D explosions', () => {
       expect(Math.max(r, g, b)).toBeGreaterThan(0.2);
     });
   });
+
+  it('draws each jutsu on its own shared layer, idle layers out of the render list', async () => {
+    const state = versusState();
+    const burning: GameEngineState = {
+      ...state,
+      explosions: [
+        {
+          x: 2, y: 1, ticksRemaining: 400, kind: 'kirin'
+        },
+        {
+          x: 3, y: 1, ticksRemaining: 400, kind: 'kirin'
+        },
+        {
+          x: 1, y: 3, ticksRemaining: 400, kind: 'crowClone'
+        },
+        {
+          x: 1, y: 5, ticksRemaining: 400, kind: 'rasenshuriken'
+        },
+      ],
+    };
+    const { scene, frame } = await renderScene(burning);
+    frame(16);
+    frame(16);
+    const layers: Record<string, THREE.InstancedMesh> = {};
+    let flame: THREE.InstancedMesh | null = null;
+    scene().traverse((object) => {
+      const mesh = object as THREE.InstancedMesh;
+      if (!mesh.isInstancedMesh) return;
+      if (mesh.userData.jutsuLayer) layers[mesh.userData.jutsuLayer] = mesh;
+      if (mesh.geometry.type === 'SphereGeometry' && mesh.count === burning.explosions.length) flame = mesh;
+    });
+    const drawnLayers = Object.fromEntries(Object.entries(layers).map(([layer, mesh]) => [
+      layer, mesh.visible ? mesh.count : 0,
+    ]));
+    // Kirin's bolts on both its cells, a crow off the burst clone, the
+    // Rasenshuriken's blades; nothing on the smoke and tomoe layers.
+    expect(drawnLayers).toEqual({
+      bolt: 2, puff: 0, blade: 1, bird: 1, sigil: 0,
+    });
+    // Every layer shares the base flame's program: same material kind and
+    // flags, and instance colours from the start, so the first jutsu of a
+    // match compiles nothing.
+    const base = (flame! as THREE.InstancedMesh).material as THREE.MeshBasicMaterial;
+    Object.values(layers).forEach((mesh) => {
+      const material = mesh.material as THREE.MeshBasicMaterial;
+      expect(material.type).toBe(base.type);
+      expect([material.transparent, material.depthWrite, material.side, material.vertexColors])
+        .toEqual([base.transparent, base.depthWrite, base.side, base.vertexColors]);
+      expect(mesh.instanceColor).not.toBeNull();
+    });
+    // And each is lit in its jutsu's colour, not black.
+    const [r, g, b] = shadedInstanceColor(layers.bolt, 0);
+    expect(Math.min(r, g, b)).toBeGreaterThan(0.6);
+  });
 });

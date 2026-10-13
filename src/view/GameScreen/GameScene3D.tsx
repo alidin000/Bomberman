@@ -109,7 +109,9 @@ import {
   OBJECTIVE_HIGH_CONTRAST, arenaModel, gateModel, gateStateFor, rescueModel, structureDamageFor,
   structureFlagFor, structureModel,
 } from './scene/objectiveModels';
-import { BossFigure, BossFigureHandle, BossFigurePose } from './scene/BossFigure';
+import {
+  BOSS_INK_HIGH_CONTRAST, BossFigure, BossFigureHandle, BossFigurePose,
+} from './scene/BossFigure';
 import {
   INTRO_AIM_TOWARD_CAMERA,
   INTRO_CATCH_UP_MS,
@@ -140,6 +142,18 @@ import {
   activeSquareLayout, squareBlastStop, villageMarks, villageMarksFromKey, villageMarksKey,
 } from './scene/VillageSquareModels';
 import { HonoredScarf } from './scene/VillageSquareScarf';
+import { BOMB_SPIN_RAD_PER_S, JUTSU_COLORS, jutsuOf } from './scene/jutsu/jutsuLooks';
+import {
+  ChidoriSparks, ClayBird, HiraishinKunai, KunaiStrike, LightningStrike, RasenshurikenBlades, SandSpikes,
+  WaterCloneSplash,
+} from './scene/jutsu/JutsuModels';
+import { enemyJutsuFor } from './scene/jutsu/enemyJutsu';
+import {
+  JUTSU_LAYERS, JutsuLayer, LayerPose, createCellPose, poseJutsuCell,
+} from './scene/jutsu/explosionPoses';
+import {
+  birdGeometry, boltGeometry, puffGeometry, rasenshurikenGeometry, tomoeGeometry,
+} from './scene/jutsu/jutsuGeometry';
 
 const ENTITY_LERP_SPEED = 7.2;
 const ENTITY_SNAP_EPSILON = 0.0016;
@@ -578,7 +592,7 @@ function BombMesh({
     if (groupRef.current) {
       groupRef.current.rotation.y = ['shadowClone', 'shadowCloneBarrage'].includes(kind)
         ? 0
-        : clock.elapsedTime * 0.7;
+        : clock.elapsedTime * BOMB_SPIN_RAD_PER_S;
       groupRef.current.scale.setScalar(scale);
     }
     if (lightRef.current) {
@@ -608,26 +622,30 @@ function BombMesh({
             <sphereGeometry args={[0.26, 24, 24]} />
             <meshStandardMaterial color="#f5efe0" emissive={style.emissive} emissiveIntensity={0.24} roughness={0.52} />
           </mesh>
-          <mesh position={[0, 0.18, 0.2]} castShadow>
-            <sphereGeometry args={[0.12, 14, 14]} />
-            <meshStandardMaterial color="#f7f0df" roughness={0.5} />
-          </mesh>
-          {[-0.22, -0.1, 0.1, 0.22].map((side) => (
-            <React.Fragment key={`clay-leg-${side}`}>
-              <mesh position={[side, -0.04, 0.13]} rotation={[0, 0, side > 0 ? -0.75 : 0.75]}>
-                <capsuleGeometry args={[0.022, 0.25, 4, 6]} />
-                <meshStandardMaterial color="#f5efe0" roughness={0.55} />
+          {giant ? <ClayBird scale={2.4} /> : (
+            <>
+              <mesh position={[0, 0.18, 0.2]} castShadow>
+                <sphereGeometry args={[0.12, 14, 14]} />
+                <meshStandardMaterial color="#f7f0df" roughness={0.5} />
               </mesh>
-              <mesh position={[side, -0.04, -0.13]} rotation={[0, 0, side > 0 ? 0.75 : -0.75]}>
-                <capsuleGeometry args={[0.022, 0.25, 4, 6]} />
-                <meshStandardMaterial color="#f5efe0" roughness={0.55} />
+              <mesh position={[0, 0.1, 0.32]} rotation={[Math.PI / 2, 0, 0]}>
+                <planeGeometry args={[0.24, 0.12]} />
+                <meshStandardMaterial color={style.emissive} emissive={style.emissive} emissiveIntensity={0.55} />
               </mesh>
-            </React.Fragment>
-          ))}
-          <mesh position={[0, 0.1, 0.32]} rotation={[Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[0.24, 0.12]} />
-            <meshStandardMaterial color={style.emissive} emissive={style.emissive} emissiveIntensity={0.55} />
-          </mesh>
+              {[-0.22, -0.1, 0.1, 0.22].map((side) => (
+                <React.Fragment key={`clay-leg-${side}`}>
+                  <mesh position={[side, -0.04, 0.13]} rotation={[0, 0, side > 0 ? -0.75 : 0.75]}>
+                    <capsuleGeometry args={[0.022, 0.25, 4, 6]} />
+                    <meshStandardMaterial color="#f5efe0" roughness={0.55} />
+                  </mesh>
+                  <mesh position={[side, -0.04, -0.13]} rotation={[0, 0, side > 0 ? 0.75 : -0.75]}>
+                    <capsuleGeometry args={[0.022, 0.25, 4, 6]} />
+                    <meshStandardMaterial color="#f5efe0" roughness={0.55} />
+                  </mesh>
+                </React.Fragment>
+              ))}
+            </>
+          )}
           {giant && (
             <mesh position={[0, 0.42, 0.02]}>
               <sphereGeometry args={[0.06, 8, 8]} />
@@ -711,6 +729,7 @@ function BombMesh({
 
       {(kind === 'chidoriMine' || kind === 'kirin') && (
         <>
+          <ChidoriSparks reducedMotion={reducedMotion} size={kind === 'kirin' ? 0.44 : 0.34} />
           <mesh ref={coreRef} rotation={[-Math.PI / 2, 0, 0]}>
             <torusGeometry args={[kind === 'kirin' ? 0.31 : 0.24, 0.028, 8, 32]} />
             <meshStandardMaterial color={style.color} emissive={style.emissive} emissiveIntensity={0.9} />
@@ -759,28 +778,13 @@ function BombMesh({
             <ringGeometry args={[0.06, kind === 'instantTeleport' ? 0.18 : 0.14, 24]} />
             <meshStandardMaterial color="#facc15" emissive="#facc15" emissiveIntensity={1.1} transparent opacity={0.7} />
           </mesh>
-          {[0, (Math.PI * 2) / 3, (Math.PI * 4) / 3].map((rotation) => (
-            <React.Fragment key={`thunder-seal-${rotation}`}>
-              <mesh position={[Math.sin(rotation) * 0.24, -0.2, Math.cos(rotation) * 0.24]} rotation={[-Math.PI / 2, 0, -rotation]}>
-                <boxGeometry args={[0.045, kind === 'instantTeleport' ? 0.38 : 0.28, 0.018]} />
-                <meshStandardMaterial color="#fde68a" emissive="#facc15" emissiveIntensity={0.82} transparent opacity={0.78} />
-              </mesh>
-              <mesh position={[Math.sin(rotation) * 0.39, -0.19, Math.cos(rotation) * 0.39]} rotation={[Math.PI / 2, 0, -rotation]}>
-                <coneGeometry args={[0.045, 0.16, 3]} />
-                <meshStandardMaterial color="#d1d5db" metalness={0.5} roughness={0.28} emissive="#facc15" emissiveIntensity={0.18} />
-              </mesh>
-            </React.Fragment>
-          ))}
+          <HiraishinKunai scale={kind === 'instantTeleport' ? 1.15 : 1} />
           {kind === 'instantTeleport' && (
             <mesh position={[0, 0.25, 0]} rotation={[0, 0, Math.PI / 4]}>
               <coneGeometry args={[0.16, 0.86, 4]} />
               <meshStandardMaterial color="#fef3c7" emissive="#facc15" emissiveIntensity={1.05} transparent opacity={0.44} />
             </mesh>
           )}
-          <mesh position={[0, -0.17, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 4]}>
-            <boxGeometry args={[0.5, 0.035, 0.02]} />
-            <meshStandardMaterial color="#60a5fa" emissive="#38bdf8" emissiveIntensity={0.6} transparent opacity={0.66} />
-          </mesh>
         </>
       )}
 
@@ -819,12 +823,7 @@ function BombMesh({
             <torusGeometry args={[0.28, 0.025, 8, 36]} />
             <meshStandardMaterial color="#bfdbfe" emissive="#38bdf8" emissiveIntensity={0.95} />
           </mesh>
-          {[0, Math.PI / 2, Math.PI, Math.PI * 1.5].map((rotation) => (
-            <mesh key={`rasen-blade-${rotation}`} position={[Math.sin(rotation) * 0.24, 0, Math.cos(rotation) * 0.24]} rotation={[Math.PI / 2, 0, -rotation]}>
-              <coneGeometry args={[0.065, 0.32, 3]} />
-              <meshStandardMaterial color="#eff6ff" emissive="#38bdf8" emissiveIntensity={0.75} />
-            </mesh>
-          ))}
+          <RasenshurikenBlades reducedMotion={reducedMotion} />
         </>
       )}
 
@@ -838,58 +837,65 @@ function BombMesh({
   );
 }
 
-type ExplosionEffect = 'chakra' | 'lightning' | 'sand' | 'clay' | 'genjutsu' | 'teleport' | 'rasengan';
-
-function getExplosionStyle(kind?: BombKind): {
-  color: string;
-  emissive: string;
-  accent: string;
-  effect: ExplosionEffect;
-} {
-  if (kind === 'chidoriMine' || kind === 'kirin') {
-    return {
-      color: '#93c5fd', emissive: '#60a5fa', accent: '#050507', effect: 'lightning'
-    };
-  }
-  if (kind === 'sandCoffin' || kind === 'sandTsunami') {
-    return {
-      color: '#d6a45d', emissive: '#f59e0b', accent: '#8b5e34', effect: 'sand'
-    };
-  }
-  if (kind === 'claySpider' || kind === 'giantClay') {
-    return {
-      color: '#fed7aa', emissive: '#f97316', accent: '#ef4444', effect: 'clay'
-    };
-  }
-  if (kind === 'crowClone' || kind === 'tsukuyomi') {
-    return {
-      color: '#7f1d1d', emissive: '#ef4444', accent: '#111827', effect: 'genjutsu'
-    };
-  }
-  if (kind === 'thunderMark' || kind === 'instantTeleport') {
-    return {
-      color: '#fef3c7', emissive: '#facc15', accent: '#60a5fa', effect: 'teleport'
-    };
-  }
-  if (kind === 'shadowClone' || kind === 'shadowCloneBarrage' || kind === 'rasenshuriken') {
-    return {
-      color: '#dbeafe', emissive: '#38bdf8', accent: '#f97316', effect: 'rasengan'
-    };
-  }
-  return {
-    ...BOMB_STYLE[kind ?? 'standard'],
-    accent: '#fed7aa',
-    effect: 'chakra',
-  };
-}
-
 const EXPLOSION_INSTANCE_CAPACITY = 512;
 const EXPLOSION_DUMMY = new THREE.Object3D();
-const EXPLOSION_COLOR = new THREE.Color();
+EXPLOSION_DUMMY.rotation.order = 'YXZ';
+const EXPLOSION_CELL_POSE = createCellPose();
 
 function getExplosionKey(explosion: ExplosionCell): string {
   return `${explosion.x},${explosion.y},${explosion.kind ?? 'standard'}`;
 }
+
+function writeExplosionLayer(
+  mesh: THREE.InstancedMesh | null,
+  slot: number,
+  pose: LayerPose,
+  wx: number,
+  wz: number,
+) {
+  if (!mesh) return;
+  EXPLOSION_DUMMY.position.set(wx + pose.x, pose.y, wz + pose.z);
+  EXPLOSION_DUMMY.scale.set(pose.sx, pose.sy, pose.sz);
+  EXPLOSION_DUMMY.rotation.set(pose.rx, pose.ry, pose.rz);
+  EXPLOSION_DUMMY.updateMatrix();
+  mesh.setMatrixAt(slot, EXPLOSION_DUMMY.matrix);
+  mesh.setColorAt(slot, pose.color);
+}
+
+/** Uploads only the live instances: flagging all 512 sent ~190 KB a frame, even with no explosions. */
+function uploadInstances(mesh: THREE.InstancedMesh | null | undefined, live: number) {
+  if (!mesh) return;
+  const instancedMesh = mesh;
+  instancedMesh.count = live;
+  if (live === 0) return;
+  instancedMesh.instanceMatrix.addUpdateRange(0, live * 16);
+  instancedMesh.instanceMatrix.needsUpdate = true;
+  if (instancedMesh.instanceColor) {
+    instancedMesh.instanceColor.addUpdateRange(0, live * 3);
+    instancedMesh.instanceColor.needsUpdate = true;
+  }
+}
+
+function pruneFlameAges(ages: Map<string, number>, ticks: Map<string, number>, active: Set<string>) {
+  ages.forEach((_, key) => {
+    if (active.has(key)) return;
+    ages.delete(key);
+    ticks.delete(key);
+  });
+}
+
+// The jutsu layers (scene/jutsu) draw only for the cells whose jutsu uses
+// them, packed from slot 0; they share the base layers' program.
+const JUTSU_LAYER_GEOMETRY: Record<JutsuLayer, () => THREE.BufferGeometry> = {
+  bolt: boltGeometry,
+  puff: puffGeometry,
+  blade: rasenshurikenGeometry,
+  bird: birdGeometry,
+  sigil: tomoeGeometry,
+};
+const JUTSU_LAYER_OPACITY: Record<JutsuLayer, number> = {
+  bolt: 0.92, puff: 0.88, blade: 0.72, bird: 0.95, sigil: 0.9,
+};
 
 function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
   const flameRef = useRef<THREE.InstancedMesh>(null);
@@ -897,11 +903,20 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
   const ringRef = useRef<THREE.InstancedMesh>(null);
   const accentRef = useRef<THREE.InstancedMesh>(null);
   const debrisRef = useRef<THREE.InstancedMesh>(null);
+  const jutsuRefs = useRef<Partial<Record<JutsuLayer, THREE.InstancedMesh | null>>>({});
+  const jutsuSetters = useRef(Object.fromEntries(JUTSU_LAYERS.map((layer) => [
+    layer,
+    (mesh: THREE.InstancedMesh | null) => { jutsuRefs.current[layer] = mesh; },
+  ])) as Record<JutsuLayer, (mesh: THREE.InstancedMesh | null) => void>);
+  const jutsuCounts = useRef(Object.fromEntries(JUTSU_LAYERS.map((layer) => [layer, 0])) as Record<JutsuLayer, number>);
   const lightRef = useRef<PooledLightHandle>(null);
   const agesRef = useRef(new Map<string, number>());
   const ticksRef = useRef(new Map<string, number>());
   const motion = React.useContext(MotionContext);
+  const reducedMotion = React.useContext(ReducedMotionContext);
   const simTimeRef = useRef<number | null>(null);
+  const activeKeysRef = useRef(new Set<string>());
+  const lightColorRef = useRef(new THREE.Color('#f97316'));
 
   // Allocate instance colours up front: setColorAt would otherwise create them
   // on the first explosion, which changes the shader variant and compiles a
@@ -910,7 +925,10 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
   // attribute, and these geometries have none, so WebGL read (0, 0, 0) and
   // every flame drew black.
   useLayoutEffect(() => {
-    [flameRef.current, shockwaveRef.current, ringRef.current, accentRef.current, debrisRef.current].forEach((mesh) => {
+    [
+      flameRef.current, shockwaveRef.current, ringRef.current, accentRef.current, debrisRef.current,
+      ...JUTSU_LAYERS.map((layer) => jutsuRefs.current[layer] ?? null),
+    ].forEach((mesh) => {
       if (!mesh || mesh.instanceColor) return;
       const instancedMesh = mesh;
       instancedMesh.instanceColor = new THREE.InstancedBufferAttribute(
@@ -920,7 +938,7 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
     });
   }, []);
 
-  useFrame((_, delta) => {
+  useFrame(({ clock }, delta) => {
     // Flames age with the simulation while it runs, so they burn out with
     // the engine's own flame. When it is stopped (paused, round over) they
     // age by frame time, capped like the engine's frame step: a frame drawn
@@ -931,11 +949,14 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
       : 0;
     simTimeRef.current = simTimeMs;
     const stepMs = simStepMs > 0 ? simStepMs : Math.min(delta * 1000, MAX_FRAME_DELTA_MS);
-    const activeKeys = new Set<string>();
+    const activeKeys = activeKeysRef.current;
+    activeKeys.clear();
     const count = Math.min(explosions.length, EXPLOSION_INSTANCE_CAPACITY);
+    const counts = jutsuCounts.current;
+    for (let layer = 0; layer < JUTSU_LAYERS.length; layer += 1) counts[JUTSU_LAYERS[layer]] = 0;
     let strongestLight = 0;
-    let strongestLightPosition: [number, number, number] | null = null;
-    let strongestLightColor = '#f97316';
+    let strongestX = 0;
+    let strongestZ = 0;
 
     for (let index = 0; index < count; index += 1) {
       const explosion = explosions[index];
@@ -952,156 +973,53 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
       ticksRef.current.set(key, explosion.ticksRemaining);
 
       const progress = ageMs / EXPLOSION_MS;
-      const [wx, , wz] = toWorld(explosion.x, explosion.y);
-      const style = getExplosionStyle(explosion.kind);
-      const pulse = Math.sin(progress * Math.PI);
-
-      EXPLOSION_COLOR.set(style.color);
-      EXPLOSION_DUMMY.position.set(wx, 0.45 + progress * 0.08, wz);
-      EXPLOSION_DUMMY.scale.set(0.95 - progress * 0.18, 1.05 + pulse * 0.32, 0.95 - progress * 0.18);
-
-      if (style.effect === 'lightning') {
-        EXPLOSION_DUMMY.position.set(wx, 0.7 + pulse * 0.18, wz);
-        EXPLOSION_DUMMY.scale.set(0.34 + pulse * 0.08, 1.55 + pulse * 0.7, 0.34 + pulse * 0.08);
+      const wx = (explosion.x + MAP_OFFSET_X) * TILE_SIZE;
+      const wz = (explosion.y + MAP_OFFSET_Z) * TILE_SIZE;
+      const effect = jutsuOf(explosion.kind);
+      const pose = poseJutsuCell(effect, progress, index, clock.elapsedTime, reducedMotion, EXPLOSION_CELL_POSE);
+      writeExplosionLayer(flameRef.current, index, pose.flame, wx, wz);
+      writeExplosionLayer(shockwaveRef.current, index, pose.shockwave, wx, wz);
+      writeExplosionLayer(ringRef.current, index, pose.ring, wx, wz);
+      writeExplosionLayer(accentRef.current, index, pose.accent, wx, wz);
+      writeExplosionLayer(debrisRef.current, index, pose.debris, wx, wz);
+      for (let layer = 0; layer < JUTSU_LAYERS.length; layer += 1) {
+        const name = JUTSU_LAYERS[layer];
+        if (pose[name].on && counts[name] < EXPLOSION_INSTANCE_CAPACITY) {
+          writeExplosionLayer(jutsuRefs.current[name] ?? null, counts[name], pose[name], wx, wz);
+          counts[name] += 1;
+        }
       }
-      if (style.effect === 'sand') {
-        EXPLOSION_DUMMY.position.set(wx, 0.24 + pulse * 0.12, wz);
-        EXPLOSION_DUMMY.scale.set(1.2 + pulse * 0.35, 0.46 + pulse * 0.22, 1.2 + pulse * 0.35);
-      }
-      if (style.effect === 'clay') {
-        EXPLOSION_DUMMY.position.set(wx, 0.5 + pulse * 0.16, wz);
-        EXPLOSION_DUMMY.scale.set(1.28 + pulse * 0.35, 1.18 + pulse * 0.45, 1.28 + pulse * 0.35);
-      }
-      if (style.effect === 'rasengan') {
-        EXPLOSION_DUMMY.position.set(wx, 0.42 + pulse * 0.14, wz);
-        EXPLOSION_DUMMY.scale.set(0.72 + pulse * 0.5, 0.72 + pulse * 0.5, 0.72 + pulse * 0.5);
-      }
-      if (style.effect === 'genjutsu') {
-        EXPLOSION_DUMMY.position.set(wx, 0.42 + pulse * 0.12, wz);
-        EXPLOSION_DUMMY.scale.set(0.74 + pulse * 0.18, 1.15 + pulse * 0.4, 0.74 + pulse * 0.18);
-      }
-      if (style.effect === 'teleport') {
-        EXPLOSION_DUMMY.position.set(wx, 0.34 + pulse * 0.2, wz);
-        EXPLOSION_DUMMY.scale.set(0.62 + pulse * 0.32, 0.82 + pulse * 0.4, 0.62 + pulse * 0.32);
-      }
-      EXPLOSION_DUMMY.rotation.set(0, progress * Math.PI * 2, 0);
-      EXPLOSION_DUMMY.updateMatrix();
-      flameRef.current?.setMatrixAt(index, EXPLOSION_DUMMY.matrix);
-      flameRef.current?.setColorAt(index, EXPLOSION_COLOR);
 
-      EXPLOSION_COLOR.set(style.emissive);
-
-      EXPLOSION_DUMMY.position.set(wx, 0.16, wz);
-      EXPLOSION_DUMMY.scale.setScalar(0.65 + progress * 1.4);
-      EXPLOSION_DUMMY.rotation.set(-Math.PI / 2, 0, progress * Math.PI);
-      EXPLOSION_DUMMY.updateMatrix();
-      shockwaveRef.current?.setMatrixAt(index, EXPLOSION_DUMMY.matrix);
-      shockwaveRef.current?.setColorAt(index, EXPLOSION_COLOR);
-
-      EXPLOSION_DUMMY.position.set(wx, 0.14, wz);
-      EXPLOSION_DUMMY.scale.setScalar(0.7 + pulse * 0.25);
-      EXPLOSION_DUMMY.rotation.set(-Math.PI / 2, 0, 0);
-      EXPLOSION_DUMMY.updateMatrix();
-      ringRef.current?.setMatrixAt(index, EXPLOSION_DUMMY.matrix);
-      ringRef.current?.setColorAt(index, EXPLOSION_COLOR);
-
-      EXPLOSION_COLOR.set(style.accent);
-      if (style.effect === 'lightning') {
-        EXPLOSION_DUMMY.position.set(wx, 0.68 + pulse * 0.28, wz);
-        EXPLOSION_DUMMY.scale.set(0.13, 1.25 + pulse * 0.85, 0.13);
-        EXPLOSION_DUMMY.rotation.set(progress * Math.PI, progress * Math.PI * 3, index * 0.7);
-      } else if (style.effect === 'rasengan') {
-        EXPLOSION_DUMMY.position.set(
-          wx + Math.sin(progress * Math.PI * 6 + index) * 0.24,
-          0.44 + pulse * 0.25,
-          wz + Math.cos(progress * Math.PI * 6 + index) * 0.24
-        );
-        EXPLOSION_DUMMY.scale.set(0.14 + pulse * 0.04, 0.9 + pulse * 0.35, 0.14 + pulse * 0.04);
-        EXPLOSION_DUMMY.rotation.set(Math.PI / 2, progress * Math.PI * 7, index * 0.9);
-      } else if (style.effect === 'genjutsu') {
-        EXPLOSION_DUMMY.position.set(wx + Math.cos(index) * 0.22, 0.46, wz + Math.sin(index) * 0.22);
-        EXPLOSION_DUMMY.scale.set(0.28 + pulse * 0.08, 0.62, 0.1);
-        EXPLOSION_DUMMY.rotation.set(0.2, progress * Math.PI * 4, index * 1.2);
-      } else if (style.effect === 'teleport') {
-        EXPLOSION_DUMMY.position.set(wx, 0.3 + pulse * 0.18, wz);
-        EXPLOSION_DUMMY.scale.set(0.12, 0.68 + pulse * 0.3, 0.12);
-        EXPLOSION_DUMMY.rotation.set(Math.PI / 2, 0, progress * Math.PI * 6);
-      } else if (style.effect === 'clay') {
-        EXPLOSION_DUMMY.position.set(wx, 0.72 + pulse * 0.24, wz);
-        EXPLOSION_DUMMY.scale.set(0.2 + pulse * 0.06, 1.0 + pulse * 0.45, 0.2 + pulse * 0.06);
-        EXPLOSION_DUMMY.rotation.set(0, progress * Math.PI * 3, index * 0.5);
-      } else {
-        EXPLOSION_DUMMY.position.set(wx, 0.52, wz);
-        EXPLOSION_DUMMY.scale.setScalar(0.001);
-        EXPLOSION_DUMMY.rotation.set(0, 0, 0);
-      }
-      EXPLOSION_DUMMY.updateMatrix();
-      accentRef.current?.setMatrixAt(index, EXPLOSION_DUMMY.matrix);
-      accentRef.current?.setColorAt(index, EXPLOSION_COLOR);
-
-      EXPLOSION_COLOR.set(style.effect === 'sand' ? '#8b5e34' : style.accent);
-      if (style.effect === 'sand' || style.effect === 'clay' || style.effect === 'lightning' || style.effect === 'rasengan') {
-        EXPLOSION_DUMMY.position.set(
-          wx + Math.sin(index * 1.8) * (0.2 + progress * 0.4),
-          0.18 + pulse * 0.32,
-          wz + Math.cos(index * 1.8) * (0.2 + progress * 0.4)
-        );
-        let debrisScale = 0.1;
-        if (style.effect === 'sand') debrisScale = 0.14;
-        if (style.effect === 'lightning') debrisScale = 0.085;
-        if (style.effect === 'rasengan') debrisScale = 0.075;
-        EXPLOSION_DUMMY.scale.setScalar(debrisScale + pulse * 0.09);
-        EXPLOSION_DUMMY.rotation.set(progress * Math.PI * 2, index * 0.9, progress * Math.PI);
-      } else if (style.effect === 'genjutsu') {
-        EXPLOSION_DUMMY.position.set(
-          wx + Math.sin(index * 2.6 + progress * 4) * 0.34,
-          0.32 + pulse * 0.24,
-          wz + Math.cos(index * 2.6 + progress * 4) * 0.34
-        );
-        EXPLOSION_DUMMY.scale.set(0.16 + pulse * 0.08, 0.28, 0.08);
-        EXPLOSION_DUMMY.rotation.set(0.5, progress * Math.PI * 4, index * 1.1);
-      } else {
-        EXPLOSION_DUMMY.position.set(wx, 0.14, wz);
-        EXPLOSION_DUMMY.scale.setScalar(0.001);
-        EXPLOSION_DUMMY.rotation.set(0, 0, 0);
-      }
-      EXPLOSION_DUMMY.updateMatrix();
-      debrisRef.current?.setMatrixAt(index, EXPLOSION_DUMMY.matrix);
-      debrisRef.current?.setColorAt(index, EXPLOSION_COLOR);
-
+      const pulse = Math.sin(Math.min(1, Math.max(0, progress)) * Math.PI);
       if (pulse > strongestLight) {
         strongestLight = pulse;
-        strongestLightPosition = [wx, 1.1, wz];
-        strongestLightColor = style.emissive;
+        strongestX = wx;
+        strongestZ = wz;
+        lightColorRef.current.copy(JUTSU_COLORS[effect].danger);
       }
     }
 
-    Array.from(agesRef.current.keys()).forEach((key) => {
-      if (activeKeys.has(key)) return;
-      agesRef.current.delete(key);
-      ticksRef.current.delete(key);
-    });
+    pruneFlameAges(agesRef.current, ticksRef.current, activeKeys);
 
-    [flameRef.current, shockwaveRef.current, ringRef.current, accentRef.current, debrisRef.current].forEach((mesh) => {
-      if (!mesh) return;
-      const instancedMesh = mesh;
-      instancedMesh.count = count;
-      // Upload only the live instances: flagging the whole 512-instance
-      // buffers sent ~190 KB to the GPU every frame, even with no explosions.
-      if (count === 0) return;
-      instancedMesh.instanceMatrix.addUpdateRange(0, count * 16);
-      instancedMesh.instanceMatrix.needsUpdate = true;
-      if (instancedMesh.instanceColor) {
-        instancedMesh.instanceColor.addUpdateRange(0, count * 3);
-        instancedMesh.instanceColor.needsUpdate = true;
-      }
-    });
+    uploadInstances(flameRef.current, count);
+    uploadInstances(shockwaveRef.current, count);
+    uploadInstances(ringRef.current, count);
+    uploadInstances(accentRef.current, count);
+    uploadInstances(debrisRef.current, count);
+    for (let layer = 0; layer < JUTSU_LAYERS.length; layer += 1) {
+      const name = JUTSU_LAYERS[layer];
+      const mesh = jutsuRefs.current[name];
+      uploadInstances(mesh, counts[name]);
+      // An idle jutsu layer leaves the render list; the base layers keep
+      // its program alive.
+      if (mesh) mesh.visible = counts[name] > 0;
+    }
 
     if (lightRef.current) {
       lightRef.current.intensity = strongestLight * 2.1;
-      lightRef.current.color.set(strongestLightColor);
-      if (strongestLightPosition) {
-        lightRef.current.position.set(...strongestLightPosition);
+      lightRef.current.color.copy(lightColorRef.current);
+      if (strongestLight > 0) {
+        lightRef.current.position.set(strongestX, 1.1, strongestZ);
       }
     }
   });
@@ -1129,6 +1047,18 @@ function ExplosionField({ explosions }: { explosions: ExplosionCell[] }) {
         <tetrahedronGeometry args={[0.12, 0]} />
         <meshBasicMaterial transparent opacity={0.72} depthWrite={false} />
       </instancedMesh>
+      {JUTSU_LAYERS.map((layer) => (
+        <instancedMesh
+          key={layer}
+          ref={jutsuSetters.current[layer]}
+          args={[JUTSU_LAYER_GEOMETRY[layer](), undefined, EXPLOSION_INSTANCE_CAPACITY]}
+          frustumCulled={false}
+          visible={false}
+          userData={{ jutsuLayer: layer }}
+        >
+          <meshBasicMaterial transparent opacity={JUTSU_LAYER_OPACITY[layer]} depthWrite={false} />
+        </instancedMesh>
+      ))}
     </>
   );
 }
@@ -1923,6 +1853,7 @@ function MonsterMeshBase({ monster, guardStage }: { monster: MonsterState; guard
         <mesh position={[0, -0.415, 0]} geometry={GUARD_BADGE_GEOMETRY} material={GUARD_BADGE_MATERIAL} />
       )}
       <MonsterFigure monster={monster} reducedMotion={reducedMotion} guard={guard ? guardStage : undefined} />
+      {monster.clone && <WaterCloneSplash />}
       <mesh
         position={[0, -0.39, 0]}
         geometry={MONSTER_RING_GEOMETRY}
@@ -1994,6 +1925,8 @@ function SensedEnemyMarker({
 
 const BOSS_FLOAT_Y = 0.92;
 const BOSS_LIGHT_INTENSITY = 1.25;
+// Above and in front of the beast: a light inside it burned a hot spot through its cel bands.
+const BOSS_LIGHT_POSITION: [number, number, number] = [0, 1.25, 0.7];
 const BOSS_RING_OPACITY = 0.38;
 // One boss at a time: scratch for its per-frame screen box.
 const BOSS_SCREEN_BOX = createScreenBox();
@@ -2175,7 +2108,7 @@ function BossMesh({ state }: { state: GameEngineState }) {
 
   return (
     <group ref={ref} scale={visual.scale}>
-      <PooledPointLight ref={lightRef} priority={LIGHT_PRIORITY.player} color={visual.glow} distance={5.2} intensity={BOSS_LIGHT_INTENSITY} />
+      <PooledPointLight ref={lightRef} priority={LIGHT_PRIORITY.player} color={visual.glow} distance={5.2} intensity={BOSS_LIGHT_INTENSITY} position={BOSS_LIGHT_POSITION} />
       {boss.health > 0 && <ShadowBlob />}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.56, 0]}>
         <torusGeometry args={[0.62, 0.025, 8, 42]} />
@@ -2221,6 +2154,9 @@ function HazardMesh({ hazard }: { hazard: BossHazard }) {
   const effectColor = beastColored ? hazard.color : visual.color;
   const effectAccent = beastColored ? '#fff7ed' : visual.accent;
   const reducedMotion = React.useContext(ReducedMotionContext);
+  // An enemy's kunai, sand spikes or lightning strike (scene/jutsu) stand
+  // still: a thrown kunai or a bolt does not spin.
+  const enemyJutsu = enemyJutsuFor(hazard);
   // The floor shape that says which family this is, and when it can kill,
   // is drawn by HazardTelegraphs; this draws the effect above it.
 
@@ -2229,7 +2165,7 @@ function HazardMesh({ hazard }: { hazard: BossHazard }) {
       let scale = 1;
       if (!reducedMotion && active) scale = 1.15;
       if (!reducedMotion && !active) scale = 0.85 + Math.sin(clock.elapsedTime * pulseRate(PULSE_HZ.hazardPulse)) * 0.08;
-      ref.current.rotation.y = reducedMotion ? 0 : clock.elapsedTime * (active ? 2.6 : 1.5);
+      ref.current.rotation.y = reducedMotion || enemyJutsu ? 0 : clock.elapsedTime * (active ? 2.6 : 1.5);
       ref.current.scale.setScalar(scale);
     }
   });
@@ -2251,12 +2187,7 @@ function HazardMesh({ hazard }: { hazard: BossHazard }) {
         </>
       )}
 
-      {visual.effect === 'spikes' && [-0.24, 0, 0.24].map((offset) => (
-        <mesh key={`sand-spike-${hazard.id}-${offset}`} position={[offset, active ? 0.24 : 0.08, 0]} rotation={[0.18, 0, offset > 0 ? -0.12 : 0.12]}>
-          <coneGeometry args={[0.075, active ? 0.62 : 0.28, 7]} />
-          <meshStandardMaterial color="#d6a45d" emissive={visual.color} emissiveIntensity={active ? 0.42 : 0.2} />
-        </mesh>
-      ))}
+      {visual.effect === 'spikes' && <SandSpikes active={active} />}
 
       {visual.effect === 'fire' && [-0.22, 0, 0.22].map((offset) => (
         <mesh key={`blue-fire-${hazard.id}-${offset}`} position={[offset, active ? 0.28 : 0.12, 0]} rotation={[0.18, offset * 2, offset > 0 ? -0.18 : 0.18]}>
@@ -2305,12 +2236,15 @@ function HazardMesh({ hazard }: { hazard: BossHazard }) {
         </mesh>
       ))}
 
+      {enemyJutsu === 'lightning' && <LightningStrike active={active} />}
       {visual.effect === 'air' && (
         <>
-          <mesh position={[0, 0.56, 0]} rotation={[Math.PI, 0, 0]}>
-            <coneGeometry args={[0.16, active ? 1.12 : 0.58, 7]} />
-            <meshStandardMaterial color={visual.accent} emissive={visual.color} emissiveIntensity={0.68} transparent opacity={active ? 0.5 : 0.26} />
-          </mesh>
+          {enemyJutsu !== 'lightning' && (
+            <mesh position={[0, 0.56, 0]} rotation={[Math.PI, 0, 0]}>
+              <coneGeometry args={[0.16, active ? 1.12 : 0.58, 7]} />
+              <meshStandardMaterial color={visual.accent} emissive={visual.color} emissiveIntensity={0.68} transparent opacity={active ? 0.5 : 0.26} />
+            </mesh>
+          )}
           <mesh position={[0, 0.12, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <torusGeometry args={[0.28, 0.018, 8, 28]} />
             <meshStandardMaterial color={visual.color} emissive={visual.color} emissiveIntensity={0.7} transparent opacity={0.44} />
@@ -2338,6 +2272,7 @@ function HazardMesh({ hazard }: { hazard: BossHazard }) {
         </>
       )}
 
+      {enemyJutsu === 'kunai' && <KunaiStrike active={active} />}
       {visual.effect === 'shockwave' && [0.26, 0.42].map((radius) => (
         <mesh key={`shock-${hazard.id}-${radius}`} rotation={[-Math.PI / 2, 0, 0]}>
           <torusGeometry args={[radius, 0.022, 8, 34]} />
@@ -2588,10 +2523,9 @@ function FlyingThunderMarker({ x, y }: { x: number; y: number }) {
           opacity={0.82}
         />
       </mesh>
-      <mesh position={[0, 0.16, 0]} rotation={[0, 0, Math.PI / 4]} castShadow>
-        <coneGeometry args={[0.07, 0.48, 4]} />
-        <meshStandardMaterial color="#f8fafc" emissive="#60a5fa" emissiveIntensity={0.28} />
-      </mesh>
+      <group position={[0, 0.36, 0]}>
+        <HiraishinKunai lean={0.28} />
+      </group>
       <PooledPointLight priority={LIGHT_PRIORITY.pickup} color="#facc15" distance={2.2} intensity={0.5} />
     </group>
   );
@@ -3185,6 +3119,7 @@ const HIGH_CONTRAST_MATERIALS: readonly HighContrastOverride[] = [
   { material: GUARD_BADGE_MATERIAL, opacity: 1 },
   ...PICKUP_HIGH_CONTRAST,
   ...OBJECTIVE_HIGH_CONTRAST,
+  ...BOSS_INK_HIGH_CONTRAST,
 ];
 
 function SceneContentBase({

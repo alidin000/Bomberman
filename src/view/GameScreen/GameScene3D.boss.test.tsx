@@ -122,12 +122,13 @@ async function mount(state: GameEngineState, props: SceneProps = {}) {
   };
 }
 
-/** The boss's base meshes (body, trim, core) and its instanced tails, as drawn. */
+/** The boss's base meshes (body, trim, mark, core) and its instanced tails, as drawn. */
 function bossParts(scene: THREE.Scene, bossId: BossId) {
   const materials = getBossFigureMaterials(bossId);
   const ours = new Set<THREE.Material>([
-    materials.body, materials.trim, materials.core,
-    materials.seeThrough.body, materials.seeThrough.trim, materials.seeThrough.core,
+    materials.body, materials.trim, materials.mark, materials.core,
+    materials.seeThrough.body, materials.seeThrough.trim,
+    materials.seeThrough.mark, materials.seeThrough.core,
   ]);
   const meshes: THREE.Mesh[] = [];
   let tails: THREE.InstancedMesh | null = null;
@@ -185,12 +186,23 @@ describe('GameScene3D boss', () => {
     const behind = body!.material as THREE.MeshStandardMaterial;
     expect(behind.transparent).toBe(true);
     expect(behind.opacity).toBeLessThan(0.5);
+    // Its solid ink line steps aside too, body and tails, or it would still
+    // draw the beast's outline over the ninja.
+    const inkLines = () => {
+      const lines: THREE.Object3D[] = [];
+      view.scene().traverse((object) => {
+        if (object.userData.bossInk || object.userData.bossTailInk) lines.push(object);
+      });
+      return lines;
+    };
+    expect(inkLines().map((line) => line.visible)).toEqual([false, false]);
 
-    // The ninja walks round to the front: solid again.
+    // The ninja walks round to the front: solid again, line and all.
     await view.rerender(arena({ x: 17, y: 20 }));
     view.run(400);
     ({ body } = bossParts(view.scene(), 'shukaku'));
     expect((body!.material as THREE.MeshStandardMaterial).transparent).toBe(false);
+    expect(inkLines().map((line) => line.visible)).toEqual([true, true]);
 
     // A boss strike telegraphed on the cell behind it shows through as well.
     await view.rerender(arena({ x: 17, y: 20 }, 'shukaku', { hazards: [hazard(17, 15)] }));

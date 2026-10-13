@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { createFighterWarmupMaterials, createInkWarmupMaterial } from './fighterInk';
+import {
+  FIGHTER_TOON_RAMP, createFighterWarmupMaterials, createInkWarmupMaterial,
+} from './fighterInk';
 import { createTokenWarmupMaterial } from './inkedToken';
 
 function instancedWarmup(material: THREE.Material): THREE.Material {
@@ -11,19 +13,21 @@ function instancedWarmup(material: THREE.Material): THREE.Material {
 }
 
 /**
- * The campaign boss's looks (scene/BossFigure): its tails are an instanced
- * flat-shaded figure mesh, and the whole figure turns see-through (flat,
- * transparent) while it would hide a player or a telegraph and as it
- * dissolves at the seal. The boss only appears mid-mission, so these compile
- * during the countdown of every campaign match.
+ * The campaign boss's looks (scene/BossFigure): a tailed beast is cel-shaded
+ * like the fighters (their toon and ink programs, compiled below for every
+ * match), and its tails are an instanced toon mesh with an instanced ink
+ * line. The whole figure turns see-through (transparent toon) while it would
+ * hide a player or a telegraph and as it dissolves at the seal. The boss only
+ * appears mid-mission, so these compile during the countdown of every
+ * campaign match.
  */
 export function createBossWarmupMaterials(): THREE.Material[] {
   return [
-    new THREE.MeshStandardMaterial({ flatShading: true, transparent: true, depthWrite: false }),
-    instancedWarmup(new THREE.MeshStandardMaterial({ flatShading: true })),
-    instancedWarmup(new THREE.MeshStandardMaterial({
-      flatShading: true, transparent: true, depthWrite: false,
+    instancedWarmup(new THREE.MeshToonMaterial({ gradientMap: FIGHTER_TOON_RAMP })),
+    instancedWarmup(new THREE.MeshToonMaterial({
+      gradientMap: FIGHTER_TOON_RAMP, transparent: true, depthWrite: false,
     })),
+    instancedWarmup(createInkWarmupMaterial()),
   ];
 }
 

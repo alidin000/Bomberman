@@ -189,8 +189,17 @@ look continuous while collisions remain deterministic.
 
 Fighters are assembled from poseable Three.js primitives. Hair, clothing, and
 accessories vary by fighter. Monsters and bosses use reusable part recipes;
-their transformed pieces are merged once and cached. Pickups and objectives use
-merged vertex-colored bodies.
+their transformed pieces are merged once and cached. Each tailed beast
+(`scene/beasts/`) is drawn as the anime shows it, with the right number of
+tails, and wears the fighters' toon bands and ink line. Pickups and objectives
+use merged vertex-colored bodies.
+
+Signature jutsu (`scene/jutsu/`) are render-only. Each bomb kind maps to its
+jutsu: smoke puffs, Rasenshuriken blades, forked lightning, sand, clay blasts,
+crows and black flames, tomoe, and the yellow flash. The blast draws them on a
+few extra instanced layers that share the flame's program. Every blast keeps
+the same floor shockwave and ring in its danger colour, and spins and crackles
+stay at or under three beats a second.
 
 The cel-shaded finish has two passes:
 
