@@ -40,9 +40,6 @@ export const BOSS_FIGURE_TONES: BossFigureTone[] = ['body', 'trim', 'mark', 'cor
 /** Local bounds before the boss group's scale (about 1.5). */
 export const BOSS_FIGURE_BOUNDS = { radius: 0.62, bottom: -0.5, top: 0.95 };
 
-/** Each beast's own tail shape (foxTail, tanukiTail, tentacle...). */
-export type BossTailStyle = string;
-
 export type BossFigureLook = BeastLook;
 
 export const BOSS_FIGURE_LOOKS: Record<BossId, BossFigureLook> = Object.fromEntries(

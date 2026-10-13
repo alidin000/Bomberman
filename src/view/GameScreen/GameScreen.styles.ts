@@ -1,6 +1,6 @@
 import styled from '@emotion/styled';
 import {
-  Button, Dialog, DialogContent, IconButton
+  Button, Dialog, IconButton
 } from '@mui/material';
 import { StyledBackground } from '../WelcomeScreen/WelcomeScreen.styles';
 import { ARENA_FRAME_PX } from './scene/canvasInsets';
@@ -8,17 +8,6 @@ import { ARENA_FRAME_PX } from './scene/canvasInsets';
 type GridCellProps = {
   isWall: boolean;
 };
-
-export const CustomDialogContent = styled(DialogContent)({
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'center',
-  alignItems: 'center',
-  width: '100%',
-  maxWidth: 'none',
-  height: 'auto',
-  backgroundColor: 'var(--anime-paper-light)'
-});
 
 export const StyledGameDialog = styled(Dialog)({
   '& .MuiDialog-paper': {
@@ -57,10 +46,6 @@ export const GridCell = styled.div<GridCellProps>(({ isWall }) => ({
   overflow: 'hidden',
 }));
 
-export const StyledGameButton = styled(Button)({
-  marginRight: '10px',
-});
-
 export const CharacterContainer = styled.div({
   position: 'absolute',
   top: 0,
@@ -70,14 +55,6 @@ export const CharacterContainer = styled.div({
   display: 'flex',
   justifyContent: 'center',
   alignItems: 'center',
-});
-
-export const StyledSettingsButton = styled(IconButton)({
-  position: 'absolute',
-  top: '20px',
-  right: '20px',
-  zIndex: 2000,
-  color: 'var(--anime-vermilion)',
 });
 
 // The arena sits inside the paper frame (ARENA_FRAME_PX on every side), so
@@ -440,23 +417,4 @@ export const CaptionLiveRegion = styled.div({
   overflow: 'hidden',
   clip: 'rect(0 0 0 0)',
   whiteSpace: 'nowrap',
-});
-
-export const GameHint = styled.div({
-  position: 'absolute',
-  left: '50%',
-  bottom: '24px',
-  transform: 'translateX(-50%)',
-  zIndex: 10,
-  width: 'min(780px, 82vw)',
-  padding: '10px 18px',
-  borderRadius: 2,
-  background: 'rgba(255,248,231,0.94)',
-  border: '2px solid var(--anime-ink)',
-  boxShadow: '4px 4px 0 var(--anime-ink)',
-  color: 'var(--anime-ink)',
-  fontSize: '0.92rem',
-  fontWeight: 700,
-  textAlign: 'center',
-  pointerEvents: 'none',
 });

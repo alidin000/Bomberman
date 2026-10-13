@@ -74,25 +74,3 @@ export function createFigureMaterial(
     emissiveIntensity: options.glowIntensity ?? (translucent ? 0.32 : 0.06),
   });
 }
-
-/** Shared, never-disposed materials keyed by look; a handful per session. */
-export class FigureMaterialPool {
-  private readonly materials = new Map<string, THREE.MeshStandardMaterial>();
-
-  get(
-    color: string,
-    options: { translucent?: boolean; glow?: string; glowIntensity?: number } = {}
-  ): THREE.MeshStandardMaterial {
-    const key = `${color}|${options.translucent ? 1 : 0}|${options.glow ?? ''}|${options.glowIntensity ?? ''}`;
-    let material = this.materials.get(key);
-    if (!material) {
-      material = createFigureMaterial(color, options);
-      this.materials.set(key, material);
-    }
-    return material;
-  }
-
-  get size(): number {
-    return this.materials.size;
-  }
-}

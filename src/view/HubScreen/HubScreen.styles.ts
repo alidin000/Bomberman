@@ -370,44 +370,6 @@ export const VillageChip = styled.button`
   }
 `;
 
-export const CodexList = styled.ul`
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-`;
-
-// Found entries have a solid accent edge; unknown ones a dashed hairline.
-export const CodexEntry = styled.li<{ locked: boolean; accent: string }>`
-  padding: 6px 10px;
-  border-left: ${(props) => (props.locked
-    ? '4px dashed var(--ink-2)'
-    : `4px solid ${props.accent}`)};
-
-  & h4 {
-    margin: 0 0 2px;
-    color: ${(props) => (props.locked ? 'var(--ink-2)' : 'var(--anime-ink)')};
-    font-size: 0.9rem;
-    font-weight: 900;
-  }
-
-  & small {
-    display: block;
-    color: var(--ink-2);
-    font-size: 0.7rem;
-    font-weight: 800;
-    text-transform: uppercase;
-  }
-
-  & p {
-    margin: 2px 0 0;
-    color: var(--anime-ink);
-    font-size: 0.88rem;
-    line-height: 1.45;
-  }
-`;
-
 export const HubAnnouncer = styled.p`
   min-height: 1.2em;
   margin: 8px 0 0;

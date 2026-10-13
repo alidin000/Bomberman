@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { BombKind } from '../../../../engine/types';
-import { MAX_FLASH_HZ } from '../flashSafety';
 
 /**
  * Each signature bomb's blast, as the show draws the jutsu behind it:
@@ -157,5 +156,3 @@ export function jutsuBeatsPerSecond(): Record<string, number> {
     lightning: LIGHTNING_FORKS_PER_S / 2,
   };
 }
-
-export const JUTSU_MAX_BEATS = MAX_FLASH_HZ;

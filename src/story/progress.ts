@@ -380,28 +380,6 @@ export function selectStoryLoadout(
   return next;
 }
 
-export function completeBossReward(
-  bossId: BossId,
-  rewardCharacter?: CharacterId,
-  rewardStage?: StageId
-): StoryProgress {
-  const progress = loadStoryProgress();
-  const next: StoryProgress = {
-    ...progress,
-    completedBosses: Array.from(new Set([...progress.completedBosses, bossId])),
-    unlockedCharacters: Array.from(new Set([
-      ...progress.unlockedCharacters,
-      ...(rewardCharacter ? [rewardCharacter] : []),
-    ])),
-    unlockedStages: Array.from(new Set([
-      ...progress.unlockedStages,
-      ...(rewardStage ? [rewardStage] : []),
-    ])),
-  };
-  saveStoryProgress(next);
-  return next;
-}
-
 export function completeCampaignStage(stageId: StageId, bossId: BossId): StoryProgress {
   const progress = loadStoryProgress();
   const campaignVillage = getCampaignVillage(stageId);

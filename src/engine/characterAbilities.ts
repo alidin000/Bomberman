@@ -90,10 +90,6 @@ export function getShadowCloneBlocks(state: GameEngineState): ShadowCloneBlock[]
   return cells;
 }
 
-export function getShadowCloneBlockCells(state: GameEngineState): Point[] {
-  return getShadowCloneBlocks(state).map(({ x, y }) => ({ x, y }));
-}
-
 export function isShadowCloneBlocked(
   state: GameEngineState,
   x: number,

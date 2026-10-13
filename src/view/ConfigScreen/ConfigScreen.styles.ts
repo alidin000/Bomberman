@@ -1,5 +1,5 @@
 import styled from '@emotion/styled';
-import { Dialog, Typography, ToggleButton } from '@mui/material';
+import { Dialog, Typography } from '@mui/material';
 
 type PlayerControlsRowProps = {
   numOfPlayers: string;
@@ -386,17 +386,6 @@ export const ControlsLabel = styled(Typography)`
   text-transform: uppercase;
 `;
 
-export const KeyGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-left: 0;
-`;
-
-export const KeyRow = styled.div`
-  display: flex;
-`;
-
 export const KeyConfigInput = styled.input`
   width: 46px;
   height: 46px;
@@ -490,13 +479,6 @@ export const SummaryItem = styled.div<{ accent: string }>`
   }
 `;
 
-export const ExtraKeys = styled.div`
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  margin-left: 25px;
-`;
-
 export const ActionKeysGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(4, minmax(64px, 1fr));
@@ -525,55 +507,6 @@ export const ActionKeyName = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-`;
-
-export const MapToggleButton = styled(ToggleButton)`
-  width: 140px;
-  height: 140px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  border-radius: 2px !important;
-  clip-path: ${panelCut};
-
-  &:hover {
-    transform: translateY(-4px);
-    box-shadow: 4px 4px 0 var(--anime-ink);
-  }
-
-  & img {
-    width: 100%;
-    height: auto;
-    margin-bottom: 8px;
-    border-radius: 0;
-  }
-
-  &.Mui-selected, &.Mui-selected:hover {
-    background-color: rgba(53, 111, 107, 0.2);
-    border-color: var(--anime-teal);
-    transform: translateY(-4px);
-  }
-`;
-
-export const ConfigIntro = styled.div`
-  position: relative;
-  margin-bottom: 18px;
-  padding: 16px 18px 16px 22px;
-  clip-path: ${panelCut};
-  background: var(--anime-paper);
-  border: 2px solid var(--anime-ink);
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 14px;
-    bottom: 14px;
-    width: 5px;
-    background: var(--anime-teal);
-  }
 `;
 
 /**
@@ -743,40 +676,6 @@ export const RouteStatusBadge = styled.span<{ accent: string }>`
   }
 `;
 
-export const FlowStepStrip = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin: 8px 0 16px;
-`;
-
-export const FlowStepPill = styled.span<{ active?: boolean }>`
-  padding: 5px 8px;
-  clip-path: ${chipCut};
-  color: ${(props) => (props.active ? 'var(--anime-paper-light)' : 'var(--anime-ink)')};
-  background: ${(props) => (props.active ? 'var(--anime-teal)' : 'var(--anime-paper)')};
-  border: 1px solid var(--anime-ink);
-  font-size: 0.68rem;
-  font-weight: 900;
-`;
-
-export const ReferenceBoard = styled.div`
-  display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) minmax(300px, 1.1fr);
-  gap: 14px;
-  margin: 16px 0 20px;
-`;
-
-export const ReferenceImage = styled.img`
-  width: 100%;
-  height: 180px;
-  object-fit: cover;
-  clip-path: ${panelCut};
-  border: 2px solid var(--anime-ink);
-  box-shadow: 4px 4px 0 var(--anime-mustard);
-  filter: saturate(0.75) contrast(1.06);
-`;
-
 export const CharacterPortrait = styled.div`
   height: 140px;
   margin: -4px -4px 8px;
@@ -937,81 +836,11 @@ export const StagePreviewImage = styled('div', {
   filter: saturate(0.76) contrast(1.08);
 `;
 
-export const AbilityLine = styled.div<{ color: string }>`
-  margin-top: 8px;
-  padding: 6px 8px;
-  border-left: 3px solid ${(props) => props.color};
-  clip-path: ${chipCut};
-  background: var(--anime-paper-light);
-  color: rgba(33, 29, 26, 0.78);
-  font-size: 0.72rem;
-`;
-
-export const LoadoutGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
-  margin-top: 8px;
-`;
-
-export const LoadoutRow = styled.div<{ color: string }>`
-  display: grid;
-  grid-template-columns: 58px 1fr;
-  gap: 8px;
-  align-items: center;
-  padding: 5px 7px;
-  clip-path: ${chipCut};
-  background: color-mix(in srgb, ${(props) => props.color} 12%, var(--anime-paper-light));
-  border: 1px solid var(--anime-ink);
-  font-size: 0.72rem;
-`;
-
-export const LoadoutKey = styled.span`
-  color: rgba(33, 29, 26, 0.68);
-  font-weight: 900;
-  text-transform: uppercase;
-`;
-
-export const PowerLoadoutGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 5px;
-  margin-top: 8px;
-`;
-
-export const PowerLoadoutItem = styled.div<{ color: string }>`
-  min-height: 42px;
-  padding: 6px 7px;
-  clip-path: ${chipCut};
-  background: color-mix(in srgb, ${(props) => props.color} 12%, var(--anime-paper-light));
-  border: 1px solid var(--anime-ink);
-  color: rgba(33, 29, 26, 0.74);
-  font-size: 0.66rem;
-  line-height: 1.22;
-`;
-
-export const PowerLoadoutName = styled.strong<{ color: string }>`
-  display: block;
-  margin-bottom: 2px;
-  color: ${(props) => props.color};
-  font-size: 0.68rem;
-  text-transform: uppercase;
-`;
-
 export const CardHeader = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
-`;
-
-export const ColorOrb = styled.span<{ color: string }>`
-  width: 32px;
-  height: 32px;
-  flex: 0 0 auto;
-  clip-path: polygon(50% 0, 96% 24%, 96% 76%, 50% 100%, 4% 76%, 4% 24%);
-  background: ${(props) => props.color};
-  border: 2px solid var(--anime-ink);
 `;
 
 export const CardMeta = styled(Typography)`
@@ -1057,16 +886,6 @@ export const LockBadge = styled.span`
     font-size: 0.66rem;
     font-weight: 700;
     text-transform: none;
-  }
-`;
-
-export const ModeGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-
-  @media (max-width: 760px) {
-    grid-template-columns: 1fr;
   }
 `;
 

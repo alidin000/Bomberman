@@ -1,5 +1,4 @@
 /* eslint-disable max-len -- part recipes read best one part per line */
-import * as THREE from 'three';
 import type { ScarfId } from '../../../../content/villageSquare';
 import { SCARF_LOOKS } from '../../../../content/scarves';
 import {
@@ -74,9 +73,4 @@ export function scarfMesh(scarf: ScarfId): InkedToken {
     SCARVES.set(scarf, token);
   }
   return token;
-}
-
-/** The scarf's main colour, as drawn (tests, the hub's picker swatches). */
-export function scarfClothColor(scarf: ScarfId): THREE.Color {
-  return new THREE.Color(SCARF_COLORS[scarf].cloth);
 }

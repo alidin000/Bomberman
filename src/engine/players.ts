@@ -679,18 +679,6 @@ export function tickPowerUps(state: GameEngineState, deltaMs: number): GameEngin
   return { ...state, players, timedPowerUps };
 }
 
-export function clearPlayerPowerUps(
-  state: GameEngineState,
-  playerId: string,
-): GameEngineState {
-  const timedPowerUps = { ...state.timedPowerUps };
-  delete timedPowerUps[playerId];
-  const players = state.players.map((p) => (
-    p.id === playerId ? { ...p, powerUps: [] } : p
-  ));
-  return { ...state, players, timedPowerUps };
-}
-
 export function isPowerUpActive(
   state: GameEngineState,
   playerId: string,

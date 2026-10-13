@@ -5,4 +5,3 @@ export * from './stages';
 export * from './campaign';
 export * from './campaignMissions';
 export * from './campaignEvents';
-export * from './powerups';

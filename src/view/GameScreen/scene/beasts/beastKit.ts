@@ -69,9 +69,6 @@ export const disc = (r: number, h = 0.02, segments = 12) => (
   new THREE.CylinderGeometry(r, r, h, segments)
 );
 
-/** Tilts that point a disc's face (its +y) along the camera-facing direction (0, sin, cos). */
-export const FACE_TILT = 1.05;
-
 /** A left/right pair: `make` builds the right one (side 1, x > 0); the left mirrors it. */
 export const pair = (make: (side: 1 | -1) => FigurePart): FigurePart[] => [make(-1), make(1)];
 export const pairs = (make: (side: 1 | -1) => FigurePart[]): FigurePart[] => (

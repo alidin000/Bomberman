@@ -1,12 +1,5 @@
 import { Direction, GameConfig } from './types';
-import { CharacterId, GameMode, StageId } from '../content';
 import type { HubConsumableId } from '../content/hubShop';
-
-type RoomSelectionPayload = {
-  mode: GameMode;
-  stageId: StageId;
-  selectedCharacters: CharacterId[];
-};
 
 /** Serializable actions – safe to send over network for future multiplayer */
 export type GameAction =
@@ -29,10 +22,3 @@ export type GameAction =
   | { type: 'ACCEPT_REQUEST'; playerId: string; requestId: string }
   | { type: 'CAMPAIGN_PURCHASE'; playerId: string; itemId: HubConsumableId }
   | { type: 'RESTART' };
-
-export type NetworkMessage =
-  | { kind: 'join'; roomId: string; playerName: string; selection?: RoomSelectionPayload }
-  | { kind: 'room-selection'; roomId: string; playerId: string; selection: RoomSelectionPayload }
-  | { kind: 'input'; roomId: string; playerId: string; action: GameAction }
-  | { kind: 'state'; roomId: string; tick: number; payload: string }
-  | { kind: 'snapshot'; roomId: string; state: string };

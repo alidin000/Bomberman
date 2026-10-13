@@ -47,7 +47,6 @@ const CANVAS = '#fef3c7';
 const IRON = '#475569';
 const LAMP = '#ffe9a8';
 const SKIN = '#f2c7a2';
-const EMBER = '#f97316';
 const GOLD = '#f59e0b';
 
 const flat = (part: TokenPart): TokenPart => ({ ...part, ink: false });
@@ -699,20 +698,3 @@ export function promptFor(
 }
 
 // --- Honored scarf -------------------------------------------------------------------
-
-/**
- * The ember-thread scarf (Honored standing): a wrap round the fighter's neck,
- * a knot at the back and two tails with gold thread and glowing ember tips.
- * In fighter units, on the figure's own origin (head centre at y 0.32).
- */
-export const scarfToken = lazy((): InkedToken => buildInkedToken([
-  p(ring(0.19, 0.05, 6, 18), '#b91c1c', [0, 0.13, 0], [HALF_TURN, 0, 0], [1, 1, 0.9]),
-  flat(p(ring(0.19, 0.012, 3, 18), GOLD, [0, 0.13, 0], [HALF_TURN, 0, 0], [1.06, 1.06, 1])),
-  p(ball(0.06, 6, 5), '#991b1b', [0.05, 0.12, -0.2]),
-  p(box(0.09, 0.3, 0.025), '#b91c1c', [0.02, -0.02, -0.25], [0.45, 0, 0.12]),
-  p(box(0.08, 0.24, 0.025), '#b91c1c', [0.12, 0.0, -0.24], [0.6, 0, -0.18]),
-  flat(p(box(0.092, 0.02, 0.03), GOLD, [0.02, -0.08, -0.28], [0.45, 0, 0.12])),
-  flat(p(box(0.082, 0.02, 0.03), GOLD, [0.125, -0.05, -0.28], [0.6, 0, -0.18])),
-  flat(p(box(0.08, 0.035, 0.03), EMBER, [0.0, -0.15, -0.32], [0.45, 0, 0.12])),
-  flat(p(box(0.07, 0.035, 0.03), EMBER, [0.15, -0.1, -0.31], [0.6, 0, -0.18])),
-]));

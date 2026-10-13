@@ -370,7 +370,3 @@ export function getOnlineSession(): OnlineSession {
   if (!onlineSession) onlineSession = new OnlineSession();
   return onlineSession;
 }
-
-export function getOnlineServerUrl(): string {
-  return serverUrl();
-}

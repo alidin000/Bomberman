@@ -125,10 +125,6 @@ export const WANDERING_VILLAGER = {
   minTier: 'known' as ReputationTierId,
 } as const;
 
-// Stall stock: the hub's consumables. Each one can be had once per mission,
-// counting what was packed in the hub. From Trusted, Pell knocks a fifth off.
-export const STALL_DISCOUNT_TIER: ReputationTierId = 'trusted';
-
 export function stallPrice(id: HubConsumableId, tier: ReputationTierId): number {
   const base = HUB_CONSUMABLES.find((item) => item.id === id)?.price ?? 0;
   const discounted = tier === 'trusted' || tier === 'honored';

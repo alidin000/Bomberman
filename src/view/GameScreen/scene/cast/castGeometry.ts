@@ -55,12 +55,3 @@ export function enemyFigureMesh(archetype: EnemyArchetype): CastMesh {
     scaled((member.look.scale ?? 1) * ENEMY_CAST_SCALE)
   ));
 }
-
-/** How many looks are built (tests, the prewarm). */
-export function builtCastFigures(): number {
-  return FIGURES.size;
-}
-
-export function isCastFigureBuilt(key: string): boolean {
-  return FIGURES.has(key);
-}

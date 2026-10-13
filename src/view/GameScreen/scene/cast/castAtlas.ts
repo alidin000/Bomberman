@@ -690,8 +690,3 @@ export function castAtlasTexture(): THREE.CanvasTexture {
   atlas.needsUpdate = true;
   return atlas;
 }
-
-/** Background colour of a print cell (decals blend into the cloth they sit on). */
-export function printBackground(print: PrintId): string {
-  return PRINT_BACKGROUND[print];
-}
