@@ -24,7 +24,9 @@ import { GameEngineState } from '../engine/types';
 // room's cracked wall drops nothing, walking into the room reveals its
 // secret); a walled boss arena whose gates open when the boss unlocks, with
 // the boss appearing at the arena's centre. SIMULATION_VERSION follows.
-export const REPLAY_VERSION = 8;
+// v9: Normal campaign enemies move and detect like Hard's (Normal keeps its
+// lives and gentler ability timing). SIMULATION_VERSION follows.
+export const REPLAY_VERSION = 9;
 
 export interface ReplayFrame {
   tick: number;
