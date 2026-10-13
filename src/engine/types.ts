@@ -20,6 +20,7 @@ import { EnemyAbilityKind, EnemyArchetype } from '../content/enemies';
 import { CampaignEventDefinition } from '../content/campaignEvents';
 import { StoryUpgradeId } from '../story/progress';
 import type { CampaignLoadout } from '../content/hubShop';
+import type { VillageSquareRuntimeState, VillageVisitConfig } from '../content/villageSquare';
 import type { DifficultyId } from './difficulty';
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
@@ -423,6 +424,9 @@ export interface CampaignRuntimeState {
   fallNoticeUntilTick?: number;
   // Scripted waves for the defense objective; missing without a script.
   waves?: CampaignWaveRuntimeState | null;
+  // The village square's requests and stall this mission; missing without
+  // GameConfig.village.
+  village?: VillageSquareRuntimeState;
 }
 
 export type CellVisibility = 'hidden' | 'explored' | 'visible';
@@ -500,6 +504,9 @@ export interface GameConfig {
   // Solo campaign only: hub consumables packed for this mission and the
   // permanent upgrade ranks (campaignLoadout.ts). Missing means none.
   loadout?: CampaignLoadout;
+  // Solo campaign only: standing, embers and requests for the village square
+  // (villageSquare.ts). Missing keeps the stall and request board closed.
+  village?: VillageVisitConfig;
 }
 
 export interface GameEngineState {

@@ -3,6 +3,7 @@ import type {
   CampaignBossArenaBounds,
   CampaignSecretRoomDefinition,
 } from './campaignMissions';
+import { WANDERING_VILLAGER, type VillageSquareLayout } from './villageSquare';
 
 export interface CampaignCell {
   x: number;
@@ -47,12 +48,58 @@ export interface CampaignStageLayout {
     fragment: CampaignSecretPlacement;
     burrow: CampaignSecretPlacement;
   };
+  // The safe village square around the entrance, where the hub's people,
+  // stall, request board and codex shrine stand inside the map.
+  square: VillageSquareLayout;
+}
+
+/**
+ * Every campaign map opens on the same 10x8 entrance district (x 1-10,
+ * y 1-8, pillars at 4,4 and 7,4, ways out east at x 11 and south at y 9), so
+ * every village square shares one plan. Props stand against the district's
+ * edges, clear of the four spawns and both ways out.
+ */
+function villageSquare(villagerA: string, villagerB: string): VillageSquareLayout {
+  return {
+    bounds: {
+      x0: 1, y0: 1, x1: 10, y1: 8
+    },
+    interactables: [
+      {
+        id: 'villager-a', kind: 'villager', x: 4, y: 1, villagerId: villagerA
+      },
+      {
+        id: 'board', kind: 'board', x: 6, y: 1
+      },
+      {
+        id: 'villager-wanderer',
+        kind: 'villager',
+        x: 8,
+        y: 1,
+        villagerId: WANDERING_VILLAGER.id,
+        minTier: WANDERING_VILLAGER.minTier,
+      },
+      {
+        id: 'villager-b', kind: 'villager', x: 1, y: 4, villagerId: villagerB
+      },
+      {
+        id: 'shop', kind: 'shop', x: 10, y: 6
+      },
+      {
+        id: 'shrine', kind: 'shrine', x: 2, y: 8
+      },
+      {
+        id: 'gate', kind: 'gate', x: 4, y: 8
+      },
+    ],
+  };
 }
 
 const LEAF_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
+  square: villageSquare('wren', 'hobb'),
   outerDistrict: { x: 20, y: 6 },
   rescueTargets: [{ x: 26, y: 7 }, { x: 12, y: 22 }],
   structure: { x: 24, y: 23 },
@@ -106,6 +153,7 @@ const SAND_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
+  square: villageSquare('saffi', 'doru'),
   outerDistrict: { x: 20, y: 2 },
   rescueTargets: [{ x: 5, y: 22 }, { x: 40, y: 6 }],
   structure: { x: 24, y: 24 },
@@ -159,6 +207,7 @@ const MIST_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
+  square: villageSquare('ondine', 'kell'),
   outerDistrict: { x: 20, y: 3 },
   rescueTargets: [{ x: 4, y: 24 }, { x: 36, y: 10 }],
   structure: { x: 22, y: 25 },
@@ -212,6 +261,7 @@ const CLOUD_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
+  square: villageSquare('brisa', 'tobin'),
   outerDistrict: { x: 6, y: 20 },
   rescueTargets: [{ x: 6, y: 28 }, { x: 40, y: 42 }],
   structure: { x: 24, y: 24 },
@@ -265,6 +315,7 @@ const STONE_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
+  square: villageSquare('marl', 'ysolde'),
   outerDistrict: { x: 6, y: 14 },
   rescueTargets: [{ x: 4, y: 13 }, { x: 33, y: 6 }],
   structure: { x: 25, y: 22 },
@@ -318,6 +369,7 @@ const AKATSUKI_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
+  square: villageSquare('ash', 'quill'),
   outerDistrict: { x: 17, y: 8 },
   rescueTargets: [{ x: 20, y: 9 }, { x: 26, y: 18 }],
   structure: { x: 21, y: 23 },
@@ -371,6 +423,7 @@ const WAR_50: CampaignStageLayout = {
   size: 50,
   playerSpawns: [{ x: 1, y: 1 }, { x: 9, y: 7 }, { x: 1, y: 7 }, { x: 9, y: 1 }],
   entrance: { x: 1, y: 1 },
+  square: villageSquare('vey', 'nim'),
   outerDistrict: { x: 20, y: 4 },
   rescueTargets: [{ x: 30, y: 6 }, { x: 6, y: 30 }],
   structure: { x: 22, y: 23 },
