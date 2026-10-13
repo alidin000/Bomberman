@@ -346,7 +346,9 @@ describe('online room server', () => {
     const server = await startOnlineServer({
       port: 0,
       reconnectGraceMs: 1000,
-      roundResultMs: 40,
+      // Long enough that the disconnect always lands inside the hold, even
+      // on a loaded machine; the check below waits past it.
+      roundResultMs: 400,
       tickIntervalMs: 1,
     });
     const first = await connect(server.port);
@@ -377,7 +379,7 @@ describe('online room server', () => {
       await waitFor(() => server.getRoomState(welcome.roomId)?.phase === 'round_end');
       second.socket.close();
       await waitFor(() => server.getRoomState(welcome.roomId)?.paused === true);
-      await wait(80);
+      await wait(500);
 
       expect(server.getRoomState(welcome.roomId)?.phase).toBe('round_end');
     } finally {
