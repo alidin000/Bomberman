@@ -24,7 +24,7 @@ import { normalizeSeed } from './random';
 import { getMatchDifficulty } from './difficulty';
 import { createTrainingSentries, isTrainingConfig, placeTrainingCharges } from './training';
 import { applyLoadoutAtInit } from './campaignLoadout';
-import { withVillageVisit } from './villageSquare';
+import { getActiveVillageSquare, withVillageVisit } from './villageSquare';
 
 const PLAYER_NAMES = ['player1', 'player2', 'player3', 'player4'];
 const ULTIMATE_COOLDOWN_MS = 12000;
@@ -228,6 +228,13 @@ function openingMonsters(
   );
 }
 
+// The village square is home ground: it starts explored, so its walls and
+// pillars draw with its paving from the first frame.
+function squareExploredAtStart(config: GameConfig): string[] {
+  const square = getActiveVillageSquare(config);
+  return square ? [...square.cellKeys].sort() : [];
+}
+
 export function createInitialState(config: GameConfig): GameEngineState {
   resetBombIdCounter();
   resetBossHazardIdCounter();
@@ -237,6 +244,7 @@ export function createInitialState(config: GameConfig): GameEngineState {
   // The config keeps the board without the room's charges, so a restart
   // lights them again.
   const { map, bombs } = placeTrainingCharges(config, safeMap);
+  const squareExplored = squareExploredAtStart(config);
   // The village square's requests and stall come from config.village.
   const campaignRuntime = withVillageVisit(createCampaignRuntimeState(config), config);
   const {
@@ -259,7 +267,7 @@ export function createInitialState(config: GameConfig): GameEngineState {
       : createBossForConfig({ ...config, map }, campaign?.bossArena),
     fogOfWar: {
       visible: [],
-      explored: [],
+      explored: squareExplored,
       sensedEnemies: [],
       sensedWalls: [],
     },
@@ -294,6 +302,7 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     state.config,
     createSpawnSafeMap(state.config.map, players)
   );
+  const squareExplored = squareExploredAtStart(state.config);
   const campaignRuntime = withVillageVisit(createCampaignRuntimeState(state.config), state.config);
   const {
     campaign,
@@ -316,7 +325,7 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
       : createBossForConfig({ ...state.config, map }, campaign?.bossArena),
     fogOfWar: {
       visible: [],
-      explored: [],
+      explored: squareExplored,
       sensedEnemies: [],
       sensedWalls: [],
     },

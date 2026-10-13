@@ -381,3 +381,12 @@ describe('the stall (CAMPAIGN_PURCHASE)', () => {
     expect(ward.campaign!.village!.embersSpent).toBe(50);
   });
 });
+
+describe('the square in the fog', () => {
+  it('starts explored in a campaign mission, so its walls draw from the first frame', () => {
+    const explored = new Set(mission('hiddenLeaf').fogOfWar.explored);
+    // Corners and the far pillar lie beyond the opening vision from 1,1.
+    ['10,8', '10,1', '1,8', '7,4'].forEach((key) => expect(explored.has(key), key).toBe(true));
+    expect(explored.has('20,20')).toBe(false);
+  });
+});
