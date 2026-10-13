@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { GameScene3D } from './GameScene3D';
 import { DEFAULT_GAME_PREFERENCES } from './gamePreferences';
 import { createInitialState } from '../../engine/initialState';
+import { gameReducer } from '../../engine/reducer';
 import { parseMapRows } from '../../engine/mapLoader';
 import { defaultMap } from '../../constants/contants';
 import { cellKey } from '../../engine/fogOfWar';
@@ -200,6 +201,31 @@ describe('the anime cast in the scene', () => {
     expect((clone.material as THREE.Material).transparent).toBe(true);
     const cloneInk = clone.parent?.children.find((child) => child.userData.castInk);
     expect(cloneInk?.visible).toBe(false);
+    view.unmount();
+  });
+
+  it('draws Naruto\'s shadow clones as his cast figure, smaller and glowing', async () => {
+    const start = versus();
+    const state = allVisible(gameReducer(start, { type: 'DROP_BOMB', playerId: start.players[0].id })!);
+    expect(state.bombs[0]?.kind).toBe('shadowClone');
+    const view = await mount(state);
+    view.frame();
+    const naruto = castFigureMesh('naruto').body;
+    const bodies = view.find((object) => (object as THREE.Mesh).geometry === naruto);
+    // Two Narutos in this match (P1 and P3) plus P1's clone.
+    expect(bodies).toHaveLength(3);
+    const glowing = bodies.filter((mesh) => (
+      ((mesh.material as THREE.MeshToonMaterial).emissiveIntensity ?? 0) > 0
+    ));
+    expect(glowing).toHaveLength(1);
+    const height = (mesh: THREE.Mesh) => {
+      mesh.updateWorldMatrix(true, false);
+      const box = new THREE.Box3().setFromObject(mesh);
+      return box.max.y - box.min.y;
+    };
+    const player = bodies.find((mesh) => !glowing.includes(mesh))!;
+    expect(height(glowing[0])).toBeLessThan(height(player));
+    expect(height(glowing[0])).toBeGreaterThan(height(player) * 0.6);
     view.unmount();
   });
 

@@ -143,6 +143,7 @@ import {
 import { VillageScarf } from './scene/VillageSquareScarf';
 import { CastFigure } from './scene/cast/CastFigure';
 import { castFigureMesh } from './scene/cast/castGeometry';
+import { castMaterial } from './scene/cast/castMaterial';
 import { CastPrewarm } from './scene/cast/CastPrewarm';
 import { FIGHTER_EFFECT_COLORS } from './scene/cast/fighterLooks';
 import { BOMB_SPIN_RAD_PER_S, JUTSU_COLORS, jutsuOf } from './scene/jutsu/jutsuLooks';
@@ -519,6 +520,12 @@ function bombAgeMs(clock: BombClock | undefined, x: number, y: number): number |
   return bomb?.ageMs ?? null;
 }
 
+// Naruto's shadow clones: his cast figure at three quarters of his height,
+// lit with a chakra glow (a uniform on a pooled cast material, so no new
+// shader program).
+const SHADOW_CLONE_SCALE = 0.76;
+const shadowCloneMaterial = () => castMaterial({ glow: '#f97316', glowIntensity: 0.32 });
+
 function BombMesh({
   x, y, kind, cloneOffsets = [],
 }: {
@@ -632,70 +639,38 @@ function BombMesh({
 
       {(kind === 'shadowClone' || kind === 'shadowCloneBarrage') && (
         <>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.22, 0]}>
+          {/* The fuse ring: it pulses with the bomb, so danger reads as before. */}
+          <mesh ref={coreRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.22, 0]}>
             <torusGeometry args={[0.33, 0.026, 8, 34]} />
             <meshStandardMaterial color="#fed7aa" emissive="#f97316" emissiveIntensity={0.64} transparent opacity={0.62} />
           </mesh>
-          <mesh ref={coreRef} position={[0, 0.02, 0]} castShadow>
-            <capsuleGeometry args={[0.11, 0.32, 6, 12]} />
-            <meshStandardMaterial color="#ff8a00" emissive="#f97316" emissiveIntensity={0.34} roughness={0.5} />
-          </mesh>
-          <mesh position={[0, 0.31, 0.03]} castShadow>
-            <sphereGeometry args={[0.14, 16, 16]} />
-            <meshStandardMaterial color="#ffedd5" emissive="#f97316" emissiveIntensity={0.18} roughness={0.45} />
-          </mesh>
-          <mesh position={[0, 0.38, 0.12]} castShadow>
-            <boxGeometry args={[0.29, 0.045, 0.035]} />
-            <meshStandardMaterial color="#1d4ed8" emissive="#2563eb" emissiveIntensity={0.28} />
-          </mesh>
-          {[-0.08, 0.08].map((side) => (
-            <mesh key={`clone-hair-${side}`} position={[side, 0.49, 0.01]} rotation={[0.15, 0, side > 0 ? -0.32 : 0.32]}>
-              <coneGeometry args={[0.055, 0.18, 6]} />
-              <meshStandardMaterial color="#facc15" emissive="#f59e0b" emissiveIntensity={0.24} />
-            </mesh>
-          ))}
-          {[-0.16, 0.16].map((side) => (
-            <mesh key={`clone-arm-${side}`} position={[side, 0.04, 0.02]} rotation={[0.25, 0, side > 0 ? -0.7 : 0.7]}>
-              <capsuleGeometry args={[0.032, 0.24, 4, 6]} />
-              <meshStandardMaterial color="#2563eb" emissive="#1d4ed8" emissiveIntensity={0.12} />
-            </mesh>
-          ))}
+          {/* The clone is Naruto's own cast figure, a little smaller and
+              glowing with chakra, so it never reads as the player. */}
+          <CastFigure
+            figure={castFigureMesh('naruto')}
+            material={shadowCloneMaterial()}
+            position={[0, -height / baseScale, 0]}
+            scale={SHADOW_CLONE_SCALE / baseScale}
+          />
           {[-0.22, 0.22].map((side) => (
             <mesh key={`clone-smoke-${side}`} position={[side, -0.16, side > 0 ? -0.08 : 0.08]} scale={[1.2, 0.66, 1.2]}>
               <sphereGeometry args={[0.1, 12, 12]} />
               <meshStandardMaterial color="#f8fafc" emissive="#e5e7eb" emissiveIntensity={0.2} transparent opacity={0.62} />
             </mesh>
           ))}
-          <mesh position={[0, 0.2, 0]}>
-            <sphereGeometry args={[0.07, 16, 16]} />
-            <meshStandardMaterial color="#ffedd5" emissive="#f97316" emissiveIntensity={0.9} transparent opacity={0.68} />
-          </mesh>
           <group ref={cloneFormationRef} visible={false}>
             {cloneOffsets.map((offset, index) => (
               <group
                 key={`shadow-clone-copy-${index}`}
-                position={[offset.x / baseScale, 0.04, offset.y / baseScale]}
+                position={[offset.x / baseScale, 0, offset.y / baseScale]}
                 rotation={[0, (index - 1) * 0.55, 0]}
-                scale={0.78}
               >
-                <mesh castShadow>
-                  <capsuleGeometry args={[0.11, 0.32, 6, 10]} />
-                  <meshStandardMaterial color="#ff8a00" emissive="#f97316" emissiveIntensity={0.42} roughness={0.5} />
-                </mesh>
-                <mesh position={[0, 0.29, 0.03]} castShadow>
-                  <sphereGeometry args={[0.14, 12, 12]} />
-                  <meshStandardMaterial color="#ffedd5" emissive="#f97316" emissiveIntensity={0.24} roughness={0.45} />
-                </mesh>
-                <mesh position={[0, 0.36, 0.12]} castShadow>
-                  <boxGeometry args={[0.29, 0.045, 0.035]} />
-                  <meshStandardMaterial color="#1d4ed8" emissive="#2563eb" emissiveIntensity={0.34} />
-                </mesh>
-                {[-0.08, 0.08].map((side) => (
-                  <mesh key={`copy-hair-${side}`} position={[side, 0.47, 0.01]} rotation={[0.15, 0, side > 0 ? -0.32 : 0.32]}>
-                    <coneGeometry args={[0.055, 0.18, 6]} />
-                    <meshStandardMaterial color="#facc15" emissive="#f59e0b" emissiveIntensity={0.32} />
-                  </mesh>
-                ))}
+                <CastFigure
+                  figure={castFigureMesh('naruto')}
+                  material={shadowCloneMaterial()}
+                  position={[0, -height / baseScale, 0]}
+                  scale={SHADOW_CLONE_SCALE / baseScale}
+                />
               </group>
             ))}
           </group>
