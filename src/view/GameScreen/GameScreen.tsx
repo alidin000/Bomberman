@@ -529,7 +529,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
   // The match's own roster when it is loaded; the route's count before that.
   // CPU slots take no keys, so they get no row.
   const controlRows = useMemo<ControlsRow[]>(() => (
-    Array.from({ length: characterIds.length || activePlayerCount }, (_, index) => {
+    Array.from({ length: characterIds.length || activePlayerCount }, (_, index): ControlsRow => {
       const playerNumber = String(index + 1);
       const bindings = keyBindings[playerNumber] ?? DEFAULT_KEY_BINDINGS[playerNumber];
       const characterId = characterIds[index];

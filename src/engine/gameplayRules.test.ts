@@ -107,7 +107,7 @@ describe('seeded crate drops', () => {
     ) as Record<(typeof genericPowerUpOptions)[number], number>;
     for (let seed = 1; seed <= 200; seed += 1) {
       blastCrateRow(seed).forEach((power) => {
-        if (power) counts[power] += 1;
+        if (power) counts[power as keyof typeof counts] += 1;
       });
     }
     genericPowerUpOptions.forEach((power) => expect(counts[power]).toBeGreaterThan(0));

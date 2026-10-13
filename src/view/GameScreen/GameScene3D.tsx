@@ -2147,7 +2147,7 @@ function FlyingThunderMarker({ x, y }: { x: number; y: number }) {
       <group position={[0, 0.36, 0]}>
         <HiraishinKunai lean={0.28} />
       </group>
-      <PooledPointLight priority={LIGHT_PRIORITY.pickup} color="#facc15" distance={2.2} intensity={0.5} />
+      <PooledPointLight priority={LIGHT_PRIORITY.marker} color="#facc15" distance={2.2} intensity={0.5} />
     </group>
   );
 }

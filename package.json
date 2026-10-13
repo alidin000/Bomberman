@@ -24,6 +24,7 @@
     "server:start": "node server-dist/index.mjs",
     "build": "vite build",
     "lint": "eslint src server --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit -p .",
     "test": "vitest run --coverage",
     "test:e2e": "npm run build && npm run server:build && playwright test",
     "preview": "vite preview"
