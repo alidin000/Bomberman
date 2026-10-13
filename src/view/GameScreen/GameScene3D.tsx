@@ -78,8 +78,7 @@ import { LIGHT_PRIORITY, PooledLightHandle } from './scene/lightPoolSlots';
 import { LABEL_SPRITES, labelSpriteKey } from './scene/labelSprites';
 import { ShaderWarmup } from './scene/ShaderWarmup';
 import {
-  FIGHTER_INK_HIGH_CONTRAST, FIGHTER_INK_MATERIAL, cachedInkHull, fighterToonMaterial, inkHullFor,
-  setInkViewportHeight,
+  FIGHTER_INK_HIGH_CONTRAST, FIGHTER_INK_MATERIAL, setInkViewportHeight,
 } from './scene/fighterInk';
 import { MAX_FRAME_DELTA_MS } from '../../hooks/engineLoop';
 import {
@@ -136,12 +135,16 @@ import { PULSE_HZ, pulseRate } from './scene/flashSafety';
 import {
   HighContrastOverride, highContrastPalette, useHighContrastMaterials,
 } from './scene/highContrast';
-import { HONORED_COSMETIC_TIER } from '../../content/villageSquare';
+import type { ScarfId } from '../../content/villageSquare';
 import { VillageRequestMarks, VillageSquare, closedCellsKey } from './scene/VillageSquare';
 import {
   activeSquareLayout, squareBlastStop, villageMarks, villageMarksFromKey, villageMarksKey,
 } from './scene/VillageSquareModels';
-import { HonoredScarf } from './scene/VillageSquareScarf';
+import { VillageScarf } from './scene/VillageSquareScarf';
+import { CastFigure } from './scene/cast/CastFigure';
+import { castFigureMesh } from './scene/cast/castGeometry';
+import { CastPrewarm } from './scene/cast/CastPrewarm';
+import { FIGHTER_EFFECT_COLORS } from './scene/cast/fighterLooks';
 import { BOMB_SPIN_RAD_PER_S, JUTSU_COLORS, jutsuOf } from './scene/jutsu/jutsuLooks';
 import {
   ChidoriSparks, ClayBird, HiraishinKunai, KunaiStrike, LightningStrike, RasenshurikenBlades, SandSpikes,
@@ -262,34 +265,6 @@ const BOMB_STYLE: Record<BombKind, { color: string; emissive: string }> = {
   sandTsunami: { color: '#d6a45d', emissive: '#f97316' },
   instantTeleport: { color: '#fef3c7', emissive: '#facc15' },
   tsukuyomi: { color: '#111827', emissive: '#ef4444' },
-};
-
-const CHARACTER_VISUALS: Record<CharacterId, {
-  body: string;
-  accent: string;
-  hair: string;
-  aura: string;
-  trim: string;
-  headband: string;
-}> = {
-  deidara: {
-    body: '#111827', accent: '#d92323', hair: '#f8fafc', aura: '#ff8a00', trim: '#f8fafc', headband: '#1f2937'
-  },
-  naruto: {
-    body: '#ff8a00', accent: '#2563eb', hair: '#facc15', aura: '#f97316', trim: '#111827', headband: '#1d4ed8'
-  },
-  sasuke: {
-    body: '#1e293b', accent: '#60a5fa', hair: '#111827', aura: '#60a5fa', trim: '#7c3aed', headband: '#0f172a'
-  },
-  gaara: {
-    body: '#7f1d1d', accent: '#f59e0b', hair: '#dc2626', aura: '#d6a45d', trim: '#3b2412', headband: '#7f1d1d'
-  },
-  minato: {
-    body: '#2563eb', accent: '#facc15', hair: '#fde68a', aura: '#fde047', trim: '#f8fafc', headband: '#1e40af'
-  },
-  itachi: {
-    body: '#111827', accent: '#dc2626', hair: '#111827', aura: '#ef4444', trim: '#7f1d1d', headband: '#374151'
-  },
 };
 
 function TextSprite({
@@ -1079,240 +1054,6 @@ function ShadowBlob() {
   );
 }
 
-type CharacterVisual = (typeof CHARACTER_VISUALS)[CharacterId];
-
-function CharacterHair({
-  characterId,
-  visual,
-  ghost,
-}: {
-  characterId: CharacterId;
-  visual: CharacterVisual;
-  ghost: boolean;
-}) {
-  const hair = fighterToonMaterial(visual.hair, { ghost });
-
-  if (characterId === 'naruto' || characterId === 'minato') {
-    const spikes = characterId === 'naruto'
-      ? [-0.22, -0.11, 0, 0.11, 0.22]
-      : [-0.26, -0.14, 0, 0.14, 0.26];
-    return (
-      <>
-        <mesh position={[0, 0.45, -0.03]} scale={[1.08, 0.58, 0.95]} material={hair} castShadow>
-          <sphereGeometry args={[0.2, 16, 16]} />
-        </mesh>
-        {spikes.map((side) => (
-          <mesh
-            key={`${characterId}-hair-spike-${side}`}
-            position={[side, 0.58 - Math.abs(side) * 0.12, 0.03]}
-            rotation={[0.38, side * 3.2, side > 0 ? -0.64 : 0.64]}
-            material={hair}
-            castShadow
-          >
-            <coneGeometry args={[0.07, characterId === 'minato' ? 0.3 : 0.24, 8]} />
-          </mesh>
-        ))}
-      </>
-    );
-  }
-
-  if (characterId === 'sasuke') {
-    const spikes = [
-      { position: [-0.2, 0.5, -0.04], rotation: [0.2, -0.9, 0.8] },
-      { position: [-0.08, 0.58, -0.08], rotation: [0.05, -0.3, 0.35] },
-      { position: [0.1, 0.58, -0.08], rotation: [0.05, 0.3, -0.35] },
-      { position: [0.22, 0.5, -0.04], rotation: [0.2, 0.9, -0.8] },
-    ];
-    return (
-      <>
-        <mesh position={[0, 0.45, -0.04]} scale={[1.12, 0.62, 0.95]} material={hair} castShadow>
-          <sphereGeometry args={[0.2, 16, 16]} />
-        </mesh>
-        {spikes.map((spike, index) => (
-          <mesh
-            key={`sasuke-hair-${index}`}
-            position={spike.position as [number, number, number]}
-            rotation={spike.rotation as [number, number, number]}
-            material={hair}
-            castShadow
-          >
-            <coneGeometry args={[0.075, 0.3, 8]} />
-          </mesh>
-        ))}
-      </>
-    );
-  }
-
-  if (characterId === 'deidara') {
-    return (
-      <>
-        <mesh position={[0, 0.45, -0.03]} scale={[1.1, 0.58, 0.95]} material={hair} castShadow>
-          <sphereGeometry args={[0.2, 16, 16]} />
-        </mesh>
-        <mesh position={[-0.05, 0.65, -0.04]} material={hair} castShadow>
-          <sphereGeometry args={[0.13, 14, 14]} />
-        </mesh>
-        <mesh position={[0.17, 0.34, 0.08]} rotation={[0.28, 0, -0.18]} material={hair} castShadow>
-          <capsuleGeometry args={[0.04, 0.38, 5, 8]} />
-        </mesh>
-      </>
-    );
-  }
-
-  if (characterId === 'gaara') {
-    return (
-      <>
-        <mesh position={[0, 0.45, -0.03]} scale={[1.02, 0.52, 0.92]} material={hair} castShadow>
-          <sphereGeometry args={[0.2, 16, 16]} />
-        </mesh>
-        {[-0.14, 0, 0.14].map((side) => (
-          <mesh
-            key={`gaara-hair-${side}`}
-            position={[side, 0.56, 0.04]}
-            rotation={[0.62, side * 2.2, side > 0 ? -0.4 : 0.4]}
-            material={hair}
-            castShadow
-          >
-            <coneGeometry args={[0.055, 0.2, 7]} />
-          </mesh>
-        ))}
-      </>
-    );
-  }
-
-  return (
-    <>
-      <mesh position={[0, 0.45, -0.03]} scale={[1.06, 0.6, 0.95]} material={hair} castShadow>
-        <sphereGeometry args={[0.2, 16, 16]} />
-      </mesh>
-      <mesh position={[-0.15, 0.28, 0.02]} rotation={[0.12, 0, 0.2]} material={hair} castShadow>
-        <capsuleGeometry args={[0.045, 0.34, 5, 8]} />
-      </mesh>
-      <mesh position={[0.15, 0.28, 0.02]} rotation={[0.12, 0, -0.2]} material={hair} castShadow>
-        <capsuleGeometry args={[0.045, 0.34, 5, 8]} />
-      </mesh>
-    </>
-  );
-}
-
-function CharacterAccessory({
-  characterId,
-  visual,
-  ghost,
-}: {
-  characterId: CharacterId;
-  visual: CharacterVisual;
-  ghost: boolean;
-}) {
-  if (characterId === 'naruto') {
-    // Face marks stay solid under Ghost, as before.
-    const mark = fighterToonMaterial('#111827');
-    return (
-      <>
-        {[-0.1, 0.1].map((side) => (
-          <React.Fragment key={`naruto-face-${side}`}>
-            <mesh position={[side, 0.31, 0.205]} rotation={[0, 0, side > 0 ? 0.2 : -0.2]} material={mark}>
-              <boxGeometry args={[0.07, 0.008, 0.012]} />
-            </mesh>
-            <mesh position={[side, 0.27, 0.205]} rotation={[0, 0, side > 0 ? -0.2 : 0.2]} material={mark}>
-              <boxGeometry args={[0.07, 0.008, 0.012]} />
-            </mesh>
-          </React.Fragment>
-        ))}
-      </>
-    );
-  }
-
-  if (characterId === 'sasuke') {
-    return (
-      <>
-        <mesh
-          position={[0, -0.19, 0.16]}
-          rotation={[Math.PI / 2, 0, 0]}
-          material={fighterToonMaterial(visual.trim, { ghost, glow: visual.trim, glowIntensity: 0.18 })}
-        >
-          <torusGeometry args={[0.24, 0.035, 8, 28]} />
-        </mesh>
-        <mesh position={[0, -0.2, 0.2]} rotation={[0.2, 0, 0]} material={fighterToonMaterial(visual.trim, { ghost })}>
-          <boxGeometry args={[0.46, 0.05, 0.04]} />
-        </mesh>
-      </>
-    );
-  }
-
-  if (characterId === 'deidara') {
-    return (
-      <>
-        <mesh
-          position={[-0.24, 0.13, 0.02]}
-          scale={[0.8, 0.55, 0.7]}
-          material={fighterToonMaterial('#f8fafc', { ghost, glow: '#f97316', glowIntensity: 0.12 })}
-          castShadow
-        >
-          <sphereGeometry args={[0.11, 12, 12]} />
-        </mesh>
-        <mesh position={[-0.28, 0.14, 0.12]} rotation={[0.2, 0, 0.6]} material={fighterToonMaterial('#f8fafc', { ghost })}>
-          <coneGeometry args={[0.035, 0.16, 8]} />
-        </mesh>
-      </>
-    );
-  }
-
-  if (characterId === 'gaara') {
-    return (
-      <group position={[0.24, 0.06, -0.2]} rotation={[0.18, 0.5, -0.28]}>
-        <mesh material={fighterToonMaterial('#9a5f2b', { ghost, glow: '#d6a45d', glowIntensity: 0.08 })} castShadow>
-          <sphereGeometry args={[0.19, 16, 16]} />
-        </mesh>
-        <mesh rotation={[Math.PI / 2, 0, 0]} material={fighterToonMaterial('#2f1c16', { ghost })}>
-          <torusGeometry args={[0.14, 0.018, 8, 24]} />
-        </mesh>
-      </group>
-    );
-  }
-
-  if (characterId === 'minato') {
-    return (
-      <>
-        <mesh
-          position={[0, -0.08, -0.16]}
-          rotation={[0.15, 0, 0]}
-          material={fighterToonMaterial('#f8fafc', { ghost, glow: '#fde047', glowIntensity: 0.06 })}
-          castShadow
-        >
-          <boxGeometry args={[0.58, 0.68, 0.045]} />
-        </mesh>
-        <mesh position={[0, 0.08, -0.19]} material={fighterToonMaterial('#dc2626', { ghost })}>
-          <boxGeometry args={[0.5, 0.06, 0.05]} />
-        </mesh>
-      </>
-    );
-  }
-
-  if (characterId === 'itachi') {
-    const cloud = fighterToonMaterial('#dc2626', { ghost, glow: '#ef4444', glowIntensity: 0.28 });
-    return (
-      <>
-        {[-0.12, 0.12].map((side) => (
-          <mesh key={`itachi-cloud-${side}`} position={[side, 0.0, 0.2]} material={cloud}>
-            <sphereGeometry args={[0.055, 10, 10]} />
-          </mesh>
-        ))}
-        <mesh
-          position={[0, -0.22, -0.02]}
-          scale={[1.05, 0.72, 0.92]}
-          material={fighterToonMaterial('#050507', { ghost })}
-          castShadow
-        >
-          <sphereGeometry args={[0.22, 12, 12]} />
-        </mesh>
-      </>
-    );
-  }
-
-  return null;
-}
-
 function isTransformationActive(player: PlayerState): boolean {
   return player.ultimateCharge >= 100
     || player.specialState === 'Kurama Mode'
@@ -1439,15 +1180,15 @@ function PlayerMesh({
   slot,
   cpu = false,
   pickupChips,
-  scarf = false,
+  scarf,
 }: {
   player: PlayerState;
   state: GameEngineState;
   slot?: number;
   cpu?: boolean;
   pickupChips?: Map<Power, PlayerTagSprite>;
-  /** Honored standing (village square): the ember-thread scarf. */
-  scarf?: boolean;
+  /** The scarf the player chose to wear (GameConfig.village.scarf). */
+  scarf?: ScarfId;
 }) {
   const ref = useRef<THREE.Group>(null);
   // Everything that falls with the fighter; the pickup label stays outside.
@@ -1464,21 +1205,18 @@ function PlayerMesh({
   const marks = useMemo(() => ({
     ring: { playerRing: player.id },
     pickup: { pickupLabel: player.id },
+    body: { fighterBody: player.id, castFigure: player.characterId },
     ink: { fighterInk: player.id },
-  }), [player.id]);
+  }), [player.characterId, player.id]);
   const motionId = useMemo(() => playerMotionId(player.id), [player.id]);
   const motion = React.useContext(MotionContext);
   const motionRef = useRef(0);
   const ghost = isPowerUpActive(state, player.id, 'Ghost');
   const invincible = isPowerUpActive(state, player.id, 'Invincibility');
-  const visual = CHARACTER_VISUALS[player.characterId];
-  // The ink hull is built from the first figure of each character to mount
-  // (in the countdown) and shared by every later one.
-  const figureRef = useRef<THREE.Group>(null);
-  const [inkHull, setInkHull] = useState(() => cachedInkHull(player.characterId));
-  useLayoutEffect(() => {
-    setInkHull(inkHullFor(player.characterId, figureRef.current));
-  }, [player.characterId]);
+  const visual = FIGHTER_EFFECT_COLORS[player.characterId];
+  // The anime figure (scene/cast): one merged body and its ink line, built
+  // once per character and shared by every fighter who plays it.
+  const figure = castFigureMesh(player.characterId);
   const reducedMotion = React.useContext(ReducedMotionContext);
   const strideRef = useRef({ phase: 0, x: NaN, z: 0 });
   useSmoothWorldPosition(
@@ -1490,20 +1228,6 @@ function PlayerMesh({
     playerMotionId(player.id),
     player.facing ? FACING_HEADING[player.facing] : undefined,
   );
-
-  // Toggling `transparent` changes the shader's OPAQUE define, which three.js
-  // only picks up after needsUpdate. A light-count change used to force that
-  // recompile by accident; with a fixed light pool it has to be explicit.
-  useEffect(() => {
-    bodyRef.current?.traverse((object) => {
-      const { material } = object as THREE.Mesh;
-      if (!material) return;
-      (Array.isArray(material) ? material : [material]).forEach((entry) => {
-        const target = entry;
-        target.needsUpdate = true;
-      });
-    });
-  }, [ghost]);
 
   const firstPickupChip = useMemo(
     () => (pickupChips ? pickupChips.values().next().value as PlayerTagSprite | undefined : undefined),
@@ -1620,93 +1344,15 @@ function PlayerMesh({
         {slot !== undefined && <PlayerTag slot={slot} color={playerSlotColor(slot - 1)} cpu={cpu} />}
         <group ref={poseRef} position={[0, FEET_Y, 0]}>
           <group position={[0, -FEET_Y, 0]}>
-            <group ref={figureRef}>
-              <mesh
-                position={[0, -0.04, 0]}
-                material={fighterToonMaterial(visual.body, { ghost, glow: visual.body })}
-                castShadow
-              >
-                <capsuleGeometry args={[0.19, 0.26, 6, 10]} />
-              </mesh>
-              <mesh
-                position={[0, -0.08, 0.16]}
-                material={fighterToonMaterial(visual.trim, { ghost, glow: visual.trim })}
-                castShadow
-              >
-                <boxGeometry args={[0.38, 0.26, 0.035]} />
-              </mesh>
-              <mesh position={[0, 0.32, 0.02]} material={fighterToonMaterial('#f2c7a2', { ghost })} castShadow>
-                <sphereGeometry args={[0.225, 10, 8]} />
-              </mesh>
-              <CharacterHair characterId={player.characterId} visual={visual} ghost={ghost} />
-              <mesh
-                position={[0, 0.35, 0.2]}
-                material={fighterToonMaterial(visual.headband, { ghost, glow: visual.headband, glowIntensity: 0.18 })}
-                castShadow
-              >
-                <boxGeometry args={[0.42, 0.055, 0.04]} />
-              </mesh>
-              <mesh position={[0, 0.35, 0.225]} material={fighterToonMaterial('#d1d5db', { ghost })} castShadow>
-                <boxGeometry args={[0.16, 0.05, 0.018]} />
-              </mesh>
-              {[-0.22, 0.22].map((side) => (
-                <mesh
-                  key={`${player.id}-arm-${side}`}
-                  position={[side, 0.04, 0.04]}
-                  rotation={[0.35, 0, side > 0 ? -0.55 : 0.55]}
-                  material={fighterToonMaterial(visual.accent, { ghost })}
-                  castShadow
-                >
-                  <capsuleGeometry args={[0.055, 0.34, 5, 8]} />
-                </mesh>
-              ))}
-              {[-0.09, 0.09].map((side) => (
-                <mesh
-                  key={`${player.id}-leg-${side}`}
-                  position={[side, -0.36, 0.02]}
-                  rotation={[0.18, 0, side > 0 ? -0.08 : 0.08]}
-                  material={fighterToonMaterial(visual.body, { ghost })}
-                  castShadow
-                >
-                  <capsuleGeometry args={[0.052, 0.34, 5, 8]} />
-                </mesh>
-              ))}
-              {[-0.1, 0.1].map((side) => (
-                <mesh
-                  key={`${player.id}-shoe-${side}`}
-                  position={[side, -0.55, 0.1]}
-                  rotation={[0.2, 0, 0]}
-                  material={fighterToonMaterial('#111827', { ghost })}
-                  castShadow
-                >
-                  <boxGeometry args={[0.13, 0.06, 0.2]} />
-                </mesh>
-              ))}
-              {[-0.09, 0.09].map((side) => (
-                <mesh key={`${player.id}-eye-${side}`} position={[side, 0.34, 0.17]} material={fighterToonMaterial('#111827')}>
-                  <sphereGeometry args={[0.025, 8, 8]} />
-                </mesh>
-              ))}
-              <CharacterAccessory characterId={player.characterId} visual={visual} ghost={ghost} />
-              <mesh
-                position={[0, -0.27, -0.08]}
-                rotation={[Math.PI / 2, 0, Math.PI / 2]}
-                material={fighterToonMaterial(visual.accent, { glow: visual.accent, glowIntensity: 0.12 })}
-                castShadow
-              >
-                <cylinderGeometry args={[0.075, 0.075, 0.42, 12]} />
-              </mesh>
-            </group>
-            {scarf && <HonoredScarf hidden={ghost} />}
-            {/* The ink line; Ghost drops it with the solid look. */}
-            {inkHull && (
-              <mesh
-                geometry={inkHull}
-                material={FIGHTER_INK_MATERIAL}
-                visible={!ghost}
-                userData={marks.ink}
-              />
-            )}
+            {/* Ghost: see-through, and the ink line goes with the solid look. */}
+            <CastFigure
+              figure={figure}
+              seeThrough={ghost}
+              position={[0, FEET_Y, 0]}
+              bodyMark={marks.body}
+              inkMark={marks.ink}
+            />
+            {scarf && <VillageScarf scarf={scarf} hidden={ghost} />}
             {invincible && (
               <>
                 <mesh position={[0, 0.04, 0]}>
@@ -3210,11 +2856,13 @@ function SceneContentBase({
   );
   const villageMarksCells = villageMarksKey(villageMarks(state.campaign));
   const requestMarks = useMemo(() => villageMarksFromKey(villageMarksCells), [villageMarksCells]);
-  const honoredScarf = !!villageSquare && villageTier === HONORED_COSMETIC_TIER;
+  // The scarf the player chose, worn on the mission's square map (render only).
+  const villageScarf = villageSquare ? state.config.village?.scarf : undefined;
 
   return (
     <LightPool>
       <ShaderWarmupMemo withBoss={state.config.mode === 'solo'} withVillage={!!villageSquare} />
+      <CastPrewarm stageId={state.campaign?.stageId} square={villageSquare} />
       <CameraRigMemo state={state} preferences={preferences} impact={impact} />
       <StageAtmosphere look={look} farEdgeZ={toWorld(0, -BOARD_LIP)[2]} />
       <FloorMemo
@@ -3309,7 +2957,7 @@ function SceneContentBase({
           slot={multiplayer ? index + 1 : undefined}
           cpu={multiplayer && isCpuSlot(state.config, index)}
           pickupChips={cueChips.pickups}
-          scarf={honoredScarf && index === 0}
+          scarf={index === 0 ? villageScarf : undefined}
         />
       ))}
       <KoMarkers players={state.players} chips={cueChips.ko} />

@@ -11,7 +11,10 @@ import {
   ReputationTierId, VillageInteractable, VillageSquareLayout, presentInteractables,
   reachableInteractable,
 } from '../../../content/villageSquare';
+import { isCastId } from '../../../content/animeCast';
 import { FIGHTER_INK_MATERIAL } from './fighterInk';
+import { CastFigure } from './cast/CastFigure';
+import { castFigureMesh } from './cast/castGeometry';
 import { tokenToonMaterial } from './inkedToken';
 import { PLAYER_TAG_SPRITES, PlayerTagSprite, chipKey } from './playerTags';
 import {
@@ -121,6 +124,13 @@ export function closedCellsKey(square: VillageSquareLayout, map: GameMap): strin
   return key;
 }
 
+// A cast villager is shrunk, if need be, to stand under their prompt.
+const CAST_VILLAGER_TOP = PROMPT_HEIGHT.villager - 0.06;
+
+/**
+ * A villager: a canon cast member (content/animeCast.ts SQUARE_CAST) is
+ * drawn as their anime figure; anyone else keeps the square's token figure.
+ */
 function Villager({
   item,
   square,
@@ -130,17 +140,25 @@ function Villager({
   square: VillageSquareLayout;
   groupRef: (group: THREE.Group | null) => void;
 }) {
-  const token = villagerToken(item.villagerId ?? item.id);
+  const id = item.villagerId ?? item.id;
+  const cast = isCastId(id) ? castFigureMesh(id) : null;
+  const token = cast ? null : villagerToken(id);
   const [wx, , wz] = toWorld(item.x, item.y);
-  const marks = useMemo(() => ({ villageProp: 'villager', interactable: item.id }), [item.id]);
+  const marks = useMemo(() => ({
+    villageProp: 'villager', interactable: item.id, castFigure: cast ? id : undefined,
+  }), [cast, id, item.id]);
+  const fit = cast ? Math.min(1, CAST_VILLAGER_TOP / (cast.body.boundingBox?.max.y ?? 1)) : 1;
   return (
     <group
       ref={groupRef}
       position={[wx, 0, wz]}
       rotation={[0, propYaw(item, square), 0]}
     >
-      <mesh geometry={token.body} material={TOKEN_MATERIAL} castShadow userData={marks} />
-      {token.ink && <mesh geometry={token.ink} material={FIGHTER_INK_MATERIAL} />}
+      {cast && <CastFigure figure={cast} scale={fit} bodyMark={marks} />}
+      {token && (
+        <mesh geometry={token.body} material={TOKEN_MATERIAL} castShadow userData={marks} />
+      )}
+      {token?.ink && <mesh geometry={token.ink} material={FIGHTER_INK_MATERIAL} />}
     </group>
   );
 }

@@ -9,12 +9,7 @@ import {
   MonsterPose,
   monsterLookFor,
 } from './monsterLooks';
-import {
-  MONSTER_FIGURE_SCALE,
-  MONSTER_FIGURE_TONES,
-  getMonsterFigureGeometries,
-  getMonsterFigureMaterials,
-} from './MonsterFigure';
+import { castMaterial } from './cast/castMaterial';
 import {
   BOSS_FIGURE_BOUNDS,
   BOSS_FIGURE_TONES,
@@ -60,33 +55,20 @@ describe('enemy silhouettes', () => {
     expect(new Set(forkHeads).size).toBe(forkKind.length);
   });
 
-  it('draws each archetype from distinct shared geometry that keeps under its nameplate', () => {
-    // MonsterNameplate hangs at 0.95; its lower bar reaches 0.1 below that.
-    const nameplateBottom = 0.95 - 0.1;
-    const headgear = new Set<string>();
-    ARCHETYPES.forEach((archetype) => {
-      const geometries = getMonsterFigureGeometries(archetype);
-      // Shared: the second monster of an archetype reuses the first one's buffers.
-      expect(getMonsterFigureGeometries(archetype)).toBe(geometries);
-      const box = bounds(MONSTER_FIGURE_TONES.map((tone) => geometries[tone]));
-      expect((box.max.y * MONSTER_FIGURE_SCALE) + MAX_MONSTER_LIFT).toBeLessThan(nameplateBottom);
-      expect(reach(MONSTER_FIGURE_TONES.map((tone) => geometries[tone])) * MONSTER_FIGURE_SCALE)
-        .toBeLessThan(0.62);
-      const trim = geometries.trim.getAttribute('position');
-      headgear.add(`${trim.count}:${geometries.trim.boundingBox?.max.y.toFixed(3)}`);
+  // Figure geometry and fit: cast/castFigures.test.ts.
+  it('reuses one pooled cast material per look instead of creating them per monster', () => {
+    const first = castMaterial();
+    expect(castMaterial()).toBe(first);
+    const clone = castMaterial({ translucent: true, glow: '#7dd3fc', glowIntensity: 0.22 });
+    expect(clone).not.toBe(first);
+    expect(clone.transparent).toBe(true);
+    // Both stay on the two cast programs ShaderWarmup compiles: toon, vertex
+    // colours and the painted atlas.
+    [first, clone].forEach((material) => {
+      expect(material.isMeshToonMaterial).toBe(true);
+      expect(material.vertexColors).toBe(true);
+      expect(material.map).toBe(first.map);
     });
-    expect(headgear.size).toBe(ARCHETYPES.length);
-  });
-
-  it('reuses one material per look instead of creating them per monster', () => {
-    const first = getMonsterFigureMaterials('anbu', false);
-    const second = getMonsterFigureMaterials('anbu', false);
-    MONSTER_FIGURE_TONES.forEach((tone) => expect(second[tone]).toBe(first[tone]));
-    const ghost = getMonsterFigureMaterials('anbu', true);
-    expect(ghost.body).not.toBe(first.body);
-    expect(ghost.body.transparent).toBe(true);
-    // Translucent figures stay on the transparent standard program ShaderWarmup compiles.
-    expect(ghost.body.flatShading).toBe(false);
   });
 
   it('moves by profile, stays within bounds, and holds still under reduced motion', () => {

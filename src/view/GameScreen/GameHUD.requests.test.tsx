@@ -50,7 +50,7 @@ describe('the HUD request tracker', () => {
     renderHud(missionWith(taken));
     const panel = screen.getByLabelText('mission objectives');
     const tracker = within(panel).getByLabelText('village requests');
-    expect(tracker).toHaveTextContent('Lost Tea Tins1/3');
+    expect(tracker).toHaveTextContent('Lost Field Kits1/3');
     expect(tracker).toHaveTextContent('Not One FallFailed');
   });
 

@@ -1,24 +1,31 @@
 /* eslint-disable react/no-unknown-property */
-import React from 'react';
+import React, { useMemo } from 'react';
+import type { ScarfId } from '../../../content/villageSquare';
 import { FIGHTER_INK_MATERIAL } from './fighterInk';
 import { tokenToonMaterial } from './inkedToken';
-import { scarfToken } from './VillageSquareModels';
-
-// A faint ember glow: a uniform on a pooled token material, same program.
-const SCARF_MATERIAL = tokenToonMaterial('#f97316', 0.16);
-const SCARF_MARK = { honoredScarf: true };
+import { SCARF_COLORS, scarfMesh } from './cast/castScarf';
 
 /**
- * The ember-thread scarf an Honored player wears (villageSquare.ts
- * HONORED_COSMETIC_TIER). Mounted in the fighter's pose group beside the
- * figure, not inside it, so the character's shared ink hull never includes
- * it; it carries its own line. Ghost drops it with the solid look.
+ * The scarf the player chose to wear (GameConfig.village.scarf): the ember
+ * scarf, or a village's scarf in its colours (cast/castScarf.ts). Mounted in
+ * the fighter's pose group beside the figure, not inside it, so the
+ * character's shared ink hull never includes it; it carries its own line.
+ * Ghost drops it with the solid look.
  */
-export function HonoredScarf({ hidden }: { hidden: boolean }) {
-  const token = scarfToken();
+export function VillageScarf({ scarf, hidden }: { scarf: ScarfId; hidden: boolean }) {
+  const token = scarfMesh(scarf);
+  const colors = SCARF_COLORS[scarf];
+  // A faint glow is a uniform on a pooled token material: the same program.
+  const material = colors.glow ? tokenToonMaterial(colors.glow, 0.16) : tokenToonMaterial();
+  const mark = useMemo(() => ({ villageScarf: scarf, honoredScarf: scarf === 'ember' }), [scarf]);
   return (
     <group visible={!hidden}>
-      <mesh geometry={token.body} material={SCARF_MATERIAL} castShadow userData={SCARF_MARK} />
+      <mesh
+        geometry={token.body}
+        material={material}
+        castShadow
+        userData={mark}
+      />
       {token.ink && <mesh geometry={token.ink} material={FIGHTER_INK_MATERIAL} />}
     </group>
   );

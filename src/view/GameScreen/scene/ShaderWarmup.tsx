@@ -5,6 +5,7 @@ import {
   FIGHTER_TOON_RAMP, createFighterWarmupMaterials, createInkWarmupMaterial,
 } from './fighterInk';
 import { createTokenWarmupMaterial } from './inkedToken';
+import { createCastWarmupMaterials } from './cast/castMaterial';
 
 function instancedWarmup(material: THREE.Material): THREE.Material {
   const target = material;
@@ -53,8 +54,8 @@ export function createVillageWarmupMaterials(): THREE.Material[] {
  * (a campaign marker label scrolling in and out of view recompiled the sprite
  * shader each time). Explosions, tiles, the floor and players stay mounted
  * for the whole match and keep their own programs alive, but a fighter's
- * Ghost look (see-through toon) only shows mid-match, so the fighter looks,
- * ink line included, are compiled here too.
+ * Ghost look (see-through cast toon) only shows mid-match, so the cast
+ * looks, ink line included, are compiled here too.
  */
 export function createWarmupMaterials(withBoss = false, withVillage = false): THREE.Material[] {
   const labelMap = new THREE.Texture();
@@ -76,6 +77,10 @@ export function createWarmupMaterials(withBoss = false, withVillage = false): TH
     // layer staying up. Compiled on an InstancedMesh: instancing is its own
     // program.
     instancedWarmup(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })),
+    // Every cast figure (fighters, enemies, guards, the square's people):
+    // solid, and see-through for Ghost and water clones, which only show
+    // mid-match; then their shared ink line.
+    ...createCastWarmupMaterials(),
     ...createFighterWarmupMaterials(),
     // Pickups, villagers, structures and gates: toon bands with vertex
     // colours (inkedToken.ts). Their ink line is the fighters' ink above.

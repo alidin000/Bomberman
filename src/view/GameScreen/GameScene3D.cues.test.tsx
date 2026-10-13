@@ -245,7 +245,8 @@ describe('player cues in the scene', () => {
     expect(body()).toBeDefined();
     expect(body()!.visible).toBe(true);
     const solid = opaque();
-    expect(solid.length).toBeGreaterThan(5);
+    // The merged cast body and its ink line (scene/cast).
+    expect(solid.length).toBeGreaterThanOrEqual(2);
     const [marker] = view.find<THREE.Sprite>((object) => object.userData.koMarker === 'player2');
     expect(drawnText(marker)).toEqual(['P2 KO']);
     const [wx, , wz] = toWorld(Math.round(dead.players[1].x), Math.round(dead.players[1].y));

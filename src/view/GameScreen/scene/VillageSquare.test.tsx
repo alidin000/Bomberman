@@ -7,9 +7,10 @@ import { DEFAULT_GAME_PREFERENCES, GamePreferences } from '../gamePreferences';
 import { createInitialState } from '../../../engine/initialState';
 import { parseMapRows } from '../../../engine/mapLoader';
 import { BombKind, BombState, GameEngineState } from '../../../engine/types';
-import type { CampaignRequestState, ReputationTierId } from '../../../content/villageSquare';
+import type { CampaignRequestState, ReputationTierId, ScarfId } from '../../../content/villageSquare';
 import { installFakeWebGL } from './fakeWebGL.testutil';
 import { toWorld } from './sceneSpace';
+import { SCARF_COLORS } from './cast/castScarf';
 
 // Scene contract for the village square (content/villageSquare.ts): what it
 // draws at each tier, the prompt over the prop a local player can use (read
@@ -33,10 +34,12 @@ function mission({
   tier,
   players = 1,
   at = { x: 1, y: 1 },
+  scarf,
 }: {
   tier?: ReputationTierId;
   players?: number;
   at?: { x: number; y: number };
+  scarf?: ScarfId;
 } = {}): GameEngineState {
   const initial = createInitialState({
     mode: 'solo',
@@ -48,7 +51,9 @@ function mission({
     map: campaignMap,
     seed: 7,
     difficulty: 'normal',
-    village: tier ? { reputationTier: tier, embers: 40, offeredRequestIds: [] } : undefined,
+    village: tier ? {
+      reputationTier: tier, embers: 40, offeredRequestIds: [], scarf,
+    } : undefined,
   });
   return {
     ...initial,
@@ -434,24 +439,39 @@ describe('village square scene', () => {
     barrage.unmount();
   });
 
-  it('wraps an Honored player in the ember-thread scarf, and no one else', async () => {
-    // The fighter whose pose group holds each scarf (it follows every pose).
+  it('wears the scarf the player chose, in its own colours, on the first player only', async () => {
+    // Who wears which scarf: the fighter whose pose group holds it (it
+    // follows every pose), and the scarf's cloth colour as drawn.
     const scarves = async (state: GameEngineState) => {
       const view = await renderScene(state);
-      const wearers = view.find((object) => !!object.userData.honoredScarf).map((scarf) => {
+      const wearers = view.find((object) => !!object.userData.villageScarf).map((scarf) => {
         let node: THREE.Object3D | null = scarf;
-        while (node) {
+        let wearer: string | null = null;
+        while (node && !wearer) {
           const ink = node.children.find((child) => child.userData.fighterInk);
-          if (ink) return ink.userData.fighterInk as string;
+          if (ink) wearer = ink.userData.fighterInk as string;
           node = node.parent;
         }
-        return null;
+        const id = scarf.userData.villageScarf as ScarfId;
+        const colors = (scarf as THREE.Mesh).geometry.getAttribute('color');
+        const cloth = new THREE.Color(SCARF_COLORS[id].cloth);
+        let inCloth = false;
+        for (let i = 0; i < colors.count && !inCloth; i += 1) {
+          inCloth = Math.abs(colors.getX(i) - cloth.r) < 1e-4
+            && Math.abs(colors.getY(i) - cloth.g) < 1e-4
+            && Math.abs(colors.getZ(i) - cloth.b) < 1e-4;
+        }
+        return `${wearer}:${id}:${inCloth ? 'cloth' : 'unpainted'}`;
       });
       view.unmount();
       return wearers;
     };
-    expect(await scarves(mission({ tier: 'trusted' }))).toEqual([]);
+    // Standing alone no longer dresses anyone: the scarf is the player's pick.
+    expect(await scarves(mission({ tier: 'honored' }))).toEqual([]);
     expect(await scarves(mission())).toEqual([]);
-    expect(await scarves(mission({ tier: 'honored' }))).toEqual(['player1']);
+    expect(await scarves(mission({ tier: 'honored', scarf: 'ember' }))).toEqual(['player1:ember:cloth']);
+    expect(await scarves(mission({ tier: 'trusted', scarf: 'hiddenMist', players: 2 })))
+      .toEqual(['player1:hiddenMist:cloth']);
+    expect(SCARF_COLORS.hiddenMist.cloth).not.toBe(SCARF_COLORS.ember.cloth);
   });
 });

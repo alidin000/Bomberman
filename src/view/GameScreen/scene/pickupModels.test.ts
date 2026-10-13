@@ -93,6 +93,8 @@ describe('token looks are compiled before play', () => {
       && material.vertexColors
       && !material.transparent
       && (material as THREE.MeshToonMaterial).gradientMap === FIGHTER_TOON_RAMP
+      // The cast figures' look adds the painted atlas: a program of its own.
+      && !(material as THREE.MeshToonMaterial).map
     ));
     expect(tokenWarm).toHaveLength(1);
     const used = [

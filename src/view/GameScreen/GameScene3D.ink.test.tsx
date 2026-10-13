@@ -99,15 +99,9 @@ const inkOf = (scene: THREE.Scene, id: string) => (
   find<THREE.Mesh>(scene, (object) => object.userData.fighterInk === id)[0]
 );
 
-// The fighter's figure: the group holding its body capsule (radius 0.19).
+// The fighter's figure: its merged cast body (scene/cast).
 function figureOf(scene: THREE.Scene, id: string): THREE.Object3D {
-  const ring = find(scene, (object) => object.userData.playerRing === id)[0];
-  const body = ring.parent as THREE.Object3D;
-  const capsule = find<THREE.Mesh>(body, (object) => {
-    const geometry = (object as THREE.Mesh).geometry as THREE.CapsuleGeometry | undefined;
-    return geometry?.type === 'CapsuleGeometry' && geometry.parameters.radius === 0.19;
-  })[0];
-  return capsule.parent as THREE.Object3D;
+  return find(scene, (object) => object.userData.fighterBody === id)[0];
 }
 
 function drawn(scene: THREE.Scene, object: THREE.Object3D): boolean {
@@ -194,7 +188,8 @@ describe('fighter looks are compiled before play', () => {
     // Ghost: the fighter turns see-through toon and drops its ink line.
     await view.rerender(withGhost(live, 'player1'));
     const ghosted = partMaterials(figureOf(scene(), 'player1'));
-    expect(ghosted.filter((material) => material.transparent).length).toBeGreaterThan(5);
+    expect(ghosted.length).toBeGreaterThan(0);
+    expect(ghosted.every((material) => material.transparent)).toBe(true);
     expect(ghosted.every(isToon)).toBe(true);
     expect(drawn(scene(), inkOf(scene(), 'player1'))).toBe(false);
     await view.rerender(live);
