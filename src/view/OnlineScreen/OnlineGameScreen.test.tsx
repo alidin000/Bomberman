@@ -231,3 +231,39 @@ describe('OnlineGameScreen co-op village square', () => {
       .toHaveBeenLastCalledWith(expect.anything(), true, expect.any(Function));
   });
 });
+
+describe('OnlineGameScreen connection curtain', () => {
+  beforeEach(() => {
+    const state = onlineState();
+    const store = createEngineStore();
+    store.publish(state);
+    mocks.engine = {
+      store, motion: null, getState: () => state, advanceFrame: vi.fn(),
+    };
+    mocks.snapshot = {
+      status: 'playing',
+      connected: true,
+      roomId: 'ABC234',
+      seat: 1,
+      playerId: 'player2',
+      token: 'resume-token',
+      players: [],
+      roomMode: 'arena',
+      stageId: 'hiddenLeaf',
+      capacity: 4,
+      totalRounds: 3,
+      gameState: state,
+      ack: 1,
+      error: 'Player 1 disconnected. The match is paused.',
+    };
+    mocks.leave.mockClear();
+  });
+
+  it('keeps a way out while the match waits on a dropped seat', () => {
+    renderOnlineGame();
+
+    expect(screen.getByRole('status')).toHaveTextContent('Player 1 disconnected. The match is paused.');
+    fireEvent.click(screen.getByRole('button', { name: 'Leave room' }));
+    expect(mocks.leave).toHaveBeenCalledTimes(1);
+  });
+});
