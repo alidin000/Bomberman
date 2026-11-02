@@ -147,8 +147,9 @@ const ModifyControlsDialog = ({
           </PlayerControlsRow>
         ))}
         {keyErrors.size > 0 && (
-          <Typography variant="body2" color="error">
-            Please correct highlighted key conflicts before saving.
+          // The theme's warning ink (vermilion, 5.9:1 on paper), not MUI's red.
+          <Typography variant="body2" color="warning.main">
+            A key is bound twice. Change one of the highlighted keys to save.
           </Typography>
         )}
       </DialogContent>

@@ -16,34 +16,40 @@ import {
 import { TOUCH_BOMB_PX, TouchSize } from '../../../input/touchLayout';
 import { canVibrate } from '../TouchControls';
 import { PreferenceGrid, PreferenceSection, SettingsButton } from './SettingsScreen.styles';
+import {
+  PRESSED, radius, space, textStyles, transition,
+} from '../../../theme/tokens';
 
 const SIZE_LABELS: Record<TouchSize, string> = { small: 'Small', medium: 'Medium', large: 'Large' };
 
+// The label column matches the sliders' (PreferenceSlider).
 const OptionRow = styled.div({
+  ...textStyles.body5,
   display: 'grid',
-  gridTemplateColumns: '112px minmax(0, 1fr)',
+  gridTemplateColumns: '144px minmax(0, 1fr)',
   alignItems: 'center',
-  gap: 12,
-  marginBottom: 8,
-  color: 'rgba(33,29,26,0.78)',
-  fontSize: '0.76rem',
-  fontWeight: 800,
+  gap: space[100],
+  marginBottom: space[75],
+  color: 'var(--ink-3)',
   '& .MuiToggleButtonGroup-root': { display: 'flex' },
   '& .MuiToggleButton-root': {
+    ...textStyles.buttonSm,
     flex: '1 1 0',
     minHeight: 40,
-    padding: '4px 8px',
+    padding: `${space[50]}px ${space[75]}px`,
     color: 'var(--anime-ink)',
     borderColor: 'var(--anime-ink)',
-    fontSize: '0.76rem',
-    fontWeight: 900,
-    textTransform: 'none',
+    borderRadius: radius.none,
+    transition: transition(['transform'], ['background-color', 'color']),
+    '&:hover': { background: 'rgba(245,130,31,0.16)' },
+    '&:active': PRESSED,
+    '&.Mui-focusVisible': { outline: 'var(--focus-ring)', outlineOffset: 2, zIndex: 1 },
   },
   '& .MuiToggleButton-root.Mui-selected, & .MuiToggleButton-root.Mui-selected:hover': {
     color: 'var(--anime-paper-light)',
     background: 'var(--anime-teal)',
   },
-  '@media (max-width: 420px)': { gridTemplateColumns: '1fr', gap: 4 },
+  '@media (max-width: 420px)': { gridTemplateColumns: '1fr', gap: space[50] },
 });
 
 /** A touch screen, even while a keyboard is in use: the section stays findable. */
@@ -120,7 +126,7 @@ export const TouchSettings = () => {
               onChange={(event) => update({ leftHanded: event.target.checked })}
             />
           )}
-          label="Left-handed: pad on the right"
+          label="Left handed: pad on the right"
         />
         {canVibrate() && (
           <FormControlLabel

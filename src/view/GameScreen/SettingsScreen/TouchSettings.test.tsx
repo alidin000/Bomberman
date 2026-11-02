@@ -39,7 +39,7 @@ describe('Settings → Touch Controls', () => {
     const view = openSettings();
     fireEvent.click(screen.getByRole('button', { name: /large buttons/i }));
     fireEvent.click(screen.getByRole('button', { name: '100% opacity' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /left-handed/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /left handed/i }));
     expect(JSON.parse(localStorage.getItem(TOUCH_PREFERENCES_KEY) as string)).toMatchObject({
       size: 'large', opacity: 100, leftHanded: true,
     });
@@ -50,7 +50,7 @@ describe('Settings → Touch Controls', () => {
     expect(loadTouchPreferences()).toMatchObject({ size: 'large', opacity: 100, leftHanded: true });
     openSettings();
     expect(screen.getByRole('button', { name: /large buttons/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('checkbox', { name: /left-handed/i })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /left handed/i })).toBeChecked();
 
     const { container } = render(
       <TouchControls store={createEngineStore()} slot={0} keys={KEYS} enabled />
