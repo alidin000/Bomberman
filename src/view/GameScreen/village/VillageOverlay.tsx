@@ -154,12 +154,20 @@ export const VillageOverlay = ({
 
   const renderBoard = () => {
     if (!open || !dispatch) {
-      return <ClosedNote>The board takes requests on solo missions only.</ClosedNote>;
+      return (
+        <ClosedNote>
+          <strong>Solo missions only</strong>
+          {' '}
+          The board takes requests on solo missions only.
+        </ClosedNote>
+      );
     }
     if (rows.length === 0) {
       return (
         <ClosedNote>
-          Nothing new is pinned up for you here. More requests go up as your standing grows.
+          <strong>No new requests</strong>
+          {' '}
+          More go up on the board as your standing grows.
         </ClosedNote>
       );
     }
@@ -215,7 +223,11 @@ export const VillageOverlay = ({
             <strong>{`${HUB_MERCHANT.name}: `}</strong>
             {`“${hub.merchantLine}”`}
           </MerchantLine>
-          <ClosedNote>The stall sells on solo missions only.</ClosedNote>
+          <ClosedNote>
+            <strong>Solo missions only</strong>
+            {' '}
+            The stall sells on solo missions only.
+          </ClosedNote>
         </>
       );
     }

@@ -213,7 +213,7 @@ function useFeedbackCore(
         const characterId = state.players[slot]?.characterId;
         const label = characterId
           ? getCharacterPowerTheme(characterId, message.power).label
-          : 'Power-up';
+          : 'Pickup';
         return `${slot >= 0 ? playerSlotLabel(slot) : 'Shinobi'} ${label}`;
       }).join(', '));
       if (audio && newExplosions === 0) playTone(audio, 720, 0.14, volume * 0.65, 'sine');
