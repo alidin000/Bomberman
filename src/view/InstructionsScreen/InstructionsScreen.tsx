@@ -81,17 +81,17 @@ const QUICK_RULES = [
   {
     step: '04',
     title: 'Finish The Objective',
-    body: 'Campaign stages end after village objectives open the boss arena and the tailed-beast boss is sealed.',
+    body: 'Campaign stages end after village objectives open the boss arena and the tailed beast boss is sealed.',
     Icon: ShieldIcon,
   },
 ];
 
 const BOMB_RULES = [
   'Bomb blasts hit the bomb cell and extend in four straight lines until blocked by walls or range.',
-  'Every round opens with a 3-2-1 freeze: nothing moves and no one can act until GO.',
+  'Every round opens with a 3, 2, 1 countdown: nothing moves and no one can act until GO.',
   'Flames stay lethal for half a second after the blast. Walking into fire is as deadly as standing in it.',
   'Boxes break after explosions. In local arena a bit under half hide a power-up; in campaign they can reveal power-ups, secrets, or Zetsu ambushes.',
-  'Bombs can chain-trigger other bombs, so one blast can start a larger delayed pattern.',
+  'Bombs set off other bombs caught in their blast, so one blast can start a larger delayed pattern.',
   'After planting a bomb, its owner may move out of that cell, but cannot move back into or through it without Ghost.',
   'Ghost is the intentional exception: it lets you phase through bombs, walls, boxes, and cover until the timer ends.',
   'Sudden death (local arena): when the round clock hits zero, walls drop in a spiral from the edge inward and crush anything beneath them.',
@@ -100,22 +100,22 @@ const BOMB_RULES = [
 const CAMPAIGN_RULES = [
   'Reach the marked mission targets first. Some stages use rescues, shrines, seals, bridges, or towers.',
   'Protect the village structure during defense objectives. If its HP reaches zero, the mission fails.',
-  'Then solve the village puzzle to unseal the mini-boss gate: blast lanterns, pylons or wards, step on levers, bells or beacons, or carry keystones. The objective line names the rule, and Story marks the next step.',
-  'Defeat the mini-boss guard before the boss gate can complete.',
+  'Then solve the village puzzle to unseal the mini boss gate: blast lanterns, pylons or wards, step on levers, bells or beacons, or carry keystones. The objective line names the rule, and Story marks the next step.',
+  'Defeat the mini boss guard before the boss gate can complete.',
   'After all objectives are complete, enter the boss arena and defeat the stage boss to unlock the next route reward.',
   'Fog of war hides unexplored campaign tiles. Visible cells update around players; visited cells stay remembered.',
 ];
 
 const COMBAT_RULES = [
   'Normal enemies and Zetsu only chase or attack after detecting a nearby player.',
-  'Zetsu have shorter awareness than shinobi patrols, while mini-boss guards detect a wider local area.',
+  'Zetsu have shorter awareness than shinobi patrols, while mini boss guards detect a wider local area.',
   'Smart and elite enemies read bomb timers and step out of blast lines. Basic enemies only refuse to walk into open fire.',
-  'Tailed-beast bosses are the exception: once their arena starts, they pressure the whole arena.',
+  'Tailed beast bosses are the exception: once their arena starts, they pressure the whole arena.',
   'Death messages name the cause, such as a specific bomb, enemy, boss attack, or failed phase escape.',
 ];
 
 const POWER_RULES = [
-  'Every fighter has equal odds for bomb, basic blast, ultimate reach, speed, shield, phase, manual-release, and cover effects. Basic Blast changes normal bombs only; Ultimate Reach changes the ultimate blast or its outer attack only. Campaign uses themed versions of those same equal categories; Chakra Scrolls and Character Fragments stay special rewards.',
+  'Every fighter has equal odds for bomb, basic blast, ultimate reach, speed, shield, phase, manual release, and cover effects. Basic Blast changes normal bombs only; Ultimate Reach changes the ultimate blast or its outer attack only. Campaign uses themed versions of those same equal categories; Chakra Scrolls and Character Fragments stay special rewards.',
   'Manual bombs require a detonation power-up and can be triggered with the configured detonate key.',
   'Cover creates a temporary blocker in front of you. It can protect space, but it can also be destroyed by blasts.',
   'Naruto\'s ultimate forms clones across its blast area after two seconds. They pin other players, monsters, and bosses, but Naruto can move through his own clones.',
@@ -178,7 +178,7 @@ export const InstructionsScreen = () => {
         maxWidth={false}
         aria-labelledby="customized-dialog-title"
       >
-        <StyledDialogTitle id="customized-dialog-title">
+        <StyledDialogTitle id="customized-dialog-title" component="h1">
           Shinobi Field Manual
         </StyledDialogTitle>
         <StyledDialogContent dividers>
@@ -207,9 +207,9 @@ export const InstructionsScreen = () => {
           </ManualHero>
 
           <ManualIntro>
-            Start with the four-step loop. Use the guide rail to jump to the detailed rule you need mid-match.
+            Start with the four step loop. Use the guide rail to jump to the rule you need during a match.
             {' '}
-            <Link to={DOJO_PATH} style={{ color: 'var(--accent)', fontWeight: 900 }}>
+            <Link to={DOJO_PATH}>
               {`Rather learn by playing? Try the ${DOJO_NAME}.`}
             </Link>
           </ManualIntro>
@@ -252,7 +252,7 @@ export const InstructionsScreen = () => {
                     </ManualItem>
                     <ManualItem>
                       <ManualBadge>Online</ManualBadge>
-                      Online play is not available yet. Every battle is on one screen.
+                      Open Online Room from the title screen. Co-op rooms share one mission; in an arena room the last shinobi standing wins each round.
                     </ManualItem>
                   </ManualList>
                 </ManualSection>
@@ -282,7 +282,7 @@ export const InstructionsScreen = () => {
                     </ManualItem>
                     <ManualItem>
                       <ManualBadge>Pause</ManualBadge>
-                      Use the top-right controls for pause, restart, and key edits.
+                      Use the controls at the top right for pause, restart, and key edits.
                     </ManualItem>
                   </ManualList>
                 </ManualSection>
