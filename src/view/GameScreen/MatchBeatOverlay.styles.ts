@@ -1,42 +1,42 @@
 import styled from '@emotion/styled';
+import { radius, space, textStyles } from '../../theme/tokens';
+
+const SHORT = '@media (max-height: 560px) and (min-width: 641px)';
 
 // Static plates only: a CSS pop animation on "GO!" re-ran style recalc on
 // every frame of the beat in the production A/B (about 30 extra recalcs per
 // round start), so every plate here just appears and goes.
 export const BeatLayer = styled.div({
   position: 'absolute',
-  left: 16,
-  right: 16,
+  left: space[200],
+  right: space[200],
   zIndex: 14,
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: 8,
+  gap: space[75],
   pointerEvents: 'none',
 });
 
 export const CountdownPlate = styled.strong({
+  ...textStyles.heading1,
   minWidth: 76,
   minHeight: 76,
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  padding: '0 14px',
-  borderRadius: 2,
+  padding: `0 ${space[200]}px`,
+  borderRadius: radius.sm,
   color: 'var(--anime-orange)',
   background: 'var(--anime-ink)',
   border: '3px solid var(--anime-orange)',
   boxShadow: '6px 6px 0 var(--anime-ink)',
   // Comic digits: orange with an ink keyline, offset like a print.
   textShadow: '3px 3px 0 var(--accent)',
-  fontFamily: 'var(--font-display)',
-  fontSize: '3.6rem',
-  fontWeight: 400,
-  lineHeight: 1,
-  '@media (max-height: 560px) and (min-width: 641px)': {
+  [SHORT]: {
     minWidth: 56,
     minHeight: 56,
-    fontSize: '2.4rem',
+    fontSize: 'var(--text-4xl)',
   },
 });
 
@@ -51,45 +51,39 @@ export const GoPlate = styled(CountdownPlate)({
 
 // One line, set once per round: "Round 2 · P1 Gaara leads 1–0".
 export const BeatLine = styled.span({
+  ...textStyles.buttonMd,
   maxWidth: '100%',
-  padding: '5px 12px',
-  borderRadius: 2,
+  padding: `${space[50]}px ${space[100]}px`,
+  borderRadius: radius.sm,
   color: 'var(--anime-paper-light)',
   background: 'var(--anime-ink)',
   border: '2px solid var(--anime-orange)',
-  fontFamily: 'var(--font-display)',
-  fontSize: '1.05rem',
-  fontWeight: 400,
-  letterSpacing: '0.06em',
-  lineHeight: 1.25,
   textAlign: 'center',
+  textTransform: 'none',
 });
 
-// Held over the deciding moment for RESULT_HOLD_MS before the result opens.
+// Held over the deciding moment for RESULT_HOLD_MS before the result opens,
+// framed all round in the winner's colour inside an ink keyline.
 export const RoundOverPlate = styled('strong', {
   shouldForwardProp: (prop) => prop !== 'accent',
 })<{ accent: string }>(({ accent }) => ({
+  ...textStyles.heading5,
   maxWidth: '100%',
-  padding: '10px 22px 11px',
-  borderRadius: 2,
+  padding: `${space[100]}px ${space[300]}px`,
+  borderRadius: radius.sm,
   color: 'var(--anime-ink)',
   background: 'var(--anime-paper-light)',
-  border: '3px solid var(--anime-ink)',
-  borderTop: `8px solid ${accent}`,
-  boxShadow: '6px 6px 0 var(--anime-ink)',
-  fontFamily: 'var(--font-display)',
-  fontSize: '1.6rem',
-  fontWeight: 400,
+  border: `4px solid ${accent}`,
+  boxShadow: '0 0 0 2px var(--anime-ink), 6px 6px 0 2px var(--anime-ink)',
   letterSpacing: '0.05em',
-  lineHeight: 1.15,
   textAlign: 'center',
 }));
 
 // A sealed boss's reward, under its name on the round-over plate.
 export const RoundOverDetail = styled.span({
+  ...textStyles.body4,
   display: 'block',
-  marginTop: 4,
-  fontSize: '0.95rem',
-  fontWeight: 800,
+  marginTop: space[50],
   color: 'var(--anime-vermilion)',
+  letterSpacing: 'normal',
 });
