@@ -86,12 +86,14 @@ export const StyledDialog = styled(Dialog)({
     ...textStyles.caption3,
     color: 'var(--ink-3)',
     textTransform: 'uppercase',
+    transition: transition([], ['color']),
   },
   '& .MuiStepLabel-label.Mui-active, & .MuiStepLabel-label.Mui-completed': {
     color: 'var(--anime-ink)',
   },
   '& .MuiStepIcon-root': {
     color: 'var(--ink-2)',
+    transition: transition([], ['color']),
   },
   '& .MuiStepLabel-labelContainer .MuiTypography-caption': {
     ...textStyles.caption5,
@@ -254,7 +256,7 @@ export const StepContent = styled.div`
   margin-bottom: 0;
 
   @media (max-height: 560px) {
-    margin-top: 6px;
+    margin-top: 4px;
   }
 `;
 
@@ -265,20 +267,25 @@ export const DeckFooter = styled.div`
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  margin: 0 -20px;
-  padding: 10px 20px 21px;
-  /* The scroll's bottom rod runs under the footer. */
+  margin: 0 -24px;
+  /* The bottom padding keeps the actions clear of the rod. */
+  padding: 12px 24px 24px;
+  /*
+   * The scroll's bottom rod runs under the footer. The ink rule on top is
+   * the divider between the scrolling setup and the actions; the frame
+   * draws the other three sides.
+   */
   background: var(--scroll-rod) bottom / 100% 11px no-repeat, var(--anime-paper-light);
   border-top: 2px solid var(--anime-ink);
 
   @media (max-width: 680px) {
     margin: 0 -12px;
-    padding: 8px 12px 19px;
+    padding: 8px 12px 24px;
   }
 
   @media (max-height: 560px) {
-    margin: 0 -14px;
-    padding: 5px 14px 14px;
+    margin: 0 -12px;
+    padding: 4px 12px 12px;
     background-size: 100% 8px, auto;
   }
 `;
@@ -307,7 +314,7 @@ export const FooterActions = styled.div`
   }
 
   @media (max-width: 680px) {
-    gap: 6px;
+    gap: 8px;
   }
 
   /* Phones: the three actions sit side by side at their own widths. */
@@ -319,45 +326,28 @@ export const FooterActions = styled.div`
 
 /** One line on how to drive the menu from the keyboard. */
 export const FooterHint = styled.p`
+  ${textStyles.caption3}
   margin: 0;
   color: var(--ink-2);
-  font-size: 0.75rem;
-  font-weight: 700;
 
   @media (max-width: 560px), (max-height: 560px) {
     display: none;
   }
 `;
 
+/** A mode's name over its one line of detail (Caption 3). */
 export const ModeToggleText = styled.span`
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  line-height: 1.15;
 
   & small {
-    font-family: var(--font-body);
-    font-size: 0.72rem;
-    font-weight: 700;
+    ${textStyles.caption3}
     letter-spacing: 0;
     text-transform: none;
     opacity: 0.9;
   }
-`;
-
-export const Row = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin: 24px 0;
-  padding: 12px 14px;
-  clip-path: ${chipCut};
-  background: rgba(255, 255, 255, 0.38);
-  border: 1px solid rgba(33, 29, 26, 0.16);
-  border-radius: 8px;
 `;
 
 export const PlayerControlsRow = styled.div<PlayerControlsRowProps>`
@@ -365,11 +355,15 @@ export const PlayerControlsRow = styled.div<PlayerControlsRowProps>`
   grid-template-columns: minmax(120px, 0.28fr) minmax(160px, 0.34fr) minmax(280px, 1fr);
   align-items: center;
   gap: 16px;
-  margin-bottom: ${(props) => (props.numOfPlayers === '2' ? '16px' : '10px')};
+  margin-bottom: ${(props) => (props.numOfPlayers === '2' ? '16px' : '12px')};
   margin-top: ${(props) => (props.numOfPlayers === '2' ? '12px' : '8px')};
-  padding: 10px 4px 0;
+  padding: 12px 4px 0;
   clip-path: ${panelCut};
-  border-top: 2px solid var(--ink-1);
+
+  /* A rule between one player's keys and the next. */
+  & + & {
+    border-top: 2px solid var(--ink-1);
+  }
 
   @media (max-width: 820px) {
     grid-template-columns: 1fr;
@@ -383,28 +377,36 @@ export const PlayerControlsRow = styled.div<PlayerControlsRowProps>`
 `;
 
 export const ControlsLabel = styled(Typography)`
-  font-size: 1rem;
-  font-weight: 900;
+  ${textStyles.title3}
   min-width: 0;
   color: var(--anime-ink);
   text-transform: uppercase;
 `;
 
 export const KeyConfigInput = styled.input`
+  ${textStyles.title2}
   width: 46px;
   height: 46px;
-  margin: 3px;
+  margin: 4px;
+  padding: 0;
   text-align: center;
-  font-size: 18px;
-  font-weight: 900;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   border: 2px solid var(--anime-ink);
   background: var(--anime-paper-light);
   color: var(--anime-ink);
   cursor: pointer;
   caret-color: transparent;
   box-shadow: 2px 2px 0 var(--anime-mustard);
-  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+  transition: ${transition(['transform'], ['background-color', 'border-color', 'box-shadow'])};
+
+  &:hover {
+    background: var(--anime-paper);
+  }
+
+  &:active {
+    ${PRESSED}
+  }
+
   &:focus {
     outline: var(--focus-ring);
     outline-offset: 2px;
@@ -433,22 +435,20 @@ export const MovementKeysGrid = styled.div`
 `;
 
 export const MovementKeyCell = styled.label<{ area: string }>`
+  ${textStyles.caption3}
   grid-area: ${(props) => props.area};
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   color: rgba(33, 29, 26, 0.72);
-  font-size: 0.64rem;
-  font-weight: 900;
   text-transform: uppercase;
 `;
 
 export const KeyHint = styled.p`
+  ${textStyles.caption1}
   margin: 4px 0 8px;
   color: var(--ink-3);
-  font-size: 0.8rem;
-  font-weight: 700;
   text-align: center;
 `;
 
@@ -457,29 +457,36 @@ export const SummaryStrip = styled.div`
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 4px 14px;
-  margin: 0 0 6px;
+  gap: 4px 16px;
+  margin: 0 0 8px;
 `;
 
+/** One fact of the plan, led by a small square in its colour. */
 export const SummaryItem = styled.div<{ accent: string }>`
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  padding-left: 8px;
+  gap: 8px;
   clip-path: ${chipCut};
-  border-left: 4px solid ${(props) => props.accent};
-  font-size: 0.82rem;
+
+  &::before {
+    content: '';
+    flex: none;
+    align-self: center;
+    width: 10px;
+    height: 10px;
+    background: ${(props) => props.accent};
+    border: 1px solid var(--anime-ink);
+  }
 
   & span {
+    ${textStyles.caption3}
     color: var(--ink-2);
-    font-size: 0.72rem;
-    font-weight: 900;
     text-transform: uppercase;
   }
 
   & strong {
+    ${textStyles.body4}
     color: var(--anime-ink);
-    font-weight: 900;
   }
 `;
 
@@ -495,14 +502,13 @@ export const ActionKeysGrid = styled.div`
 `;
 
 export const ActionKeyCell = styled.label`
+  ${textStyles.caption3}
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   color: rgba(33, 29, 26, 0.72);
-  font-size: 0.64rem;
-  font-weight: 900;
   text-transform: uppercase;
 `;
 
