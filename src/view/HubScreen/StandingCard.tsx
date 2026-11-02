@@ -12,10 +12,11 @@ import { SECTION_HEADING } from './HubScreen.styles';
 import { EmptyNote } from './HubSecrets.styles';
 
 // Quiet paper with hairlines inside the hub frame, like the rest of the hub.
+// Margins above and below: the panels before and after keep a 12 px gap.
 const Card = styled.section`
   display: grid;
   gap: 8px;
-  margin: 0 0 12px;
+  margin: 12px 0;
   padding: 8px 12px;
   border: 1px solid var(--ink-1);
 
