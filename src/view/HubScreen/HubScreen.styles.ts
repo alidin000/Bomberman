@@ -1,41 +1,54 @@
 import styled from '@emotion/styled';
+import { PRESSED, textStyles, transition } from '../../theme/tokens';
 
 // The hub lives inside the house dialog frame (ConfigScreen's StyledDialog):
 // that frame is the one framed panel on screen. Everything in it is quiet
-// paper with hairlines, never a second ink frame or offset shadow.
+// paper with hairlines, never a second ink frame. The frame's corners are
+// 2 px, so the shapes nested inside it are square.
+
+/** A section header inside the hub: the display face at 18 px. */
+export const SECTION_HEADING = {
+  fontFamily: 'var(--font-display)',
+  fontSize: 'var(--text-lg)',
+  lineHeight: 'var(--leading-lg)',
+  fontWeight: 400,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+} as const;
+
+/** A village's colour as a keyline that shows on paper: deepened with ink. */
+export const accentLine = (accent: string) => `color-mix(in srgb, ${accent} 60%, var(--anime-ink))`;
 
 export const HubHeader = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 6px 12px;
+  gap: 8px 12px;
   margin: 0 0 8px;
 `;
 
 export const HubStatusLine = styled.p`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  color: var(--ink-3);
-  font-size: 0.8rem;
-  font-weight: 800;
-  text-transform: uppercase;
-`;
-
-export const EmberBalance = styled.p`
+  ${textStyles.caption3}
   display: inline-flex;
   align-items: center;
   gap: 8px;
   margin: 0;
-  padding: 3px 10px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+`;
+
+export const EmberBalance = styled.p`
+  ${textStyles.body4}
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 12px;
   color: var(--anime-ink);
   background: color-mix(in srgb, var(--anime-mustard) 22%, var(--anime-paper-light));
   border: 1px solid var(--anime-mustard);
-  border-radius: var(--radius);
-  font-size: 0.9rem;
-  font-weight: 900;
+  border-radius: 0;
 `;
 
 /** A small ink-edged diamond: the Ember mark, by shape as well as colour. */
@@ -49,72 +62,78 @@ export const EmberGlyph = styled.span`
   transform: rotate(45deg);
 `;
 
+// The last mission's pay: a mustard callout led by the Ember mark. Plain
+// inline text, so a long breakdown wraps mid-line on a phone.
 export const HubReport = styled.p`
+  ${textStyles.body5}
   margin: 0 0 8px;
-  padding: 6px 0 6px 10px;
+  padding: 8px 12px;
   color: var(--anime-ink);
-  border-left: 4px solid var(--anime-mustard);
-  font-size: 0.82rem;
-  font-weight: 700;
+  background: color-mix(in srgb, var(--anime-mustard) 14%, var(--anime-paper-light));
+  border: 1px solid var(--anime-mustard);
+
+  & > span[aria-hidden] {
+    margin-right: 8px;
+    vertical-align: 1px;
+  }
 
   & strong {
-    font-weight: 900;
+    font-weight: 600;
   }
 `;
 
 export const HubBody = styled.div`
-  margin-top: 10px;
+  margin-top: 12px;
 `;
 
 export const VillageIntro = styled.div`
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
-  gap: 14px;
+  gap: 16px;
   align-items: center;
-  margin: 0 0 10px;
+  margin: 0 0 12px;
 
   & h3 {
+    ${textStyles.heading5}
     margin: 0 0 4px;
     color: var(--anime-ink);
-    font-family: var(--font-display);
-    font-size: 1.75rem;
-    font-weight: 400;
-    line-height: 1.05;
-    letter-spacing: 0.05em;
   }
 
   & h3 small {
+    ${textStyles.caption3}
     display: block;
     color: var(--anime-teal-deep);
-    font-family: var(--font-body);
-    font-size: 0.72rem;
-    font-weight: 900;
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
 
   @media (max-width: 620px) {
     grid-template-columns: 96px minmax(0, 1fr);
-    gap: 10px;
+    gap: 12px;
 
     & h3 {
-      font-size: 1.35rem;
+      font-size: var(--text-xl);
+      line-height: var(--leading-xl);
     }
   }
 `;
 
 export const MissionGoals = styled.p`
-  margin: 0 0 6px;
+  ${textStyles.body5}
+  margin: 0 0 8px;
   color: var(--ink-3);
-  font-size: 0.82rem;
-  font-weight: 700;
+`;
+
+// The found count closing the Village tab, set off from the panel above.
+export const SecretsCount = styled(MissionGoals)`
+  margin: 12px 0 0;
 `;
 
 export const VillageArt = styled.div`
   height: 112px;
   overflow: hidden;
   border: 2px solid var(--anime-ink);
-  border-radius: var(--radius);
+  border-radius: 0;
   box-shadow: 4px 4px 0 var(--anime-orange);
 
   @media (max-width: 620px) {
@@ -123,11 +142,9 @@ export const VillageArt = styled.div`
 `;
 
 export const HubBlurb = styled.p`
-  margin: 0 0 10px;
+  ${textStyles.body6}
+  margin: 0 0 12px;
   color: var(--ink-3);
-  font-size: 0.9rem;
-  font-style: italic;
-  line-height: 1.45;
 `;
 
 export const NpcGrid = styled.div`
@@ -136,45 +153,51 @@ export const NpcGrid = styled.div`
   gap: 8px;
 `;
 
+// A villager: a card keyed in the village's colour all round. Hover lifts
+// it onto an orange offset; a press sets it back down.
 export const NpcButton = styled.button<{ accent: string }>`
   display: grid;
   gap: 2px;
   min-height: 64px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   color: var(--anime-ink);
   background: var(--anime-paper-light);
-  border: 2px solid var(--ink-1);
-  border-left: 5px solid ${(props) => props.accent};
-  border-radius: var(--radius);
+  border: 2px solid ${(props) => accentLine(props.accent)};
+  border-radius: 0;
   text-align: left;
   font: inherit;
   cursor: pointer;
+  transition: ${transition(['transform'], ['background-color', 'border-color', 'box-shadow'])};
 
   & strong {
     font-family: var(--font-display);
-    font-size: 1.2rem;
+    font-size: var(--text-lg);
+    line-height: var(--leading-lg);
     font-weight: 400;
-    line-height: 1.1;
     letter-spacing: 0.05em;
   }
 
   & small {
+    ${textStyles.caption3}
     color: var(--ink-2);
-    font-size: 0.72rem;
-    font-weight: 800;
     text-transform: uppercase;
   }
 
   & span {
+    ${textStyles.body6}
     color: var(--ink-3);
-    font-size: 0.82rem;
-    line-height: 1.35;
   }
 
   &:hover {
+    background: color-mix(in srgb, var(--anime-orange) 8%, var(--anime-paper-light));
     border-color: var(--anime-ink);
-    border-left-color: ${(props) => props.accent};
     box-shadow: 3px 3px 0 var(--anime-orange);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    box-shadow: none;
+    transform: ${PRESSED.transform};
   }
 
   &:focus-visible {
@@ -189,19 +212,14 @@ export const Conversation = styled.div`
 `;
 
 export const Speaker = styled.h3`
+  ${textStyles.heading5}
   margin: 0;
   color: var(--anime-ink);
-  font-family: var(--font-display);
-  font-size: 1.35rem;
-  font-weight: 400;
-  letter-spacing: 0.05em;
 
   & small {
+    ${textStyles.caption3}
     margin-left: 8px;
     color: var(--ink-2);
-    font-family: var(--font-body);
-    font-size: 0.72rem;
-    font-weight: 800;
     letter-spacing: 0;
     text-transform: uppercase;
   }
@@ -211,20 +229,20 @@ export const Speaker = styled.h3`
   }
 `;
 
+// What the villager says: a paper speech panel keyed in the village's colour.
 export const SpokenLine = styled.p<{ accent: string }>`
+  ${textStyles.body3}
   margin: 0;
-  padding: 4px 0 4px 12px;
+  padding: 8px 12px;
   color: var(--anime-ink);
-  border-left: 4px solid ${(props) => props.accent};
-  font-size: 0.95rem;
-  line-height: 1.5;
+  background: var(--anime-paper-light);
+  border: 2px solid ${(props) => accentLine(props.accent)};
 `;
 
 export const AskedLine = styled.p`
+  ${textStyles.body4}
   margin: 0;
   color: var(--ink-2);
-  font-size: 0.82rem;
-  font-weight: 800;
 `;
 
 export const ChoiceList = styled.div`
@@ -239,17 +257,17 @@ export const ChoiceList = styled.div`
 `;
 
 export const MerchantLine = styled.p`
+  ${textStyles.body6}
   margin: 0 0 8px;
   color: var(--anime-ink);
-  font-size: 0.88rem;
-  line-height: 1.45;
 
   & strong {
-    font-weight: 900;
+    font-weight: 600;
   }
 `;
 
 export const ShopHeading = styled.h3`
+  ${SECTION_HEADING}
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -257,17 +275,10 @@ export const ShopHeading = styled.h3`
   gap: 4px 12px;
   margin: 12px 0 4px;
   color: var(--anime-ink);
-  font-family: var(--font-display);
-  font-size: 1.1rem;
-  font-weight: 400;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 
   & span {
+    ${textStyles.caption3}
     color: var(--ink-2);
-    font-family: var(--font-body);
-    font-size: 0.75rem;
-    font-weight: 800;
     letter-spacing: 0;
     text-transform: none;
   }
@@ -284,7 +295,7 @@ export const ShopRow = styled.li`
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px 12px;
-  padding: 7px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--ink-1);
 
   & .MuiButton-root {
@@ -301,24 +312,21 @@ export const ShopRow = styled.li`
 
 export const ItemText = styled.div`
   display: grid;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 
   & strong {
-    font-size: 0.92rem;
-    font-weight: 900;
+    ${textStyles.title3}
   }
 
   & span {
+    ${textStyles.body6}
     color: var(--ink-3);
-    font-size: 0.8rem;
-    line-height: 1.35;
   }
 
   & small {
+    ${textStyles.caption3}
     color: var(--ink-2);
-    font-size: 0.72rem;
-    font-weight: 800;
   }
 `;
 
@@ -326,7 +334,7 @@ export const ItemText = styled.div`
 export const RankPips = styled.span`
   display: inline-flex;
   gap: 4px;
-  margin-left: 6px;
+  margin-left: 8px;
   vertical-align: middle;
 `;
 
@@ -336,32 +344,45 @@ export const RankPip = styled('span', {
   width: 10px;
   height: 10px;
   border: 2px solid var(--anime-ink);
-  border-radius: 50%;
+  border-radius: 9999px;
   background: ${(props) => (props.filled ? 'var(--anime-ink)' : 'var(--anime-paper-light)')};
 `;
 
 export const VillageChips = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   margin: 0 0 8px;
 `;
 
 export const VillageChip = styled.button`
-  padding: 4px 9px;
+  ${textStyles.buttonSm}
+  min-height: 36px;
+  padding: 4px 8px;
   color: var(--anime-ink);
   background: var(--anime-paper-light);
   border: 2px solid var(--ink-1);
-  border-radius: var(--radius);
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 900;
+  border-radius: 0;
   cursor: pointer;
+  transition: ${transition(['transform'], ['background-color', 'border-color', 'color'])};
+
+  &:hover {
+    background: color-mix(in srgb, var(--anime-orange) 16%, var(--anime-paper-light));
+    border-color: var(--anime-ink);
+  }
+
+  &:active {
+    transform: ${PRESSED.transform};
+  }
 
   &[aria-pressed='true'] {
     color: var(--on-action);
     background: var(--action);
     border-color: var(--anime-ink);
+  }
+
+  &[aria-pressed='true']:hover {
+    background: var(--action-deep);
   }
 
   &:focus-visible {
@@ -371,29 +392,26 @@ export const VillageChip = styled.button`
 `;
 
 export const HubAnnouncer = styled.p`
-  min-height: 1.2em;
+  ${textStyles.body4}
+  min-height: var(--leading-sm);
   margin: 8px 0 0;
   color: var(--ink-3);
-  font-size: 0.8rem;
-  font-weight: 800;
 `;
 
 export const EarningsLine = styled.p`
+  ${textStyles.body4}
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 4px 8px;
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   color: var(--anime-ink);
-  font-size: 0.82rem;
-  font-weight: 800;
 
   & strong {
+    ${textStyles.body1}
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 0.95rem;
-    font-weight: 900;
+    gap: 8px;
   }
 `;

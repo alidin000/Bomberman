@@ -95,6 +95,7 @@ import {
   NpcGrid,
   RankPip,
   RankPips,
+  SecretsCount,
   ShopHeading,
   ShopList,
   ShopRow,
@@ -453,9 +454,9 @@ export const HubScreen = () => {
         <StandingCard progress={progress} />
         <RebuildCard progress={progress} stageId={stageId} />
         <ScarfPicker progress={progress} onChoose={wear} onLocked={setAnnouncement} />
-        <MissionGoals>
+        <SecretsCount>
           {`Secrets: ${secrets.found} of ${secrets.total} found. ${SECRETS_EXPLAINER}`}
-        </MissionGoals>
+        </SecretsCount>
       </>
     );
   };
@@ -593,6 +594,7 @@ export const HubScreen = () => {
           </HubHeader>
           {report && (
             <HubReport>
+              <EmberGlyph aria-hidden="true" />
               <strong>{`${reportVillage} mission: +${formatEmbers(report.earnings.total)}`}</strong>
               {report.earnings.total > 0 && ` · ${earningsBreakdown(report.earnings)}`}
             </HubReport>
