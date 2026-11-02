@@ -15,15 +15,15 @@ export const PlayerStatus = ({
   const getPowerIcon = (power: Power): React.ReactNode => {
     switch (power) {
       case 'Detonator':
-        return <span>🧨</span>;
+        return <span role="img" aria-label="Detonator">🧨</span>;
       case 'RollerSkate':
-        return <span>👟</span>;
+        return <span role="img" aria-label="Roller skate">👟</span>;
       case 'Invincibility':
-        return <span>💪</span>;
+        return <span role="img" aria-label="Invincibility">💪</span>;
       case 'Ghost':
-        return <span>👻</span>;
+        return <span role="img" aria-label="Ghost">👻</span>;
       case 'Obstacle':
-        return <span>🚧</span>;
+        return <span role="img" aria-label="Obstacle">🚧</span>;
       default:
         return null;
     }
