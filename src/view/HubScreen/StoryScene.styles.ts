@@ -1,6 +1,7 @@
 import styled from '@emotion/styled';
 import { Dialog } from '@mui/material';
 import { styled as muiStyled } from '@mui/material/styles';
+import { textStyles, transition } from '../../theme/tokens';
 
 // A story scene: ink panel with speed lines behind two portraits, and a
 // paper speech box along the bottom, like an anime's dialogue card.
@@ -17,6 +18,8 @@ export const SceneDialog = muiStyled(Dialog)({
     borderRadius: 'var(--radius)',
     color: 'var(--anime-paper-light)',
     backgroundColor: 'var(--anime-night)',
+    // The house dialog lays scroll paper over its colour: the scene is ink.
+    backgroundImage: 'none',
     border: '3px solid var(--anime-ink)',
     boxShadow: 'var(--shadow-frame)',
   },
@@ -28,24 +31,23 @@ export const SceneHeader = styled.header`
   align-items: baseline;
   justify-content: space-between;
   gap: 2px 12px;
-  padding: 10px 16px 6px;
+  padding: 12px 16px 8px;
   border-bottom: 3px solid var(--scene-accent);
 
   & h2 {
+    ${textStyles.heading5}
     margin: 0;
-    font-size: 1.1rem;
-    font-weight: 900;
-    text-transform: uppercase;
   }
 
   & small {
-    color: rgba(255, 248, 231, 0.82);
-    font-size: 0.74rem;
-    font-weight: 800;
+    ${textStyles.caption3}
+    color: var(--anime-paper-muted);
     text-transform: uppercase;
   }
 `;
 
+// Speed lines from below, over a cel-shaded burst in the village's colour:
+// three hard-edged rings that dim outward, in place of a soft glow.
 export const SceneStage = styled.div`
   position: relative;
   display: flex;
@@ -53,15 +55,19 @@ export const SceneStage = styled.div`
   justify-content: space-between;
   gap: 8px;
   height: clamp(150px, 34dvh, 300px);
-  padding: 8px 18px 0;
+  padding: 8px 16px 0;
   overflow: hidden;
   background:
     repeating-conic-gradient(from 0deg at 50% 120%,
       rgba(255, 248, 231, 0.07) 0deg 4deg, transparent 4deg 11deg),
-    radial-gradient(circle at 50% 110%, var(--scene-accent) 0, transparent 62%);
+    radial-gradient(circle at 50% 110%,
+      var(--scene-accent) 0 24%,
+      color-mix(in srgb, var(--scene-accent) 62%, var(--anime-night)) 24% 40%,
+      color-mix(in srgb, var(--scene-accent) 30%, var(--anime-night)) 40% 56%,
+      transparent 56%);
 
   @media (max-width: 560px) {
-    padding: 6px 6px 0;
+    padding: 8px 8px 0;
   }
 `;
 
@@ -76,7 +82,7 @@ export const SceneSpeaker = styled.figure<{ active: boolean }>`
   opacity: ${(props) => (props.active ? 1 : 0.42)};
   filter: ${(props) => (props.active ? 'none' : 'grayscale(0.6)')};
   transform: translateY(${(props) => (props.active ? '0' : '6px')});
-  transition: opacity 160ms ease, transform 160ms ease, filter 160ms ease;
+  transition: ${transition(['transform'], ['opacity', 'filter'])};
 
   & svg {
     width: 100%;
@@ -92,35 +98,49 @@ export const SceneSpeaker = styled.figure<{ active: boolean }>`
 export const SpeechBox = styled.div`
   position: relative;
   margin: 0;
-  padding: 18px 16px 12px;
+  padding: 24px 16px 12px;
   color: var(--anime-ink);
   background: var(--anime-paper-light);
   border-top: 3px solid var(--anime-ink);
 `;
 
+// The speaker's ink plate, led by a diamond in the village's colour.
 export const NamePlate = styled.p`
+  display: flex;
+  align-items: center;
+  gap: 8px;
   position: absolute;
-  top: -15px;
-  left: 14px;
+  top: -16px;
+  left: 16px;
   margin: 0;
-  padding: 3px 14px;
+  padding: 4px 12px;
   color: var(--anime-paper-light);
   background: var(--anime-ink);
-  border-left: 6px solid var(--scene-accent);
-  font-size: 0.82rem;
-  font-weight: 900;
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  font-weight: 400;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+
+  &::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    background: var(--scene-accent);
+    transform: rotate(45deg);
+  }
 
   &[data-side="right"] {
     left: auto;
-    right: 14px;
-    border-left: none;
-    border-right: 6px solid var(--scene-accent);
+    right: 16px;
   }
 `;
 
 export const SpeechText = styled.p`
-  min-height: 3.2em;
+  ${textStyles.body1}
+  min-height: 48px;
 
   & .visually-hidden {
     position: absolute;
@@ -131,14 +151,7 @@ export const SpeechText = styled.p`
     white-space: nowrap;
   }
 
-  margin: 0 0 10px;
-  font-size: 1.02rem;
-  font-weight: 700;
-  line-height: 1.45;
-
-  @media (max-width: 560px) {
-    font-size: 0.95rem;
-  }
+  margin: 0 0 12px;
 `;
 
 export const SceneActions = styled.div`
@@ -149,9 +162,8 @@ export const SceneActions = styled.div`
   gap: 8px;
 
   & > span {
+    ${textStyles.caption3}
     margin-right: auto;
     color: var(--ink-2);
-    font-size: 0.78rem;
-    font-weight: 800;
   }
 `;
