@@ -127,6 +127,7 @@ export const DojoRoomBadge = styled('span', {
   background: status === 'cleared' ? 'var(--anime-olive)' : 'var(--anime-paper-light)',
   border: '2px solid var(--anime-ink)',
   textTransform: 'uppercase',
+  letterSpacing: '0.06em',
 }));
 
 export const DojoActions = styled('div')({

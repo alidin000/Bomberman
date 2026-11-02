@@ -174,7 +174,7 @@ export const Field = styled('label')({
     background: 'var(--anime-ink)',
     border: '1px solid color-mix(in srgb, var(--anime-paper-light) 28%, transparent)',
     borderRadius: 'var(--radius-base)',
-    letterSpacing: 0,
+    letterSpacing: '0.06em',
     transition: transition([], ['border-color']),
   },
   '& input:hover': {

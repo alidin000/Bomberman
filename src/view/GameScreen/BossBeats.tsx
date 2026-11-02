@@ -30,6 +30,7 @@ const TitlePlate = styled.div({
     alignItems: 'center',
     gap: space[75],
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
     color: 'var(--anime-mustard)',
     '&::before': {
       content: '""',

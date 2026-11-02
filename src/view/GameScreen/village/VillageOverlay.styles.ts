@@ -33,6 +33,7 @@ export const RoleLine = styled.p`
   margin: 0;
   color: var(--ink-2);
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 `;
 
 export const OverlayLead = styled.p`

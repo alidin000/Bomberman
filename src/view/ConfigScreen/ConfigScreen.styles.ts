@@ -86,6 +86,7 @@ export const StyledDialog = styled(Dialog)({
     ...textStyles.caption3,
     color: 'var(--ink-3)',
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
     transition: transition([], ['color']),
   },
   '& .MuiStepLabel-label.Mui-active, & .MuiStepLabel-label.Mui-completed': {
@@ -390,6 +391,7 @@ export const ControlsLabel = styled(Typography)`
   min-width: 0;
   color: var(--anime-ink);
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 `;
 
 export const KeyConfigInput = styled.input`
@@ -452,6 +454,7 @@ export const MovementKeyCell = styled.label<{ area: string }>`
   gap: 4px;
   color: rgba(33, 29, 26, 0.72);
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 `;
 
 export const KeyHint = styled.p`
@@ -491,6 +494,7 @@ export const SummaryItem = styled.div<{ accent: string }>`
     ${textStyles.caption3}
     color: var(--ink-2);
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   & strong {
@@ -519,6 +523,7 @@ export const ActionKeyCell = styled.label`
   min-width: 0;
   color: rgba(33, 29, 26, 0.72);
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 `;
 
 export const ActionKeyName = styled.span`
@@ -705,6 +710,7 @@ export const RouteStatusBadge = styled.span<{ accent: string }>`
   border-radius: 0;
   margin-right: var(--mark-room, 0px);
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 
   & svg {
     margin-right: 4px;
@@ -929,6 +935,7 @@ export const LockBadge = styled.span`
   padding-top: 4px;
   color: var(--anime-ink);
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 
   & svg {
     font-size: var(--text-sm);
@@ -1304,6 +1311,7 @@ export const RoundsRow = styled.div`
     ${textStyles.title4}
     color: var(--anime-ink);
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 `;
 

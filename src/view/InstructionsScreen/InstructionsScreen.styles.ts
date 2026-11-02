@@ -253,6 +253,7 @@ export const ManualPill = styled('span')({
   background: 'var(--anime-paper-light)',
   border: '1px solid var(--anime-ink)',
   textTransform: 'uppercase',
+  letterSpacing: '0.06em',
 });
 
 export const ManualLayout = styled('div')({
@@ -289,6 +290,7 @@ export const ManualNavLink = styled('a')({
   color: 'var(--anime-paper-light)',
   textDecoration: 'none',
   textTransform: 'uppercase',
+  letterSpacing: '0.06em',
   background: 'transparent',
   border: '1px solid rgba(255,248,231,0.25)',
   transition: transition(['transform'], ['color', 'background-color', 'border-color']),
@@ -340,6 +342,7 @@ export const ManualRuleCard = styled('article')({
     ...textStyles.title3,
     color: 'var(--anime-teal)',
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
   },
   '& span': {
     ...textStyles.caption3,
@@ -437,6 +440,7 @@ export const ManualBadge = styled('strong')({
   background: 'rgba(212,163,63,0.16)',
   border: '1px solid var(--anime-mustard)',
   textTransform: 'uppercase',
+  letterSpacing: '0.06em',
 });
 
 export const ManualFlow = styled('div')({
@@ -461,6 +465,7 @@ export const ManualFlowStep = styled('div')({
     alignItems: 'center',
     color: 'var(--anime-teal)',
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
   },
   '& strong::before': diamondMarker('var(--anime-teal)'),
   '& span': {
@@ -498,6 +503,7 @@ export const ManualLegend = styled('div')({
     background: 'var(--anime-paper-light)',
     border: '1px solid var(--anime-ink)',
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
   },
   '& strong': {
     ...textStyles.caption3,
@@ -582,6 +588,7 @@ export const CharacterManualCard = styled('div', {
     alignItems: 'center',
     color: 'var(--anime-ink)',
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
     textShadow: 'none',
   },
   '& strong::before': {

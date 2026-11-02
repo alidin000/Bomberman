@@ -33,6 +33,7 @@ export const HubStatusLine = styled.p`
   margin: 0;
   color: var(--ink-3);
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 `;
 
 export const EmberBalance = styled.p`
@@ -178,6 +179,7 @@ export const NpcButton = styled.button<{ accent: string }>`
     ${textStyles.caption3}
     color: var(--ink-2);
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   & span {
@@ -217,7 +219,7 @@ export const Speaker = styled.h3`
     ${textStyles.caption3}
     margin-left: 8px;
     color: var(--ink-2);
-    letter-spacing: 0;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
 

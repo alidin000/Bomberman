@@ -44,6 +44,7 @@ export const SceneHeader = styled.header`
     ${textStyles.caption3}
     color: var(--anime-paper-muted);
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 `;
 

@@ -356,6 +356,7 @@ export const ControlTable = styled.table({
     color: 'var(--ink-3)',
     fontWeight: textStyles.caption3.fontWeight,
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
   },
   '& thead th:first-of-type, & tbody th': {
     textAlign: 'left',

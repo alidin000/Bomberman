@@ -41,6 +41,7 @@ export const SecretHead = styled.div`
     ${textStyles.caption3}
     color: var(--ink-2);
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 `;
 
@@ -55,6 +56,7 @@ export const SecretStatus = styled.span<{ found: boolean }>`
   background: ${(props) => (props.found ? 'var(--anime-teal)' : 'transparent')};
   border: 2px solid ${(props) => (props.found ? 'var(--anime-teal)' : 'var(--ink-2)')};
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 `;
 
 export const SecretFacts = styled.dl`
@@ -89,6 +91,7 @@ export const StoryPage = styled.div`
     align-items: center;
     gap: 8px;
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   & strong::before {
@@ -128,6 +131,7 @@ export const SetReward = styled.div<{ ready: boolean }>`
     ${textStyles.caption3}
     display: block;
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 `;
 

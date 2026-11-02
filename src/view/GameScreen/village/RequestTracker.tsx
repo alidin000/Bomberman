@@ -24,6 +24,7 @@ const Row = styled.div`
     gap: ${space[75]}px;
     margin: 0;
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   & h3::before {

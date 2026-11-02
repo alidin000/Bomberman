@@ -738,6 +738,7 @@ export const PickupNote = styled(Box, {
   '& strong': {
     fontWeight: textStyles.caption3.fontWeight,
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
   },
   [PHONE]: {
     display: 'none',
@@ -899,6 +900,7 @@ export const IntelLine = styled(Box)({
   marginTop: space[75],
   color: 'var(--ink-3)',
   textTransform: 'uppercase',
+  letterSpacing: '0.06em',
   '& strong': {
     ...hudText(textStyles.body4),
     color: '#8f2f26',

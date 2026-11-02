@@ -84,6 +84,7 @@ export const DojoBandHeader = styled('div')({
     color: 'var(--anime-mustard)',
     background: 'var(--anime-ink)',
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
     whiteSpace: 'nowrap',
   },
   '& span': {

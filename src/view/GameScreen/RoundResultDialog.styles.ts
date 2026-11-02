@@ -211,6 +211,7 @@ export const ResultBreakdown = styled.div`
     ${textStyles.caption3}
     color: rgba(33, 29, 26, 0.82);
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   td {
@@ -286,6 +287,7 @@ export const ResultIntel = styled.div`
     border: 1px solid rgba(33, 29, 26, 0.3);
     text-align: center;
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   strong {
