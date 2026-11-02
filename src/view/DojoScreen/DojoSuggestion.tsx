@@ -82,7 +82,8 @@ export function DojoSuggestion({ onOpen }: { onOpen: () => void }) {
       <p>
         <span>
           <strong>New here? </strong>
-          {`The ${DOJO_NAME} teaches the basics in four 30 second rooms.`}
+          {/* A no-break space keeps "30 second" on one line. */}
+          {`The ${DOJO_NAME} teaches the basics in four 30\u00a0second rooms.`}
         </span>
       </p>
       <div>
