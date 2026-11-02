@@ -25,6 +25,7 @@ import {
   SecretItem,
   SecretList,
   SecretStatus,
+  SecretsEmptyNote,
   SetReward,
   StoryPage,
 } from './HubSecrets.styles';
@@ -118,15 +119,23 @@ export const SecretsPanel = ({
   const claimed = sets.filter((item) => item.set.state === 'claimed').length;
   const village = getCampaignVillage(stageId);
   const set = secretSetProgress(stageId, discoveredSecrets, claimedSecretSets);
+  const secretsHowTo = `${SECRETS_EXPLAINER} Crack their walls in a mission; this list and the square's shrine keep count.`;
   return (
     <>
-      <ShopHeading as="p">
+      {/* An h3 like the other tabs' section heads, so the secrets' h4s follow it. */}
+      <ShopHeading>
         {`Secrets · ${found} of ${total} found`}
         <span>{`${claimed} of ${sets.length} sets claimed`}</span>
       </ShopHeading>
-      <MissionGoals>
-        {`${SECRETS_EXPLAINER} Crack their walls in a mission; this list and the square's shrine keep count.`}
-      </MissionGoals>
+      {found === 0 ? (
+        // Nothing found yet: a titled note in place of the bare explainer.
+        <SecretsEmptyNote role="note">
+          <strong>No secrets found yet</strong>
+          <p>{secretsHowTo}</p>
+        </SecretsEmptyNote>
+      ) : (
+        <MissionGoals>{secretsHowTo}</MissionGoals>
+      )}
       <VillageChips role="group" aria-label="secrets village" data-roving-group>
         {sets.map((item) => (
           <VillageChip
