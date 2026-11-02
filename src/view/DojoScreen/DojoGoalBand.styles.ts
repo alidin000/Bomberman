@@ -37,6 +37,7 @@ export const DojoBandRoot = styled('div', {
 export const DojoBand = styled('section')({
   position: 'absolute',
   top: 12,
+  // design-system: allow centres the 460 px band beside the HUD controls
   left: `max(12px, min(50% - 230px, 100% - 460px - ${CONTROLS_CLEARANCE}))`,
   width: `min(460px, 100% - 24px - ${CONTROLS_CLEARANCE})`,
   boxSizing: 'border-box',

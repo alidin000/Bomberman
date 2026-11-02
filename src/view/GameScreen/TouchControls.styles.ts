@@ -116,15 +116,19 @@ export const PadRing = styled.div({
     opacity: 0.45,
   },
   '& > i[data-dir="up"]': {
+    // design-system: allow a CSS triangle arrow, drawn with one border
     left: 'calc(50% - 9px)', top: space[75], borderWidth: '0 9px 12px', borderBottomColor: 'var(--anime-ink)',
   },
   '& > i[data-dir="down"]': {
+    // design-system: allow a CSS triangle arrow, drawn with one border
     left: 'calc(50% - 9px)', bottom: space[75], borderWidth: '12px 9px 0', borderTopColor: 'var(--anime-ink)',
   },
   '& > i[data-dir="left"]': {
+    // design-system: allow a CSS triangle arrow, drawn with one border
     top: 'calc(50% - 9px)', left: space[75], borderWidth: '9px 12px 9px 0', borderRightColor: 'var(--anime-ink)',
   },
   '& > i[data-dir="right"]': {
+    // design-system: allow a CSS triangle arrow, drawn with one border
     top: 'calc(50% - 9px)', right: space[75], borderWidth: '9px 0 9px 12px', borderLeftColor: 'var(--anime-ink)',
   },
   '&[data-held="up"] > i[data-dir="up"], &[data-held="down"] > i[data-dir="down"], &[data-held="left"] > i[data-dir="left"], &[data-held="right"] > i[data-dir="right"]': {

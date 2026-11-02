@@ -32,6 +32,7 @@ export const SceneHeader = styled.header`
   justify-content: space-between;
   gap: 2px 12px;
   padding: 12px 16px 8px;
+  /* design-system: allow a divider under the scene header */
   border-bottom: 3px solid var(--scene-accent);
 
   & h2 {
@@ -101,6 +102,7 @@ export const SpeechBox = styled.div`
   padding: 24px 16px 12px;
   color: var(--anime-ink);
   background: var(--anime-paper-light);
+  /* design-system: allow a divider between the stage and the speech */
   border-top: 3px solid var(--anime-ink);
 `;
 

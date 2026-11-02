@@ -132,6 +132,7 @@ export const ConfirmText = styled.p({
 export const PreferenceSection = styled.section({
   marginTop: space[200],
   paddingTop: space[200],
+  // design-system: allow a divider between sections
   borderTop: '2px solid var(--anime-ink)',
   '& h3': {
     ...textStyles.buttonMd,

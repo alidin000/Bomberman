@@ -194,6 +194,7 @@ export const StyledDialog = styled(Dialog)({
   '& .MuiToggleButton-root.Mui-selected': {
     color: 'var(--on-action)',
     background: 'var(--action)',
+    // design-system: allow the selected toggle's underline
     boxShadow: 'inset 0 -3px 0 var(--anime-ink)',
   },
   '& .MuiToggleButton-root.Mui-selected:hover': {
@@ -282,6 +283,7 @@ export const DeckFooter = styled.div`
    * draws the other three sides.
    */
   background: var(--scroll-rod) bottom / 100% 11px no-repeat, var(--anime-paper-light);
+  /* design-system: allow a divider between the scroll area and the actions; the frame draws the other sides */
   border-top: 2px solid var(--anime-ink);
 
   @media (max-width: 680px) {
@@ -368,6 +370,7 @@ export const PlayerControlsRow = styled.div<PlayerControlsRowProps>`
 
   /* A rule between one player's keys and the next. */
   & + & {
+    /* design-system: allow a divider between key rows */
     border-top: 2px solid var(--ink-1);
   }
 
@@ -739,7 +742,7 @@ export const CharacterPortraitImage = styled('div', {
 `;
 
 // The cast keeps Typography's component prop, so a section title can be an h3.
-// The display face at 18/28: smaller than any named Heading, set from the vars.
+// Heading 7: the display face at 18/28.
 export const SectionTitle = styled(Typography)`
   position: relative;
   z-index: 0;
@@ -748,10 +751,7 @@ export const SectionTitle = styled(Typography)`
   padding: 0;
   color: var(--anime-ink);
   background: transparent;
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  font-weight: 400;
-  line-height: var(--leading-lg);
+  ${textStyles.heading7}
   letter-spacing: 0.07em;
   text-transform: uppercase;
   text-align: left;

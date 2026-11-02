@@ -6,12 +6,9 @@ import { PRESSED, textStyles, transition } from '../../theme/tokens';
 // paper with hairlines, never a second ink frame. The frame's corners are
 // 2 px, so the shapes nested inside it are square.
 
-/** A section header inside the hub: the display face at 18 px. */
+/** A section header inside the hub: Heading 7, tracked like a button label. */
 export const SECTION_HEADING = {
-  fontFamily: 'var(--font-display)',
-  fontSize: 'var(--text-lg)',
-  lineHeight: 'var(--leading-lg)',
-  fontWeight: 400,
+  ...textStyles.heading7,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
 } as const;
@@ -296,6 +293,7 @@ export const ShopRow = styled.li`
   align-items: center;
   gap: 4px 12px;
   padding: 8px 0;
+  /* design-system: allow a divider between shop rows */
   border-bottom: 1px solid var(--ink-1);
 
   & .MuiButton-root {

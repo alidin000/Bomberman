@@ -122,6 +122,7 @@ export const LoadingScreen = styled.div({
 
 export const LoadingStrip = styled.div({
   top: space[100],
+  // design-system: allow centres the 360 px plate clear of the 290 px HUD column
   left: 'max(12px, min(50% - 180px, 100% - 360px - 290px))',
   width: 'min(360px, 100% - 314px)',
   height: 62,
@@ -139,6 +140,7 @@ export const LoadingControls = styled.div({
 // 84 px clearance), 80 px tall (100 px on phones).
 export const LoadingCard = styled('div', {
   shouldForwardProp: (prop) => prop !== 'side',
+// design-system: allow 84 px is the controls' clearance in scene/cameraFraming
 })<{ side: 'left' | 'right' }>(({ side }) => ({
   top: 84,
   [side]: space[100],
@@ -149,6 +151,7 @@ export const LoadingCard = styled('div', {
 
 // Under the cards, with a 12 px gap.
 export const LoadingArena = styled.div({
+  // design-system: allow stacks below the controls and the 100 px plate
   top: `calc(84px + 100px + ${space[100]}px)`,
   bottom: space[700],
   left: '50%',
@@ -362,11 +365,12 @@ export const ControlTable = styled.table({
   },
   '& tbody th, & tbody td': {
     background: 'var(--anime-paper)',
-    borderTop: '1px solid rgba(33,29,26,0.3)',
-    borderBottom: '1px solid rgba(33,29,26,0.3)',
+    // design-system: allow with the first and last cells' sides, a row draws one full border
+    borderBlock: '1px solid rgba(33,29,26,0.3)',
   },
   '& tbody th': {
     fontWeight: textStyles.caption3.fontWeight,
+    // design-system: allow one side of a row's full border
     borderLeft: '1px solid rgba(33,29,26,0.3)',
     '& span:last-of-type': {
       display: 'inline-block',
@@ -378,6 +382,7 @@ export const ControlTable = styled.table({
     },
   },
   '& tbody td:last-of-type': {
+    // design-system: allow one side of a row's full border
     borderRight: '1px solid rgba(33,29,26,0.3)',
   },
   '& kbd': {

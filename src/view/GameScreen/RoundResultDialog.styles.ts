@@ -62,6 +62,7 @@ export const StyledResultDialog = styled(Dialog, {
     '&::before': {
       content: "''",
       position: 'absolute',
+      // design-system: allow sits under the 11 px scroll rod
       inset: '11px 0 auto',
       height: 150,
       pointerEvents: 'none',
@@ -200,6 +201,7 @@ export const ResultBreakdown = styled.div`
 
   th, td {
     padding: ${space[75]}px ${space[50]}px;
+    /* design-system: allow dividers between the rows of the results table */
     border-bottom: 1px solid rgba(33, 29, 26, 0.18);
     text-align: left;
     vertical-align: top;

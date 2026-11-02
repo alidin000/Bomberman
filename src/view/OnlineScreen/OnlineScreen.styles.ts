@@ -59,6 +59,7 @@ export const OnlineHeader = styled('header')({
   alignItems: 'flex-start',
   gap: space[200],
   paddingBottom: space[200],
+  // design-system: allow a divider under the lobby header
   borderBottom: '1px solid color-mix(in srgb, var(--anime-paper-light) 24%, transparent)',
   '& h1': {
     ...textStyles.heading2,

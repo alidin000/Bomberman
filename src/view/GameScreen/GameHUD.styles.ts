@@ -125,6 +125,7 @@ export const MissionStrip = styled(Box)({
   position: 'absolute',
   top: space[100],
   // Centred, but slides left before it would reach the top controls.
+  // design-system: allow centres the 360 px line clear of the HUD corners
   left: `max(12px, min(50% - 180px, 100% - 360px - ${CONTROLS_CLEARANCE}))`,
   zIndex: 3,
   width: `min(360px, 100% - 24px - ${CONTROLS_CLEARANCE})`,
@@ -747,6 +748,7 @@ export const PickupNote = styled(Box, {
 // nothing sits over the middle of the screen where the player is drawn.
 export const HudRight = styled(Box)({
   position: 'absolute',
+  // design-system: allow 84 px is the controls' clearance in scene/cameraFraming
   top: 'calc(84px / var(--hud-zoom, 1))',
   right: space[100],
   zIndex: 2,
