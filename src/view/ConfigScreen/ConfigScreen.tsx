@@ -764,12 +764,12 @@ export const ConfigScreen = () => {
                     />
                   </MissionBriefingPreview>
                   <MissionBriefingDetails>
-                    <Typography variant="overline" fontWeight="bold">
+                    <Typography variant="overline">
                       {selectedMission.villageName}
                       {' '}
                       Campaign
                     </Typography>
-                    <Typography variant="h5" component="h3" fontWeight="bold">
+                    <Typography variant="h5" component="h3">
                       {selectedMission.title}
                     </Typography>
                     <CardMeta variant="body2">
@@ -859,7 +859,7 @@ export const ConfigScreen = () => {
                             {status}
                           </RouteStatusBadge>
                           {selectedStage === village.stageId && <SelectedMark aria-hidden="true">✓</SelectedMark>}
-                          <Typography component="span" variant="subtitle2" fontWeight="bold" sx={{ mt: 0.5, display: 'block', lineHeight: 1.2 }}>
+                          <Typography component="span" variant="subtitle2" sx={{ mt: 0.5, display: 'block' }}>
                             {village.villageName}
                           </Typography>
                         </CampaignRouteCard>

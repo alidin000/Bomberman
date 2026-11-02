@@ -528,13 +528,13 @@ export const MissionBriefing = styled('div', {
 })<{ accent: string; mark?: string | null }>`
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
-  gap: 14px;
+  gap: 16px;
   margin: 12px 0 4px;
-  padding: 10px;
+  padding: 12px;
   clip-path: ${panelCut};
   border: 2px solid var(--anime-ink);
   border-radius: var(--radius);
-  background: ${(props) => (props.mark ? `${props.mark} right 10px center / 120px 120px no-repeat, ` : '')}
+  background: ${(props) => (props.mark ? `${props.mark} right 12px center / 120px 120px no-repeat, ` : '')}
     color-mix(in srgb, ${(props) => props.accent} 8%, var(--anime-paper));
   box-shadow: 4px 4px 0 var(--anime-orange);
 
@@ -544,12 +544,13 @@ export const MissionBriefing = styled('div', {
   }
 `;
 
+// Square: it sits 12 px inside the briefing's 2 px corner.
 export const MissionBriefingPreview = styled.div`
   height: 124px;
   overflow: hidden;
   clip-path: ${panelCut};
   border: 2px solid var(--anime-ink);
-  border-radius: var(--radius);
+  border-radius: 0;
   background: var(--anime-paper-light);
 
   @media (max-width: 620px) {
@@ -557,6 +558,7 @@ export const MissionBriefingPreview = styled.div`
   }
 `;
 
+// The village line is the theme's overline (Caption 3); the mission title is Heading 4.
 export const MissionBriefingDetails = styled.div`
   display: flex;
   flex-direction: column;
@@ -565,15 +567,10 @@ export const MissionBriefingDetails = styled.div`
 
   & .MuiTypography-overline {
     color: var(--anime-teal-deep);
-    letter-spacing: 0.04em;
-    line-height: 1.6;
   }
 
   & .MuiTypography-h5 {
-    font-family: var(--font-display);
-    font-weight: 400;
-    font-size: 1.85rem;
-    line-height: 1.05;
+    ${textStyles.heading4}
     letter-spacing: 0.05em;
   }
 `;
@@ -581,37 +578,48 @@ export const MissionBriefingDetails = styled.div`
 export const MissionObjectiveList = styled.ul`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 14px;
+  gap: 8px 16px;
   margin: 8px 0 0;
   padding: 0;
   list-style: none;
 `;
 
+/** A goal, led by a small square in the village's colour. */
 export const MissionObjectiveItem = styled.li<{ accent: string }>`
-  padding-left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   clip-path: ${chipCut};
-  border-left: 4px solid ${(props) => props.accent};
+
+  &::before {
+    content: '';
+    flex: none;
+    width: 10px;
+    height: 10px;
+    background: ${(props) => props.accent};
+    border: 1px solid var(--anime-ink);
+  }
 
   & strong {
+    ${textStyles.body4}
     display: block;
     margin-bottom: 0;
     color: var(--anime-ink);
-    font-size: 0.82rem;
   }
 `;
 
 export const MissionActionRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 12px;
+  margin-top: 12px;
 `;
 
 export const CampaignRoute = styled.div`
   display: grid;
-  /* One row of seven villages in the 980px deck, four per row on phones. */
+  /* One row of seven villages in the 980px deck; 92 px or wider on phones. */
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
   margin: 0 0 4px;
 
   @media (max-width: 760px) {
@@ -619,7 +627,9 @@ export const CampaignRoute = styled.div`
   }
 `;
 
-// Each village card carries its mark, faint in the corner (`markImage`: a CSS image).
+// Each village card carries its mark, faint in the corner (`markImage`: a CSS
+// image). The chosen card has an ink keyline, a hard ink offset and the check
+// badge; a locked one is dashed and dimmed, with a lock in its status chip.
 export const CampaignRouteCard = styled('button', {
   shouldForwardProp: (prop) => !['active', 'completed', 'locked', 'accent', 'markImage'].includes(String(prop)),
 })<{
@@ -631,12 +641,11 @@ export const CampaignRouteCard = styled('button', {
 }>`
   position: relative;
   min-height: 56px;
-  padding: 6px 8px;
+  padding: 8px;
   clip-path: ${panelCut};
   border: ${(props) => (props.active ? '2px solid var(--anime-ink)' : '2px solid var(--ink-1)')};
   border-style: ${(props) => (props.locked ? 'dashed' : 'solid')};
   border-radius: var(--radius);
-  border-top: 4px solid ${(props) => (props.active ? props.accent : 'transparent')};
   background: ${(props) => {
     if (props.locked) return '#e4dccb';
     if (props.completed) return `color-mix(in srgb, ${props.accent} 18%, var(--anime-paper-light))`;
@@ -644,16 +653,21 @@ export const CampaignRouteCard = styled('button', {
   }};
   background-image: ${(props) => props.markImage ?? 'none'};
   background-repeat: no-repeat;
-  background-position: right 5px bottom 5px;
+  background-position: right 4px bottom 4px;
   background-size: 30px 30px;
   color: ${(props) => (props.locked ? 'var(--ink-2)' : 'var(--anime-ink)')};
   text-align: left;
   cursor: ${(props) => (props.locked ? 'not-allowed' : 'pointer')};
-  box-shadow: ${(props) => (props.active ? 'var(--shadow-1)' : 'none')};
-  transition: transform 0.16s ease;
+  box-shadow: ${(props) => (props.active ? 'var(--shadow-2)' : 'none')};
+  transition: ${transition(['transform'], ['border-color', 'box-shadow'])};
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
+    border-color: var(--anime-ink);
+  }
+
+  &:active:not(:disabled) {
+    ${PRESSED}
   }
 
   &:focus-visible {
@@ -666,33 +680,34 @@ export const CampaignRouteCard = styled('button', {
   }
 `;
 
+// Square: it sits 8 px inside the card's 2 px corner.
 export const RouteStatusBadge = styled.span<{ accent: string }>`
+  ${textStyles.caption3}
   display: inline-flex;
   align-items: center;
   min-height: 20px;
-  padding: 3px 7px;
+  padding: 2px 8px;
   clip-path: ${chipCut};
   color: var(--anime-ink);
   background: color-mix(in srgb, ${(props) => props.accent} 18%, var(--anime-paper-light));
   border: 1px solid ${(props) => props.accent};
-  border-radius: var(--radius);
-  font-size: 0.68rem;
-  font-weight: 900;
+  border-radius: 0;
   text-transform: uppercase;
 
   & svg {
-    margin-right: 3px;
-    font-size: 0.8rem;
+    margin-right: 4px;
+    font-size: var(--text-xs);
   }
 `;
 
+// Square: it sits 4 px inside the card's 2 px corner.
 export const CharacterPortrait = styled.div`
   height: 140px;
   margin: -4px -4px 8px;
   overflow: hidden;
   clip-path: ${panelCut};
   border: 0;
-  border-radius: var(--radius);
+  border-radius: 0;
   background: var(--anime-paper-light);
 
   &.compact {
@@ -715,18 +730,19 @@ export const CharacterPortraitImage = styled('div', {
 `;
 
 // The cast keeps Typography's component prop, so a section title can be an h3.
+// The display face at 18/28: smaller than any named Heading, set from the vars.
 export const SectionTitle = styled(Typography)`
   position: relative;
   z-index: 0;
   width: fit-content;
-  margin: 14px auto 6px;
+  margin: 16px auto 8px;
   padding: 0;
   color: var(--anime-ink);
   background: transparent;
   font-family: var(--font-display);
-  font-size: 1.12rem;
+  font-size: var(--text-lg);
   font-weight: 400;
-  line-height: 1.25;
+  line-height: var(--leading-lg);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   text-align: left;
@@ -736,9 +752,9 @@ export const SectionTitle = styled(Typography)`
     content: '';
     position: absolute;
     z-index: -1;
-    left: -10px;
-    right: -10px;
-    bottom: 1px;
+    left: -8px;
+    right: -8px;
+    bottom: 4px;
     height: 0.55em;
     background: var(--anime-orange);
     -webkit-mask-image: var(--brush-swash);
