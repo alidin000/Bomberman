@@ -8,6 +8,7 @@ import { ConfigScreen } from './view/ConfigScreen/ConfigScreen';
 import { InstructionsScreen } from './view/InstructionsScreen/InstructionsScreen';
 import { DojoScreen } from './view/DojoScreen/DojoScreen';
 import { OnlineLobbyScreen } from './view/OnlineScreen/OnlineLobbyScreen';
+import { NotFoundScreen } from './view/NotFoundScreen/NotFoundScreen';
 import { GameSettingsProvider } from './contexts/GameSettingsContext';
 import { MenuPad } from './input/MenuPad';
 import { TouchMode } from './input/TouchMode';
@@ -140,6 +141,7 @@ export function App() {
               path="/game/:numOfPlayers/:numOfRounds/:selectedMap"
               element={<Suspense fallback={gameLoading}><GameScreen /></Suspense>}
             />
+            <Route path="*" element={<NotFoundScreen />} />
           </Routes>
         </main>
       </ThemeProvider>

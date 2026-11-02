@@ -203,6 +203,36 @@ export const HeroMark = styled('span')({
   },
 });
 
+/**
+ * The title card's lettering: comic display type in ninja orange, a thin ink
+ * line in the letters, a thick ink outline around them and a hard ink drop.
+ * Spread it with a Heading style; the 404 screen shares it.
+ */
+export const TITLE_CARD_LETTERS = {
+  color: 'var(--anime-orange)',
+  letterSpacing: '0.035em',
+  textTransform: 'uppercase',
+  WebkitTextStroke: '1.5px var(--anime-ink)',
+  textShadow: '3px 0 0 #17120f, -3px 0 0 #17120f, 0 3px 0 #17120f, 0 -3px 0 #17120f, '
+    + '2px 2px 0 #17120f, -2px -2px 0 #17120f, 2px -2px 0 #17120f, -2px 2px 0 #17120f, '
+    + '6px 6px 0 #17120f',
+  overflowWrap: 'anywhere',
+} as const;
+
+/** A brush stroke under a title card heading (its ::after). */
+export const TITLE_CARD_STROKE = {
+  content: "''",
+  display: 'block',
+  width: 'min(420px, 82%)',
+  height: 14,
+  marginTop: space[200],
+  background: 'var(--anime-orange)',
+  WebkitMaskImage: 'var(--brush-swash)',
+  maskImage: 'var(--brush-swash)',
+  WebkitMaskSize: '100% 100%',
+  maskSize: '100% 100%',
+} as const;
+
 export const HeroCopy = styled(Box)({
   position: 'relative',
   flex: 1,
@@ -213,36 +243,15 @@ export const HeroCopy = styled(Box)({
   padding: space[700],
   color: 'var(--anime-paper-light)',
   isolation: 'isolate',
-  // The title card: comic display type in ninja orange, a thin ink line in
-  // the letters, a thick ink outline around them and a hard ink drop.
   // Heading 1 here, Heading 2 on phones and Heading 3 on short screens.
   '& h1': {
     ...textStyles.heading1,
+    ...TITLE_CARD_LETTERS,
     margin: 0,
     // Narrow enough to break after "Explosive", where the name breaks.
     maxWidth: 480,
-    color: 'var(--anime-orange)',
-    letterSpacing: '0.035em',
-    textTransform: 'uppercase',
-    WebkitTextStroke: '1.5px var(--anime-ink)',
-    textShadow: '3px 0 0 #17120f, -3px 0 0 #17120f, 0 3px 0 #17120f, 0 -3px 0 #17120f, '
-      + '2px 2px 0 #17120f, -2px -2px 0 #17120f, 2px -2px 0 #17120f, -2px 2px 0 #17120f, '
-      + '6px 6px 0 #17120f',
-    overflowWrap: 'anywhere',
   },
-  // A brush stroke under the title.
-  '& h1::after': {
-    content: "''",
-    display: 'block',
-    width: 'min(420px, 82%)',
-    height: 14,
-    marginTop: space[200],
-    background: 'var(--anime-orange)',
-    WebkitMaskImage: 'var(--brush-swash)',
-    maskImage: 'var(--brush-swash)',
-    WebkitMaskSize: '100% 100%',
-    maskSize: '100% 100%',
-  },
+  '& h1::after': TITLE_CARD_STROKE,
   '@media (max-height: 760px)': {
     padding: space[600],
   },
