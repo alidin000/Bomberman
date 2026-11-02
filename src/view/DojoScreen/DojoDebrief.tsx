@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import styled from '@emotion/styled';
 import { Button } from '@mui/material';
 import { DojoRoom } from '../../content/dojoRooms';
 import { GameEngineState } from '../../engine/types';
@@ -12,6 +13,10 @@ import {
   RESULT_TONE_ACCENTS,
   StyledResultDialog,
 } from '../GameScreen/RoundResultDialog.styles';
+
+// The instructor's name leads the line at Manrope's semibold, not the
+// browser's bold.
+const Instructor = styled.strong({ fontWeight: 600 });
 
 type DojoDebriefProps = {
   room: DojoRoom;
@@ -100,7 +105,7 @@ export function DojoDebrief({
         {cleared ? `${room.name} cleared` : 'Caught'}
       </ResultBanner>
       <ResultMessage id="dojo-debrief-text">
-        <strong>{`${room.instructor}: `}</strong>
+        <Instructor>{`${room.instructor}: `}</Instructor>
         {cleared ? room.debrief : retryHint(room, state)}
       </ResultMessage>
       <ResultActions>
