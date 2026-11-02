@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { Dialog, Typography } from '@mui/material';
+import { PRESSED, textStyles, transition } from '../../theme/tokens';
 
 type PlayerControlsRowProps = {
   numOfPlayers: string;
@@ -22,7 +23,7 @@ export const StyledDialog = styled(Dialog)({
     minHeight: 'min(760px, calc(100dvh - 16px))',
     maxHeight: 'calc(100dvh - 16px)',
     margin: 8,
-    padding: '25px 20px 0',
+    padding: '24px 24px 0',
     overflow: 'hidden',
     borderRadius: 'var(--radius)',
     clipPath: panelCut,
@@ -34,20 +35,17 @@ export const StyledDialog = styled(Dialog)({
     border: '3px solid var(--anime-ink)',
     boxShadow: 'var(--shadow-frame)',
   },
-  // The title: display type on a ragged brush stroke of ink.
+  // The title (Heading 5): display type on a ragged brush stroke of ink.
   '& .MuiDialogTitle-root': {
+    ...textStyles.heading5,
     position: 'relative',
     isolation: 'isolate',
     width: 'fit-content',
     minWidth: 280,
     margin: '0 auto 8px',
-    padding: '5px 44px 6px',
+    padding: '4px 48px',
     color: 'var(--anime-paper-light)',
     background: 'transparent',
-    fontFamily: 'var(--font-display)',
-    fontSize: '1.65rem',
-    fontWeight: 400,
-    lineHeight: 1.15,
     letterSpacing: '0.07em',
     textAlign: 'center',
     textTransform: 'uppercase',
@@ -70,25 +68,24 @@ export const StyledDialog = styled(Dialog)({
     },
   },
   '& .MuiDialogContent-root': {
-    padding: '0 4px 14px',
+    padding: '0 4px 16px',
     overflowX: 'hidden',
     borderTop: 0,
-    scrollPaddingBottom: 14,
+    scrollPaddingBottom: 16,
   },
   '& .MuiStepper-root': {
-    margin: '0 auto 10px',
+    margin: '0 auto 12px',
     padding: '2px 12px',
     maxWidth: 640,
     clipPath: chipCut,
     background: 'transparent',
     border: 0,
   },
+  // Step names are Caption 3 in capitals; "Optional" under them is Caption 5.
   '& .MuiStepLabel-label': {
+    ...textStyles.caption3,
     color: 'var(--ink-3)',
-    fontWeight: 900,
-    letterSpacing: 0,
     textTransform: 'uppercase',
-    fontSize: '0.75rem',
   },
   '& .MuiStepLabel-label.Mui-active, & .MuiStepLabel-label.Mui-completed': {
     color: 'var(--anime-ink)',
@@ -97,14 +94,13 @@ export const StyledDialog = styled(Dialog)({
     color: 'var(--ink-2)',
   },
   '& .MuiStepLabel-labelContainer .MuiTypography-caption': {
+    ...textStyles.caption5,
     display: 'block',
     color: 'var(--ink-2)',
-    fontSize: '0.66rem',
-    lineHeight: 1.1,
   },
   '& .MuiStepIcon-text': {
     fill: 'var(--anime-paper-light)',
-    fontWeight: 900,
+    fontWeight: 600,
   },
   '& .MuiStepIcon-root.Mui-active, & .MuiStepIcon-root.Mui-completed': {
     color: 'var(--action)',
@@ -116,14 +112,11 @@ export const StyledDialog = styled(Dialog)({
   '& .MuiTypography-colorTextSecondary': {
     color: 'var(--ink-2)',
   },
+  // Labels come from the theme: Button-md, and Button-lg on the large
+  // footer actions.
   '& .MuiButton-root': {
     borderRadius: 'var(--radius)',
     clipPath: chipCut,
-    fontFamily: 'var(--font-display)',
-    fontWeight: 400,
-    fontSize: '1.02rem',
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
   },
   // The one primary call-to-action look: ninja orange with ink type, an
   // ink keyline and a hard ink offset.
@@ -170,17 +163,25 @@ export const StyledDialog = styled(Dialog)({
     padding: '4px 8px',
     margin: '-4px -8px',
   },
+  // Segmented choices (mode, difficulty, rounds): Button-md labels, a press
+  // that sinks a pixel, and the chosen one filled orange with an ink
+  // underline, so the choice does not rest on colour alone.
   '& .MuiToggleButton-root': {
+    ...textStyles.buttonMd,
     minWidth: 58,
+    padding: 12,
     color: 'var(--anime-ink)',
     borderColor: 'var(--ink-1)',
     background: 'rgba(255,255,255,0.42)',
-    fontFamily: 'var(--font-display)',
-    fontWeight: 400,
-    fontSize: '1.05rem',
-    letterSpacing: '0.06em',
-    lineHeight: 1.2,
     clipPath: chipCut,
+    transition: transition(['transform'], ['background-color', 'color', 'box-shadow']),
+    '&:active': PRESSED,
+  },
+  '& .MuiToggleButton-sizeSmall': {
+    padding: 8,
+  },
+  '& .MuiToggleButton-root:hover': {
+    background: 'rgba(245,130,31,0.14)',
   },
   '& .MuiToggleButton-root.Mui-selected': {
     color: 'var(--on-action)',
@@ -199,18 +200,20 @@ export const StyledDialog = styled(Dialog)({
   },
   '@media (max-width: 680px)': {
     '& .MuiDialog-paper': {
-      padding: '20px 12px 0',
+      padding: '16px 12px 0',
     },
-    // Keep the footer actions on one row on phones.
+    // Keep the footer actions on one row on phones: Button-md labels and
+    // the main buttons' 8 by 12 px padding.
     '& .MuiButton-sizeLarge': {
+      ...textStyles.buttonMd,
       minWidth: 0,
-      padding: '8px 10px',
-      fontSize: '0.98rem',
+      padding: '8px 12px',
     },
     '& .MuiDialogTitle-root': {
       minWidth: 0,
-      padding: '4px 30px 5px',
-      fontSize: '1.3rem',
+      padding: '4px 32px',
+      fontSize: 'var(--text-xl)',
+      lineHeight: 'var(--leading-xl)',
     },
   },
   // Narrow phones: drop the play icon so the three footer actions share one row.
@@ -222,12 +225,13 @@ export const StyledDialog = styled(Dialog)({
   // Landscape phones: a small title and a slim footer leave room for the setup.
   '@media (max-height: 560px)': {
     '& .MuiDialog-paper': {
-      padding: '14px 14px 0',
+      padding: '16px 12px 0',
     },
     '& .MuiDialogTitle-root': {
       margin: '0 auto 2px',
-      padding: '2px 26px 3px',
-      fontSize: '0.85rem',
+      padding: '2px 24px',
+      fontSize: 'var(--text-sm)',
+      lineHeight: 'var(--leading-sm)',
       minWidth: 0,
     },
     '& .MuiStepper-root': {
@@ -238,9 +242,9 @@ export const StyledDialog = styled(Dialog)({
       display: 'none',
     },
     '& .MuiButton-sizeLarge': {
+      ...textStyles.buttonMd,
       minWidth: 0,
-      padding: '4px 14px',
-      fontSize: '0.98rem',
+      padding: '8px 12px',
     },
   },
 });
