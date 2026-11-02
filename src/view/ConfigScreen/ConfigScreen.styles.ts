@@ -1211,13 +1211,14 @@ export const AddSlotButton = styled.button`
 export const StageStrip = styled.div`
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
 
   @media (max-width: 760px) {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 `;
 
+/** A stage's art over its short name (Title 5); the chosen one is framed and checked. */
 export const StageThumb = styled.button<{ chosen: boolean }>`
   position: relative;
   display: flex;
@@ -1225,30 +1226,39 @@ export const StageThumb = styled.button<{ chosen: boolean }>`
   align-items: center;
   gap: 4px;
   min-width: 0;
-  padding: 4px 2px 6px;
+  padding: 4px 4px 8px;
   color: var(--anime-ink);
   background: ${(props) => (props.chosen ? 'var(--anime-paper)' : 'transparent')};
   border: 2px solid ${(props) => (props.chosen ? 'var(--anime-ink)' : 'transparent')};
   border-radius: var(--radius);
   cursor: pointer;
+  transition: ${transition(['transform'], ['background-color', 'border-color'])};
 
   & > span:last-of-type {
-    font-size: 0.75rem;
-    font-weight: 800;
-    line-height: 1.15;
+    ${textStyles.title5}
     text-align: center;
   }
 
   &:hover {
-    border-color: var(--ink-1);
+    transform: translateY(-2px);
+    border-color: ${(props) => (props.chosen ? 'var(--anime-ink)' : 'var(--ink-1)')};
+  }
+
+  &:active {
+    ${PRESSED}
   }
 
   &:focus-visible {
     outline: var(--focus-ring);
     outline-offset: 2px;
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `;
 
+// Square: it sits 4 px inside the thumb's 2 px corner.
 export const StageThumbArt = styled.span`
   display: block;
   width: 100%;
@@ -1256,21 +1266,22 @@ export const StageThumbArt = styled.span`
   aspect-ratio: 1;
   overflow: hidden;
   border: 2px solid var(--anime-ink);
-  border-radius: var(--radius);
+  border-radius: 0;
 
   @media (max-height: 560px) {
     max-width: 52px;
   }
 `;
 
-/** The selected stage's rule, said once under the strip. */
+/** The selected stage's rule, said once under the strip (Body 6). */
 export const StageCaption = styled.p`
-  margin: 6px 0 0;
+  ${textStyles.body6}
+  margin: 8px 0 0;
   color: var(--ink-3);
-  font-size: 0.82rem;
   text-align: center;
 
   & strong {
+    ${textStyles.body4}
     color: var(--anime-ink);
   }
 `;
@@ -1280,13 +1291,12 @@ export const RoundsRow = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   margin-top: 12px;
 
   & > span {
+    ${textStyles.title4}
     color: var(--anime-ink);
-    font-size: 0.82rem;
-    font-weight: 900;
     text-transform: uppercase;
   }
 `;
