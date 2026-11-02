@@ -1,21 +1,79 @@
 import styled from '@emotion/styled';
 import { Box, LinearProgress } from '@mui/material';
+import {
+  radius, space, textStyles, transition,
+} from '../../theme/tokens';
 
 const PANEL_SURFACE = 'rgba(255, 248, 231, 0.94)';
 const PANEL_EDGE = 'var(--anime-ink)';
 const PANEL_SHADOW = '3px 3px 0 rgba(23, 18, 15, 0.9)';
-// Display numerals and names (index.css --font-display). Every use sets its
-// line height so a panel stays the height hudInsets expects.
-const DISPLAY = 'var(--font-display)';
 // Two slanted orange slashes at a card's right edge, like a manga panel.
 const CARD_SLASHES = 'linear-gradient(105deg, transparent 0 80%, rgba(245,130,31,0.22) 80% 82%, '
   + 'transparent 82% 85%, rgba(245,130,31,0.22) 85% 86%, transparent 86%)';
 
-// Text floor: nothing in the HUD is smaller than 12 px (0.75rem) at 100%
-// HUD, and the numbers players read mid-fight are at least 1.1rem. The
-// HUD zoom (hudZoom in scene/cameraFraming) also grows with the viewport.
-const LABEL = '0.75rem';
-const NUMBER = '1.1rem';
+// The HUD's text is the named text styles (theme/tokens), with each size
+// and line height written out in rem instead of var(--text-*): the HUD's
+// tests read the declared size, and jsdom does not resolve var().
+const REM: Record<string, string> = {
+  'text-xs': '0.75rem',
+  'leading-xs': '1rem',
+  'text-sm': '0.875rem',
+  'leading-sm': '1.25rem',
+  'text-base': '1rem',
+  'leading-base': '1.5rem',
+  'text-lg': '1.125rem',
+  'leading-lg': '1.75rem',
+  'text-xl': '1.25rem',
+  'leading-xl': '1.75rem',
+};
+type TextStyle = { fontSize: string; lineHeight: string | number };
+const literal = (value: string | number) => (
+  typeof value === 'string' ? value.replace(/^var\(--([\w-]+)\)$/, (match, name) => REM[name] ?? match) : value
+);
+function hudText<T extends TextStyle>(style: T): Omit<T, keyof TextStyle> & TextStyle {
+  return { ...style, fontSize: literal(style.fontSize), lineHeight: literal(style.lineHeight) };
+}
+type Step = 'xs' | 'sm' | 'base' | 'lg' | 'xl';
+// Numerals and names in the display face (one weight) at a scale step. Line
+// height 1 (inside the step's own) keeps each panel the height hudInsets
+// expects; the strip's cells take the step's paired line height.
+const hudDisplay = (step: Step, lineHeight: string | number = 1) => ({
+  fontFamily: 'var(--font-display)',
+  fontSize: REM[`text-${step}`],
+  fontWeight: 400,
+  lineHeight,
+  letterSpacing: '0.04em',
+});
+const CAPTION = hudText(textStyles.caption3);
+
+// A small ink-edged diamond before a label: the colour marks the panel
+// (boss, objective, request) in place of a one-sided accent stripe.
+const marker = (color: string) => ({
+  content: '""',
+  flex: '0 0 auto',
+  alignSelf: 'center',
+  width: 8,
+  height: 8,
+  margin: `0 ${space[50]}px 0 ${space[25]}px`,
+  background: color,
+  border: '1px solid var(--anime-ink)',
+  transform: 'rotate(45deg)',
+});
+
+// A warning sign before the sudden-death text: ink and vermilion hazard
+// stripes in a square, so the banner reads as a warning by shape as well
+// as colour.
+const HAZARD_SIGN = {
+  content: '""',
+  flex: '0 0 auto',
+  width: 16,
+  height: 16,
+  background: 'repeating-linear-gradient(135deg, var(--anime-ink) 0 4px, var(--anime-mustard) 4px 8px)',
+  border: '1px solid var(--anime-paper-light)',
+};
+
+// MUI eases a determinate bar's transform linearly: the house curve instead.
+const BAR_MOTION = { transition: transition(['transform']) };
 
 // Layout contract: players in local versus can only be drawn inside the
 // middle band of the screen. The camera centres their bounding box and the
@@ -25,9 +83,12 @@ const NUMBER = '1.1rem';
 // bottom band (below 65%), never at mid-height. Positions are in HUD units:
 // HudRoot is zoomed, so `%` is the zoomed viewport and the unzoomed top
 // controls (about 276 x 76 px at the top right) are cleared with
-// `px / var(--hud-zoom)`.
+// `px / var(--hud-zoom)`. The clearances are scene/cameraFraming's own
+// (belowControls, ROW_CARD_PX), so the two stay in step.
 const CONTROLS_CLEARANCE = '290px / var(--hud-zoom, 1)';
 const BELOW_CONTROLS = 'max(78px, 84px / var(--hud-zoom, 1))';
+/** A row player card's height (hudInsets ROW_CARD_PX). */
+const CARD_PX = 80;
 const PHONE = '@media (max-width: 640px)';
 const SHORT = '@media (max-height: 560px) and (min-width: 641px)';
 // Touch controls are up (input/touchMode): --touch-bottom is their band in
@@ -62,7 +123,7 @@ export const HudRoot = styled(Box, {
 
 export const MissionStrip = styled(Box)({
   position: 'absolute',
-  top: 12,
+  top: space[100],
   // Centred, but slides left before it would reach the top controls.
   left: `max(12px, min(50% - 180px, 100% - 360px - ${CONTROLS_CLEARANCE}))`,
   zIndex: 3,
@@ -70,8 +131,8 @@ export const MissionStrip = styled(Box)({
   minHeight: 54,
   display: 'grid',
   gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 0.7fr) minmax(0, 1.05fr)',
-  gap: 1,
-  padding: 3,
+  gap: space[25],
+  padding: space[25],
   border: '2px solid var(--anime-ink)',
   background: 'var(--anime-orange)',
   boxShadow: '3px 3px 0 var(--anime-ink)',
@@ -79,7 +140,7 @@ export const MissionStrip = styled(Box)({
   // Phones: the strip is the clock cell alone (GameHUD renders only that),
   // sized to its text so the clock is never cut off.
   [PHONE]: {
-    left: 12,
+    left: space[100],
     width: 'auto',
     gridTemplateColumns: 'auto',
   },
@@ -89,22 +150,18 @@ export const MissionStatus = styled(Box)({
   minWidth: 0,
   display: 'grid',
   alignContent: 'center',
-  gap: 2,
-  padding: '6px 10px 6px 12px',
+  gap: space[25],
+  padding: `${space[50]}px ${space[100]}px`,
   background: 'var(--anime-ink)',
   '& strong': {
+    ...CAPTION,
     color: 'var(--anime-orange)',
-    fontSize: LABEL,
-    fontWeight: 900,
     textTransform: 'uppercase',
   },
   '& > span': {
+    ...hudDisplay('base', REM['leading-base']),
     overflow: 'hidden',
     color: 'var(--anime-paper-light)',
-    fontFamily: DISPLAY,
-    fontSize: '1.05rem',
-    fontWeight: 400,
-    lineHeight: 1.02,
     letterSpacing: '0.05em',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -116,25 +173,20 @@ export const MissionNode = styled(Box)({
   display: 'grid',
   placeItems: 'center',
   alignContent: 'center',
-  gap: 1,
-  padding: '5px 6px',
+  gap: space[25],
+  padding: `${space[50]}px ${space[75]}px`,
   background: 'var(--anime-paper-light)',
   textAlign: 'center',
   '& span': {
-    color: 'rgba(33,29,26,0.82)',
-    fontSize: LABEL,
-    fontWeight: 900,
+    ...CAPTION,
+    color: 'var(--ink-3)',
     textTransform: 'uppercase',
   },
   '& strong': {
+    ...hudDisplay('lg', REM['leading-lg']),
     maxWidth: '100%',
     overflow: 'hidden',
     color: 'var(--anime-ink)',
-    fontFamily: DISPLAY,
-    fontSize: NUMBER,
-    fontWeight: 400,
-    lineHeight: 1.16,
-    letterSpacing: '0.04em',
     fontVariantNumeric: 'tabular-nums',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -149,15 +201,15 @@ export const ClockNode = styled(MissionNode, {
 })<{ urgent: boolean }>(({ urgent }) => ({
   background: urgent ? 'var(--anime-vermilion)' : 'var(--anime-paper-light)',
   '& span': {
-    color: urgent ? 'var(--anime-paper-light)' : 'rgba(33,29,26,0.82)',
+    color: urgent ? 'var(--anime-paper-light)' : 'var(--ink-3)',
   },
   '& strong': {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 4,
+    gap: space[50],
     color: urgent ? 'var(--anime-paper-light)' : 'var(--anime-ink)',
-    fontSize: '1.3rem',
-    lineHeight: 1.05,
+    fontSize: REM['text-xl'],
+    lineHeight: REM['leading-xl'],
   },
   '& svg': {
     width: 18,
@@ -169,41 +221,46 @@ export const ClockNode = styled(MissionNode, {
   // controls on a 360 px phone.
   [PHONE]: {
     minWidth: 'calc(54px / max(1, var(--hud-zoom, 1)))',
-    padding: '4px 3px',
+    padding: `${space[50]}px ${space[50]}px`,
     '& span': {
-      fontSize: `calc(${LABEL} / max(1, var(--hud-zoom, 1)))`,
+      fontSize: `calc(${REM['text-xs']} / max(1, var(--hud-zoom, 1)))`,
+      lineHeight: `calc(${REM['leading-xs']} / max(1, var(--hud-zoom, 1)))`,
     },
     '& strong': {
       maxWidth: 'none',
       overflow: 'visible',
-      fontSize: `calc(${NUMBER} / max(1, var(--hud-zoom, 1)))`,
+      fontSize: `calc(${REM['text-lg']} / max(1, var(--hud-zoom, 1)))`,
+      lineHeight: `calc(${REM['leading-lg']} / max(1, var(--hud-zoom, 1)))`,
       textOverflow: 'clip',
     },
   },
 }));
 
 // Last 5 s of the clock and sudden death itself: the status and threats
-// cells give way to one banner, striped at its edge so it reads as a
-// warning by shape as well as colour. Static: no animation or flash.
+// cells give way to one banner, led by a striped hazard sign so it reads as
+// a warning by shape as well as colour. Static: no animation or flash.
 export const SuddenDeathCell = styled(Box)({
   gridColumn: '1 / 3',
   minWidth: 0,
-  display: 'grid',
-  alignContent: 'center',
-  gap: 1,
-  padding: '5px 10px 5px 22px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: space[75],
+  padding: `${space[50]}px ${space[100]}px`,
   color: 'var(--anime-paper-light)',
-  background: 'repeating-linear-gradient(135deg, var(--anime-ink) 0 5px, var(--anime-vermilion) 5px 10px) left / 12px 100% no-repeat, var(--anime-vermilion)',
+  background: 'var(--anime-vermilion)',
+  '&::before': HAZARD_SIGN,
+  '& > div': {
+    minWidth: 0,
+    display: 'grid',
+    gap: space[25],
+  },
   '& span': {
-    fontSize: LABEL,
-    fontWeight: 900,
+    ...CAPTION,
     textTransform: 'uppercase',
   },
   '& strong': {
+    ...hudDisplay('lg', REM['leading-lg']),
     overflow: 'hidden',
-    fontSize: '1.05rem',
-    fontWeight: 900,
-    lineHeight: 1.1,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
@@ -213,14 +270,14 @@ export const SuddenDeathCell = styled(Box)({
 // hudInsets keeps the players above it.
 const BOTTOM_LINE = {
   position: 'absolute' as const,
-  bottom: 12,
+  bottom: space[100],
   zIndex: 3,
   boxSizing: 'border-box' as const,
   minHeight: 40,
   pointerEvents: 'none' as const,
   [PHONE]: {
-    left: 12,
-    right: 12,
+    left: space[100],
+    right: space[100],
     // On top of the touch band, between the touch columns.
     [TOUCH]: {
       bottom: `calc(12px + ${IN_HUD_PX('--touch-bottom')})`,
@@ -229,13 +286,13 @@ const BOTTOM_LINE = {
     },
   },
   [SHORT]: {
-    right: 12,
+    right: space[100],
     width: 'min(380px, 100% - 260px)',
     // Under P1's card in the left column (PlayerCards), clear of the controls.
     [TOUCH]: {
-      top: `calc(${BELOW_CONTROLS} + 88px)`,
+      top: `calc(${BELOW_CONTROLS} + ${CARD_PX}px + 8px)`,
       bottom: 'auto',
-      left: 12,
+      left: space[100],
       right: 'auto',
       width: 206,
     },
@@ -247,20 +304,19 @@ export const PhoneSuddenDeathBanner = styled(Box)({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  gap: 8,
-  padding: '6px 10px 6px 24px',
+  gap: space[75],
+  padding: `${space[50]}px ${space[100]}px`,
   color: 'var(--anime-paper-light)',
-  background: 'repeating-linear-gradient(135deg, var(--anime-ink) 0 5px, var(--anime-vermilion) 5px 10px) left / 14px 100% no-repeat, var(--anime-vermilion)',
+  background: 'var(--anime-vermilion)',
   border: '2px solid var(--anime-ink)',
   boxShadow: '3px 3px 0 var(--anime-ink)',
+  '&::before': HAZARD_SIGN,
   '& strong': {
-    fontSize: '1rem',
-    fontWeight: 900,
+    ...hudDisplay('base', REM['leading-base']),
     whiteSpace: 'nowrap',
   },
   '& span': {
-    fontSize: LABEL,
-    fontWeight: 900,
+    ...CAPTION,
     textTransform: 'uppercase',
     whiteSpace: 'nowrap',
   },
@@ -271,40 +327,37 @@ export const MissionLine = styled(Box, {
 })<{ boss: boolean }>(({ boss }) => ({
   ...BOTTOM_LINE,
   display: 'grid',
-  gap: 4,
-  padding: '6px 9px 7px',
+  gap: space[50],
+  padding: `${space[50]}px ${space[75]}px`,
   color: 'var(--anime-ink)',
   background: PANEL_SURFACE,
-  border: '2px solid var(--anime-ink)',
-  borderLeft: `6px solid ${boss ? 'var(--anime-vermilion)' : 'var(--anime-olive)'}`,
+  border: `2px solid ${PANEL_EDGE}`,
   boxShadow: PANEL_SHADOW,
   '& > div': {
     display: 'flex',
     alignItems: 'baseline',
-    gap: 8,
+    gap: space[75],
     minWidth: 0,
+    '&::before': marker(boss ? 'var(--anime-vermilion)' : 'var(--anime-olive)'),
   },
   '& strong': {
+    ...hudText(textStyles.title4),
     flex: '1 1 auto',
     minWidth: 0,
     overflow: 'hidden',
-    fontSize: '0.86rem',
-    fontWeight: 900,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
   '& span': {
+    ...hudText(textStyles.body4),
     flex: '0 0 auto',
-    fontSize: '0.92rem',
-    fontWeight: 900,
     fontVariantNumeric: 'tabular-nums',
   },
   '& em': {
+    ...CAPTION,
     flex: '0 0 auto',
     color: '#8f2f26',
-    fontSize: LABEL,
     fontStyle: 'normal',
-    fontWeight: 900,
   },
 }));
 
@@ -312,9 +365,10 @@ export const MissionLineProgress = styled(LinearProgress, {
   shouldForwardProp: (prop) => prop !== 'boss',
 })<{ boss: boolean }>(({ boss }) => ({
   height: 5,
-  borderRadius: 0,
+  borderRadius: radius.none,
   backgroundColor: 'rgba(33, 29, 26, 0.2)',
   '& .MuiLinearProgress-bar': {
+    ...BAR_MOTION,
     background: boss ? 'var(--anime-vermilion)' : 'var(--anime-teal)',
   },
 }));
@@ -325,14 +379,14 @@ export const MissionLineProgress = styled(LinearProgress, {
 export const PlayerCards = styled(Box)({
   position: 'absolute',
   top: BELOW_CONTROLS,
-  left: 12,
-  right: 12,
+  left: space[100],
+  right: space[100],
   zIndex: 2,
   display: 'flex',
   flexWrap: 'nowrap',
   justifyContent: 'space-between',
   alignItems: 'flex-start',
-  gap: 8,
+  gap: space[75],
   pointerEvents: 'none',
   '& > *': {
     pointerEvents: 'auto',
@@ -343,7 +397,7 @@ export const PlayerCards = styled(Box)({
     display: 'grid',
     gridAutoFlow: 'column',
     gridAutoColumns: 'minmax(0, 1fr)',
-    gap: 6,
+    gap: space[75],
     '&:has(> :nth-child(4))': {
       gridAutoFlow: 'row',
       gridAutoColumns: 'auto',
@@ -354,7 +408,7 @@ export const PlayerCards = styled(Box)({
   // edge instead (the players' band ends at 65% of the height).
   [SHORT]: {
     top: 'auto',
-    bottom: 12,
+    bottom: space[100],
     // With touch controls in the bottom corners the cards stand above them:
     // P1/P3 on the left, P2/P4 on the right under the top
     // controls, and the middle stays open for the players.
@@ -363,7 +417,7 @@ export const PlayerCards = styled(Box)({
       bottom: 'auto',
       display: 'grid',
       gridTemplateColumns: 'auto minmax(0, 1fr) auto',
-      gap: 8,
+      gap: space[75],
       '& > :nth-of-type(2)': { gridColumn: 3, gridRow: 1 },
       '& > :nth-of-type(3)': { gridColumn: 1, gridRow: 2 },
       '& > :nth-of-type(4)': { gridColumn: 3, gridRow: 2 },
@@ -371,21 +425,21 @@ export const PlayerCards = styled(Box)({
   },
 });
 
+// An ink keyline all round; the slot colour is on the "P1" badge inside.
 export const PlayerCardPaper = styled('section', {
-  shouldForwardProp: (prop) => !['alive', 'slotColor', 'cardOrder'].includes(String(prop)),
-})<{ alive: boolean; slotColor: string; cardOrder: number }>(({ alive, slotColor, cardOrder }) => ({
+  shouldForwardProp: (prop) => !['alive', 'cardOrder'].includes(String(prop)),
+})<{ alive: boolean; cardOrder: number }>(({ alive, cardOrder }) => ({
   position: 'relative',
   boxSizing: 'border-box',
   order: cardOrder,
   flex: '0 1 248px',
   minWidth: 0,
   width: 248,
-  padding: '6px 8px 7px 7px',
+  padding: space[75],
   background: alive ? `${CARD_SLASHES}, ${PANEL_SURFACE}` : 'rgba(226, 216, 194, 0.94)',
   color: 'var(--anime-ink)',
   border: `2px solid ${PANEL_EDGE}`,
-  borderTop: `4px solid ${slotColor}`,
-  borderRadius: 2,
+  borderRadius: radius.sm,
   boxShadow: PANEL_SHADOW,
   '@media (max-width: 900px)': {
     flexBasis: 206,
@@ -394,23 +448,24 @@ export const PlayerCardPaper = styled('section', {
   [PHONE]: {
     width: 'auto',
     minWidth: 0,
-    padding: '5px 6px 6px',
   },
 }));
 
+// Badge, portrait, then the name and the match score beside them; the
+// numbers take the card's full width on the line below (PlayerStats).
 export const PlayerHeader = styled(Box)({
   display: 'grid',
   gridTemplateColumns: '24px 36px minmax(0, 1fr)',
   alignItems: 'center',
-  gap: 6,
+  gap: space[75],
   '@media (max-width: 900px)': {
     gridTemplateColumns: '24px minmax(0, 1fr)',
   },
-  // Phones: badge and name share the first line, the numbers get the full
-  // card width below (PlayerIdentity's children join this grid).
+  // Phones: badge and name share the first line, the match score gets the
+  // full card width below (PlayerIdentity's children join this grid).
   [PHONE]: {
     gridTemplateColumns: 'auto minmax(0, 1fr)',
-    gap: '3px 5px',
+    gap: `${space[25]}px ${space[50]}px`,
     '& > :last-child': { display: 'contents' },
     '& > :last-child > :not(strong)': { gridColumn: '1 / -1' },
   },
@@ -421,23 +476,18 @@ export const PlayerHeader = styled(Box)({
 export const SlotBadge = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'slotColor' && prop !== 'textColor',
 })<{ slotColor: string; textColor: string }>(({ slotColor, textColor }) => ({
+  ...hudDisplay('sm'),
   alignSelf: 'stretch',
   minHeight: 36,
   display: 'grid',
   placeItems: 'center',
-  borderRadius: 1,
   color: textColor,
   background: slotColor,
   border: '2px solid var(--anime-ink)',
-  fontFamily: DISPLAY,
-  fontSize: '0.95rem',
-  fontWeight: 400,
-  letterSpacing: '0.04em',
-  lineHeight: 1,
   [PHONE]: {
     minHeight: 0,
-    padding: '2px 4px',
-    fontSize: LABEL,
+    padding: `${space[25]}px ${space[50]}px`,
+    fontSize: REM['text-xs'],
   },
 }));
 
@@ -449,7 +499,6 @@ export const PlayerAvatar = styled(Box, {
 }) => ({
   width: 36,
   height: 36,
-  borderRadius: 2,
   backgroundImage: `url(${image})`,
   backgroundSize: '600% 280%',
   backgroundPosition: imagePosition,
@@ -463,21 +512,17 @@ export const PlayerAvatar = styled(Box, {
 export const PlayerIdentity = styled(Box)({
   minWidth: 0,
   display: 'grid',
-  gap: 3,
+  gap: space[25],
   '& > strong': {
+    ...hudDisplay('base'),
     overflow: 'hidden',
     color: 'var(--anime-ink)',
-    fontFamily: DISPLAY,
-    fontSize: '1.05rem',
-    fontWeight: 400,
-    // The old 0.92rem x 1.1 line box (about 16 px), so the card keeps its height.
-    lineHeight: 0.965,
     letterSpacing: '0.05em',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
   [PHONE]: {
-    '& > strong': { fontSize: '0.94rem', lineHeight: 0.96 },
+    '& > strong': { fontSize: REM['text-sm'] },
   },
 });
 
@@ -488,7 +533,7 @@ export const CardMeta = styled(Box)({
   display: 'flex',
   flexWrap: 'wrap',
   alignItems: 'center',
-  gap: '3px 6px',
+  gap: `${space[25]}px ${space[75]}px`,
   minHeight: 16,
 });
 
@@ -497,7 +542,7 @@ export const CardMeta = styled(Box)({
 export const WinPips = styled('span')({
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 3,
+  gap: space[50],
   flex: '0 0 auto',
 });
 
@@ -508,36 +553,38 @@ export const Pip = styled('span', {
   height: 12,
   flex: '0 0 auto',
   boxSizing: 'border-box',
-  borderRadius: '50%',
+  borderRadius: radius.full,
   border: '2px solid var(--anime-ink)',
   background: filled ? 'var(--anime-ink)' : 'var(--anime-paper-light)',
 }));
 
 // Square-cornered ink chip, apart from the round pips.
 export const CpuBadge = styled('span')({
+  ...CAPTION,
   flex: '0 0 auto',
   maxWidth: '100%',
   minWidth: 0,
   overflow: 'hidden',
-  padding: '1px 5px',
+  padding: `0 ${space[50]}px`,
   color: 'var(--anime-paper-light)',
   background: 'var(--anime-ink)',
-  fontSize: LABEL,
-  fontWeight: 900,
-  lineHeight: 1.2,
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
 });
 
-// Phones: bombs and blast on one line, the ultimate bar on the next, so a
-// card is the same height with two or three players.
+// The card's full width under the header, so health, bombs, blast and the
+// ultimate bar fit side by side. Phones: health, bombs and blast on one
+// line, the ultimate bar on the next, so a card is the same height with
+// two or three players.
 export const PlayerStats = styled(Box)({
   display: 'flex',
   alignItems: 'stretch',
-  gap: 4,
+  gap: space[50],
+  marginTop: space[50],
   [PHONE]: {
     flexWrap: 'wrap',
-    rowGap: 3,
+    rowGap: space[25],
+    marginTop: space[25],
   },
 });
 
@@ -547,9 +594,8 @@ export const StatCell = styled(Box)({
   minWidth: 0,
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 3,
-  padding: '1px 5px',
-  borderRadius: 1,
+  gap: space[25],
+  padding: `0 ${space[50]}px`,
   color: 'var(--anime-ink)',
   background: 'var(--anime-paper)',
   border: '1px solid rgba(33,29,26,0.4)',
@@ -559,16 +605,12 @@ export const StatCell = styled(Box)({
     flex: '0 0 auto',
   },
   '& strong': {
-    fontFamily: DISPLAY,
-    fontSize: NUMBER,
-    fontWeight: 400,
+    ...hudDisplay('lg'),
     letterSpacing: '0.03em',
     fontVariantNumeric: 'tabular-nums',
-    lineHeight: 1.05,
   },
   [PHONE]: {
-    gap: 1,
-    padding: '0 2px',
+    padding: `0 ${space[25]}px`,
     '& svg': { width: 12, height: 12 },
   },
 });
@@ -581,9 +623,8 @@ export const UltimateCell = styled(Box, {
   minWidth: 40,
   display: 'flex',
   alignItems: 'center',
-  gap: 4,
-  padding: '2px 5px',
-  borderRadius: 1,
+  gap: space[50],
+  padding: `0 ${space[50]}px`,
   color: 'var(--anime-ink)',
   background: ready ? 'var(--anime-mustard)' : 'var(--anime-paper)',
   border: `1px solid ${ready ? 'var(--anime-ink)' : 'rgba(33,29,26,0.4)'}`,
@@ -599,14 +640,13 @@ export const UltimateCell = styled(Box, {
   },
   [PHONE]: {
     flexBasis: '100%',
-    padding: '1px 4px',
     '& svg': { width: 12, height: 12 },
   },
 }));
 
 export const UltimateProgress = styled(LinearProgress)({
   height: 6,
-  borderRadius: 0,
+  borderRadius: radius.none,
   backgroundColor: 'rgba(33, 29, 26, 0.2)',
   '& .MuiLinearProgress-bar': {
     background: 'var(--anime-vermilion)',
@@ -616,37 +656,41 @@ export const UltimateProgress = styled(LinearProgress)({
   },
 });
 
+// "OUT" and how, on the line the numbers had.
 export const OutNote = styled(Box)({
-  display: 'grid',
-  gap: 2,
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: `${space[25]}px ${space[75]}px`,
+  marginTop: space[50],
   color: '#8f2f26',
-  fontSize: LABEL,
-  fontWeight: 800,
-  lineHeight: 1.2,
   '& strong': {
-    width: 'fit-content',
-    padding: '1px 6px',
-    borderRadius: 1,
+    ...CAPTION,
+    flex: '0 0 auto',
+    padding: `0 ${space[50]}px`,
     color: 'var(--anime-paper-light)',
     background: 'var(--anime-vermilion)',
     border: '1px solid var(--anime-ink)',
-    fontSize: LABEL,
-    fontWeight: 900,
     textTransform: 'uppercase',
   },
   '& span': {
+    ...hudText(textStyles.caption4),
     display: '-webkit-box',
+    minWidth: 0,
     overflow: 'hidden',
     WebkitBoxOrient: 'vertical',
     WebkitLineClamp: 2,
+  },
+  [PHONE]: {
+    flexWrap: 'wrap',
+    marginTop: space[25],
   },
 });
 
 export const PowerChips = styled(Box)({
   display: 'flex',
-  gap: 4,
+  gap: space[50],
   flexWrap: 'wrap',
-  marginTop: 5,
+  marginTop: space[50],
   [PHONE]: {
     display: 'none',
   },
@@ -655,25 +699,22 @@ export const PowerChips = styled(Box)({
 export const PowerBadge = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'color' && prop !== 'accent',
 })<{ color: string; accent: string }>(({ color, accent }) => ({
+  ...CAPTION,
   minHeight: 18,
   maxWidth: '100%',
-  padding: '2px 6px',
-  borderRadius: 2,
+  padding: `0 ${space[50]}px`,
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 4,
+  gap: space[50],
   color: 'var(--anime-ink)',
   background: `color-mix(in srgb, ${color} 20%, var(--anime-paper-light))`,
   border: `1px solid ${accent}`,
-  fontSize: LABEL,
-  fontWeight: 800,
-  lineHeight: 1.1,
   '&::before': {
     content: '""',
     width: 6,
     height: 6,
     flex: '0 0 auto',
-    borderRadius: '50%',
+    borderRadius: radius.full,
     background: accent,
     border: '1px solid var(--anime-ink)',
   },
@@ -683,19 +724,18 @@ export const PowerBadge = styled(Box, {
 export const PickupNote = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'color',
 })<{ color: string }>(({ color }) => ({
+  ...hudText(textStyles.caption5),
   display: '-webkit-box',
   overflow: 'hidden',
   WebkitBoxOrient: 'vertical',
   WebkitLineClamp: 2,
-  marginTop: 5,
-  padding: '3px 6px',
-  borderRadius: 2,
+  marginTop: space[50],
+  padding: `${space[25]}px ${space[50]}px`,
   color: 'var(--anime-ink)',
   background: `color-mix(in srgb, ${color} 16%, var(--anime-paper-light))`,
   border: `1px solid ${color}`,
-  fontSize: LABEL,
-  lineHeight: 1.2,
   '& strong': {
+    fontWeight: textStyles.caption3.fontWeight,
     textTransform: 'uppercase',
   },
   [PHONE]: {
@@ -708,7 +748,7 @@ export const PickupNote = styled(Box, {
 export const HudRight = styled(Box)({
   position: 'absolute',
   top: 'calc(84px / var(--hud-zoom, 1))',
-  right: 12,
+  right: space[100],
   zIndex: 2,
   // Never past the middle, where the campaign camera keeps its lone player
   // (a 768 px tablet at 125% HUD would otherwise cover it).
@@ -721,7 +761,7 @@ export const HudRight = styled(Box)({
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',
-  gap: 8,
+  gap: space[75],
   pointerEvents: 'auto',
 });
 
@@ -730,55 +770,55 @@ export const ObjectivePaper = styled('section')({
   boxSizing: 'border-box',
   minHeight: 0,
   overflow: 'hidden',
-  padding: '8px 9px 9px',
+  padding: `${space[75]}px ${space[100]}px ${space[100]}px`,
   color: 'var(--anime-ink)',
   background: PANEL_SURFACE,
-  border: '2px solid var(--anime-ink)',
-  borderTop: '4px solid var(--anime-olive)',
-  borderRadius: 2,
+  border: `2px solid ${PANEL_EDGE}`,
+  borderRadius: radius.sm,
   boxShadow: PANEL_SHADOW,
   '& h2': {
+    ...hudDisplay('base', REM['leading-base']),
+    display: 'flex',
+    alignItems: 'center',
+    gap: space[75],
     margin: 0,
-    fontSize: '0.8rem',
-    fontWeight: 900,
-    lineHeight: 1.2,
-    textTransform: 'uppercase',
+    '&::before': marker('var(--anime-olive)'),
   },
 });
 
 export const CampaignMessage = styled.p({
+  ...hudText(textStyles.body6),
   display: '-webkit-box',
   overflow: 'hidden',
   WebkitBoxOrient: 'vertical',
   WebkitLineClamp: 2,
-  margin: '3px 0 0',
+  margin: `${space[50]}px 0 0`,
   color: 'var(--anime-line)',
-  fontSize: LABEL,
-  lineHeight: 1.3,
 });
 
 export const CampaignEventBanner = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'color',
 })<{ color: string }>(({ color }) => ({
+  ...hudText(textStyles.body6),
   display: '-webkit-box',
   overflow: 'hidden',
   WebkitBoxOrient: 'vertical',
   WebkitLineClamp: 3,
-  marginTop: 6,
-  padding: '4px 6px',
-  borderRadius: 2,
+  marginTop: space[75],
+  padding: `${space[50]}px ${space[75]}px`,
   color: 'var(--anime-ink)',
   background: `color-mix(in srgb, ${color} 16%, var(--anime-paper-light))`,
   border: `1px solid ${color}`,
-  fontSize: LABEL,
-  lineHeight: 1.25,
+  '& strong': {
+    fontWeight: textStyles.body4.fontWeight,
+  },
 }));
 
 export const ObjectiveList = styled.ul({
   display: 'grid',
   gridTemplateColumns: 'minmax(0, 1fr)',
-  gap: 4,
-  margin: '6px 0 0',
+  gap: space[50],
+  margin: `${space[75]}px 0 0`,
   padding: 0,
   listStyle: 'none',
 });
@@ -788,15 +828,15 @@ export const ObjectiveItem = styled('li', {
 })<{ status: string }>(({ status }) => ({
   display: 'grid',
   gridTemplateColumns: 'minmax(0, 1fr)',
-  gap: 3,
-  padding: status === 'active' ? '5px 6px' : '3px 6px',
-  borderRadius: 1,
+  gap: space[25],
+  padding: status === 'active'
+    ? `${space[50]}px ${space[75]}px`
+    : `${space[25]}px ${space[75]}px`,
   background: status === 'active' ? 'var(--anime-paper)' : 'transparent',
   border: '1px solid rgba(33,29,26,0.3)',
   '& > span': {
+    ...hudText(textStyles.caption5),
     color: 'var(--anime-line)',
-    fontSize: LABEL,
-    lineHeight: 1.2,
   },
 }));
 
@@ -804,13 +844,11 @@ export const ObjectiveMeta = styled(Box)({
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-  gap: 6,
+  gap: space[75],
   '& strong': {
+    ...hudText(textStyles.title4),
     minWidth: 0,
     overflow: 'hidden',
-    fontSize: '0.8rem',
-    fontWeight: 900,
-    lineHeight: 1.2,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
@@ -827,17 +865,14 @@ export const ObjectiveStatusBadge = styled(Box, {
   };
   const color = colors[status] ?? colors.locked;
   return {
+    ...CAPTION,
     flex: '0 0 auto',
     minWidth: 48,
-    padding: '2px 5px',
-    borderRadius: 1,
+    padding: `${space[25]}px ${space[50]}px`,
     color: status === 'active' || status === 'failed'
       ? 'var(--anime-paper-light)'
       : 'var(--anime-ink)',
     background: color,
-    fontSize: LABEL,
-    fontWeight: 900,
-    lineHeight: 1.1,
     textAlign: 'center',
     textTransform: 'uppercase',
   };
@@ -845,25 +880,26 @@ export const ObjectiveStatusBadge = styled(Box, {
 
 export const ObjectiveProgress = styled(LinearProgress)({
   height: 6,
-  borderRadius: 0,
+  borderRadius: radius.none,
   backgroundColor: 'rgba(33, 29, 26, 0.2)',
   '& .MuiLinearProgress-bar': {
+    ...BAR_MOTION,
     background: 'var(--anime-teal)',
   },
 });
 
 export const IntelLine = styled(Box)({
+  ...CAPTION,
   display: 'flex',
   flexWrap: 'wrap',
-  gap: '2px 10px',
-  marginTop: 6,
-  color: 'rgba(33,29,26,0.82)',
-  fontSize: LABEL,
-  fontWeight: 800,
+  alignItems: 'baseline',
+  gap: `${space[25]}px ${space[100]}px`,
+  marginTop: space[75],
+  color: 'var(--ink-3)',
   textTransform: 'uppercase',
   '& strong': {
+    ...hudText(textStyles.body4),
     color: '#8f2f26',
-    fontSize: '0.86rem',
     fontVariantNumeric: 'tabular-nums',
   },
 });
@@ -871,21 +907,18 @@ export const IntelLine = styled(Box)({
 export const PatrolLine = styled(Box)({
   display: 'flex',
   flexWrap: 'wrap',
-  gap: 4,
-  marginTop: 6,
+  gap: space[50],
+  marginTop: space[75],
 });
 
 export const MonsterBadge = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'color',
 })<{ color: string }>(({ color }) => ({
-  padding: '2px 6px',
-  borderRadius: 1,
+  ...CAPTION,
+  padding: `${space[25]}px ${space[50]}px`,
   color: 'var(--anime-ink)',
   background: `color-mix(in srgb, ${color} 18%, var(--anime-paper-light))`,
   border: `1px solid ${color}`,
-  fontSize: LABEL,
-  fontWeight: 800,
-  lineHeight: 1.2,
 }));
 
 export const BossPaper = styled('section', {
@@ -894,44 +927,43 @@ export const BossPaper = styled('section', {
   boxSizing: 'border-box',
   flex: '0 0 auto',
   display: 'grid',
-  gap: 4,
-  padding: '7px 9px 8px',
+  gap: space[50],
+  padding: `${space[75]}px ${space[100]}px`,
   background: PANEL_SURFACE,
   color: 'var(--anime-ink)',
-  border: '2px solid var(--anime-ink)',
-  borderTop: `5px solid ${color}`,
-  borderRadius: 2,
+  border: `2px solid ${PANEL_EDGE}`,
+  borderRadius: radius.sm,
   boxShadow: PANEL_SHADOW,
   '& > div': {
     display: 'flex',
     flexWrap: 'wrap',
     alignItems: 'baseline',
-    gap: '0 8px',
+    gap: `0 ${space[75]}px`,
+    '&::before': marker(color),
     '& strong': {
-      fontSize: '0.86rem',
-      fontWeight: 900,
+      ...hudText(textStyles.body4),
       fontVariantNumeric: 'tabular-nums',
     },
     '& strong:last-of-type': {
       marginLeft: 'auto',
     },
     '& span': {
+      ...hudText(textStyles.caption5),
       color: 'var(--anime-line)',
-      fontSize: LABEL,
     },
   },
   '& > span': {
+    ...CAPTION,
     color: '#8f2f26',
-    fontSize: LABEL,
-    fontWeight: 800,
   },
 }));
 
 export const BossProgress = styled(LinearProgress)({
   height: 8,
-  borderRadius: 0,
+  borderRadius: radius.none,
   backgroundColor: 'rgba(33, 29, 26, 0.2)',
   '& .MuiLinearProgress-bar': {
+    ...BAR_MOTION,
     background: 'var(--anime-vermilion)',
   },
 });

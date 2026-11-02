@@ -1,47 +1,43 @@
 import React from 'react';
 import styled from '@emotion/styled';
+import { space, textStyles } from '../../theme/tokens';
 import { WaveLineModel } from './waveCopy';
 
 // The defense's wave line in the mission panel: "Wave 2/4 · in 0:12", and
-// under it where the marked wave comes from. A held wave keeps a dashed
-// edge and the word "held", so the state never rests on colour alone.
-
-const LABEL = '0.75rem';
+// under it where the marked wave comes from. A held wave is boxed in a
+// dashed vermilion edge (a solid accent one otherwise) and says "held", so
+// the state never rests on colour alone.
 
 const WaveRow = styled('div', {
   shouldForwardProp: (prop) => prop !== 'held',
 })<{ held: boolean }>(({ held }) => ({
   display: 'grid',
-  gap: 2,
-  marginTop: 6,
-  padding: '4px 6px',
+  gap: space[25],
+  marginTop: space[75],
+  padding: `${space[50]}px ${space[75]}px`,
   color: 'var(--anime-ink)',
   background: 'var(--anime-paper)',
-  border: '1px solid rgba(33,29,26,0.3)',
-  borderLeft: `4px ${held ? 'dashed' : 'solid'} ${held ? 'var(--anime-vermilion)' : 'var(--anime-teal)'}`,
+  border: `2px ${held ? 'dashed' : 'solid'} ${held ? 'var(--anime-vermilion)' : 'var(--anime-teal)'}`,
   '& > div': {
     display: 'flex',
     alignItems: 'baseline',
-    gap: 6,
+    gap: space[75],
     minWidth: 0,
   },
   '& strong': {
-    fontSize: '0.8rem',
-    fontWeight: 900,
+    ...textStyles.title4,
     whiteSpace: 'nowrap',
   },
   '& b': {
+    ...textStyles.body4,
     marginLeft: 'auto',
-    fontSize: '0.92rem',
-    fontWeight: 900,
     fontVariantNumeric: 'tabular-nums',
     whiteSpace: 'nowrap',
   },
   '& small': {
+    ...textStyles.caption5,
     overflow: 'hidden',
     color: 'var(--anime-line)',
-    fontSize: LABEL,
-    lineHeight: 1.2,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },

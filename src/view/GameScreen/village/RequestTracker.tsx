@@ -1,31 +1,42 @@
 import React from 'react';
 import styled from '@emotion/styled';
+import { space, textStyles } from '../../../theme/tokens';
 import type { TrackedRequest } from './villageCopy';
 
 // The board requests taken this mission, in the mission panel under the
-// objectives: "Lost Tea Tins 1/3". Done ones get a solid edge and the word
-// "Done", failed ones a dashed edge and "Failed": never colour alone.
+// objectives: "Lost Tea Tins 1/3", after a mustard square. Each row ends in
+// its count or the word "Done" or "Failed", and a failed one is struck
+// through: never colour alone.
 
 const Row = styled.div`
   display: grid;
-  gap: 2px;
-  margin-top: 6px;
-  padding: 4px 6px;
+  gap: ${space[25]}px;
+  margin-top: ${space[75]}px;
+  padding: ${space[50]}px ${space[75]}px;
   color: var(--anime-ink);
   background: var(--anime-paper);
   border: 1px solid rgba(33, 29, 26, 0.3);
-  border-left: 4px solid var(--anime-mustard);
 
   & h3 {
+    ${textStyles.caption3}
+    display: flex;
+    align-items: center;
+    gap: ${space[75]}px;
     margin: 0;
-    font-size: 0.68rem;
-    font-weight: 900;
     text-transform: uppercase;
+  }
+
+  & h3::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: var(--anime-mustard);
+    border: 1px solid var(--anime-ink);
   }
 
   & ul {
     display: grid;
-    gap: 1px;
+    gap: ${space[25]}px;
     margin: 0;
     padding: 0;
     list-style: none;
@@ -34,10 +45,9 @@ const Row = styled.div`
   & li {
     display: flex;
     align-items: baseline;
-    gap: 6px;
+    gap: ${space[75]}px;
     min-width: 0;
-    font-size: 0.78rem;
-    font-weight: 800;
+    ${textStyles.caption4}
   }
 
   & li span {
@@ -50,6 +60,7 @@ const Row = styled.div`
 
   & li b {
     flex: 0 0 auto;
+    font-weight: ${textStyles.caption3.fontWeight};
     font-variant-numeric: tabular-nums;
   }
 
