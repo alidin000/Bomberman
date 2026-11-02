@@ -152,6 +152,9 @@
   --radius-base: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 24px;
   --radius-full: 9999px;
   --radius: var(--radius-sm);
   --shadow-1: 2px 2px 0 var(--anime-ink);
@@ -295,11 +298,28 @@ blockquote {
   text-wrap: pretty;
 }
 
+/* Nothing is set in italics: emphasis is weight, never slant. */
+em,
+i,
+cite,
+dfn,
+var,
+address {
+  font-style: normal;
+}
+
+/* Strong text is semibold, like Body 1 and Body 4, in every face that has the weight. */
+em,
+strong,
+b {
+  font-weight: 600;
+}
+
 /*
  * The named text styles. Every piece of text uses one of them, here as a
- * class or through src/theme/textStyles.ts in the styled components.
- * Headings and buttons are set in the display face, which has one weight;
- * titles, body and captions are Manrope at the listed weight.
+ * class or through textStyles in src/theme/tokens.ts. Headings 1 to 5,
+ * Heading 7 and buttons are set in the display face, which has one weight;
+ * Heading 6, titles, body and captions are Manrope at the listed weight.
  */
 .heading-1 { font: 400 var(--text-6xl) / 1 var(--font-display); letter-spacing: 0.04em; }
 .heading-2 { font: 400 var(--text-5xl) / 1 var(--font-display); letter-spacing: 0.04em; }
@@ -307,6 +327,7 @@ blockquote {
 .heading-4 { font: 400 var(--text-3xl) / var(--leading-3xl) var(--font-display); letter-spacing: 0.04em; }
 .heading-5 { font: 400 var(--text-2xl) / var(--leading-2xl) var(--font-display); letter-spacing: 0.04em; }
 .heading-6 { font: 600 var(--text-xl) / var(--leading-xl) var(--font-body); }
+.heading-7 { font: 400 var(--text-lg) / var(--leading-lg) var(--font-display); letter-spacing: 0.04em; }
 .title-1 { font: 500 var(--text-xl) / var(--leading-xl) var(--font-body); }
 .title-2 { font: 500 var(--text-lg) / var(--leading-lg) var(--font-body); }
 .title-3 { font: 500 var(--text-base) / var(--leading-base) var(--font-body); }

@@ -77,8 +77,8 @@ const button = (size: string) => ({
 });
 
 /**
- * The named text styles, one per kind of text. Headings 1 to 5 and buttons
- * are the display face (one weight); the rest are Manrope.
+ * The named text styles, one per kind of text. Headings 1 to 5, Heading 7
+ * and buttons are the display face (one weight); the rest are Manrope.
  */
 export const textStyles = {
   heading1: display('6xl', 1),
@@ -87,6 +87,8 @@ export const textStyles = {
   heading4: display('3xl', 'var(--leading-3xl)'),
   heading5: display('2xl', 'var(--leading-2xl)'),
   heading6: body('xl', 600),
+  // The next heading down: small section headers in the display face.
+  heading7: display('lg', 'var(--leading-lg)'),
   title1: body('xl', 500),
   title2: body('lg', 500),
   title3: body('base', 500),
