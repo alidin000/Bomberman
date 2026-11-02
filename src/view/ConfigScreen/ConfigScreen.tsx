@@ -62,6 +62,7 @@ import {
   MissionObjectiveList,
   MissionObjectiveItem,
   MissionActionRow,
+  SceneSkeleton,
 } from './ConfigScreen.styles';
 import { WelcomeContainer } from '../WelcomeScreen/WelcomeScreen.styles';
 import {
@@ -119,6 +120,17 @@ import { playerSlotLabel } from '../GameScreen/playerSlots';
 // A village's first deploy plays its story scene; its words and portraits
 // load only then.
 const FirstMissionScene = lazy(() => import('../HubScreen/FirstMissionScene'));
+
+// Until it arrives, a skeleton in the scene's shape: title, stage, speech box.
+const sceneLoading = (
+  <SceneSkeleton aria-hidden="true">
+    <div>
+      <div className="skeleton" style={{ width: '40%', height: 24 }} />
+      <div className="skeleton" style={{ height: 200 }} />
+      <div className="skeleton" style={{ height: 120 }} />
+    </div>
+  </SceneSkeleton>
+);
 
 type KeyErrors = {
   [key: string]: boolean;
@@ -1020,7 +1032,7 @@ export const ConfigScreen = () => {
         <RovingTabStops root={contentRef} />
       </StyledDialog>
       {sceneDeploy && (
-        <Suspense fallback={null}>
+        <Suspense fallback={sceneLoading}>
           <FirstMissionScene
             stageId={sceneDeploy.sceneStage}
             onDone={() => {

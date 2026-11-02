@@ -161,9 +161,15 @@ export const StyledDialog = styled(Dialog)({
     borderColor: 'var(--accent)',
     background: 'rgba(245,130,31,0.14)',
   },
+  // A finished step's name goes back to that step.
   '& .MuiStepButton-root': {
     padding: '4px 8px',
     margin: '-4px -8px',
+    transition: transition(['transform'], ['background-color']),
+    '&:hover': {
+      background: 'rgba(245,130,31,0.14)',
+    },
+    '&:active': PRESSED,
   },
   // Segmented choices (mode, difficulty, rounds): Button-md labels, a press
   // that sinks a pixel, and the chosen one filled orange with an ink
@@ -1298,5 +1304,36 @@ export const RoundsRow = styled.div`
     ${textStyles.title4}
     color: var(--anime-ink);
     text-transform: uppercase;
+  }
+`;
+
+/* ---- Story scene loading ------------------------------------------------- */
+
+/**
+ * While a village's first story scene downloads: that dialog's shape (title
+ * bar, portrait stage, speech box) in skeleton blocks, over its scrim and
+ * above the deck. Visual only: the deck's dialog keeps the focus.
+ */
+export const SceneSkeleton = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: rgba(14, 12, 10, 0.86);
+
+  & > div {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 860px;
+    max-width: 100%;
+    padding: 16px;
+    background: var(--anime-night);
+    border: 3px solid var(--anime-ink);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-frame);
   }
 `;
