@@ -639,6 +639,8 @@ export const CampaignRouteCard = styled('button', {
   accent: string;
   markImage?: string | null;
 }>`
+  /* Room the status chip leaves for the check badge on the chosen card. */
+  --mark-room: ${(props) => (props.active ? '16px' : '0px')};
   position: relative;
   min-height: 56px;
   padding: 8px;
@@ -686,13 +688,13 @@ export const RouteStatusBadge = styled.span<{ accent: string }>`
   display: inline-flex;
   align-items: center;
   min-height: 20px;
-  padding: 2px 8px;
+  padding: 2px 4px;
   clip-path: ${chipCut};
   color: var(--anime-ink);
   background: color-mix(in srgb, ${(props) => props.accent} 18%, var(--anime-paper-light));
   border: 1px solid ${(props) => props.accent};
   border-radius: 0;
-  margin-right: 16px;
+  margin-right: var(--mark-room, 0px);
   text-transform: uppercase;
 
   & svg {
