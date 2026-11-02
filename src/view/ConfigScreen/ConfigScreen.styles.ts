@@ -942,12 +942,12 @@ export const LockBadge = styled.span`
 export const SlotRow = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
   margin-top: 12px;
 
   @media (max-height: 560px) {
-    margin-top: 6px;
-    gap: 10px;
+    margin-top: 8px;
+    gap: 12px;
   }
 
   @media (max-width: 560px) {
@@ -969,7 +969,7 @@ export const SlotCard = styled.div`
     'controller'
     'keys';
   justify-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 
   /* Phones and short screens: portrait beside the controls, not above them. */
@@ -982,28 +982,28 @@ export const SlotCard = styled.div`
       'portrait keys';
     justify-items: start;
     align-items: center;
-    column-gap: 10px;
+    column-gap: 12px;
     row-gap: 4px;
   }
 `;
 
+/** The seat's nameplate in its slot colour (Title 4). */
 export const SlotPlate = styled.div<{ slotColor: string; textColor: string }>`
+  ${textStyles.title4}
   grid-area: plate;
   justify-self: stretch;
   display: flex;
   align-items: center;
   justify-content: space-between;
   min-height: 28px;
-  padding: 0 4px 0 10px;
+  padding: 0 4px 0 12px;
   color: ${(props) => props.textColor};
   background: ${(props) => props.slotColor};
   border: 2px solid var(--anime-ink);
   border-radius: var(--radius);
-  font-size: 0.9rem;
-  font-weight: 900;
 `;
 
-/** The x that removes the third seat. */
+/** The x that removes the third seat. Square: it sits inside the plate's 2 px corner. */
 export const SlotRemoveButton = styled.button`
   display: inline-flex;
   align-items: center;
@@ -1014,15 +1014,24 @@ export const SlotRemoveButton = styled.button`
   color: var(--anime-paper-light);
   background: var(--anime-ink);
   border: 0;
-  border-radius: var(--radius);
+  border-radius: 0;
   cursor: pointer;
+  transition: ${transition(['transform'], ['background-color'])};
 
   & svg {
-    font-size: 1rem;
+    font-size: var(--text-base);
+  }
+
+  &:hover {
+    background: var(--danger);
+  }
+
+  &:active {
+    ${PRESSED}
   }
 
   &:focus-visible {
-    outline: 3px solid var(--anime-ink);
+    outline: var(--focus-ring);
     outline-offset: 2px;
   }
 `;
@@ -1053,7 +1062,7 @@ export const SlotPicker = styled.div`
   grid-area: picker;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 `;
 
 export const SlotPickerButton = styled.button`
@@ -1068,9 +1077,14 @@ export const SlotPickerButton = styled.button`
   border: 2px solid var(--anime-ink);
   border-radius: var(--radius);
   cursor: pointer;
+  transition: ${transition(['transform'], ['background-color'])};
 
   &:hover {
     background: var(--anime-paper);
+  }
+
+  &:active {
+    ${PRESSED}
   }
 
   &:focus-visible {
@@ -1079,39 +1093,48 @@ export const SlotPickerButton = styled.button`
   }
 `;
 
+/** The seat's shinobi between the arrows (Title 3). */
 export const SlotName = styled.span`
+  ${textStyles.title3}
   min-width: 82px;
   color: var(--anime-ink);
-  font-size: 1rem;
-  font-weight: 900;
   text-align: center;
 `;
 
 /**
- * Human or CPU at a level. A CPU chip is filled ink with a robot mark, so it
- * does not rely on colour to read differently from a human chip.
+ * Human or CPU at a level, as a small button label. A CPU chip is filled ink
+ * with a robot mark, so it does not rely on colour to read differently from
+ * a human chip. The last human seat's chip is locked: dashed and dimmed.
  */
 export const ControllerChip = styled.button<{ cpu: boolean }>`
+  ${textStyles.buttonSm}
   grid-area: controller;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-height: 32px;
-  padding: 3px 12px;
+  padding: 4px 12px;
   color: ${(props) => (props.cpu ? 'var(--anime-paper-light)' : 'var(--anime-ink)')};
   background: ${(props) => (props.cpu ? 'var(--anime-ink)' : 'var(--anime-paper-light)')};
   border: 2px solid var(--anime-ink);
   border-radius: var(--radius);
-  font-size: 0.82rem;
-  font-weight: 900;
-  text-transform: uppercase;
   cursor: pointer;
+  transition: ${transition(['transform'], ['color', 'border-color'])};
 
   & svg {
-    font-size: 1.05rem;
+    font-size: var(--text-base);
+  }
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    ${PRESSED}
   }
 
   &:disabled {
+    color: var(--ink-2);
     cursor: not-allowed;
     border-style: dashed;
   }
@@ -1122,25 +1145,25 @@ export const ControllerChip = styled.button<{ cpu: boolean }>`
   }
 `;
 
-/** That seat's keys in one short line; a clash turns it into a warning. */
+/** That seat's keys in one short line (Caption 3); a clash turns it into a warning. */
 export const SlotKeys = styled.p<{ clash?: boolean }>`
+  ${textStyles.caption3}
   grid-area: keys;
   display: flex;
   align-items: center;
   gap: 4px;
   margin: 0;
   color: ${(props) => (props.clash ? 'var(--anime-vermilion-deep)' : 'var(--ink-2)')};
-  font-size: 0.8rem;
-  font-weight: 800;
   text-align: center;
 
   & svg {
-    font-size: 0.95rem;
+    font-size: var(--text-base);
   }
 `;
 
 /** The empty seat: a dashed outline that adds a third shinobi. */
 export const AddSlotButton = styled.button`
+  ${textStyles.buttonSm}
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1152,18 +1175,20 @@ export const AddSlotButton = styled.button`
   background: transparent;
   border: 2px dashed var(--ink-2);
   border-radius: var(--radius);
-  font-size: 0.9rem;
-  font-weight: 900;
-  text-transform: uppercase;
   cursor: pointer;
+  transition: ${transition(['transform'], ['background-color', 'border-color'])};
 
   & svg {
-    font-size: 2rem;
+    font-size: var(--text-3xl);
   }
 
   &:hover {
     border-color: var(--anime-ink);
     background: rgba(33, 29, 26, 0.04);
+  }
+
+  &:active {
+    ${PRESSED}
   }
 
   &:focus-visible {
@@ -1176,7 +1201,7 @@ export const AddSlotButton = styled.button`
     min-height: 44px;
 
     & svg {
-      font-size: 1.3rem;
+      font-size: var(--text-xl);
     }
   }
 `;
