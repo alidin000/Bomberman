@@ -15,9 +15,26 @@
     <meta name="darkreader-lock" />
     <meta
       name="description"
-      content="A 3D shinobi arena game with character-specific bombs, village stages, and tailed-beast boss fights."
+      content="A 3D shinobi arena game in your browser: six fighters with their own bombs, a seven village campaign and tailed beast boss fights."
     />
     <title>Explosive Shinobi Arena</title>
+    <!-- Link previews. Crawlers need absolute URLs: the live site from README.md. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Explosive Shinobi Arena" />
+    <meta property="og:title" content="Explosive Shinobi Arena" />
+    <meta
+      property="og:description"
+      content="A 3D shinobi arena game in your browser: six fighters with their own bombs, a seven village campaign and tailed beast boss fights."
+    />
+    <meta property="og:url" content="https://bomberman-zuqb.onrender.com/" />
+    <meta property="og:image" content="https://bomberman-zuqb.onrender.com/social-card.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The Explosive Shinobi Arena title screen over the Hidden Leaf village" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Explosive Shinobi Arena" />
+    <meta name="twitter:image" content="https://bomberman-zuqb.onrender.com/social-card.jpg" />
+    <meta name="twitter:image:alt" content="The Explosive Shinobi Arena title screen over the Hidden Leaf village" />
     <!-- The title screen's largest image. A CSS background set from JS is
          invisible to the preload scanner, so name it here. -->
     <link
@@ -30,6 +47,8 @@
     <!-- The title's display face (SIL OFL, public/fonts): fetched with the
          page so the static title below is set in it, not swapped later. -->
     <link rel="preload" as="font" type="font/woff2" href="/fonts/bangers-latin.woff2" crossorigin />
+    <!-- The body face (SIL OFL, public/fonts): the title screen's subtitle and captions. -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/manrope-latin.woff2" crossorigin />
     <!-- Static first paint: the title screen's frame, art and copy, drawn
          before the JS arrives. React replaces #root's content on mount.
          Mirrors the hero in src/view/WelcomeScreen/WelcomeScreen.styles.ts;

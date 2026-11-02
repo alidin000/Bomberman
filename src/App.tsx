@@ -51,19 +51,29 @@ const PrefetchHub = () => {
   return null;
 };
 
+// While a screen's chunk downloads: a skeleton shaped like the match (the
+// HUD strip over the square arena), not a spinner.
 const gameLoading = (
   <div
     role="status"
     style={{
       minHeight: '100dvh',
-      paddingTop: 32,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 16,
+      padding: 24,
       color: 'var(--anime-paper-light)',
       background: 'var(--anime-night)',
-      textAlign: 'center',
-      fontSize: '1.1rem',
     }}
   >
-    Loading game...
+    <span className="caption-4">Loading game...</span>
+    <div className="skeleton" aria-hidden="true" style={{ width: 'min(960px, 100%)', height: 48 }} />
+    <div
+      className="skeleton"
+      aria-hidden="true"
+      style={{ width: 'min(640px, 100%, calc(100dvh - 160px))', aspectRatio: '1 / 1' }}
+    />
   </div>
 );
 
@@ -75,60 +85,63 @@ export function App() {
         <MenuPad />
         {/* Touch controls on touch screens, until a keyboard or pad is used. */}
         <TouchMode />
-        <Routes>
-          <Route
-            path="/"
-            element={(
-              <>
-                <PrefetchGameWhenIdle />
-                <WelcomeScreen />
-              </>
-            )}
-          />
-          <Route
-            path="/config"
-            element={(
-              <>
-                <PrefetchGame />
-                <PrefetchHub />
-                <ConfigScreen />
-              </>
-            )}
-          />
-          <Route path="/instructions" element={<InstructionsScreen />} />
-          <Route path="/online" element={<OnlineLobbyScreen />} />
-          <Route path="/online/:roomId" element={<OnlineLobbyScreen />} />
-          <Route
-            path="/online/:roomId/play"
-            element={<Suspense fallback={gameLoading}><OnlineGameScreen /></Suspense>}
-          />
-          <Route
-            path="/dojo"
-            element={(
-              <>
-                <PrefetchDojoRoom />
-                <DojoScreen />
-              </>
-            )}
-          />
-          <Route
-            path="/dojo/:roomId"
-            element={<Suspense fallback={gameLoading}><DojoRoomScreen /></Suspense>}
-          />
-          <Route
-            path="/hub/:stageId"
-            element={(
-              <>
-                <PrefetchGame />
-                <Suspense fallback={gameLoading}><HubScreen /></Suspense>
-              </>
-            )}
-          />
-          <Route
-            path="/game/:numOfPlayers/:numOfRounds/:selectedMap"
-            element={<Suspense fallback={gameLoading}><GameScreen /></Suspense>}
-          />
-        </Routes>
+        {/* One landmark for every screen; MUI dialogs portal outside it. */}
+        <main id="main-content">
+          <Routes>
+            <Route
+              path="/"
+              element={(
+                <>
+                  <PrefetchGameWhenIdle />
+                  <WelcomeScreen />
+                </>
+              )}
+            />
+            <Route
+              path="/config"
+              element={(
+                <>
+                  <PrefetchGame />
+                  <PrefetchHub />
+                  <ConfigScreen />
+                </>
+              )}
+            />
+            <Route path="/instructions" element={<InstructionsScreen />} />
+            <Route path="/online" element={<OnlineLobbyScreen />} />
+            <Route path="/online/:roomId" element={<OnlineLobbyScreen />} />
+            <Route
+              path="/online/:roomId/play"
+              element={<Suspense fallback={gameLoading}><OnlineGameScreen /></Suspense>}
+            />
+            <Route
+              path="/dojo"
+              element={(
+                <>
+                  <PrefetchDojoRoom />
+                  <DojoScreen />
+                </>
+              )}
+            />
+            <Route
+              path="/dojo/:roomId"
+              element={<Suspense fallback={gameLoading}><DojoRoomScreen /></Suspense>}
+            />
+            <Route
+              path="/hub/:stageId"
+              element={(
+                <>
+                  <PrefetchGame />
+                  <Suspense fallback={gameLoading}><HubScreen /></Suspense>
+                </>
+              )}
+            />
+            <Route
+              path="/game/:numOfPlayers/:numOfRounds/:selectedMap"
+              element={<Suspense fallback={gameLoading}><GameScreen /></Suspense>}
+            />
+          </Routes>
+        </main>
       </ThemeProvider>
     </GameSettingsProvider>
   );

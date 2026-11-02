@@ -1,11 +1,13 @@
 import { createTheme } from '@mui/material/styles';
+import {
+  DURATION, EASE_OUT, PRESSED, radius, textStyles, transition,
+} from './tokens';
 
 // The menus' MUI theme: scroll paper, ink keylines, ninja-orange actions and
 // a heavy comic display face for titles and buttons (index.css holds the
-// colour tokens and the @font-face rules).
-const DISPLAY = '"Bangers", Impact, "Arial Narrow Bold", "Arial Black", sans-serif';
-const BODY = '"Trebuchet MS", "Arial Narrow", Arial, sans-serif';
-const display = { fontFamily: DISPLAY, fontWeight: 400, letterSpacing: '0.04em' };
+// colour tokens and the @font-face rules). Every variant is one of the named
+// text styles, and every transition runs on the house curve (theme/tokens).
+const BODY = '"Manrope", "Trebuchet MS", system-ui, sans-serif';
 
 const theme = createTheme({
   palette: {
@@ -43,23 +45,40 @@ const theme = createTheme({
   },
   typography: {
     fontFamily: BODY,
-    h1: display,
-    h2: display,
-    h3: display,
-    h4: display,
-    h5: display,
-    h6: {
-      fontWeight: 600,
-    },
-    button: {
-      fontFamily: DISPLAY,
-      textTransform: 'uppercase',
-      fontWeight: 400,
-      letterSpacing: '0.06em',
-    },
+    h1: textStyles.heading1,
+    h2: textStyles.heading2,
+    h3: textStyles.heading3,
+    h4: textStyles.heading4,
+    h5: textStyles.heading5,
+    h6: textStyles.heading6,
+    subtitle1: textStyles.title3,
+    subtitle2: textStyles.title4,
+    body1: textStyles.body3,
+    body2: textStyles.body6,
+    button: textStyles.buttonMd,
+    caption: textStyles.caption5,
+    overline: { ...textStyles.caption3, letterSpacing: '0.08em', textTransform: 'uppercase' },
   },
   shape: {
-    borderRadius: 3,
+    borderRadius: radius.sm,
+  },
+  // MUI's own transitions (dialogs, switches, ripples) on the house curve.
+  transitions: {
+    easing: {
+      easeInOut: EASE_OUT,
+      easeOut: EASE_OUT,
+      easeIn: EASE_OUT,
+      sharp: EASE_OUT,
+    },
+    duration: {
+      shortest: DURATION.min,
+      shorter: DURATION.min,
+      short: DURATION.fade,
+      standard: DURATION.fade,
+      complex: DURATION.move,
+      enteringScreen: DURATION.fade,
+      leavingScreen: DURATION.min,
+    },
   },
   components: {
     // State colours must read at 3:1 on paper: the deep accent, not the
@@ -72,14 +91,25 @@ const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 2,
-          padding: '10px 24px',
+          borderRadius: radius.sm,
+          // Main buttons: 8 px by 12 px around the label.
+          padding: '8px 12px',
           border: '2px solid #17120f',
+          transition: transition(['transform'], ['background-color', 'border-color', 'color', 'box-shadow']),
+          '&:active': PRESSED,
           // Keyboard focus is a chakra-blue ring with an aura (index.css).
           '&.Mui-focusVisible': {
             outline: 'var(--focus-ring)',
             outlineOffset: 2,
           },
+        },
+        sizeLarge: {
+          ...textStyles.buttonLg,
+          padding: '8px 16px',
+        },
+        sizeSmall: {
+          ...textStyles.buttonSm,
+          padding: '4px 8px',
         },
         contained: {
           color: 'var(--on-action)',
