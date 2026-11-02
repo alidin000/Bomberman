@@ -54,6 +54,24 @@
          Mirrors the hero in src/view/WelcomeScreen/WelcomeScreen.styles.ts;
          the empty .boot-actions block holds the Quick Play panel's place. -->
     <style>
+      @font-face {
+        font-family: "Bangers";
+        src: url("/fonts/bangers-latin.woff2") format("woff2");
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Manrope";
+        src: url("/fonts/manrope-latin.woff2") format("woff2-variations"),
+          url("/fonts/manrope-latin.woff2") format("woff2");
+        font-weight: 200 800;
+        font-display: swap;
+      }
+      .boot,
+      .boot *,
+      .boot *::before,
+      .boot *::after {
+        box-sizing: border-box;
+      }
       .boot {
         position: relative;
         min-height: 100dvh;
@@ -62,16 +80,10 @@
         align-items: center;
         justify-content: center;
         overflow: hidden;
-        padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
-          max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+        padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+          max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
         background-color: #120d0b;
-        background-image: radial-gradient(ellipse at 50% 120%, rgba(245, 130, 31, 0.38), rgba(245, 130, 31, 0) 62%);
-        font-family: "Trebuchet MS", "Arial Narrow", Arial, sans-serif;
-      }
-      @font-face {
-        font-family: "Bangers";
-        src: url("/fonts/bangers-latin.woff2") format("woff2");
-        font-display: swap;
+        font-family: "Manrope", "Trebuchet MS", system-ui, sans-serif;
       }
       .boot::before,
       .boot::after {
@@ -87,15 +99,17 @@
         mask-image: radial-gradient(ellipse at 50% 50%, transparent 0 28%, #000 70%);
       }
       .boot::after {
-        inset: 10px;
+        inset: 8px;
         border: 1px solid rgba(245, 130, 31, 0.45);
         box-shadow: inset 0 0 0 3px rgba(18, 13, 11, 0.9), inset 0 0 0 4px rgba(255, 248, 231, 0.12);
       }
       .boot-hero {
         position: relative;
         z-index: 1;
-        width: min(1120px, calc(100vw - 40px));
-        min-height: min(760px, calc(100dvh - 40px));
+        display: flex;
+        flex-direction: column;
+        width: min(1120px, 100%);
+        min-height: min(760px, calc(100dvh - 32px));
         overflow: hidden;
         border-radius: 4px;
         border: 3px solid #17120f;
@@ -112,32 +126,35 @@
         content: "";
         position: absolute;
         inset: 0;
-        background: linear-gradient(90deg, rgba(14, 9, 7, 0.86) 0%, rgba(20, 11, 6, 0.62) 46%, rgba(60, 24, 6, 0.26) 100%);
+        background: repeating-conic-gradient(from 0deg at 74% 42%, rgba(255, 248, 231, 0) 0deg 2.4deg,
+          rgba(255, 248, 231, 0.12) 2.4deg 3.1deg, rgba(255, 248, 231, 0) 3.1deg 5.3deg,
+          rgba(255, 214, 150, 0.08) 5.3deg 5.8deg), rgba(14, 9, 7, 0.62);
       }
       .boot-copy {
         position: relative;
-        min-height: min(760px, calc(100dvh - 40px));
+        flex: 1;
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
         align-items: flex-start;
-        padding: clamp(28px, 7vh, 72px);
+        padding: 64px;
         color: #fff8e7;
       }
       .boot-title {
-        max-width: 600px;
+        max-width: 480px;
         margin: 0;
         color: #f5821f;
-        font-family: "Bangers", Impact, "Arial Narrow Bold", "Arial Black", sans-serif;
-        font-size: 5.4rem;
+        font-family: "Bangers", Impact, "Haettenschweiler", sans-serif;
+        font-size: 3.75rem;
         font-weight: 400;
-        line-height: 0.86;
+        line-height: 1;
         letter-spacing: 0.035em;
         text-transform: uppercase;
+        text-wrap: balance;
         -webkit-text-stroke: 1.5px #17120f;
         text-shadow: 3px 0 0 #17120f, -3px 0 0 #17120f, 0 3px 0 #17120f, 0 -3px 0 #17120f,
           2px 2px 0 #17120f, -2px -2px 0 #17120f, 2px -2px 0 #17120f, -2px 2px 0 #17120f,
-          7px 7px 0 #17120f, 0 0 26px rgba(245, 130, 31, 0.45);
+          6px 6px 0 #17120f;
         overflow-wrap: anywhere;
       }
       .boot-title::after {
@@ -145,64 +162,89 @@
         display: block;
         width: min(420px, 82%);
         height: 14px;
-        margin-top: 14px;
+        margin-top: 16px;
         background: #f5821f;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 60' preserveAspectRatio='none'%3E%3Cpath d='M6 14 C40 6 90 9 140 6 C200 3 260 8 320 5 C350 4 376 6 394 10 L388 19 L397 24 L386 31 L396 38 L384 45 C340 52 280 49 220 53 C160 57 100 52 50 55 C30 56 16 54 4 50 L12 42 L2 35 L10 28 L3 21 Z' fill='%2317120f'/%3E%3C/svg%3E") 0 0 / 100% 100%;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 60' preserveAspectRatio='none'%3E%3Cpath d='M6 14 C40 6 90 9 140 6 C200 3 260 8 320 5 C350 4 376 6 394 10 L388 19 L397 24 L386 31 L396 38 L384 45 C340 52 280 49 220 53 C160 57 100 52 50 55 C30 56 16 54 4 50 L12 42 L2 35 L10 28 L3 21 Z' fill='%2317120f'/%3E%3C/svg%3E") 0 0 / 100% 100%;
       }
       .boot-subtitle {
         max-width: 520px;
-        margin: 14px 0 0;
+        margin: 16px 0 0;
         color: rgba(255, 248, 231, 0.92);
         font-size: 1.25rem;
-        font-weight: 800;
-        line-height: 1.36;
+        font-weight: 600;
+        line-height: 1.75rem;
+        text-wrap: balance;
+        text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
       }
       .boot-meta {
-        width: fit-content;
-        margin-top: 10px;
-        padding: 3px 14px 3px 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+        padding: 4px 12px;
         color: #fff8e7;
         background: rgba(18, 13, 11, 0.86);
-        border-left: 5px solid #f5821f;
-        font-family: "Bangers", Impact, "Arial Narrow Bold", sans-serif;
-        font-size: 0.95rem;
+        font-family: "Bangers", Impact, "Haettenschweiler", sans-serif;
+        font-size: 0.875rem;
+        font-weight: 400;
+        line-height: 1.25rem;
         letter-spacing: 0.08em;
         text-transform: uppercase;
       }
+      .boot-meta::before {
+        content: "";
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        background: #f5821f;
+        transform: rotate(45deg);
+      }
       .boot-actions {
-        height: 144px;
-        margin-top: 22px;
+        height: 146px;
+        margin-top: 24px;
+      }
+      @media (max-height: 760px) {
+        .boot-copy {
+          padding: 48px;
+        }
       }
       @media (max-width: 720px) {
         .boot-scene::after {
-          background: linear-gradient(180deg, rgba(14, 9, 7, 0.3) 0%, rgba(14, 9, 7, 0.7) 45%, rgba(14, 9, 7, 0.9) 100%);
+          background: repeating-conic-gradient(from 0deg at 74% 42%, rgba(255, 248, 231, 0) 0deg 2.4deg,
+            rgba(255, 248, 231, 0.12) 2.4deg 3.1deg, rgba(255, 248, 231, 0) 3.1deg 5.3deg,
+            rgba(255, 214, 150, 0.08) 5.3deg 5.8deg), rgba(14, 9, 7, 0.72);
         }
       }
       @media (max-width: 640px) {
         .boot {
           justify-content: flex-start;
-          padding: 10px;
         }
       }
       @media (max-width: 560px) {
+        .boot-hero {
+          min-height: calc(100dvh - 32px);
+        }
         .boot-copy {
-          min-height: calc(100dvh - 40px);
-          padding: 28px 22px;
+          padding: 24px;
         }
         .boot-title {
-          font-size: 3.25rem;
-          line-height: 0.9;
+          font-size: 3rem;
+        }
+        .boot-meta {
+          letter-spacing: 0.04em;
         }
         .boot-actions {
-          height: 223px;
+          height: 326px;
         }
       }
       @media (max-height: 600px) {
         .boot-copy {
-          padding: 20px;
+          padding: 16px;
         }
         .boot-title {
-          font-size: 3rem;
-          line-height: 0.9;
+          font-size: 2.25rem;
+          line-height: 2.5rem;
         }
       }
     </style>
