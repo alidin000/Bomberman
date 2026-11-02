@@ -1,9 +1,7 @@
 import styled from '@emotion/styled';
 import { Button, Dialog, DialogTitle } from '@mui/material';
 import theme from '../../../theme/InstructionsTheme';
-
-const panelCut = 'none';
-const chipCut = 'none';
+import { radius, space, textStyles } from '../../../theme/tokens';
 
 export const StyledSettingsDialog = styled(Dialog)({
   '& .MuiBackdrop-root': {
@@ -13,9 +11,9 @@ export const StyledSettingsDialog = styled(Dialog)({
   '& .MuiDialog-paper': {
     width: 430,
     maxWidth: '92vw',
-    padding: '29px 22px 22px',
-    clipPath: panelCut,
-    borderRadius: 2,
+    // The rod (11 px) plus 21 px of paper above the title.
+    padding: `${space[400]}px ${space[300]}px ${space[300]}px`,
+    borderRadius: radius.sm,
     color: 'var(--anime-ink)',
     backgroundColor: 'var(--anime-paper-light)',
     backgroundImage: 'var(--scroll-rod), var(--scroll-paper)',
@@ -24,30 +22,29 @@ export const StyledSettingsDialog = styled(Dialog)({
     border: '3px solid var(--anime-ink)',
     boxShadow: '8px 8px 0 var(--anime-orange)',
     maxHeight: 'min(760px, 92vh)',
+    '@media (max-width: 420px)': {
+      padding: `${space[400]}px ${space[200]}px ${space[200]}px`,
+    },
   },
   '& .MuiDialogContent-root': {
-    padding: '4px 0 0',
+    padding: `${space[50]}px 0 0`,
   },
   '& .MuiDialogActions-root': {
-    gap: 8,
+    gap: space[75],
     justifyContent: 'center',
-    padding: '18px 0 0',
+    padding: `${space[200]}px 0 0`,
   },
 });
 
 // Display type on a ragged brush stroke of ink.
 export const SettingsTitle = styled(DialogTitle)({
+  ...textStyles.heading5,
   position: 'relative',
   isolation: 'isolate',
-  margin: '0 0 10px',
-  padding: '6px 18px 7px',
-  clipPath: chipCut,
+  margin: `0 0 ${space[100]}px`,
+  padding: `${space[75]}px ${space[200]}px`,
   color: 'var(--anime-paper-light)',
   background: 'transparent',
-  fontFamily: 'var(--font-display)',
-  fontSize: '1.6rem',
-  fontWeight: 400,
-  lineHeight: 1.15,
   letterSpacing: '0.07em',
   textAlign: 'center',
   textTransform: 'uppercase',
@@ -66,18 +63,16 @@ export const SettingsTitle = styled(DialogTitle)({
 });
 
 export const SettingsIntro = styled.p({
-  margin: '0 0 16px',
-  color: 'rgba(33,29,26,0.72)',
-  fontSize: '0.84rem',
-  fontWeight: 700,
-  lineHeight: 1.45,
+  ...textStyles.body6,
+  margin: `0 0 ${space[200]}px`,
+  color: 'var(--ink-2)',
   textAlign: 'center',
 });
 
 export const ButtonContainer = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: ${space[100]}px;
 
   @media (max-width: 480px) {
     grid-template-columns: 1fr;
@@ -85,24 +80,25 @@ export const ButtonContainer = styled.div`
 `;
 
 export const SettingsButton = styled(Button)({
+  ...textStyles.buttonMd,
   minHeight: 48,
-  borderRadius: 2,
-  clipPath: chipCut,
-  fontFamily: 'var(--font-display)',
-  fontSize: '1.08rem',
-  fontWeight: 400,
-  letterSpacing: '0.07em',
-  textTransform: 'uppercase',
+  borderRadius: radius.sm,
   '&.MuiButton-contained': {
     color: 'var(--on-action)',
     background: 'var(--action)',
     border: '2px solid var(--anime-ink)',
     boxShadow: '3px 3px 0 var(--anime-ink)',
   },
+  '&.MuiButton-contained:hover': {
+    background: 'var(--action-deep)',
+  },
   '&.MuiButton-outlined': {
     color: 'var(--anime-ink)',
     borderColor: 'var(--anime-ink)',
     background: 'var(--anime-paper)',
+  },
+  '&.MuiButton-outlined:hover': {
+    background: 'rgba(245,130,31,0.16)',
   },
   // The theme's warning ink: 5.8:1 on this tint over paper-light (the old
   // vermilion read 4.37:1).
@@ -111,55 +107,73 @@ export const SettingsButton = styled(Button)({
     borderColor: theme.palette.warning.main,
     background: 'rgba(184,40,29,0.1)',
   },
+  '&.MuiButton-colorWarning:hover': {
+    background: 'rgba(184,40,29,0.18)',
+  },
+  // Unavailable (Save with clashing keys): flat paper, a dashed keyline and
+  // no offset, so it never reads as the orange action.
+  '&.MuiButton-root.Mui-disabled': {
+    color: 'var(--ink-2)',
+    background: 'var(--anime-paper)',
+    borderColor: 'var(--ink-2)',
+    borderStyle: 'dashed',
+    boxShadow: 'none',
+  },
 });
 
 export const ConfirmText = styled.p({
-  margin: '6px 0 0',
+  ...textStyles.body3,
+  margin: `${space[75]}px 0 0`,
   color: 'rgba(33,29,26,0.8)',
-  fontWeight: 700,
-  lineHeight: 1.45,
   textAlign: 'center',
 });
 
+// Sections split by an ink rule across the dialog (a divider, not a box).
 export const PreferenceSection = styled.section({
-  marginTop: 18,
-  paddingTop: 16,
+  marginTop: space[200],
+  paddingTop: space[200],
+  // design-system: allow a divider between sections
   borderTop: '2px solid var(--anime-ink)',
   '& h3': {
+    ...textStyles.buttonMd,
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
-    margin: '0 0 10px',
+    gap: space[75],
+    margin: `0 0 ${space[100]}px`,
     color: 'var(--anime-teal)',
-    fontFamily: 'var(--font-display)',
-    fontSize: '1.1rem',
-    fontWeight: 400,
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
+  },
+  // Keyboard focus on a switch or a slider: the chakra ring on its thumb
+  // (index.css adds the aura).
+  '& .MuiSwitch-switchBase.Mui-focusVisible .MuiSwitch-thumb, & .MuiSlider-thumb.Mui-focusVisible': {
+    outline: 'var(--focus-ring)',
+    outlineOffset: 2,
   },
 });
 
 export const PreferenceGrid = styled.div({
   display: 'grid',
   gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: '2px 12px',
+  gap: `${space[25]}px ${space[100]}px`,
   '& .MuiFormControlLabel-root': { margin: 0 },
-  '& .MuiFormControlLabel-label': { fontSize: '0.78rem', fontWeight: 700 },
-  '& .MuiSwitch-root': { marginRight: 4 },
+  '& .MuiFormControlLabel-label': textStyles.body5,
+  '& .MuiSwitch-root': { marginRight: space[50] },
   '@media (max-width: 480px)': { gridTemplateColumns: '1fr' },
 });
 
 export const PreferenceSlider = styled.label({
+  ...textStyles.body5,
   display: 'grid',
-  gridTemplateColumns: '112px minmax(0, 1fr)',
+  gridTemplateColumns: '144px minmax(0, 1fr)',
   alignItems: 'center',
-  gap: 12,
+  gap: space[100],
   minHeight: 34,
-  color: 'rgba(33,29,26,0.78)',
-  fontSize: '0.76rem',
-  fontWeight: 800,
+  color: 'var(--ink-3)',
   // The value stays visible next to its name, not only while dragging.
-  '& > span': { display: 'flex', justifyContent: 'space-between', gap: 6 },
-  '& > span strong': { color: 'var(--anime-ink)', fontVariantNumeric: 'tabular-nums' },
-  '& .MuiSlider-root': { color: 'var(--anime-teal)', padding: '12px 0' },
+  '& > span': { display: 'flex', justifyContent: 'space-between', gap: space[75] },
+  '& > span strong': {
+    color: 'var(--anime-ink)',
+    fontWeight: textStyles.body4.fontWeight,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  '& .MuiSlider-root': { color: 'var(--anime-teal)', padding: `${space[100]}px 0` },
 });

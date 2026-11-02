@@ -250,9 +250,10 @@ function toPlayerCardModel(
 }
 
 // Compact card: slot badge and portrait for identity, the match score and
-// who controls the slot, then the three numbers that matter mid-fight as
-// glyph + digit (bombs ready, blast reach, ultimate). Static character text
-// (title, bomb and ultimate names, vision) lives in the pause menu.
+// who controls the slot, then the numbers that matter mid-fight as glyph +
+// digit across the card (health, bombs ready, blast reach, ultimate).
+// Static character text (title, bomb and ultimate names, vision) lives in
+// the pause menu.
 const PlayerCard = React.memo(({ model }: { model: PlayerCardModel }) => {
   const character = getCharacterDefinition(model.characterId);
   const slotLabel = playerSlotLabel(model.slot);
@@ -269,7 +270,6 @@ const PlayerCard = React.memo(({ model }: { model: PlayerCardModel }) => {
       role="group"
       aria-label={`${slotLabel} ${displayName}${model.cpuLevel ? ` · CPU ${model.cpuLevel}` : ''}`}
       alive={model.alive}
-      slotColor={slotColor}
       cardOrder={CARD_ORDER.indexOf(model.slot) >= 0 ? CARD_ORDER.indexOf(model.slot) : model.slot}
     >
       <PlayerHeader>
@@ -300,38 +300,38 @@ const PlayerCard = React.memo(({ model }: { model: PlayerCardModel }) => {
               )}
             </CardMeta>
           )}
-          {model.alive ? (
-            <PlayerStats>
-              <StatCell role="img" aria-label={`Health ${model.health} of ${model.maxHealth}`}>
-                <HealthGlyph />
-                <strong>{`${model.health}/${model.maxHealth}`}</strong>
-              </StatCell>
-              <StatCell role="img" aria-label={`Bombs ready ${model.bombsLeft} of ${model.maxBombs}`}>
-                <BombGlyph />
-                <strong>{`${model.bombsLeft}/${model.maxBombs}`}</strong>
-              </StatCell>
-              <StatCell role="img" aria-label={`Blast range ${model.bombRange}`}>
-                <BlastGlyph />
-                <strong>{model.bombRange}</strong>
-              </StatCell>
-              <UltimateCell ready={ultReady}>
-                <StarGlyph filled={ultReady} />
-                <UltimateProgress
-                  aria-label={`${character.name} ultimate`}
-                  aria-valuetext={ultReady ? 'Ready' : `${model.ultimateCharge}%`}
-                  variant="determinate"
-                  value={model.ultimateCharge}
-                />
-              </UltimateCell>
-            </PlayerStats>
-          ) : (
-            <OutNote>
-              <strong>Out</strong>
-              {model.outNote && <span>{model.outNote}</span>}
-            </OutNote>
-          )}
         </PlayerIdentity>
       </PlayerHeader>
+      {model.alive ? (
+        <PlayerStats>
+          <StatCell role="img" aria-label={`Health ${model.health} of ${model.maxHealth}`}>
+            <HealthGlyph />
+            <strong>{`${model.health}/${model.maxHealth}`}</strong>
+          </StatCell>
+          <StatCell role="img" aria-label={`Bombs ready ${model.bombsLeft} of ${model.maxBombs}`}>
+            <BombGlyph />
+            <strong>{`${model.bombsLeft}/${model.maxBombs}`}</strong>
+          </StatCell>
+          <StatCell role="img" aria-label={`Blast range ${model.bombRange}`}>
+            <BlastGlyph />
+            <strong>{model.bombRange}</strong>
+          </StatCell>
+          <UltimateCell ready={ultReady}>
+            <StarGlyph filled={ultReady} />
+            <UltimateProgress
+              aria-label={`${character.name} ultimate`}
+              aria-valuetext={ultReady ? 'Ready' : `${model.ultimateCharge}%`}
+              variant="determinate"
+              value={model.ultimateCharge}
+            />
+          </UltimateCell>
+        </PlayerStats>
+      ) : (
+        <OutNote>
+          <strong>Out</strong>
+          {model.outNote && <span>{model.outNote}</span>}
+        </OutNote>
+      )}
       {model.alive && model.activePowers.length > 0 && (
         <PowerChips>
           {model.activePowers.map((power) => {
@@ -410,7 +410,7 @@ function toMissionModel(state: GameEngineState, layout: HudLayout): MissionModel
 }
 
 // Versus: "Round 2 · First to 2", threats and the clock. In the last 5 s
-// and during sudden death the first two cells become one striped banner.
+// and during sudden death the first two cells become one warning banner.
 // Phones keep only the clock cell (never truncated: it has the strip's
 // whole width and drops its caption to "R2"); their banner sits at the
 // bottom edge instead.
@@ -423,8 +423,10 @@ const MissionSummary = React.memo(({ model }: { model: MissionModel }) => {
           // Not a live region: the caption already announces the lead-in and
           // the start, and this text changes every second.
           <SuddenDeathCell>
-            <span>{model.suddenDeath.detail}</span>
-            <strong>{model.suddenDeath.title}</strong>
+            <div>
+              <span>{model.suddenDeath.detail}</span>
+              <strong>{model.suddenDeath.title}</strong>
+            </div>
           </SuddenDeathCell>
         )}
         {!phone && !model.suddenDeath && (

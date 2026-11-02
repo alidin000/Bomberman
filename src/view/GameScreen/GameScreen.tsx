@@ -21,7 +21,6 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { Tooltip } from '@mui/material';
 import FocusTrap from '@mui/material/Unstable_TrapFocus';
 import { useNavigate, useParams } from 'react-router-dom';
-import { StyledBackground } from '../WelcomeScreen/WelcomeScreen.styles';
 import {
   KeyBindings,
   DEFAULT_KEY_BINDINGS,
@@ -51,7 +50,11 @@ import { settleCampaignMission } from '../../story/hubEconomy';
 import {
   GameSceneContainer,
   TopControls,
-  LoadingMessage,
+  LoadingArena,
+  LoadingCard,
+  LoadingControls,
+  LoadingScreen,
+  LoadingStrip,
   GameBackground,
   ControlButton,
   PauseOverlay,
@@ -772,10 +775,16 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
   }, [bossSeal, dialogOpen, menuState, resultVisible]);
 
   if (!view.loaded) {
+    // The match's layout in skeleton blocks, never a spinner.
     return (
-      <StyledBackground>
-        <LoadingMessage>Loading game...</LoadingMessage>
-      </StyledBackground>
+      <LoadingScreen role="status">
+        <span className="caption-4">Loading game...</span>
+        <LoadingStrip className="skeleton" aria-hidden="true" />
+        <LoadingControls className="skeleton" aria-hidden="true" />
+        <LoadingCard className="skeleton" aria-hidden="true" side="left" />
+        <LoadingCard className="skeleton" aria-hidden="true" side="right" />
+        <LoadingArena className="skeleton" aria-hidden="true" />
+      </LoadingScreen>
     );
   }
 

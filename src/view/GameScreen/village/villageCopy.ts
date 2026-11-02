@@ -150,7 +150,7 @@ export function trackedRequests(state: GameEngineState): TrackedRequest[] {
 // What a stall item does when bought mid-mission (the hub's effects say
 // "for one mission" from the start; here they apply at once).
 export const STALL_EFFECTS: Record<HubConsumableId, string> = {
-  paperWard: 'A 15-second Guard, starting now.',
+  paperWard: 'A 15 second Guard, starting now.',
   blastPowder: '+1 blast range for the rest of the mission.',
   fusePouch: '+1 bomb slot for the rest of the mission.',
   lodestone: 'Pull in pickups beside you as you move, for the rest of the mission.',

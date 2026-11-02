@@ -1,5 +1,6 @@
 import React from 'react';
 import styled from '@emotion/styled';
+import { radius, space, textStyles } from '../../theme/tokens';
 import { EngineStore, useEngineSelector } from '../../hooks/engineStore';
 import { BeatLayer } from './MatchBeatOverlay.styles';
 import { bottomPlateOffset } from './MatchBeatOverlay';
@@ -8,63 +9,68 @@ import { hudInsets, hudLayout } from './scene/cameraFraming';
 import { useViewportSize } from './useViewportSize';
 
 // Static plates, like the countdown's: they appear and go, with no CSS
-// animation (a per-frame style recalc) and no flash.
+// animation (a per-frame style recalc) and no flash. A paper keyline all
+// round and a vermilion offset; a vermilion diamond leads the eyebrow line.
 const TitlePlate = styled.div({
   maxWidth: 'min(100%, 520px)',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: 4,
-  padding: '10px 22px 12px',
-  borderRadius: 2,
+  gap: space[50],
+  padding: `${space[100]}px ${space[300]}px`,
+  borderRadius: radius.sm,
   color: 'var(--anime-paper-light)',
   background: 'var(--anime-ink)',
   border: '3px solid var(--anime-paper-light)',
-  borderTop: '8px solid var(--anime-vermilion)',
   boxShadow: '6px 6px 0 var(--anime-vermilion)',
   textAlign: 'center',
   '& small': {
-    fontSize: '0.78rem',
-    fontWeight: 900,
-    letterSpacing: '0.12em',
+    ...textStyles.caption3,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: space[75],
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
     color: 'var(--anime-mustard)',
+    '&::before': {
+      content: '""',
+      width: 8,
+      height: 8,
+      background: 'var(--anime-vermilion)',
+      border: '1px solid var(--anime-paper-light)',
+      transform: 'rotate(45deg)',
+    },
   },
   '& strong': {
-    fontSize: '2.2rem',
-    fontWeight: 900,
-    lineHeight: 1.05,
+    ...textStyles.heading3,
+    lineHeight: 1,
     textShadow: '3px 3px 0 var(--anime-vermilion)',
   },
   '& span': {
-    fontSize: '0.92rem',
-    fontWeight: 800,
-    lineHeight: 1.25,
+    ...textStyles.body5,
   },
   '& em': {
-    marginTop: 2,
-    fontSize: '0.75rem',
+    ...textStyles.caption4,
+    marginTop: space[25],
     fontStyle: 'normal',
-    fontWeight: 800,
     opacity: 0.85,
   },
   '@media (max-height: 560px) and (min-width: 641px)': {
-    padding: '6px 16px 8px',
-    '& strong': { fontSize: '1.6rem' },
+    padding: `${space[75]}px ${space[200]}px`,
+    '& strong': { fontSize: 'var(--text-2xl)' },
   },
   // Phones: compact, so it fits the top HUD band when it has to go there.
   '@media (max-width: 640px)': {
-    padding: '6px 14px 8px',
-    gap: 2,
-    '& strong': { fontSize: '1.6rem' },
-    '& span': { fontSize: '0.8rem' },
+    padding: `${space[75]}px ${space[200]}px`,
+    gap: space[25],
+    '& strong': { fontSize: 'var(--text-2xl)' },
   },
 });
 
 /** The card's height in px, a little over its drawn height, for its placement. */
 const TITLE_CARD_PX = { row: 160, phone: 140 };
 /** Its top when it goes up: in the top HUD band, under the top controls. */
-const TITLE_TOP_PX = 70;
+const TITLE_TOP_PX = 64;
 
 /**
  * The boss's title card, while its entrance freezes the arena. The camera

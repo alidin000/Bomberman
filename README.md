@@ -135,9 +135,10 @@ CI runs all of these on every push and pull request to `main`.
 
 ## Credits
 
-- Fonts: [Bangers](https://github.com/googlefonts/bangers) and a 16-kanji subset
-  of [Yuji Boku](https://github.com/Kinutafontfactory/Yuji), both under the SIL
-  Open Font License 1.1. The licences are in [public/fonts](public/fonts).
+- Fonts: [Manrope](https://github.com/sharanda/manrope),
+  [Bangers](https://github.com/googlefonts/bangers) and a 16-kanji subset of
+  [Yuji Boku](https://github.com/Kinutafontfactory/Yuji), all under the SIL Open
+  Font License 1.1. The licences are in [public/fonts](public/fonts).
 - Characters, villages, models, effects and portraits are drawn in code by the
   game. No art, models, logos, music or voices from the show or its games are
   included.

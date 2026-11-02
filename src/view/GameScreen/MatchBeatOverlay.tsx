@@ -22,7 +22,7 @@ type MatchBeatOverlayProps = {
 
 // The feedback caption (GameScreen.styles FeedbackCaption) sits this far up
 // from the bottom edge and is about this tall (two lines on a narrow phone).
-const CAPTION_BOTTOM_PX = { row: 28, phone: 66 };
+const CAPTION_BOTTOM_PX = { row: 24, phone: 64 };
 const CAPTION_HEIGHT_PX = { row: 44, phone: 64 };
 
 /**
@@ -53,7 +53,7 @@ export const MatchBeatOverlay = React.memo(({
   const device = useHudDevice();
   if (!countdown && !go && !roundOver) return null;
   const insets = hudInsets(hudScale, width, height, device);
-  let place: React.CSSProperties = { top: Math.round(insets.top * height) + 6 };
+  let place: React.CSSProperties = { top: Math.round(insets.top * height) + 8 };
   if (hudLayout(width, height) === 'short') place = { top: 8 };
   else if (campaign) place = { bottom: bottomPlateOffset(width, height, insets.bottom) };
   return (

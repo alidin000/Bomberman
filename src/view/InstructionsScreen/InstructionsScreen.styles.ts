@@ -5,9 +5,24 @@ import {
   DialogTitle,
   DialogActions as MuiDialogActions
 } from '@mui/material';
+import {
+  PRESSED, space, textStyles, transition,
+} from '../../theme/tokens';
 
-const panelCut = 'none';
-const chipCut = 'none';
+const PHONE = '@media (max-width: 520px)';
+
+/** A small square turned on its corner, placed before a label instead of an accent stripe. */
+const diamondMarker = (color: string, size = 8) => ({
+  content: "''",
+  flex: '0 0 auto',
+  display: 'inline-block',
+  width: size,
+  height: size,
+  marginRight: space[75],
+  background: color,
+  border: '1px solid var(--anime-ink)',
+  transform: 'rotate(45deg)',
+});
 
 export const InstructionsBackground = styled('div')({
   position: 'relative',
@@ -20,9 +35,8 @@ export const InstructionsBackground = styled('div')({
   padding: 'max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) '
     + 'max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left))',
   overflow: 'hidden',
-  // The house backdrop: ink night, an orange dusk and speed lines.
+  // The house backdrop: flat ink night and speed lines.
   backgroundColor: 'var(--anime-night)',
-  backgroundImage: 'radial-gradient(ellipse at 50% 120%, rgba(245,130,31,0.38), rgba(245,130,31,0) 62%)',
   '&::before': {
     content: "''",
     position: 'absolute',
@@ -43,12 +57,11 @@ export const StyledDialog = styled(Dialog)({
   '& .MuiPaper-root': {
     width: 'min(1180px, 96vw)',
     maxWidth: 'min(1180px, 96vw)',
-    margin: 8,
+    margin: space[75],
     maxHeight: '92vh',
-    padding: '27px 18px 0',
+    padding: `${space[300]}px ${space[200]}px 0`,
     overflow: 'hidden',
     color: 'var(--anime-ink)',
-    clipPath: panelCut,
     // An unrolled scroll: its wooden rod across the top (the actions bar
     // carries the bottom one).
     backgroundColor: 'var(--anime-paper-light)',
@@ -61,22 +74,21 @@ export const StyledDialog = styled(Dialog)({
   },
 });
 
-// Display type on a ragged brush stroke of ink.
+// The screen's heading (Heading 3, Heading 4 on phones): display type on a
+// ragged brush stroke of ink. Typed as DialogTitle itself so it keeps
+// the `component` prop (the screen renders it as its h1).
 export const StyledDialogTitle = styled(DialogTitle)({
+  ...textStyles.heading3,
   position: 'relative',
   isolation: 'isolate',
   width: 'fit-content',
   minWidth: 300,
-  margin: '0 auto 14px',
-  padding: '6px 44px 7px',
+  margin: `0 auto ${space[200]}px`,
+  padding: `${space[75]}px ${space[600]}px`,
   color: 'var(--anime-paper-light)',
   background: 'transparent',
   textAlign: 'center',
   textTransform: 'uppercase',
-  fontFamily: 'var(--font-display)',
-  fontSize: '1.75rem',
-  fontWeight: 400,
-  lineHeight: 1.15,
   letterSpacing: '0.07em',
   textShadow: '2px 2px 0 var(--accent)',
   '&::before': {
@@ -90,16 +102,17 @@ export const StyledDialogTitle = styled(DialogTitle)({
     WebkitMaskSize: '100% 100%',
     maskSize: '100% 100%',
   },
-  '@media (max-width: 520px)': {
+  [PHONE]: {
     minWidth: 0,
     width: '100%',
-    padding: '6px 18px 7px',
-    fontSize: '1.35rem',
+    padding: `${space[75]}px ${space[200]}px`,
+    fontSize: 'var(--text-3xl)',
+    lineHeight: 'var(--leading-3xl)',
   },
-});
+}) as typeof DialogTitle;
 
 export const StyledDialogContent = styled(DialogContent)({
-  padding: '0 4px 18px',
+  padding: `0 ${space[50]}px ${space[200]}px`,
   maxHeight: '74vh',
   overflowY: 'auto',
   borderColor: 'var(--anime-ink)',
@@ -107,61 +120,85 @@ export const StyledDialogContent = styled(DialogContent)({
 
 export const DialogActions = styled(MuiDialogActions)({
   justifyContent: 'center',
-  padding: '14px 8px 18px',
+  padding: `${space[100]}px ${space[75]}px ${space[300]}px`,
   minHeight: 64,
   display: 'flex',
   alignItems: 'center',
-  paddingBottom: 27,
   background: 'var(--scroll-rod) bottom / 100% 11px no-repeat, var(--anime-paper-light)',
 });
 
 export const BackButton = styled('button')({
+  ...textStyles.buttonMd,
   minWidth: 170,
   minHeight: 44,
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  gap: 8,
+  gap: space[75],
+  padding: `${space[75]}px ${space[100]}px`,
   border: '2px solid var(--anime-ink)',
-  borderRadius: 2,
-  clipPath: chipCut,
+  borderRadius: 'var(--radius-sm)',
   color: 'var(--on-action)',
   background: 'var(--action)',
   boxShadow: 'var(--shadow-2)',
   cursor: 'pointer',
-  fontFamily: 'var(--font-display)',
-  fontSize: '1.1rem',
-  fontWeight: 400,
-  letterSpacing: '0.07em',
-  textTransform: 'uppercase',
+  transition: transition(['transform'], ['background-color', 'box-shadow']),
   '&:hover': {
     background: 'var(--action-deep)',
   },
+  '&:active': PRESSED,
   '&:focus-visible': {
     outline: 'var(--focus-ring)',
     outlineOffset: 3,
   },
+  '&:disabled': {
+    color: 'rgba(23,18,15,0.7)',
+    background: '#c9a27a',
+    boxShadow: 'none',
+    cursor: 'not-allowed',
+  },
 });
 
+// A callout led by a mustard diamond, with the link to the dojo.
 export const ManualIntro = styled('div')({
-  marginBottom: 14,
-  padding: '14px 16px 14px 20px',
-  clipPath: panelCut,
-  color: 'rgba(33,29,26,0.84)',
+  ...textStyles.body1,
+  marginBottom: space[200],
+  padding: `${space[100]}px ${space[200]}px`,
+  color: 'var(--ink-3)',
   background: 'var(--anime-paper)',
   border: '2px solid var(--anime-ink)',
-  borderLeft: '8px solid var(--anime-mustard)',
-  fontWeight: 700,
+  '&::before': {
+    ...diamondMarker('var(--anime-mustard)', 10),
+    marginRight: space[100],
+    verticalAlign: 'middle',
+  },
+  '& a': {
+    display: 'inline-block',
+    padding: `0 ${space[25]}px`,
+    borderRadius: 'var(--radius-sm)',
+    color: 'var(--accent)',
+    fontWeight: 600,
+    textUnderlineOffset: 3,
+    transition: transition(['transform'], ['color', 'background-color']),
+  },
+  '& a:hover': {
+    color: 'var(--accent-deep)',
+    background: 'rgba(164,64,10,0.1)',
+  },
+  '& a:active': PRESSED,
+  '& a:focus-visible': {
+    outline: 'var(--focus-ring)',
+    outlineOffset: 2,
+  },
 });
 
 export const ManualHero = styled('section')({
   display: 'grid',
   gridTemplateColumns: 'minmax(0, 1fr) auto',
-  gap: 16,
+  gap: space[200],
   alignItems: 'end',
-  marginBottom: 14,
-  padding: '18px 18px 16px',
-  clipPath: panelCut,
+  marginBottom: space[200],
+  padding: space[200],
   background: 'var(--anime-paper)',
   border: '2px solid var(--anime-ink)',
   boxShadow: '4px 4px 0 var(--anime-teal)',
@@ -170,26 +207,28 @@ export const ManualHero = styled('section')({
   },
 });
 
+// The lead: Heading 4 (Heading 5 on phones) over a line of Body 5.
 export const ManualHeroTitle = styled('div')({
   display: 'grid',
-  gap: 6,
+  gap: space[75],
   '& strong': {
+    ...textStyles.heading4,
     color: 'var(--anime-ink)',
-    fontFamily: 'var(--font-display)',
-    fontSize: '2rem',
-    fontWeight: 400,
-    lineHeight: 1.05,
     letterSpacing: '0.05em',
     textTransform: 'uppercase',
     textShadow: '2px 2px 0 var(--anime-orange)',
   },
   '& p': {
+    ...textStyles.body5,
     maxWidth: 720,
     margin: 0,
-    color: 'rgba(33,29,26,0.74)',
-    fontSize: '0.9rem',
-    lineHeight: 1.4,
-    fontWeight: 700,
+    color: 'var(--ink-2)',
+  },
+  [PHONE]: {
+    '& strong': {
+      fontSize: 'var(--text-2xl)',
+      lineHeight: 'var(--leading-2xl)',
+    },
   },
 });
 
@@ -197,31 +236,30 @@ export const ManualHeroMeta = styled('div')({
   display: 'flex',
   flexWrap: 'wrap',
   justifyContent: 'flex-end',
-  gap: 8,
+  gap: space[75],
   '@media (max-width: 760px)': {
     justifyContent: 'flex-start',
   },
 });
 
 export const ManualPill = styled('span')({
+  ...textStyles.caption3,
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 7,
+  gap: space[75],
   minHeight: 32,
-  padding: '6px 10px',
-  clipPath: chipCut,
+  padding: `${space[50]}px ${space[75]}px`,
   color: 'var(--anime-ink)',
   background: 'var(--anime-paper-light)',
   border: '1px solid var(--anime-ink)',
-  fontSize: '0.72rem',
-  fontWeight: 900,
   textTransform: 'uppercase',
+  letterSpacing: '0.06em',
 });
 
 export const ManualLayout = styled('div')({
   display: 'grid',
   gridTemplateColumns: '180px minmax(0, 1fr)',
-  gap: 12,
+  gap: space[100],
   alignItems: 'start',
   '@media (max-width: 880px)': {
     gridTemplateColumns: '1fr',
@@ -232,9 +270,8 @@ export const ManualNav = styled('nav')({
   position: 'sticky',
   top: 0,
   display: 'grid',
-  gap: 8,
-  padding: 10,
-  clipPath: panelCut,
+  gap: space[75],
+  padding: space[75],
   background: 'var(--anime-ink)',
   border: '2px solid var(--anime-ink)',
   '@media (max-width: 880px)': {
@@ -243,24 +280,26 @@ export const ManualNav = styled('nav')({
   },
 });
 
+// Nav items: Title 5, paper on ink; mustard on hover.
 export const ManualNavLink = styled('a')({
+  ...textStyles.title5,
   minHeight: 34,
   display: 'inline-flex',
   alignItems: 'center',
-  padding: '7px 9px',
-  clipPath: chipCut,
+  padding: `${space[75]}px ${space[75]}px`,
   color: 'var(--anime-paper-light)',
   textDecoration: 'none',
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
   background: 'transparent',
   border: '1px solid rgba(255,248,231,0.25)',
-  fontSize: '0.74rem',
-  fontWeight: 900,
-  textTransform: 'uppercase',
+  transition: transition(['transform'], ['color', 'background-color', 'border-color']),
   '&:hover': {
     color: 'var(--anime-ink)',
     borderColor: 'var(--anime-paper-light)',
     background: 'var(--anime-mustard)',
   },
+  '&:active': PRESSED,
   '&:focus-visible': {
     outline: 'var(--focus-ring)',
     outlineOffset: 2,
@@ -270,7 +309,7 @@ export const ManualNavLink = styled('a')({
 export const ManualGrid = styled('div')({
   display: 'grid',
   gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: 12,
+  gap: space[100],
   '@media (max-width: 760px)': {
     gridTemplateColumns: '1fr',
   },
@@ -279,8 +318,8 @@ export const ManualGrid = styled('div')({
 export const ManualRuleGrid = styled('div')({
   display: 'grid',
   gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-  gap: 10,
-  marginBottom: 12,
+  gap: space[100],
+  marginBottom: space[100],
   '@media (max-width: 980px)': {
     gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
   },
@@ -289,23 +328,24 @@ export const ManualRuleGrid = styled('div')({
   },
 });
 
+// A rule card: a step badge and icon, a Title 3 heading and Body 6.
 export const ManualRuleCard = styled('article')({
   minHeight: 134,
   display: 'grid',
   gridTemplateRows: 'auto auto 1fr',
-  gap: 7,
-  padding: 12,
-  clipPath: panelCut,
+  gap: space[75],
+  padding: space[100],
   color: 'var(--anime-ink)',
   background: 'var(--anime-paper)',
   border: '2px solid var(--anime-ink)',
   '& strong': {
+    ...textStyles.title3,
     color: 'var(--anime-teal)',
-    fontSize: '0.84rem',
-    fontWeight: 900,
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
   },
   '& span': {
+    ...textStyles.caption3,
     width: 26,
     height: 26,
     display: 'inline-flex',
@@ -314,14 +354,11 @@ export const ManualRuleCard = styled('article')({
     clipPath: 'polygon(50% 0, 96% 24%, 96% 76%, 50% 100%, 4% 76%, 4% 24%)',
     color: 'var(--anime-paper-light)',
     background: 'var(--anime-vermilion)',
-    fontWeight: 900,
   },
   '& p': {
+    ...textStyles.body6,
     margin: 0,
-    color: 'rgba(33,29,26,0.76)',
-    fontSize: '0.82rem',
-    lineHeight: 1.34,
-    fontWeight: 700,
+    color: 'var(--ink-2)',
   },
 });
 
@@ -329,7 +366,7 @@ export const ManualRuleHeader = styled('div')({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  gap: 8,
+  gap: space[75],
   '& svg': {
     color: 'var(--anime-mustard)',
   },
@@ -339,28 +376,25 @@ export const ManualSection = styled('section', {
   shouldForwardProp: (prop) => prop !== 'wide',
 })<{ wide?: boolean }>(({ wide }) => ({
   gridColumn: wide ? '1 / -1' : 'auto',
-  padding: 12,
-  clipPath: panelCut,
+  padding: space[100],
   color: 'var(--anime-ink)',
   background: 'var(--anime-paper)',
   border: '2px solid var(--anime-ink)',
 }));
 
-// A brush stroke of the deep accent (paper-light type, 6.3:1).
+// Section headings (Heading 5) on a brush stroke of the deep accent
+// (paper-light type, 6.3:1).
 export const ManualSectionTitle = styled('h2')({
+  ...textStyles.heading5,
   position: 'relative',
   isolation: 'isolate',
   width: 'fit-content',
-  margin: '0 auto 10px',
-  padding: '4px 30px 5px',
+  margin: `0 auto ${space[100]}px`,
+  padding: `${space[50]}px ${space[400]}px`,
   color: 'var(--anime-paper-light)',
   background: 'transparent',
   textAlign: 'center',
   textTransform: 'uppercase',
-  fontFamily: 'var(--font-display)',
-  fontSize: '1.2rem',
-  fontWeight: 400,
-  lineHeight: 1.15,
   letterSpacing: '0.07em',
   textShadow: 'none',
   '&::before': {
@@ -381,59 +415,62 @@ export const ManualList = styled('div', {
 })<{ compact?: boolean }>(({ compact }) => ({
   display: 'grid',
   gridTemplateColumns: compact ? 'repeat(auto-fit, minmax(260px, 1fr))' : '1fr',
-  gap: 8,
+  gap: space[75],
 }));
 
+// One rule: Body 5 on paper-light, its key words at the same weight as a badge.
 export const ManualItem = styled('div')({
+  ...textStyles.body5,
   minHeight: 38,
-  padding: '8px 10px',
-  clipPath: chipCut,
-  color: 'rgba(33,29,26,0.82)',
+  padding: `${space[75]}px ${space[100]}px`,
+  color: 'var(--ink-3)',
   background: 'var(--anime-paper-light)',
   border: '1px solid rgba(33,29,26,0.3)',
-  fontSize: '0.86rem',
-  fontWeight: 700,
-  lineHeight: 1.32,
+  '& strong': {
+    fontWeight: 600,
+  },
 });
 
 export const ManualBadge = styled('strong')({
+  ...textStyles.caption3,
   display: 'inline-flex',
-  marginRight: 8,
-  padding: '2px 7px',
-  clipPath: chipCut,
+  marginRight: space[75],
+  padding: `${space[25]}px ${space[75]}px`,
   color: 'var(--anime-vermilion-deep)',
   background: 'rgba(212,163,63,0.16)',
   border: '1px solid var(--anime-mustard)',
   textTransform: 'uppercase',
-  fontSize: '0.68rem',
-  letterSpacing: 0,
+  letterSpacing: '0.06em',
 });
 
 export const ManualFlow = styled('div')({
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-  gap: 8,
-  marginBottom: 10,
+  gap: space[75],
+  marginBottom: space[100],
 });
 
+// A step of the campaign: its number led by an accent diamond, then the label.
 export const ManualFlowStep = styled('div')({
   minHeight: 74,
   display: 'grid',
-  gap: 4,
-  padding: 10,
-  clipPath: chipCut,
+  alignContent: 'start',
+  gap: space[50],
+  padding: space[100],
   background: 'var(--anime-paper-light)',
   border: '1px solid var(--anime-ink)',
-  borderTop: '5px solid var(--anime-teal)',
   '& strong': {
+    ...textStyles.caption3,
+    display: 'flex',
+    alignItems: 'center',
     color: 'var(--anime-teal)',
-    fontSize: '0.78rem',
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
   },
+  '& strong::before': diamondMarker('var(--anime-teal)'),
   '& span': {
-    color: 'rgba(33,29,26,0.72)',
-    fontSize: '0.78rem',
-    fontWeight: 800,
+    ...textStyles.title4,
+    color: 'var(--ink-2)',
   },
 });
 
@@ -441,11 +478,10 @@ export const ManualDiagram = styled('div')({
   display: 'grid',
   gridTemplateColumns: 'repeat(5, 36px)',
   gridTemplateRows: 'repeat(5, 36px)',
-  gap: 4,
+  gap: space[50],
   justifyContent: 'center',
-  marginBottom: 10,
-  padding: 10,
-  clipPath: panelCut,
+  marginBottom: space[100],
+  padding: space[100],
   background: 'var(--anime-ink)',
   border: '2px solid var(--anime-ink)',
 });
@@ -454,23 +490,23 @@ export const ManualLegend = styled('div')({
   display: 'flex',
   flexWrap: 'wrap',
   justifyContent: 'center',
-  gap: 8,
-  margin: '-2px 0 10px',
+  gap: space[75],
+  margin: `0 0 ${space[100]}px`,
   '& span': {
+    ...textStyles.caption3,
     minHeight: 28,
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 6,
-    padding: '5px 8px',
-    clipPath: chipCut,
+    gap: space[75],
+    padding: `${space[50]}px ${space[75]}px`,
     color: 'var(--anime-ink)',
     background: 'var(--anime-paper-light)',
     border: '1px solid var(--anime-ink)',
-    fontSize: '0.72rem',
-    fontWeight: 900,
     textTransform: 'uppercase',
+    letterSpacing: '0.06em',
   },
   '& strong': {
+    ...textStyles.caption3,
     width: 18,
     height: 18,
     display: 'inline-flex',
@@ -479,7 +515,6 @@ export const ManualLegend = styled('div')({
     clipPath: 'polygon(50% 0, 96% 24%, 96% 76%, 50% 100%, 4% 76%, 4% 24%)',
     color: 'var(--anime-ink)',
     background: 'var(--anime-mustard)',
-    fontSize: '0.66rem',
   },
 });
 
@@ -512,22 +547,21 @@ function getDiagramBorder(kind?: DiagramCellKind): string {
 export const DiagramCell = styled('span', {
   shouldForwardProp: (prop) => prop !== 'kind',
 })<{ kind?: DiagramCellKind }>(({ kind }) => ({
+  ...textStyles.body4,
   minWidth: 36,
   minHeight: 36,
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  clipPath: chipCut,
   color: kind === 'bomb' ? 'var(--anime-ink)' : 'var(--anime-paper-light)',
   background: getDiagramBackground(kind),
   border: `1px solid ${getDiagramBorder(kind)}`,
-  fontWeight: 900,
 }));
 
 export const CharacterManualGrid = styled('div')({
   display: 'grid',
   gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
-  gap: 8,
+  gap: space[75],
   '@media (max-width: 1000px)': {
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
   },
@@ -536,36 +570,42 @@ export const CharacterManualGrid = styled('div')({
   },
 });
 
+// A fighter card, tinted with the fighter's colour: the name (Title 3, led by
+// a square of that colour), the kit as captions and the blurb as Body 6.
 export const CharacterManualCard = styled('div', {
   shouldForwardProp: (prop) => prop !== 'color',
 })<{ color: string }>(({ color }) => ({
   minHeight: 124,
   display: 'grid',
-  gap: 5,
-  padding: 9,
-  clipPath: panelCut,
+  alignContent: 'start',
+  gap: space[50],
+  padding: space[75],
   background: `color-mix(in srgb, ${color} 13%, var(--anime-paper-light))`,
   border: '2px solid var(--anime-ink)',
-  borderTop: `6px solid ${color}`,
   '& strong': {
+    ...textStyles.title3,
+    display: 'flex',
+    alignItems: 'center',
     color: 'var(--anime-ink)',
     textTransform: 'uppercase',
-    fontWeight: 900,
+    letterSpacing: '0.06em',
     textShadow: 'none',
   },
+  '& strong::before': {
+    ...diamondMarker(color, 10),
+    transform: 'none',
+  },
   '& span': {
-    color: 'rgba(33,29,26,0.82)',
-    fontSize: '0.76rem',
-    fontWeight: 800,
+    ...textStyles.caption3,
+    color: 'var(--ink-3)',
   },
   '& small': {
-    color: 'rgba(33,29,26,0.72)',
-    fontWeight: 800,
+    ...textStyles.caption4,
+    color: 'var(--ink-2)',
   },
   '& p': {
+    ...textStyles.body6,
     margin: 0,
-    color: 'rgba(33,29,26,0.68)',
-    fontSize: '0.68rem',
-    lineHeight: 1.25,
+    color: 'var(--ink-2)',
   },
 }));

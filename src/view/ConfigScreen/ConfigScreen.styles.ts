@@ -1,5 +1,6 @@
 import styled from '@emotion/styled';
 import { Dialog, Typography } from '@mui/material';
+import { PRESSED, textStyles, transition } from '../../theme/tokens';
 
 type PlayerControlsRowProps = {
   numOfPlayers: string;
@@ -22,7 +23,7 @@ export const StyledDialog = styled(Dialog)({
     minHeight: 'min(760px, calc(100dvh - 16px))',
     maxHeight: 'calc(100dvh - 16px)',
     margin: 8,
-    padding: '25px 20px 0',
+    padding: '24px 24px 0',
     overflow: 'hidden',
     borderRadius: 'var(--radius)',
     clipPath: panelCut,
@@ -34,20 +35,17 @@ export const StyledDialog = styled(Dialog)({
     border: '3px solid var(--anime-ink)',
     boxShadow: 'var(--shadow-frame)',
   },
-  // The title: display type on a ragged brush stroke of ink.
+  // The title (Heading 5): display type on a ragged brush stroke of ink.
   '& .MuiDialogTitle-root': {
+    ...textStyles.heading5,
     position: 'relative',
     isolation: 'isolate',
     width: 'fit-content',
     minWidth: 280,
     margin: '0 auto 8px',
-    padding: '5px 44px 6px',
+    padding: '4px 48px',
     color: 'var(--anime-paper-light)',
     background: 'transparent',
-    fontFamily: 'var(--font-display)',
-    fontSize: '1.65rem',
-    fontWeight: 400,
-    lineHeight: 1.15,
     letterSpacing: '0.07em',
     textAlign: 'center',
     textTransform: 'uppercase',
@@ -70,41 +68,42 @@ export const StyledDialog = styled(Dialog)({
     },
   },
   '& .MuiDialogContent-root': {
-    padding: '0 4px 14px',
+    padding: '0 4px 16px',
     overflowX: 'hidden',
     borderTop: 0,
-    scrollPaddingBottom: 14,
+    scrollPaddingBottom: 16,
   },
   '& .MuiStepper-root': {
-    margin: '0 auto 10px',
+    margin: '0 auto 12px',
     padding: '2px 12px',
     maxWidth: 640,
     clipPath: chipCut,
     background: 'transparent',
     border: 0,
   },
+  // Step names are Caption 3 in capitals; "Optional" under them is Caption 5.
   '& .MuiStepLabel-label': {
+    ...textStyles.caption3,
     color: 'var(--ink-3)',
-    fontWeight: 900,
-    letterSpacing: 0,
     textTransform: 'uppercase',
-    fontSize: '0.75rem',
+    letterSpacing: '0.06em',
+    transition: transition([], ['color']),
   },
   '& .MuiStepLabel-label.Mui-active, & .MuiStepLabel-label.Mui-completed': {
     color: 'var(--anime-ink)',
   },
   '& .MuiStepIcon-root': {
     color: 'var(--ink-2)',
+    transition: transition([], ['color']),
   },
   '& .MuiStepLabel-labelContainer .MuiTypography-caption': {
+    ...textStyles.caption5,
     display: 'block',
     color: 'var(--ink-2)',
-    fontSize: '0.66rem',
-    lineHeight: 1.1,
   },
   '& .MuiStepIcon-text': {
     fill: 'var(--anime-paper-light)',
-    fontWeight: 900,
+    fontWeight: 600,
   },
   '& .MuiStepIcon-root.Mui-active, & .MuiStepIcon-root.Mui-completed': {
     color: 'var(--action)',
@@ -116,14 +115,11 @@ export const StyledDialog = styled(Dialog)({
   '& .MuiTypography-colorTextSecondary': {
     color: 'var(--ink-2)',
   },
+  // Labels come from the theme: Button-md, and Button-lg on the large
+  // footer actions.
   '& .MuiButton-root': {
     borderRadius: 'var(--radius)',
     clipPath: chipCut,
-    fontFamily: 'var(--font-display)',
-    fontWeight: 400,
-    fontSize: '1.02rem',
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
   },
   // The one primary call-to-action look: ninja orange with ink type, an
   // ink keyline and a hard ink offset.
@@ -166,25 +162,40 @@ export const StyledDialog = styled(Dialog)({
     borderColor: 'var(--accent)',
     background: 'rgba(245,130,31,0.14)',
   },
+  // A finished step's name goes back to that step.
   '& .MuiStepButton-root': {
     padding: '4px 8px',
     margin: '-4px -8px',
+    transition: transition(['transform'], ['background-color']),
+    '&:hover': {
+      background: 'rgba(245,130,31,0.14)',
+    },
+    '&:active': PRESSED,
   },
+  // Segmented choices (mode, difficulty, rounds): Button-md labels, a press
+  // that sinks a pixel, and the chosen one filled orange with an ink
+  // underline, so the choice does not rest on colour alone.
   '& .MuiToggleButton-root': {
+    ...textStyles.buttonMd,
     minWidth: 58,
+    padding: 12,
     color: 'var(--anime-ink)',
     borderColor: 'var(--ink-1)',
     background: 'rgba(255,255,255,0.42)',
-    fontFamily: 'var(--font-display)',
-    fontWeight: 400,
-    fontSize: '1.05rem',
-    letterSpacing: '0.06em',
-    lineHeight: 1.2,
     clipPath: chipCut,
+    transition: transition(['transform'], ['background-color', 'color', 'box-shadow']),
+    '&:active': PRESSED,
+  },
+  '& .MuiToggleButton-sizeSmall': {
+    padding: 8,
+  },
+  '& .MuiToggleButton-root:hover': {
+    background: 'rgba(245,130,31,0.14)',
   },
   '& .MuiToggleButton-root.Mui-selected': {
     color: 'var(--on-action)',
     background: 'var(--action)',
+    // design-system: allow the selected toggle's underline
     boxShadow: 'inset 0 -3px 0 var(--anime-ink)',
   },
   '& .MuiToggleButton-root.Mui-selected:hover': {
@@ -199,18 +210,20 @@ export const StyledDialog = styled(Dialog)({
   },
   '@media (max-width: 680px)': {
     '& .MuiDialog-paper': {
-      padding: '20px 12px 0',
+      padding: '16px 12px 0',
     },
-    // Keep the footer actions on one row on phones.
+    // Keep the footer actions on one row on phones: Button-md labels and
+    // the main buttons' 8 by 12 px padding.
     '& .MuiButton-sizeLarge': {
+      ...textStyles.buttonMd,
       minWidth: 0,
-      padding: '8px 10px',
-      fontSize: '0.98rem',
+      padding: '8px 12px',
     },
     '& .MuiDialogTitle-root': {
       minWidth: 0,
-      padding: '4px 30px 5px',
-      fontSize: '1.3rem',
+      padding: '4px 32px',
+      fontSize: 'var(--text-xl)',
+      lineHeight: 'var(--leading-xl)',
     },
   },
   // Narrow phones: drop the play icon so the three footer actions share one row.
@@ -222,12 +235,13 @@ export const StyledDialog = styled(Dialog)({
   // Landscape phones: a small title and a slim footer leave room for the setup.
   '@media (max-height: 560px)': {
     '& .MuiDialog-paper': {
-      padding: '14px 14px 0',
+      padding: '16px 12px 0',
     },
     '& .MuiDialogTitle-root': {
       margin: '0 auto 2px',
-      padding: '2px 26px 3px',
-      fontSize: '0.85rem',
+      padding: '2px 24px',
+      fontSize: 'var(--text-sm)',
+      lineHeight: 'var(--leading-sm)',
       minWidth: 0,
     },
     '& .MuiStepper-root': {
@@ -238,9 +252,9 @@ export const StyledDialog = styled(Dialog)({
       display: 'none',
     },
     '& .MuiButton-sizeLarge': {
+      ...textStyles.buttonMd,
       minWidth: 0,
-      padding: '4px 14px',
-      fontSize: '0.98rem',
+      padding: '8px 12px',
     },
   },
 });
@@ -250,7 +264,7 @@ export const StepContent = styled.div`
   margin-bottom: 0;
 
   @media (max-height: 560px) {
-    margin-top: 6px;
+    margin-top: 4px;
   }
 `;
 
@@ -261,20 +275,26 @@ export const DeckFooter = styled.div`
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  margin: 0 -20px;
-  padding: 10px 20px 21px;
-  /* The scroll's bottom rod runs under the footer. */
+  margin: 0 -24px;
+  /* The bottom padding keeps the actions clear of the rod. */
+  padding: 12px 24px 24px;
+  /*
+   * The scroll's bottom rod runs under the footer. The ink rule on top is
+   * the divider between the scrolling setup and the actions; the frame
+   * draws the other three sides.
+   */
   background: var(--scroll-rod) bottom / 100% 11px no-repeat, var(--anime-paper-light);
+  /* design-system: allow a divider between the scroll area and the actions; the frame draws the other sides */
   border-top: 2px solid var(--anime-ink);
 
   @media (max-width: 680px) {
     margin: 0 -12px;
-    padding: 8px 12px 19px;
+    padding: 8px 12px 24px;
   }
 
   @media (max-height: 560px) {
-    margin: 0 -14px;
-    padding: 5px 14px 14px;
+    margin: 0 -12px;
+    padding: 4px 12px 12px;
     background-size: 100% 8px, auto;
   }
 `;
@@ -303,7 +323,7 @@ export const FooterActions = styled.div`
   }
 
   @media (max-width: 680px) {
-    gap: 6px;
+    gap: 8px;
   }
 
   /* Phones: the three actions sit side by side at their own widths. */
@@ -315,45 +335,28 @@ export const FooterActions = styled.div`
 
 /** One line on how to drive the menu from the keyboard. */
 export const FooterHint = styled.p`
+  ${textStyles.caption3}
   margin: 0;
   color: var(--ink-2);
-  font-size: 0.75rem;
-  font-weight: 700;
 
   @media (max-width: 560px), (max-height: 560px) {
     display: none;
   }
 `;
 
+/** A mode's name over its one line of detail (Caption 3). */
 export const ModeToggleText = styled.span`
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  line-height: 1.15;
 
   & small {
-    font-family: var(--font-body);
-    font-size: 0.72rem;
-    font-weight: 700;
+    ${textStyles.caption3}
     letter-spacing: 0;
     text-transform: none;
     opacity: 0.9;
   }
-`;
-
-export const Row = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin: 24px 0;
-  padding: 12px 14px;
-  clip-path: ${chipCut};
-  background: rgba(255, 255, 255, 0.38);
-  border: 1px solid rgba(33, 29, 26, 0.16);
-  border-radius: 8px;
 `;
 
 export const PlayerControlsRow = styled.div<PlayerControlsRowProps>`
@@ -361,11 +364,16 @@ export const PlayerControlsRow = styled.div<PlayerControlsRowProps>`
   grid-template-columns: minmax(120px, 0.28fr) minmax(160px, 0.34fr) minmax(280px, 1fr);
   align-items: center;
   gap: 16px;
-  margin-bottom: ${(props) => (props.numOfPlayers === '2' ? '16px' : '10px')};
+  margin-bottom: ${(props) => (props.numOfPlayers === '2' ? '16px' : '12px')};
   margin-top: ${(props) => (props.numOfPlayers === '2' ? '12px' : '8px')};
-  padding: 10px 4px 0;
+  padding: 12px 4px 0;
   clip-path: ${panelCut};
-  border-top: 2px solid var(--ink-1);
+
+  /* A rule between one player's keys and the next. */
+  & + & {
+    /* design-system: allow a divider between key rows */
+    border-top: 2px solid var(--ink-1);
+  }
 
   @media (max-width: 820px) {
     grid-template-columns: 1fr;
@@ -379,28 +387,37 @@ export const PlayerControlsRow = styled.div<PlayerControlsRowProps>`
 `;
 
 export const ControlsLabel = styled(Typography)`
-  font-size: 1rem;
-  font-weight: 900;
+  ${textStyles.title3}
   min-width: 0;
   color: var(--anime-ink);
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 `;
 
 export const KeyConfigInput = styled.input`
+  ${textStyles.title2}
   width: 46px;
   height: 46px;
-  margin: 3px;
+  margin: 4px;
+  padding: 0;
   text-align: center;
-  font-size: 18px;
-  font-weight: 900;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   border: 2px solid var(--anime-ink);
   background: var(--anime-paper-light);
   color: var(--anime-ink);
   cursor: pointer;
   caret-color: transparent;
   box-shadow: 2px 2px 0 var(--anime-mustard);
-  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+  transition: ${transition(['transform'], ['background-color', 'border-color', 'box-shadow'])};
+
+  &:hover {
+    background: var(--anime-paper);
+  }
+
+  &:active {
+    ${PRESSED}
+  }
+
   &:focus {
     outline: var(--focus-ring);
     outline-offset: 2px;
@@ -429,22 +446,21 @@ export const MovementKeysGrid = styled.div`
 `;
 
 export const MovementKeyCell = styled.label<{ area: string }>`
+  ${textStyles.caption3}
   grid-area: ${(props) => props.area};
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   color: rgba(33, 29, 26, 0.72);
-  font-size: 0.64rem;
-  font-weight: 900;
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 `;
 
 export const KeyHint = styled.p`
+  ${textStyles.caption1}
   margin: 4px 0 8px;
   color: var(--ink-3);
-  font-size: 0.8rem;
-  font-weight: 700;
   text-align: center;
 `;
 
@@ -453,29 +469,37 @@ export const SummaryStrip = styled.div`
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 4px 14px;
-  margin: 0 0 6px;
+  gap: 4px 16px;
+  margin: 0 0 8px;
 `;
 
+/** One fact of the plan, led by a small square in its colour. */
 export const SummaryItem = styled.div<{ accent: string }>`
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  padding-left: 8px;
+  gap: 8px;
   clip-path: ${chipCut};
-  border-left: 4px solid ${(props) => props.accent};
-  font-size: 0.82rem;
+
+  &::before {
+    content: '';
+    flex: none;
+    align-self: center;
+    width: 10px;
+    height: 10px;
+    background: ${(props) => props.accent};
+    border: 1px solid var(--anime-ink);
+  }
 
   & span {
+    ${textStyles.caption3}
     color: var(--ink-2);
-    font-size: 0.72rem;
-    font-weight: 900;
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   & strong {
+    ${textStyles.body4}
     color: var(--anime-ink);
-    font-weight: 900;
   }
 `;
 
@@ -491,15 +515,15 @@ export const ActionKeysGrid = styled.div`
 `;
 
 export const ActionKeyCell = styled.label`
+  ${textStyles.caption3}
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   color: rgba(33, 29, 26, 0.72);
-  font-size: 0.64rem;
-  font-weight: 900;
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 `;
 
 export const ActionKeyName = styled.span`
@@ -518,13 +542,13 @@ export const MissionBriefing = styled('div', {
 })<{ accent: string; mark?: string | null }>`
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
-  gap: 14px;
+  gap: 16px;
   margin: 12px 0 4px;
-  padding: 10px;
+  padding: 12px;
   clip-path: ${panelCut};
   border: 2px solid var(--anime-ink);
   border-radius: var(--radius);
-  background: ${(props) => (props.mark ? `${props.mark} right 10px center / 120px 120px no-repeat, ` : '')}
+  background: ${(props) => (props.mark ? `${props.mark} right 12px center / 120px 120px no-repeat, ` : '')}
     color-mix(in srgb, ${(props) => props.accent} 8%, var(--anime-paper));
   box-shadow: 4px 4px 0 var(--anime-orange);
 
@@ -534,12 +558,13 @@ export const MissionBriefing = styled('div', {
   }
 `;
 
+// Square: it sits 12 px inside the briefing's 2 px corner.
 export const MissionBriefingPreview = styled.div`
   height: 124px;
   overflow: hidden;
   clip-path: ${panelCut};
   border: 2px solid var(--anime-ink);
-  border-radius: var(--radius);
+  border-radius: 0;
   background: var(--anime-paper-light);
 
   @media (max-width: 620px) {
@@ -547,6 +572,7 @@ export const MissionBriefingPreview = styled.div`
   }
 `;
 
+// The village line is the theme's overline (Caption 3); the mission title is Heading 4.
 export const MissionBriefingDetails = styled.div`
   display: flex;
   flex-direction: column;
@@ -555,15 +581,10 @@ export const MissionBriefingDetails = styled.div`
 
   & .MuiTypography-overline {
     color: var(--anime-teal-deep);
-    letter-spacing: 0.04em;
-    line-height: 1.6;
   }
 
   & .MuiTypography-h5 {
-    font-family: var(--font-display);
-    font-weight: 400;
-    font-size: 1.85rem;
-    line-height: 1.05;
+    ${textStyles.heading4}
     letter-spacing: 0.05em;
   }
 `;
@@ -571,37 +592,48 @@ export const MissionBriefingDetails = styled.div`
 export const MissionObjectiveList = styled.ul`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 14px;
+  gap: 8px 16px;
   margin: 8px 0 0;
   padding: 0;
   list-style: none;
 `;
 
+/** A goal, led by a small square in the village's colour. */
 export const MissionObjectiveItem = styled.li<{ accent: string }>`
-  padding-left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   clip-path: ${chipCut};
-  border-left: 4px solid ${(props) => props.accent};
+
+  &::before {
+    content: '';
+    flex: none;
+    width: 10px;
+    height: 10px;
+    background: ${(props) => props.accent};
+    border: 1px solid var(--anime-ink);
+  }
 
   & strong {
+    ${textStyles.body4}
     display: block;
     margin-bottom: 0;
     color: var(--anime-ink);
-    font-size: 0.82rem;
   }
 `;
 
 export const MissionActionRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 12px;
+  margin-top: 12px;
 `;
 
 export const CampaignRoute = styled.div`
   display: grid;
-  /* One row of seven villages in the 980px deck, four per row on phones. */
+  /* One row of seven villages in the 980px deck; 92 px or wider on phones. */
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
   margin: 0 0 4px;
 
   @media (max-width: 760px) {
@@ -609,7 +641,9 @@ export const CampaignRoute = styled.div`
   }
 `;
 
-// Each village card carries its mark, faint in the corner (`markImage`: a CSS image).
+// Each village card carries its mark, faint in the corner (`markImage`: a CSS
+// image). The chosen card has an ink keyline, a hard ink offset and the check
+// badge; a locked one is dashed and dimmed, with a lock in its status chip.
 export const CampaignRouteCard = styled('button', {
   shouldForwardProp: (prop) => !['active', 'completed', 'locked', 'accent', 'markImage'].includes(String(prop)),
 })<{
@@ -619,14 +653,15 @@ export const CampaignRouteCard = styled('button', {
   accent: string;
   markImage?: string | null;
 }>`
+  /* Room the status chip leaves for the check badge on the chosen card. */
+  --mark-room: ${(props) => (props.active ? '16px' : '0px')};
   position: relative;
   min-height: 56px;
-  padding: 6px 8px;
+  padding: 8px;
   clip-path: ${panelCut};
   border: ${(props) => (props.active ? '2px solid var(--anime-ink)' : '2px solid var(--ink-1)')};
   border-style: ${(props) => (props.locked ? 'dashed' : 'solid')};
   border-radius: var(--radius);
-  border-top: 4px solid ${(props) => (props.active ? props.accent : 'transparent')};
   background: ${(props) => {
     if (props.locked) return '#e4dccb';
     if (props.completed) return `color-mix(in srgb, ${props.accent} 18%, var(--anime-paper-light))`;
@@ -634,16 +669,21 @@ export const CampaignRouteCard = styled('button', {
   }};
   background-image: ${(props) => props.markImage ?? 'none'};
   background-repeat: no-repeat;
-  background-position: right 5px bottom 5px;
+  background-position: right 4px bottom 4px;
   background-size: 30px 30px;
   color: ${(props) => (props.locked ? 'var(--ink-2)' : 'var(--anime-ink)')};
   text-align: left;
   cursor: ${(props) => (props.locked ? 'not-allowed' : 'pointer')};
-  box-shadow: ${(props) => (props.active ? 'var(--shadow-1)' : 'none')};
-  transition: transform 0.16s ease;
+  box-shadow: ${(props) => (props.active ? 'var(--shadow-2)' : 'none')};
+  transition: ${transition(['transform'], ['border-color', 'box-shadow'])};
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
+    border-color: var(--anime-ink);
+  }
+
+  &:active:not(:disabled) {
+    ${PRESSED}
   }
 
   &:focus-visible {
@@ -656,33 +696,36 @@ export const CampaignRouteCard = styled('button', {
   }
 `;
 
+// Square: it sits 8 px inside the card's 2 px corner.
 export const RouteStatusBadge = styled.span<{ accent: string }>`
+  ${textStyles.caption3}
   display: inline-flex;
   align-items: center;
   min-height: 20px;
-  padding: 3px 7px;
+  padding: 2px 4px;
   clip-path: ${chipCut};
   color: var(--anime-ink);
   background: color-mix(in srgb, ${(props) => props.accent} 18%, var(--anime-paper-light));
   border: 1px solid ${(props) => props.accent};
-  border-radius: var(--radius);
-  font-size: 0.68rem;
-  font-weight: 900;
+  border-radius: 0;
+  margin-right: var(--mark-room, 0px);
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 
   & svg {
-    margin-right: 3px;
-    font-size: 0.8rem;
+    margin-right: 4px;
+    font-size: var(--text-xs);
   }
 `;
 
+// Square: it sits 4 px inside the card's 2 px corner.
 export const CharacterPortrait = styled.div`
   height: 140px;
   margin: -4px -4px 8px;
   overflow: hidden;
   clip-path: ${panelCut};
   border: 0;
-  border-radius: var(--radius);
+  border-radius: 0;
   background: var(--anime-paper-light);
 
   &.compact {
@@ -705,18 +748,16 @@ export const CharacterPortraitImage = styled('div', {
 `;
 
 // The cast keeps Typography's component prop, so a section title can be an h3.
+// Heading 7: the display face at 18/28.
 export const SectionTitle = styled(Typography)`
   position: relative;
   z-index: 0;
   width: fit-content;
-  margin: 14px auto 6px;
+  margin: 16px auto 8px;
   padding: 0;
   color: var(--anime-ink);
   background: transparent;
-  font-family: var(--font-display);
-  font-size: 1.12rem;
-  font-weight: 400;
-  line-height: 1.25;
+  ${textStyles.heading7}
   letter-spacing: 0.07em;
   text-transform: uppercase;
   text-align: left;
@@ -726,9 +767,9 @@ export const SectionTitle = styled(Typography)`
     content: '';
     position: absolute;
     z-index: -1;
-    left: -10px;
-    right: -10px;
-    bottom: 1px;
+    left: -8px;
+    right: -8px;
+    bottom: 4px;
     height: 0.55em;
     background: var(--anime-orange);
     -webkit-mask-image: var(--brush-swash);
@@ -745,7 +786,7 @@ export const SectionTitle = styled(Typography)`
 
 export const SelectionGrid = styled.div`
   display: grid;
-  /* 118px lets all seven stages share one row in the 980px deck. */
+  /* Upgrades: as many 118 px or wider columns as fit. */
   grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 12px;
 
@@ -760,7 +801,14 @@ export const SelectionGrid = styled.div`
   }
 `;
 
+/**
+ * A pick in a grid (a shinobi or an upgrade). The chosen card is tinted in
+ * its colour (`accent`, also the square before its name) with an ink
+ * keyline, a hard ink offset and the check badge; a locked card is dashed,
+ * greyed and says what unlocks it.
+ */
 export const SelectionCard = styled.button<{ selected: boolean; accent: string }>`
+  --card-accent: ${(props) => props.accent};
   position: relative;
   display: flex;
   flex-direction: column;
@@ -779,21 +827,11 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
   color: var(--anime-ink);
   cursor: pointer;
   text-align: left;
-  transition: transform 0.16s ease, border-color 0.16s ease;
-  box-shadow: ${(props) => (props.selected ? 'var(--shadow-1)' : 'none')};
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 12px;
-    bottom: 12px;
-    width: 4px;
-    background: ${(props) => props.accent};
-    opacity: ${(props) => (props.selected ? 1 : 0.46)};
-  }
+  transition: ${transition(['transform'], ['border-color', 'box-shadow'])};
+  box-shadow: ${(props) => (props.selected ? 'var(--shadow-2)' : 'none')};
 
   &:disabled {
+    --card-accent: rgba(33, 29, 26, 0.32);
     cursor: not-allowed;
     background: #e4dccb;
     border-style: dashed;
@@ -810,6 +848,10 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
     border-color: var(--anime-ink);
   }
 
+  &:active:not(:disabled) {
+    ${PRESSED}
+  }
+
   &:focus-visible {
     outline: var(--focus-ring);
     outline-offset: 2px;
@@ -819,6 +861,23 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
     transition: none;
   }
 `;
+
+/** A card's name (Title 4 as subtitle2), led by a small square in the card's colour. */
+export const CardName = styled(Typography)`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 16px;
+
+  &::before {
+    content: '';
+    flex: none;
+    width: 10px;
+    height: 10px;
+    background: var(--card-accent, var(--action));
+    border: 1px solid var(--anime-ink);
+  }
+` as typeof Typography;
 
 export const StagePreviewImage = styled('div', {
   shouldForwardProp: (prop) => !['image', 'backgroundPosition', 'standalone'].includes(String(prop)),
@@ -839,7 +898,7 @@ export const StagePreviewImage = styled('div', {
 export const CardHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 8px;
 `;
 
@@ -849,22 +908,25 @@ export const CardMeta = styled(Typography)`
   color: rgba(33, 29, 26, 0.72);
 `;
 
-/** Corner tag on the selected card, so selection does not rely on colour. */
+/**
+ * Corner tag on the selected card, so selection does not rely on colour.
+ * Square: it sits 4 px inside the card's 2 px corner. Names and status chips
+ * keep 16 px clear on the right so the tag never covers them.
+ */
 export const SelectedMark = styled.span`
+  ${textStyles.caption3}
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 4px;
+  right: 4px;
   z-index: 1;
-  padding: 2px 7px;
+  padding: 2px 4px;
   color: var(--anime-paper-light);
   background: var(--anime-ink);
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 900;
-  line-height: 1.3;
+  border-radius: 0;
 `;
 
 export const LockBadge = styled.span`
+  ${textStyles.caption3}
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
@@ -872,19 +934,17 @@ export const LockBadge = styled.span`
   margin-top: auto;
   padding-top: 4px;
   color: var(--anime-ink);
-  font-size: 0.7rem;
-  font-weight: 900;
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 
   & svg {
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
   & small {
+    ${textStyles.caption4}
     width: 100%;
     color: rgba(33, 29, 26, 0.72);
-    font-size: 0.66rem;
-    font-weight: 700;
     text-transform: none;
   }
 `;
@@ -895,12 +955,12 @@ export const LockBadge = styled.span`
 export const SlotRow = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
   margin-top: 12px;
 
   @media (max-height: 560px) {
-    margin-top: 6px;
-    gap: 10px;
+    margin-top: 8px;
+    gap: 12px;
   }
 
   @media (max-width: 560px) {
@@ -922,7 +982,7 @@ export const SlotCard = styled.div`
     'controller'
     'keys';
   justify-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 
   /* Phones and short screens: portrait beside the controls, not above them. */
@@ -935,28 +995,28 @@ export const SlotCard = styled.div`
       'portrait keys';
     justify-items: start;
     align-items: center;
-    column-gap: 10px;
+    column-gap: 12px;
     row-gap: 4px;
   }
 `;
 
+/** The seat's nameplate in its slot colour (Title 4). */
 export const SlotPlate = styled.div<{ slotColor: string; textColor: string }>`
+  ${textStyles.title4}
   grid-area: plate;
   justify-self: stretch;
   display: flex;
   align-items: center;
   justify-content: space-between;
   min-height: 28px;
-  padding: 0 4px 0 10px;
+  padding: 0 4px 0 12px;
   color: ${(props) => props.textColor};
   background: ${(props) => props.slotColor};
   border: 2px solid var(--anime-ink);
   border-radius: var(--radius);
-  font-size: 0.9rem;
-  font-weight: 900;
 `;
 
-/** The x that removes the third seat. */
+/** The x that removes the third seat. Square: it sits inside the plate's 2 px corner. */
 export const SlotRemoveButton = styled.button`
   display: inline-flex;
   align-items: center;
@@ -967,15 +1027,24 @@ export const SlotRemoveButton = styled.button`
   color: var(--anime-paper-light);
   background: var(--anime-ink);
   border: 0;
-  border-radius: var(--radius);
+  border-radius: 0;
   cursor: pointer;
+  transition: ${transition(['transform'], ['background-color'])};
 
   & svg {
-    font-size: 1rem;
+    font-size: var(--text-base);
+  }
+
+  &:hover {
+    background: var(--danger);
+  }
+
+  &:active {
+    ${PRESSED}
   }
 
   &:focus-visible {
-    outline: 3px solid var(--anime-ink);
+    outline: var(--focus-ring);
     outline-offset: 2px;
   }
 `;
@@ -1006,7 +1075,7 @@ export const SlotPicker = styled.div`
   grid-area: picker;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 `;
 
 export const SlotPickerButton = styled.button`
@@ -1021,9 +1090,14 @@ export const SlotPickerButton = styled.button`
   border: 2px solid var(--anime-ink);
   border-radius: var(--radius);
   cursor: pointer;
+  transition: ${transition(['transform'], ['background-color'])};
 
   &:hover {
     background: var(--anime-paper);
+  }
+
+  &:active {
+    ${PRESSED}
   }
 
   &:focus-visible {
@@ -1032,39 +1106,48 @@ export const SlotPickerButton = styled.button`
   }
 `;
 
+/** The seat's shinobi between the arrows (Title 3). */
 export const SlotName = styled.span`
+  ${textStyles.title3}
   min-width: 82px;
   color: var(--anime-ink);
-  font-size: 1rem;
-  font-weight: 900;
   text-align: center;
 `;
 
 /**
- * Human or CPU at a level. A CPU chip is filled ink with a robot mark, so it
- * does not rely on colour to read differently from a human chip.
+ * Human or CPU at a level, as a small button label. A CPU chip is filled ink
+ * with a robot mark, so it does not rely on colour to read differently from
+ * a human chip. The last human seat's chip is locked: dashed and dimmed.
  */
 export const ControllerChip = styled.button<{ cpu: boolean }>`
+  ${textStyles.buttonSm}
   grid-area: controller;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-height: 32px;
-  padding: 3px 12px;
+  padding: 4px 12px;
   color: ${(props) => (props.cpu ? 'var(--anime-paper-light)' : 'var(--anime-ink)')};
   background: ${(props) => (props.cpu ? 'var(--anime-ink)' : 'var(--anime-paper-light)')};
   border: 2px solid var(--anime-ink);
   border-radius: var(--radius);
-  font-size: 0.82rem;
-  font-weight: 900;
-  text-transform: uppercase;
   cursor: pointer;
+  transition: ${transition(['transform'], ['color', 'border-color'])};
 
   & svg {
-    font-size: 1.05rem;
+    font-size: var(--text-base);
+  }
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    ${PRESSED}
   }
 
   &:disabled {
+    color: var(--ink-2);
     cursor: not-allowed;
     border-style: dashed;
   }
@@ -1075,25 +1158,25 @@ export const ControllerChip = styled.button<{ cpu: boolean }>`
   }
 `;
 
-/** That seat's keys in one short line; a clash turns it into a warning. */
+/** That seat's keys in one short line (Caption 3); a clash turns it into a warning. */
 export const SlotKeys = styled.p<{ clash?: boolean }>`
+  ${textStyles.caption3}
   grid-area: keys;
   display: flex;
   align-items: center;
   gap: 4px;
   margin: 0;
   color: ${(props) => (props.clash ? 'var(--anime-vermilion-deep)' : 'var(--ink-2)')};
-  font-size: 0.8rem;
-  font-weight: 800;
   text-align: center;
 
   & svg {
-    font-size: 0.95rem;
+    font-size: var(--text-base);
   }
 `;
 
 /** The empty seat: a dashed outline that adds a third shinobi. */
 export const AddSlotButton = styled.button`
+  ${textStyles.buttonSm}
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1105,18 +1188,20 @@ export const AddSlotButton = styled.button`
   background: transparent;
   border: 2px dashed var(--ink-2);
   border-radius: var(--radius);
-  font-size: 0.9rem;
-  font-weight: 900;
-  text-transform: uppercase;
   cursor: pointer;
+  transition: ${transition(['transform'], ['background-color', 'border-color'])};
 
   & svg {
-    font-size: 2rem;
+    font-size: var(--text-3xl);
   }
 
   &:hover {
     border-color: var(--anime-ink);
     background: rgba(33, 29, 26, 0.04);
+  }
+
+  &:active {
+    ${PRESSED}
   }
 
   &:focus-visible {
@@ -1129,7 +1214,7 @@ export const AddSlotButton = styled.button`
     min-height: 44px;
 
     & svg {
-      font-size: 1.3rem;
+      font-size: var(--text-xl);
     }
   }
 `;
@@ -1139,13 +1224,14 @@ export const AddSlotButton = styled.button`
 export const StageStrip = styled.div`
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
 
   @media (max-width: 760px) {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 `;
 
+/** A stage's art over its short name (Title 5); the chosen one is framed and checked. */
 export const StageThumb = styled.button<{ chosen: boolean }>`
   position: relative;
   display: flex;
@@ -1153,30 +1239,39 @@ export const StageThumb = styled.button<{ chosen: boolean }>`
   align-items: center;
   gap: 4px;
   min-width: 0;
-  padding: 4px 2px 6px;
+  padding: 4px 4px 8px;
   color: var(--anime-ink);
   background: ${(props) => (props.chosen ? 'var(--anime-paper)' : 'transparent')};
   border: 2px solid ${(props) => (props.chosen ? 'var(--anime-ink)' : 'transparent')};
   border-radius: var(--radius);
   cursor: pointer;
+  transition: ${transition(['transform'], ['background-color', 'border-color'])};
 
   & > span:last-of-type {
-    font-size: 0.75rem;
-    font-weight: 800;
-    line-height: 1.15;
+    ${textStyles.title5}
     text-align: center;
   }
 
   &:hover {
-    border-color: var(--ink-1);
+    transform: translateY(-2px);
+    border-color: ${(props) => (props.chosen ? 'var(--anime-ink)' : 'var(--ink-1)')};
+  }
+
+  &:active {
+    ${PRESSED}
   }
 
   &:focus-visible {
     outline: var(--focus-ring);
     outline-offset: 2px;
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `;
 
+// Square: it sits 4 px inside the thumb's 2 px corner.
 export const StageThumbArt = styled.span`
   display: block;
   width: 100%;
@@ -1184,21 +1279,22 @@ export const StageThumbArt = styled.span`
   aspect-ratio: 1;
   overflow: hidden;
   border: 2px solid var(--anime-ink);
-  border-radius: var(--radius);
+  border-radius: 0;
 
   @media (max-height: 560px) {
     max-width: 52px;
   }
 `;
 
-/** The selected stage's rule, said once under the strip. */
+/** The selected stage's rule, said once under the strip (Body 6). */
 export const StageCaption = styled.p`
-  margin: 6px 0 0;
+  ${textStyles.body6}
+  margin: 8px 0 0;
   color: var(--ink-3);
-  font-size: 0.82rem;
   text-align: center;
 
   & strong {
+    ${textStyles.body4}
     color: var(--anime-ink);
   }
 `;
@@ -1208,13 +1304,44 @@ export const RoundsRow = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   margin-top: 12px;
 
   & > span {
+    ${textStyles.title4}
     color: var(--anime-ink);
-    font-size: 0.82rem;
-    font-weight: 900;
     text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+`;
+
+/* ---- Story scene loading ------------------------------------------------- */
+
+/**
+ * While a village's first story scene downloads: that dialog's shape (title
+ * bar, portrait stage, speech box) in skeleton blocks, over its scrim and
+ * above the deck. Visual only: the deck's dialog keeps the focus.
+ */
+export const SceneSkeleton = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: rgba(14, 12, 10, 0.86);
+
+  & > div {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 860px;
+    max-width: 100%;
+    padding: 16px;
+    background: var(--anime-night);
+    border: 3px solid var(--anime-ink);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-frame);
   }
 `;

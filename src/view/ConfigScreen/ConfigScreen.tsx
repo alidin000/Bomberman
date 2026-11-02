@@ -42,6 +42,7 @@ import {
   SelectionCard,
   CardHeader,
   CardMeta,
+  CardName,
   LockBadge,
   SelectedMark,
   StagePreviewImage,
@@ -61,6 +62,7 @@ import {
   MissionObjectiveList,
   MissionObjectiveItem,
   MissionActionRow,
+  SceneSkeleton,
 } from './ConfigScreen.styles';
 import { WelcomeContainer } from '../WelcomeScreen/WelcomeScreen.styles';
 import {
@@ -118,6 +120,17 @@ import { playerSlotLabel } from '../GameScreen/playerSlots';
 // A village's first deploy plays its story scene; its words and portraits
 // load only then.
 const FirstMissionScene = lazy(() => import('../HubScreen/FirstMissionScene'));
+
+// Until it arrives, a skeleton in the scene's shape: title, stage, speech box.
+const sceneLoading = (
+  <SceneSkeleton aria-hidden="true">
+    <div>
+      <div className="skeleton" style={{ width: '40%', height: 24 }} />
+      <div className="skeleton" style={{ height: 200 }} />
+      <div className="skeleton" style={{ height: 120 }} />
+    </div>
+  </SceneSkeleton>
+);
 
 type KeyErrors = {
   [key: string]: boolean;
@@ -764,12 +777,12 @@ export const ConfigScreen = () => {
                     />
                   </MissionBriefingPreview>
                   <MissionBriefingDetails>
-                    <Typography variant="overline" fontWeight="bold">
+                    <Typography variant="overline">
                       {selectedMission.villageName}
                       {' '}
                       Campaign
                     </Typography>
-                    <Typography variant="h5" component="h3" fontWeight="bold">
+                    <Typography variant="h5" component="h3">
                       {selectedMission.title}
                     </Typography>
                     <CardMeta variant="body2">
@@ -859,7 +872,7 @@ export const ConfigScreen = () => {
                             {status}
                           </RouteStatusBadge>
                           {selectedStage === village.stageId && <SelectedMark aria-hidden="true">✓</SelectedMark>}
-                          <Typography component="span" variant="subtitle2" fontWeight="bold" sx={{ mt: 0.5, display: 'block', lineHeight: 1.2 }}>
+                          <Typography component="span" variant="subtitle2" sx={{ mt: 0.5, display: 'block' }}>
                             {village.villageName}
                           </Typography>
                         </CampaignRouteCard>
@@ -893,7 +906,7 @@ export const ConfigScreen = () => {
                             />
                           </CharacterPortrait>
                           <CardHeader>
-                            <Typography component="span" variant="subtitle2" fontWeight="bold">{character.name}</Typography>
+                            <CardName component="span" variant="subtitle2">{character.name}</CardName>
                           </CardHeader>
                           {locked && (
                             <LockBadge>
@@ -932,9 +945,9 @@ export const ConfigScreen = () => {
                       aria-pressed={selected}
                     >
                       {selected && <SelectedMark aria-hidden="true">✓</SelectedMark>}
-                      <Typography component="span" variant="subtitle2" fontWeight="bold">
+                      <CardName component="span" variant="subtitle2">
                         {upgrade.name}
-                      </Typography>
+                      </CardName>
                       <CardMeta id={`upgrade-meta-${upgrade.id}`} variant="caption">{upgrade.description}</CardMeta>
                       {!unlocked && (
                         <LockBadge id={`upgrade-lock-${upgrade.id}`}>
@@ -976,14 +989,20 @@ export const ConfigScreen = () => {
               <div>
                 {humanPlayerNumbers.map((player) => renderKeyConfig(player))}
               </div>
+              {/* Deep vermilion: MUI's error red is under 4.5:1 on the scroll paper. */}
               {hasKeyConflicts && (
                 <>
-                  <Typography variant="body2" color="error" sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      display: 'flex', alignItems: 'center', mt: 2, color: 'var(--anime-vermilion-deep)',
+                    }}
+                  >
                     <Info sx={{ mr: 1, fontSize: 'inherit' }} />
                     Please correct the highlighted key conflicts before proceeding.
                   </Typography>
                   {conflictKeyLabels.length > 0 && (
-                    <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                    <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'var(--anime-vermilion-deep)' }}>
                       {`Duplicated keys: ${conflictKeyLabels.join(' · ')}`}
                     </Typography>
                   )}
@@ -1019,7 +1038,7 @@ export const ConfigScreen = () => {
         <RovingTabStops root={contentRef} />
       </StyledDialog>
       {sceneDeploy && (
-        <Suspense fallback={null}>
+        <Suspense fallback={sceneLoading}>
           <FirstMissionScene
             stageId={sceneDeploy.sceneStage}
             onDone={() => {

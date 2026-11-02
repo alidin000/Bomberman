@@ -132,7 +132,7 @@ describe('GameScreen boss entrance and seal', () => {
     // Nothing is drawn under the card: a ninja standing low on screen moves it up.
     expect(card).toHaveAttribute('data-side', 'bottom');
     // And it stacks above the entrance caption.
-    expect(parseFloat(card.style.bottom)).toBeGreaterThanOrEqual(28 + 44);
+    expect(parseFloat(card.style.bottom)).toBeGreaterThanOrEqual(24 + 44);
     const fight = bossFight({ bossIntroMsRemaining: 1400 });
     view.publish({
       ...fight,
@@ -179,10 +179,10 @@ describe('GameScreen boss entrance and seal', () => {
       expect(counts.idle).toBe(false);
       expect(screen.getByText('Shukaku sealed')).toBeInTheDocument();
       expect(screen.getByText('Reward · Sand Armor Powerup')).toBeInTheDocument();
-      // Clear of the caption that arrives with it ("Boss hit"), 28 px up and
+      // Clear of the caption that arrives with it ("Boss hit"), 24 px up and
       // about 44 px tall.
       const plate = screen.getByText('Shukaku sealed').parentElement as HTMLElement;
-      expect(parseFloat(plate.style.bottom)).toBeGreaterThanOrEqual(28 + 44);
+      expect(parseFloat(plate.style.bottom)).toBeGreaterThanOrEqual(24 + 44);
 
       // A plain round end would open the result here; the collapse still plays.
       act(() => { vi.advanceTimersByTime(RESULT_HOLD_MS + 100); });

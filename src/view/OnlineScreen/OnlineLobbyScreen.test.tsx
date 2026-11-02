@@ -1,5 +1,7 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import {
+  fireEvent, render, screen, within,
+} from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { vi } from 'vitest';
@@ -166,5 +168,69 @@ describe('OnlineLobbyScreen', () => {
     renderLobby('/online/ABC234');
     fireEvent.click(screen.getByRole('button', { name: 'Start battle' }));
     expect(mocks.startMatch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('OnlineLobbyScreen connection states', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    mocks.create.mockClear();
+    mocks.leave.mockClear();
+    mocks.snapshot = {
+      status: 'idle',
+      connected: false,
+      roomId: '',
+      seat: null,
+      playerId: '',
+      token: '',
+      players: [],
+      roomMode: 'coop',
+      stageId: 'hiddenLeaf',
+      capacity: 4,
+      totalRounds: 3,
+      gameState: null,
+      ack: -1,
+      error: '',
+    };
+  });
+
+  it('shows a room-shaped skeleton, not the forms, while the socket opens', () => {
+    mocks.snapshot = { ...mocks.snapshot, status: 'connecting' };
+    renderLobby();
+
+    expect(screen.getByRole('status')).toHaveTextContent('Connecting to the online server...');
+    expect(screen.queryByRole('button', { name: /create room/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Main Menu' })).toBeInTheDocument();
+  });
+
+  it('says what failed inline and tries the same create again', () => {
+    mocks.create.mockImplementationOnce(() => {
+      mocks.snapshot = {
+        ...mocks.snapshot, status: 'closed', error: 'Could not connect to the online server.',
+      };
+    });
+    renderLobby();
+    fireEvent.change(screen.getByLabelText('display name'), { target: { value: 'Hinata' } });
+    fireEvent.click(screen.getByRole('button', { name: /create room/i }));
+
+    const problem = screen.getByRole('alert', { name: 'Could not reach the online server' });
+    expect(problem).toHaveTextContent('Check your connection, then try again in a moment.');
+    fireEvent.click(within(problem).getByRole('button', { name: 'Try again' }));
+    expect(mocks.create).toHaveBeenCalledTimes(2);
+    expect(mocks.create).toHaveBeenLastCalledWith('Hinata', 'naruto', 'coop', 'hiddenLeaf', 3);
+
+    fireEvent.click(within(problem).getByRole('button', { name: 'Main Menu' }));
+    expect(mocks.leave).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no try again when this build has no online server', () => {
+    mocks.snapshot = {
+      ...mocks.snapshot, status: 'closed', error: 'Online play is not configured on this build.',
+    };
+    renderLobby();
+
+    const problem = screen.getByRole('alert', { name: 'Online play is off in this build' });
+    expect(within(problem).queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    expect(within(problem).getByRole('button', { name: 'Main Menu' })).toBeInTheDocument();
   });
 });

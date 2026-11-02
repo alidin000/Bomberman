@@ -1,8 +1,8 @@
 import styled from '@emotion/styled';
 import { Dialog } from '@mui/material';
-
-const panelCut = 'none';
-const chipCut = 'none';
+import {
+  radius, space, textStyles,
+} from '../../theme/tokens';
 
 export type ResultTone = 'victory' | 'defeat' | 'neutral';
 
@@ -42,14 +42,15 @@ export const StyledResultDialog = styled(Dialog, {
     backgroundColor: betweenRounds ? 'rgba(18, 13, 11, 0.45)' : 'rgba(18, 13, 11, 0.78)',
   },
   // A scroll card: paper, a wooden rod across the top, ink keyline, a hard
-  // orange offset, and faint ink speed lines bursting from the banner.
+  // orange offset, and faint ink speed lines bursting from the banner (hard
+  // edged, faded out by a mask).
   '& .MuiDialog-paper': {
     position: 'relative',
     width: '480px',
     maxWidth: '92vw',
-    padding: '30px 24px 26px',
-    borderRadius: 2,
-    clipPath: panelCut,
+    // The rod (11 px) plus 21 px of paper above the banner.
+    padding: `${space[400]}px ${space[300]}px ${space[300]}px`,
+    borderRadius: radius.sm,
     color: 'var(--anime-ink)',
     textAlign: 'center',
     backgroundColor: 'var(--anime-paper-light)',
@@ -61,6 +62,7 @@ export const StyledResultDialog = styled(Dialog, {
     '&::before': {
       content: "''",
       position: 'absolute',
+      // design-system: allow sits under the 11 px scroll rod
       inset: '11px 0 auto',
       height: 150,
       pointerEvents: 'none',
@@ -69,16 +71,15 @@ export const StyledResultDialog = styled(Dialog, {
       WebkitMaskImage: 'linear-gradient(#000, transparent)',
       maskImage: 'linear-gradient(#000, transparent)',
     },
+    '@media (max-width: 420px)': {
+      padding: `${space[400]}px ${space[200]}px ${space[200]}px`,
+    },
   },
   '& .MuiButton-root': {
-    borderRadius: 2,
-    clipPath: chipCut,
-    fontFamily: 'var(--font-display)',
-    fontWeight: 400,
-    fontSize: '1.08rem',
-    letterSpacing: '0.07em',
-    textTransform: 'uppercase',
+    ...textStyles.buttonMd,
+    borderRadius: radius.sm,
   },
+  '& .MuiButton-sizeLarge': textStyles.buttonLg,
   '& .MuiButton-contained': {
     background: 'var(--action)',
     color: 'var(--on-action)',
@@ -102,34 +103,36 @@ export const StyledResultDialog = styled(Dialog, {
 // (defeat). Decoration only; the banner says the result in words.
 export const ResultStamp = styled.span`
   position: absolute;
-  top: 18px;
-  right: 14px;
+  top: ${space[200]}px;
+  right: ${space[200]}px;
   width: 52px;
   height: 52px;
   display: grid;
   place-items: center;
   color: var(--anime-vermilion);
   border: 3px solid var(--anime-vermilion);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-family: var(--font-brush);
-  font-size: 2.1rem;
+  font-size: var(--text-3xl);
+  font-weight: 400;
   line-height: 1;
   transform: rotate(-12deg);
   opacity: 0.88;
   pointer-events: none;
 
   @media (max-width: 420px) {
-    top: 14px;
-    right: 8px;
+    top: ${space[100]}px;
+    right: ${space[75]}px;
     width: 40px;
     height: 40px;
-    font-size: 1.6rem;
+    font-size: var(--text-2xl);
   }
 `;
 
 // The result in display type on a brush stroke of the winner's colour, over
 // a ragged ink stroke offset like a hard shadow.
 export const ResultBanner = styled.h2<{ accent: string; textColor?: string }>`
+  ${textStyles.heading5}
   position: relative;
   isolation: isolate;
   width: fit-content;
@@ -137,12 +140,8 @@ export const ResultBanner = styled.h2<{ accent: string; textColor?: string }>`
   max-width: 100%;
   box-sizing: border-box;
   margin: 0 auto;
-  padding: 8px 40px 9px;
+  padding: ${space[75]}px ${space[500]}px;
   color: ${(props) => props.textColor ?? 'var(--anime-ink)'};
-  font-family: var(--font-display);
-  font-size: 1.7rem;
-  font-weight: 400;
-  line-height: 1.1;
   letter-spacing: 0.06em;
   text-align: center;
   text-transform: uppercase;
@@ -167,70 +166,70 @@ export const ResultBanner = styled.h2<{ accent: string; textColor?: string }>`
   &::after {
     background: ${(props) => props.accent};
   }
+
+  @media (max-width: 420px) {
+    min-width: 0;
+    padding: ${space[75]}px ${space[300]}px;
+  }
 `;
 
 export const ResultMessage = styled.p`
+  ${textStyles.body3}
   max-width: 380px;
-  margin: 14px auto 0;
+  margin: ${space[200]}px auto 0;
   color: rgba(33, 29, 26, 0.86);
-  font-size: 0.95rem;
-  line-height: 1.55;
 `;
 
 export const ResultBreakdown = styled.div`
-  margin-top: 16px;
-  padding: 12px;
+  margin-top: ${space[200]}px;
+  padding: ${space[100]}px;
   background: var(--anime-paper);
   border: 2px solid var(--anime-ink);
   text-align: left;
 
   h3 {
-    margin: 0 0 8px;
+    ${textStyles.buttonMd}
+    margin: 0 0 ${space[75]}px;
     color: var(--anime-teal);
-    font-family: var(--font-display);
-    font-size: 1rem;
-    font-weight: 400;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
   }
 
   table {
+    ${textStyles.body5}
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.82rem;
   }
 
   th, td {
-    padding: 6px 5px;
+    padding: ${space[75]}px ${space[50]}px;
+    /* design-system: allow dividers between the rows of the results table */
     border-bottom: 1px solid rgba(33, 29, 26, 0.18);
     text-align: left;
     vertical-align: top;
   }
 
   th {
+    ${textStyles.caption3}
     color: rgba(33, 29, 26, 0.82);
-    font-size: 0.75rem;
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   td {
     color: var(--anime-ink);
-    font-weight: 700;
   }
 
   td small {
+    ${textStyles.caption4}
     display: block;
-    margin-top: 2px;
+    margin-top: ${space[25]}px;
     color: rgba(33, 29, 26, 0.82);
-    font-size: 0.75rem;
-    font-weight: 800;
   }
 `;
 
 export const ResultPips = styled.span`
   display: inline-flex;
-  gap: 4px;
-  padding-top: 2px;
+  gap: ${space[50]}px;
+  padding-top: ${space[25]}px;
 `;
 
 // Filled per round won: shape and fill, not colour, carry the score.
@@ -240,48 +239,64 @@ export const ResultPip = styled('span', {
   width: 14px;
   height: 14px;
   box-sizing: border-box;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   border: 2px solid var(--anime-ink);
   background: ${(props) => (props.filled ? 'var(--anime-ink)' : 'var(--anime-paper-light)')};
 `;
 
-// Slot colour down the left edge; the winner's row is bold on mustard.
+// A square of the slot colour before the name; the winner's row is
+// stronger on an orange tint.
 export const ResultRow = styled('tr', {
   shouldForwardProp: (prop) => prop !== 'slotColor' && prop !== 'winner',
 })<{ slotColor: string; winner: boolean }>`
   background: ${(props) => (props.winner ? 'rgba(245, 130, 31, 0.24)' : 'transparent')};
 
   td:first-of-type {
-    border-left: 5px solid ${(props) => props.slotColor};
-    font-weight: 900;
+    font-weight: ${textStyles.body4.fontWeight};
+  }
+
+  td:first-of-type::before {
+    content: '';
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: ${space[75]}px;
+    background: ${(props) => props.slotColor};
+    border: 1px solid var(--anime-ink);
+    vertical-align: -1px;
   }
 
   td {
-    font-weight: ${(props) => (props.winner ? 900 : 700)};
+    font-weight: ${(props) => (props.winner ? textStyles.body4.fontWeight : textStyles.body5.fontWeight)};
   }
 `;
 
 export const ResultIntel = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 10px;
+  gap: ${space[75]}px;
+  margin-top: ${space[100]}px;
 
   span {
+    ${textStyles.caption3}
     display: grid;
-    gap: 2px;
-    padding: 7px;
+    gap: ${space[25]}px;
+    padding: ${space[75]}px;
     color: rgba(33, 29, 26, 0.82);
-    background: var(--anime-paper);
-    font-size: 0.75rem;
-    font-weight: 800;
+    background: var(--anime-paper-light);
+    border: 1px solid rgba(33, 29, 26, 0.3);
     text-align: center;
     text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   strong {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    line-height: var(--leading-xl);
+    font-weight: 400;
+    letter-spacing: 0.04em;
     color: #8f2f26;
-    font-size: 0.86rem;
   }
 `;
 
@@ -289,6 +304,6 @@ export const ResultActions = styled.div`
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
-  margin-top: 20px;
+  gap: ${space[100]}px;
+  margin-top: ${space[300]}px;
 `;

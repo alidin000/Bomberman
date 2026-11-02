@@ -85,10 +85,10 @@ export const WelcomeScreen = () => {
         </HeroMark>
         <HeroCopy>
           <HeroKanji aria-hidden="true">忍</HeroKanji>
-          <Typography variant="h2" component="h1" gutterBottom fontWeight={900}>
+          <Typography variant="h1" component="h1">
             Explosive Shinobi Arena
           </Typography>
-          <HeroSubtitle variant="h6">
+          <HeroSubtitle>
             Clear the village. Outsmart the beasts. Survive your own blast.
           </HeroSubtitle>
           <HeroMeta>Solo campaign · Local battle · Seven villages</HeroMeta>

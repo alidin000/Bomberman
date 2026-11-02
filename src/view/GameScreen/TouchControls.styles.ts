@@ -1,4 +1,7 @@
 import styled from '@emotion/styled';
+import {
+  PRESSED, radius, space, textStyles, transition,
+} from '../../theme/tokens';
 
 // The touch controls draw no full-screen layer: the overlay box itself takes
 // no input, only the pad zone and the buttons do. Nothing animates; a press
@@ -29,23 +32,21 @@ export const TouchLayer = styled.div({
 export const LandscapeHint = styled.div({
   position: 'fixed',
   zIndex: 19,
-  bottom: 'calc(var(--touch-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 76px)',
+  bottom: 'calc(var(--touch-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 80px)',
   left: '50%',
   transform: 'translateX(-50%)',
   display: 'flex',
   alignItems: 'center',
-  gap: 8,
+  gap: space[75],
   maxWidth: 'calc(100vw - 32px)',
   minHeight: 44,
-  padding: '4px 4px 4px 12px',
+  padding: `${space[50]}px ${space[50]}px ${space[50]}px ${space[100]}px`,
   color: 'var(--anime-ink)',
   background: 'var(--anime-paper-light)',
   border: '2px solid var(--anime-ink)',
-  borderRadius: 4,
+  borderRadius: radius.base,
   boxShadow: '3px 3px 0 color-mix(in srgb, var(--anime-ink) 72%, transparent)',
-  fontSize: '0.78rem',
-  fontWeight: 900,
-  lineHeight: 1.15,
+  ...textStyles.caption1,
   whiteSpace: 'nowrap',
   pointerEvents: 'auto',
   '& > svg': {
@@ -70,9 +71,15 @@ export const LandscapeHintDismiss = styled.button({
   background: 'transparent',
   cursor: 'pointer',
   touchAction: 'manipulation',
+  // Square inside the hint (its 4 px radius less the 4 px gap is 0).
+  borderRadius: radius.none,
+  transition: transition(['transform'], ['background-color']),
   '& svg': { fontSize: 20 },
+  '&:hover': { background: 'rgba(245,130,31,0.16)' },
+  '&:active': PRESSED,
+  // The chakra ring, inside the hint's own edge.
   '&:focus-visible': {
-    outline: '3px solid var(--anime-teal)',
+    outline: 'var(--focus-ring)',
     outlineOffset: -3,
   },
 });
@@ -88,7 +95,7 @@ export const PadRing = styled.div({
   left: 0,
   top: 0,
   boxSizing: 'border-box',
-  borderRadius: '50%',
+  borderRadius: radius.full,
   border: '3px solid var(--anime-ink)',
   background: 'rgba(255, 248, 231, 0.24)',
   boxShadow: '0 0 0 2px rgba(255, 248, 231, 0.6)',
@@ -109,16 +116,20 @@ export const PadRing = styled.div({
     opacity: 0.45,
   },
   '& > i[data-dir="up"]': {
-    left: 'calc(50% - 9px)', top: 6, borderWidth: '0 9px 12px', borderBottomColor: 'var(--anime-ink)',
+    // design-system: allow a CSS triangle arrow, drawn with one border
+    left: 'calc(50% - 9px)', top: space[75], borderWidth: '0 9px 12px', borderBottomColor: 'var(--anime-ink)',
   },
   '& > i[data-dir="down"]': {
-    left: 'calc(50% - 9px)', bottom: 6, borderWidth: '12px 9px 0', borderTopColor: 'var(--anime-ink)',
+    // design-system: allow a CSS triangle arrow, drawn with one border
+    left: 'calc(50% - 9px)', bottom: space[75], borderWidth: '12px 9px 0', borderTopColor: 'var(--anime-ink)',
   },
   '& > i[data-dir="left"]': {
-    top: 'calc(50% - 9px)', left: 6, borderWidth: '9px 12px 9px 0', borderRightColor: 'var(--anime-ink)',
+    // design-system: allow a CSS triangle arrow, drawn with one border
+    top: 'calc(50% - 9px)', left: space[75], borderWidth: '9px 12px 9px 0', borderRightColor: 'var(--anime-ink)',
   },
   '& > i[data-dir="right"]': {
-    top: 'calc(50% - 9px)', right: 6, borderWidth: '9px 0 9px 12px', borderLeftColor: 'var(--anime-ink)',
+    // design-system: allow a CSS triangle arrow, drawn with one border
+    top: 'calc(50% - 9px)', right: space[75], borderWidth: '9px 0 9px 12px', borderLeftColor: 'var(--anime-ink)',
   },
   '&[data-held="up"] > i[data-dir="up"], &[data-held="down"] > i[data-dir="down"], &[data-held="left"] > i[data-dir="left"], &[data-held="right"] > i[data-dir="right"]': {
     opacity: 1,
@@ -131,7 +142,7 @@ export const PadKnob = styled.div({
   left: '50%',
   top: '50%',
   boxSizing: 'border-box',
-  borderRadius: '50%',
+  borderRadius: radius.full,
   border: '3px solid var(--anime-ink)',
   background: 'var(--anime-paper-light)',
   boxShadow: '2px 2px 0 var(--anime-ink)',
@@ -144,8 +155,8 @@ export const ActionButton = styled.div({
   display: 'grid',
   placeItems: 'center',
   alignContent: 'center',
-  gap: 1,
-  borderRadius: '50%',
+  gap: space[25],
+  borderRadius: radius.full,
   border: '3px solid var(--anime-ink)',
   color: 'var(--anime-ink)',
   background: 'var(--anime-paper-light)',
@@ -159,16 +170,14 @@ export const ActionButton = styled.div({
     fill: 'currentColor',
   },
   '& span': {
-    fontSize: '0.75rem',
-    fontWeight: 900,
+    ...textStyles.buttonXsm,
     lineHeight: 1,
-    textTransform: 'uppercase',
   },
   // Seen around the thumb: the button sinks, its offset shadow goes and the
-  // fill turns mustard.
+  // fill turns mustard (at once: a press restyles nothing else).
   '&[data-pressed]': {
     opacity: 1,
-    transform: 'scale(0.92)',
+    transform: 'scale(0.98)',
     color: 'var(--anime-ink)',
     background: 'var(--anime-mustard)',
     boxShadow: '0 0 0 3px var(--anime-paper-light)',
@@ -181,7 +190,7 @@ export const ActionButton = styled.div({
 export const BombButton = styled(ActionButton)({
   color: 'var(--anime-paper-light)',
   background: 'var(--anime-ink)',
-  '& span': { fontSize: '0.8rem' },
+  '& span': { fontSize: 'var(--text-sm)' },
 });
 
 // The ring fills clockwise with the charge (HUD ultimate meter); full, it
@@ -191,9 +200,9 @@ export const UltimateButton = styled(ActionButton)({
   '&::before': {
     content: '""',
     position: 'absolute',
-    inset: 6,
+    inset: space[75],
     zIndex: 0,
-    borderRadius: '50%',
+    borderRadius: radius.full,
     background: 'var(--anime-paper-light)',
     border: '2px solid var(--anime-ink)',
   },
@@ -208,14 +217,13 @@ export const UltimateButton = styled(ActionButton)({
 
 export const TouchGuideList = styled.ul({
   display: 'grid',
-  gap: 6,
+  ...textStyles.body6,
+  gap: space[75],
   margin: 0,
   padding: 0,
   listStyle: 'none',
   color: 'var(--anime-ink)',
-  fontSize: '0.86rem',
-  lineHeight: 1.35,
   '& strong': {
-    fontWeight: 900,
+    fontWeight: textStyles.body4.fontWeight,
   },
 });

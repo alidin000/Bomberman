@@ -7,46 +7,50 @@ import { REPUTATION_TIERS, tierAtLeast } from '../../story/reputation';
 import type { StoryProgress } from '../../story/progress';
 import { getLockedRequests, getOfferedRequests, getVillageStanding } from '../../story/villageVisit';
 import { rewardText } from '../GameScreen/village/villageCopy';
+import { textStyles, transition } from '../../theme/tokens';
+import { SECTION_HEADING } from './HubScreen.styles';
+import { EmptyNote } from './HubSecrets.styles';
 
 // Quiet paper with hairlines inside the hub frame, like the rest of the hub.
+// Margins above and below: the panels before and after keep a 12 px gap.
 const Card = styled.section`
   display: grid;
-  gap: 6px;
-  margin: 0 0 10px;
-  padding: 8px 10px;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 8px 12px;
   border: 1px solid var(--ink-1);
-  border-radius: var(--radius);
 
   & h3 {
+    ${SECTION_HEADING}
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
     justify-content: space-between;
-    gap: 2px 10px;
+    gap: 2px 12px;
     margin: 0;
     color: var(--anime-ink);
-    font-size: 0.82rem;
-    font-weight: 900;
-    text-transform: uppercase;
   }
 
   & h3 span {
+    ${textStyles.caption3}
     color: var(--ink-2);
-    font-size: 0.75rem;
-    font-weight: 800;
+    letter-spacing: 0;
     text-transform: none;
   }
 
   & .MuiLinearProgress-root {
     height: 6px;
-    background-color: rgba(33, 29, 26, 0.16);
+    background-color: var(--ink-1);
   }
 
+  /* MUI eases the bar linearly; the house curve moves it instead. */
   & .MuiLinearProgress-bar {
     background: var(--anime-teal);
+    transition: ${transition(['transform'])};
   }
 `;
 
+// Each tier is led by a square: filled once reached, hollow until then.
 const TierList = styled.ol`
   display: grid;
   gap: 2px;
@@ -55,25 +59,37 @@ const TierList = styled.ol`
   list-style: none;
 
   & li {
+    ${textStyles.body6}
     display: grid;
-    grid-template-columns: 7.5em minmax(0, 1fr);
+    grid-template-columns: 9em minmax(0, 1fr);
     gap: 8px;
-    padding-left: 8px;
+    padding: 0 4px;
     color: var(--ink-3);
-    border-left: 4px dashed var(--ink-1);
-    font-size: 0.8rem;
-    line-height: 1.35;
   }
 
   & li strong {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     color: var(--anime-ink);
-    font-weight: 900;
+    font-weight: 600;
+  }
+
+  & li strong::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--ink-2);
   }
 
   & li[data-reached='true'] {
     color: var(--anime-ink);
-    border-left-style: solid;
-    border-left-color: var(--anime-teal);
+  }
+
+  & li[data-reached='true'] strong::before {
+    background: var(--anime-teal);
+    border-color: var(--anime-teal);
   }
 
   & li[aria-current='true'] {
@@ -88,37 +104,46 @@ const TierList = styled.ol`
   }
 `;
 
+// Each request is led by a mustard pin, like a note on the board.
 const BoardList = styled.ul`
   display: grid;
-  gap: 4px;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 
   & li {
+    ${textStyles.body6}
     display: grid;
-    gap: 1px;
-    padding-left: 8px;
-    border-left: 4px solid var(--anime-mustard);
-    font-size: 0.82rem;
+    gap: 2px;
   }
 
   & li strong {
-    font-weight: 900;
+    ${textStyles.title3}
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  & li strong::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+    background: var(--anime-mustard);
+    border: 2px solid var(--anime-ink);
   }
 
   & li small {
+    ${textStyles.caption3}
     color: var(--ink-3);
-    font-size: 0.74rem;
-    font-weight: 800;
   }
 `;
 
 const Quiet = styled.p`
+  ${textStyles.body5}
   margin: 0;
   color: var(--ink-3);
-  font-size: 0.8rem;
-  font-weight: 700;
 `;
 
 /** Standing over every village: its tier, the way to the next, what each brings. */
@@ -191,7 +216,10 @@ export const BoardPreview = ({ stageId, progress }: BoardPreviewProps) => {
           ))}
         </BoardList>
       ) : (
-        <Quiet>Every request this village can offer you now is done.</Quiet>
+        <EmptyNote>
+          <strong>Board cleared</strong>
+          <p>Every request this village can offer you now is done.</p>
+        </EmptyNote>
       )}
       {nextLocked && (
         <Quiet>
