@@ -692,6 +692,7 @@ export const RouteStatusBadge = styled.span<{ accent: string }>`
   background: color-mix(in srgb, ${(props) => props.accent} 18%, var(--anime-paper-light));
   border: 1px solid ${(props) => props.accent};
   border-radius: 0;
+  margin-right: 16px;
   text-transform: uppercase;
 
   & svg {
@@ -771,7 +772,7 @@ export const SectionTitle = styled(Typography)`
 
 export const SelectionGrid = styled.div`
   display: grid;
-  /* 118px lets all seven stages share one row in the 980px deck. */
+  /* Upgrades: as many 118 px or wider columns as fit. */
   grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 12px;
 
@@ -786,7 +787,14 @@ export const SelectionGrid = styled.div`
   }
 `;
 
+/**
+ * A pick in a grid (a shinobi or an upgrade). The chosen card is tinted in
+ * its colour (`accent`, also the square before its name) with an ink
+ * keyline, a hard ink offset and the check badge; a locked card is dashed,
+ * greyed and says what unlocks it.
+ */
 export const SelectionCard = styled.button<{ selected: boolean; accent: string }>`
+  --card-accent: ${(props) => props.accent};
   position: relative;
   display: flex;
   flex-direction: column;
@@ -805,21 +813,11 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
   color: var(--anime-ink);
   cursor: pointer;
   text-align: left;
-  transition: transform 0.16s ease, border-color 0.16s ease;
-  box-shadow: ${(props) => (props.selected ? 'var(--shadow-1)' : 'none')};
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 12px;
-    bottom: 12px;
-    width: 4px;
-    background: ${(props) => props.accent};
-    opacity: ${(props) => (props.selected ? 1 : 0.46)};
-  }
+  transition: ${transition(['transform'], ['border-color', 'box-shadow'])};
+  box-shadow: ${(props) => (props.selected ? 'var(--shadow-2)' : 'none')};
 
   &:disabled {
+    --card-accent: rgba(33, 29, 26, 0.32);
     cursor: not-allowed;
     background: #e4dccb;
     border-style: dashed;
@@ -836,6 +834,10 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
     border-color: var(--anime-ink);
   }
 
+  &:active:not(:disabled) {
+    ${PRESSED}
+  }
+
   &:focus-visible {
     outline: var(--focus-ring);
     outline-offset: 2px;
@@ -845,6 +847,23 @@ export const SelectionCard = styled.button<{ selected: boolean; accent: string }
     transition: none;
   }
 `;
+
+/** A card's name (Title 4 as subtitle2), led by a small square in the card's colour. */
+export const CardName = styled(Typography)`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 16px;
+
+  &::before {
+    content: '';
+    flex: none;
+    width: 10px;
+    height: 10px;
+    background: var(--card-accent, var(--action));
+    border: 1px solid var(--anime-ink);
+  }
+` as typeof Typography;
 
 export const StagePreviewImage = styled('div', {
   shouldForwardProp: (prop) => !['image', 'backgroundPosition', 'standalone'].includes(String(prop)),
@@ -865,7 +884,7 @@ export const StagePreviewImage = styled('div', {
 export const CardHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 8px;
 `;
 
@@ -875,22 +894,25 @@ export const CardMeta = styled(Typography)`
   color: rgba(33, 29, 26, 0.72);
 `;
 
-/** Corner tag on the selected card, so selection does not rely on colour. */
+/**
+ * Corner tag on the selected card, so selection does not rely on colour.
+ * Square: it sits 4 px inside the card's 2 px corner. Names and status chips
+ * keep 16 px clear on the right so the tag never covers them.
+ */
 export const SelectedMark = styled.span`
+  ${textStyles.caption3}
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 4px;
+  right: 4px;
   z-index: 1;
-  padding: 2px 7px;
+  padding: 2px 4px;
   color: var(--anime-paper-light);
   background: var(--anime-ink);
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 900;
-  line-height: 1.3;
+  border-radius: 0;
 `;
 
 export const LockBadge = styled.span`
+  ${textStyles.caption3}
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
@@ -898,19 +920,16 @@ export const LockBadge = styled.span`
   margin-top: auto;
   padding-top: 4px;
   color: var(--anime-ink);
-  font-size: 0.7rem;
-  font-weight: 900;
   text-transform: uppercase;
 
   & svg {
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
   }
 
   & small {
+    ${textStyles.caption4}
     width: 100%;
     color: rgba(33, 29, 26, 0.72);
-    font-size: 0.66rem;
-    font-weight: 700;
     text-transform: none;
   }
 `;

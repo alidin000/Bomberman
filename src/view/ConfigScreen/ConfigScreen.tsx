@@ -42,6 +42,7 @@ import {
   SelectionCard,
   CardHeader,
   CardMeta,
+  CardName,
   LockBadge,
   SelectedMark,
   StagePreviewImage,
@@ -893,7 +894,7 @@ export const ConfigScreen = () => {
                             />
                           </CharacterPortrait>
                           <CardHeader>
-                            <Typography component="span" variant="subtitle2" fontWeight="bold">{character.name}</Typography>
+                            <CardName component="span" variant="subtitle2">{character.name}</CardName>
                           </CardHeader>
                           {locked && (
                             <LockBadge>
@@ -932,9 +933,9 @@ export const ConfigScreen = () => {
                       aria-pressed={selected}
                     >
                       {selected && <SelectedMark aria-hidden="true">✓</SelectedMark>}
-                      <Typography component="span" variant="subtitle2" fontWeight="bold">
+                      <CardName component="span" variant="subtitle2">
                         {upgrade.name}
-                      </Typography>
+                      </CardName>
                       <CardMeta id={`upgrade-meta-${upgrade.id}`} variant="caption">{upgrade.description}</CardMeta>
                       {!unlocked && (
                         <LockBadge id={`upgrade-lock-${upgrade.id}`}>
