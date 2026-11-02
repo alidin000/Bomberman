@@ -989,14 +989,20 @@ export const ConfigScreen = () => {
               <div>
                 {humanPlayerNumbers.map((player) => renderKeyConfig(player))}
               </div>
+              {/* Deep vermilion: MUI's error red is under 4.5:1 on the scroll paper. */}
               {hasKeyConflicts && (
                 <>
-                  <Typography variant="body2" color="error" sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      display: 'flex', alignItems: 'center', mt: 2, color: 'var(--anime-vermilion-deep)',
+                    }}
+                  >
                     <Info sx={{ mr: 1, fontSize: 'inherit' }} />
                     Please correct the highlighted key conflicts before proceeding.
                   </Typography>
                   {conflictKeyLabels.length > 0 && (
-                    <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                    <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'var(--anime-vermilion-deep)' }}>
                       {`Duplicated keys: ${conflictKeyLabels.join(' · ')}`}
                     </Typography>
                   )}
