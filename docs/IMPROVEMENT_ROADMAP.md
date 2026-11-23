@@ -4,6 +4,43 @@ This document collects the main engineering findings and product ideas from a so
 
 **Scope:** review of the repository source code and project structure. This is not a full live-gameplay test, load test, or local test-suite run. Items are prioritized by impact and confidence.
 
+## Status (2026-11-22)
+
+Items 1–5 are implemented. The section 6 ideas are not started. Before building, each finding was checked against the code, reproduced through the real WebSocket server, and load-tested. That changed two items and added the gaps below. The original text further down is kept as written.
+
+| Item | Status | What changed from the finding |
+|---|---|---|
+| 1. Entity IDs | Done | Boss and enemy hazard IDs collided across rooms, as described. Bomb IDs did not: live bombs used an ID built from match state. That ID could still repeat inside one room, leaving a bomb on the map that never exploded and cost its owner a bomb slot. All three now come from per-match counters in `GameEngineState.entityIds`, and live bombs are `bomb-N`. |
+| 2. Abuse protection | Done, one setting open | Limits per address and server-wide on sockets, rooms, connects, creates and failed joins. Seatless sockets time out. Origins are normalised. IPv6 is counted per /64 and per /48. The client address on Render still needs a live check (see Open decisions). |
+| 3. Room lifecycle | Done | A one-second sweep replaces the per-room timers. A reconnect or a guest drop used to cancel the lobby timeout; it now counts from creation. Finished rooms stop ticking and expire, and idle and very old rooms close. SIGTERM tells every room the server is restarting. The client stops retrying after a final message and gives up rejoining after 30 s. |
+| 4. Tests | Done | 10 new test files. The full suite is 153 files and 1,345 tests (143 and 1,258 before). Each regression test was shown failing on the old code. |
+| 5. Diagnostics | Done | One JSON log line per event, with no tokens, names, raw addresses or message bodies. `/healthz` adds a socket count. `/metrics` answers only when `METRICS_TOKEN` is set. |
+
+Evidence for item 1: one room plays while six others start matches on the same server. On the old code, 90 of room A's 1,700 snapshots held two live hazards with the same ID. On the branch, none of its 1,306 snapshots did. `REPLAY_VERSION` (and so `SIMULATION_VERSION`) moved from 10 to 11, so the client and the server must be deployed together.
+
+Gaps found beyond this document, fixed on the branch:
+
+- The client threw away the server's final messages and kept reconnecting. "This game is out of date" never showed, and "room closed" turned into "seat expired".
+- Idle, paused and finished rooms sent 20 empty updates a second to every player.
+- A lobby guest who dropped stayed in the seat forever and blocked the start.
+- A reloaded or duplicated tab could not act, because the server kept the old tab's input sequence.
+- `close()` hung while a socket without a seat was open.
+
+Measured capacity: the server ran 100 four-player rooms on one laptop core. Under a 0.1-CPU quota, the size of Render's free instance, only about 3 rooms stayed smooth, and at 20 every room fell behind. A four-player room sends about 0.34 GB of WebSocket traffic an hour. `MAX_ROOMS` is now an environment setting but still defaults to 100.
+
+Open decisions:
+
+1. **Client address on Render.** `render.yaml` uses `CLIENT_IP_SOURCE=xff-left`. That keys normal browsers correctly, but a client that forges `X-Forwarded-For` bypasses every per-address limit and can fill the server-wide caps. The `DEBUG_CLIENT_IP` check described in `render.yaml` shows which source cannot be forged. It needs a deploy, so it has not been run.
+2. **`MAX_ROOMS` on the free plan.** A low cap such as 3–5 keeps the rooms that exist smooth, but `MAX_ROOMS_PER_IP` (8) must then come down too, or one address can take every room.
+3. **Create cooldown.** Section 2 asked for one. It is off by default (`CREATE_COOLDOWN_MS=0`): a per-address create budget of 8 rooms, refilling one every 5 s, replaces it so a classroom behind one router is not throttled.
+
+Notes on the section 6 ideas, from the same investigation:
+
+- `src/network/replay.ts` already versions and validates a replay format, but nothing records matches or plays them back.
+- Local movement repeats per display frame, so a local match cannot be reproduced from the seed and player inputs alone; a replay needs the full action stream.
+- The seed changes little (versus crate drops and campaign waves), so "everyone plays the same seed" does not make scores comparable yet.
+- The engine keeps no event log, so post-match highlights would need one first.
+
 ## Priority summary
 
 | Priority | Area | Improvement |
