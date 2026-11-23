@@ -1,7 +1,8 @@
 // What the online screens say when a room cannot open or a match stops: a
 // short title for what failed and one line on what to do next. Keyed by the
 // session's error text (network/onlineSession), which for server errors is
-// the error code with spaces for its dashes.
+// the error code with spaces for its dashes, and for a closed room or a lost
+// seat the sentence the session maps its detail or reason to.
 
 export type OnlineProblem = {
   title: string;
@@ -31,6 +32,56 @@ const PROBLEMS: Record<string, OnlineProblem> = {
     detail: 'Create a new room, or join with another code.',
     retry: false,
   },
+  'The host left the room.': {
+    title: 'The host left the room',
+    detail: 'Create a new room, or join with another code.',
+    retry: false,
+  },
+  'A player left the match.': {
+    title: 'A player left, so the match ended',
+    detail: 'Create a new room to play again.',
+    retry: false,
+  },
+  'The room closed while everyone was away.': {
+    title: 'The room closed while everyone was away',
+    detail: 'Create a new room, or join with another code.',
+    retry: false,
+  },
+  'A player did not reconnect in time.': {
+    title: 'A player did not reconnect in time',
+    detail: 'The match ended. Create a new room to play again.',
+    retry: false,
+  },
+  'The match was idle too long.': {
+    title: 'The match was idle too long',
+    detail: 'Nobody played for a while, so the room closed. Create a new room to play again.',
+    retry: false,
+  },
+  'The room closed after the match.': {
+    title: 'The room closed after the match',
+    detail: 'Create a new room for another match.',
+    retry: false,
+  },
+  'The room reached its time limit.': {
+    title: 'The room reached its time limit',
+    detail: 'Create a new room to keep playing.',
+    retry: false,
+  },
+  'The server restarted.': {
+    title: 'The server restarted for an update',
+    detail: 'Your match ended. Create a new room to play again.',
+    retry: false,
+  },
+  'Your seat moved to another tab.': {
+    title: 'This room is open in another tab',
+    detail: 'Your seat moved to another tab or window. Carry on playing there.',
+    retry: false,
+  },
+  'Could not rejoin the room.': {
+    title: 'Could not rejoin the room',
+    detail: 'Check your connection, then try again.',
+    retry: true,
+  },
   'room full': {
     title: 'That room is full',
     detail: 'A room holds four shinobi. Ask the host for another code, or create your own room.',
@@ -59,6 +110,21 @@ const PROBLEMS: Record<string, OnlineProblem> = {
   'rate limited': {
     title: 'Too many tries at once',
     detail: 'Wait a few seconds, then try again.',
+    retry: true,
+  },
+  'server busy': {
+    title: 'The server is busy',
+    detail: 'It cannot take more players right now. Try again in a minute.',
+    retry: true,
+  },
+  'too many rooms': {
+    title: 'Too many rooms from your network',
+    detail: 'Finish or leave a room you opened, then try again.',
+    retry: true,
+  },
+  'too many connections': {
+    title: 'Too many connections from your network',
+    detail: 'Close other game tabs, then try again.',
     retry: true,
   },
   'bad message': {

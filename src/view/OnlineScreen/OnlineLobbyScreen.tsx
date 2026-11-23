@@ -142,8 +142,13 @@ export function OnlineLobbyScreen() {
   // Opening a socket, or rejoining after a drop: the room is on its way.
   const busy = online.status === 'connecting' || online.status === 'reconnecting';
   const problem = online.error && !busy ? describeOnlineError(online.error) : null;
-  const canRetry = Boolean(problem?.retry && attempt);
-  const retry = () => (attempt === 'join' ? joinRoom() : createRoom());
+  const canRetry = Boolean(problem?.retry && (online.token || attempt));
+  const retry = () => {
+    // A seat the session still holds is tried again, never swapped for a new room.
+    if (online.token) session.rejoin();
+    else if (attempt === 'join') joinRoom();
+    else createRoom();
+  };
 
   let body: React.ReactNode;
   if (busy) {

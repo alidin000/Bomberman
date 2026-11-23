@@ -31,7 +31,7 @@ export function useOnlineSessionSnapshot(session: OnlineSession = getOnlineSessi
 
 type OnlineStatusSnapshot = Pick<
 OnlineSessionSnapshot,
-'connected' | 'roomId' | 'seat' | 'error'
+'status' | 'connected' | 'roomId' | 'seat' | 'error'
 >;
 
 function sameOnlineStatus(
@@ -39,6 +39,7 @@ function sameOnlineStatus(
   next: OnlineSessionSnapshot
 ): boolean {
   return !!previous
+    && previous.status === next.status
     && previous.connected === next.connected
     && previous.roomId === next.roomId
     && previous.seat === next.seat
@@ -54,6 +55,7 @@ export function useOnlineStatusSnapshot(
     const next = session.getSnapshot();
     if (!sameOnlineStatus(cachedRef.current, next)) {
       cachedRef.current = {
+        status: next.status,
         connected: next.connected,
         roomId: next.roomId,
         seat: next.seat,

@@ -20,6 +20,7 @@ import { OnlineGameScreen } from './OnlineGameScreen';
 const mocks = vi.hoisted(() => ({
   input: vi.fn(),
   leave: vi.fn(),
+  rejoin: vi.fn(),
   resumeStored: vi.fn(() => true),
   setRematch: vi.fn(),
   useOnlineInput: vi.fn(),
@@ -27,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   engine: null as {
     store: PublishingEngineStore;
     motion: null;
-    getState: () => GameEngineState;
+    getState: () => GameEngineState | null;
     advanceFrame: (now: number) => void;
   } | null,
 }));
@@ -36,6 +37,7 @@ vi.mock('../../network/onlineSession', () => ({
   getOnlineSession: () => ({
     input: mocks.input,
     leave: mocks.leave,
+    rejoin: mocks.rejoin,
     resumeStored: mocks.resumeStored,
     setRematch: mocks.setRematch,
   }),
@@ -99,6 +101,7 @@ function renderOnlineGame() {
       <MemoryRouter initialEntries={['/online/ABC234/play']}>
         <Routes>
           <Route path="/online/:roomId/play" element={<OnlineGameScreen />} />
+          <Route path="/online" element={<p>Online menu page</p>} />
         </Routes>
       </MemoryRouter>
     </ThemeProvider>
@@ -265,5 +268,111 @@ describe('OnlineGameScreen connection curtain', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Player 1 disconnected. The match is paused.');
     fireEvent.click(screen.getByRole('button', { name: 'Leave room' }));
     expect(mocks.leave).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('OnlineGameScreen match result', () => {
+  it('shows who a rematch waits on', () => {
+    const state: GameEngineState = {
+      ...onlineState(), phase: 'game_over', resultMessage: 'Player 2 wins the match!',
+    };
+    const store = createEngineStore();
+    store.publish(state);
+    mocks.engine = {
+      store, motion: null, getState: () => state, advanceFrame: vi.fn(),
+    };
+    mocks.snapshot = {
+      status: 'playing',
+      connected: true,
+      roomId: 'ABC234',
+      seat: 1,
+      playerId: 'player2',
+      token: 'resume-token',
+      players: [],
+      roomMode: 'arena',
+      stageId: 'hiddenLeaf',
+      capacity: 4,
+      totalRounds: 3,
+      gameState: state,
+      ack: 1,
+      error: 'Player 1 reconnecting (12s)',
+    };
+    renderOnlineGame();
+
+    const result = screen.getByRole('dialog', { name: 'online match result' });
+    expect(within(result).getByRole('status')).toHaveTextContent('Player 1 reconnecting (12s)');
+    expect(within(result).getByRole('button', { name: 'Ready for rematch' })).toBeInTheDocument();
+  });
+});
+
+describe('OnlineGameScreen when the match cannot go on', () => {
+  function endedSnapshot(patch: Partial<OnlineSessionSnapshot>): OnlineSessionSnapshot {
+    return {
+      status: 'closed',
+      connected: false,
+      roomId: '',
+      seat: null,
+      playerId: '',
+      token: '',
+      players: [],
+      roomMode: 'arena',
+      stageId: 'hiddenLeaf',
+      capacity: 4,
+      totalRounds: 3,
+      gameState: null,
+      ack: -1,
+      error: '',
+      ...patch,
+    };
+  }
+
+  beforeEach(() => {
+    mocks.engine = {
+      store: createEngineStore(), motion: null, getState: () => null, advanceFrame: vi.fn(),
+    };
+    mocks.leave.mockClear();
+    mocks.rejoin.mockClear();
+    mocks.resumeStored.mockClear();
+  });
+
+  it('sends the player to the online menu once the room is gone', () => {
+    mocks.snapshot = endedSnapshot({ error: 'A player did not reconnect in time.' });
+    renderOnlineGame();
+
+    const problem = screen.getByRole('alert', { name: 'A player did not reconnect in time' });
+    expect(within(problem).queryByRole('button', { name: 'Back to the room' })).not.toBeInTheDocument();
+    fireEvent.click(within(problem).getByRole('button', { name: 'Online menu' }));
+    expect(mocks.leave).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Online menu page')).toBeInTheDocument();
+  });
+
+  it('tries the kept seat again after the session gave up rejoining', () => {
+    mocks.snapshot = endedSnapshot({
+      roomId: 'ABC234', seat: 1, token: 'resume-token', error: 'Could not rejoin the room.',
+    });
+    renderOnlineGame();
+
+    const problem = screen.getByRole('alert', { name: 'Could not rejoin the room' });
+    fireEvent.click(within(problem).getByRole('button', { name: 'Try again' }));
+    expect(mocks.rejoin).toHaveBeenCalledTimes(1);
+    expect(mocks.leave).not.toHaveBeenCalled();
+    fireEvent.click(within(problem).getByRole('button', { name: 'Main Menu' }));
+    expect(mocks.leave).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a rejoin in progress, and leaves it to the session', () => {
+    mocks.snapshot = endedSnapshot({
+      status: 'reconnecting',
+      roomId: 'ABC234',
+      seat: 1,
+      token: 'resume-token',
+      error: 'Connection lost. Rejoining the room...',
+    });
+    renderOnlineGame();
+
+    expect(screen.getByRole('status')).toHaveTextContent('Connection lost. Rejoining the room...');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    // A second resume from the screen would race the session's own.
+    expect(mocks.resumeStored).not.toHaveBeenCalled();
   });
 });

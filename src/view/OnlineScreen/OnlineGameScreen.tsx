@@ -79,14 +79,13 @@ export function OnlineGameScreen() {
 
   useEffect(() => applyDocumentPreferences(preferences), [preferences]);
   useEffect(() => {
-    if (
-      !online.connected
-      && roomId
-      && !session.resumeStored(roomId.toUpperCase())
-    ) {
+    // Only a fresh session resumes here. A live, rejoining or ended one
+    // already knows its room, and a second resume would race its own.
+    if (online.status !== 'idle' || !roomId) return;
+    if (!session.resumeStored(roomId.toUpperCase())) {
       navigate(`/online/${roomId.toUpperCase()}`, { replace: true });
     }
-  }, [navigate, online.connected, roomId, session]);
+  }, [navigate, online.status, roomId, session]);
 
   useOnlineInput(session, canPlay && !squareUse, squareBomb);
 
@@ -97,7 +96,34 @@ export function OnlineGameScreen() {
 
   // Before the first snapshot: a skeleton of the match, or why it failed.
   if (!state) {
-    const problem = online.error ? describeOnlineError(online.error) : null;
+    const rejoining = online.status === 'reconnecting';
+    const problem = online.error && !rejoining ? describeOnlineError(online.error) : null;
+    let nextStep: React.ReactNode;
+    if (problem?.retry && online.roomId) {
+      // The session gave up rejoining, but the seat may still be there.
+      nextStep = (
+        <Button variant="contained" startIcon={<ReplayIcon />} onClick={() => session.rejoin()}>
+          Try again
+        </Button>
+      );
+    } else if (!online.roomId) {
+      // The room, or this seat in it, is gone: its code leads nowhere now.
+      const openOnlineMenu = () => {
+        session.leave();
+        navigate('/online');
+      };
+      nextStep = (
+        <Button variant="contained" startIcon={<ArrowBackIcon />} onClick={openOnlineMenu}>
+          Online menu
+        </Button>
+      );
+    } else {
+      nextStep = (
+        <Button variant="contained" startIcon={<ArrowBackIcon />} onClick={() => navigate(`/online/${roomId.toUpperCase()}`)}>
+          Back to the room
+        </Button>
+      );
+    }
     return (
       <OnlinePage>
         <OnlineShell>
@@ -106,15 +132,13 @@ export function OnlineGameScreen() {
               <h1 id="online-match-problem">{problem.title}</h1>
               <p>{problem.detail}</p>
               <ErrorActions>
-                <Button variant="contained" startIcon={<ArrowBackIcon />} onClick={() => navigate(`/online/${roomId.toUpperCase()}`)}>
-                  Back to the room
-                </Button>
+                {nextStep}
                 <Button variant="outlined" onClick={leave}>{MAIN_MENU_LABEL}</Button>
               </ErrorActions>
             </OnlineError>
           ) : (
             <RoomSkeleton role="status">
-              <span>{JOINING_MATCH_MESSAGE}</span>
+              <span>{rejoining && online.error ? online.error : JOINING_MATCH_MESSAGE}</span>
               <div className="skeleton" aria-hidden="true" style={{ width: '100%', height: 48 }} />
               <div
                 className="skeleton"
@@ -193,6 +217,8 @@ export function OnlineGameScreen() {
           <ResultPanel role="dialog" aria-label="online match result">
             <h2>{state.resultMessage || 'Match over'}</h2>
             <p>Every player must request a rematch.</p>
+            {/* Who the rematch waits on, counted down to when the room closes. */}
+            {online.error && <p role="status">{curtainProblem?.title ?? online.error}</p>}
             <Button variant="contained" startIcon={<ReplayIcon />} onClick={() => session.setRematch(true)}>Ready for rematch</Button>
             <Button variant="outlined" startIcon={<ExitToAppIcon />} onClick={leave}>Leave room</Button>
           </ResultPanel>

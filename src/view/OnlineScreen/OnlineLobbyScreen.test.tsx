@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   join: vi.fn(),
   leave: vi.fn(),
+  rejoin: vi.fn(),
   resumeStored: vi.fn(),
   selectCharacter: vi.fn(),
   setReady: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock('../../network/onlineSession', () => ({
     create: mocks.create,
     join: mocks.join,
     leave: mocks.leave,
+    rejoin: mocks.rejoin,
     resumeStored: mocks.resumeStored,
     selectCharacter: mocks.selectCharacter,
     setReady: mocks.setReady,
@@ -221,6 +223,26 @@ describe('OnlineLobbyScreen connection states', () => {
 
     fireEvent.click(within(problem).getByRole('button', { name: 'Main Menu' }));
     expect(mocks.leave).toHaveBeenCalledTimes(1);
+  });
+
+  it('tries the seat it still holds again, not a new room, after rejoining gave up', () => {
+    mocks.join.mockClear();
+    mocks.rejoin.mockClear();
+    mocks.snapshot = {
+      ...mocks.snapshot,
+      status: 'closed',
+      roomId: 'ABC234',
+      seat: 0,
+      token: 'resume-token',
+      error: 'Could not rejoin the room.',
+    };
+    renderLobby('/online/ABC234');
+
+    const problem = screen.getByRole('alert', { name: 'Could not rejoin the room' });
+    fireEvent.click(within(problem).getByRole('button', { name: 'Try again' }));
+    expect(mocks.rejoin).toHaveBeenCalledTimes(1);
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.join).not.toHaveBeenCalled();
   });
 
   it('offers no try again when this build has no online server', () => {
