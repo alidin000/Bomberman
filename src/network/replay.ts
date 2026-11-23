@@ -32,7 +32,11 @@ import { GameEngineState } from '../engine/types';
 // (ACCEPT_REQUEST, marked cells from their own seed) and the stall
 // (CAMPAIGN_PURCHASE), both taken while paused, from config.village.
 // SIMULATION_VERSION follows.
-export const REPLAY_VERSION = 10;
+// v11: bomb, boss hazard and enemy hazard ids come from counters in the match
+// state (bomb-1, bomb-2, ...), not from counters every room in the process
+// shared; they keep counting through a match's rounds. SIMULATION_VERSION
+// follows.
+export const REPLAY_VERSION = 11;
 
 export interface ReplayFrame {
   tick: number;

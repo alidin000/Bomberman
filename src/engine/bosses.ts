@@ -5,28 +5,26 @@ import { applyCharacterSurvival } from './players';
 import { getPlayerCell, positionOverlapsCell } from './grid';
 import { getMatchDifficulty } from './difficulty';
 import { isInVillageSquare, isShelteredInSquare, playersOutsideSquare } from './villageSquare';
+import { mintEntityId } from './entityIds';
 
 const BOSS_ATTACK_MS = 3100;
 const BOSS_MOVE_MS = 950;
 const HAZARD_TOTAL_MS = 2400;
 const HAZARD_WARNING_MS = Math.round(HAZARD_TOTAL_MS * 0.7);
 
-let hazardIdCounter = 0;
-
-export function resetBossHazardIdCounter(): void {
-  hazardIdCounter = 0;
-}
+// An attack's hazards so far, and the match's id counters after them.
+type HazardBatch = { hazards: BossHazard[]; entityIds: GameEngineState['entityIds'] };
 
 function createHazard(
+  id: string,
   kind: BossHazard['kind'],
   x: number,
   y: number,
   color: string,
   damage = 1
 ): BossHazard {
-  hazardIdCounter += 1;
   return {
-    id: `hazard-${hazardIdCounter}`,
+    id,
     kind,
     x,
     y,
@@ -147,106 +145,109 @@ function moveBoss(state: GameEngineState, deltaMs: number): GameEngineState {
 
 function addHazardAt(
   state: GameEngineState,
-  hazards: BossHazard[],
+  batch: HazardBatch,
   kind: BossHazard['kind'],
   x: number,
   y: number,
   color: string,
   damage?: number
-): BossHazard[] {
+): HazardBatch {
   const point = clampToArena(state, x, y);
-  if (!canBossMoveTo(state, point.x, point.y)) return hazards;
-  if (isInVillageSquare(state, point.x, point.y)) return hazards;
-  if (hazards.some((hazard) => hazard.x === point.x && hazard.y === point.y)) {
-    return hazards;
+  if (!canBossMoveTo(state, point.x, point.y)) return batch;
+  if (isInVillageSquare(state, point.x, point.y)) return batch;
+  if (batch.hazards.some((hazard) => hazard.x === point.x && hazard.y === point.y)) {
+    return batch;
   }
-  return [...hazards, createHazard(kind, point.x, point.y, color, damage)];
+  const [id, entityIds] = mintEntityId(batch.entityIds, 'bossHazard');
+  return {
+    hazards: [...batch.hazards, createHazard(id, kind, point.x, point.y, color, damage)],
+    entityIds,
+  };
 }
 
 function addLineHazards(
   state: GameEngineState,
+  batch: HazardBatch,
   kind: BossHazard['kind'],
   color: string,
   horizontal: boolean
-): BossHazard[] {
-  if (!state.boss) return [];
-  const hazards: BossHazard[] = [];
+): HazardBatch {
+  if (!state.boss) return batch;
   const fixed = horizontal ? state.boss.y : state.boss.x;
   const limit = horizontal ? state.map[0].length - 1 : state.map.length - 1;
-  let nextHazards = hazards;
+  let next = batch;
   for (let index = 1; index < limit; index += 1) {
-    nextHazards = addHazardAt(
+    next = addHazardAt(
       state,
-      nextHazards,
+      next,
       kind,
       horizontal ? index : fixed,
       horizontal ? fixed : index,
       color
     );
   }
-  return nextHazards;
+  return next;
 }
 
-function spawnBossHazards(state: GameEngineState): {
-  ability: string;
-  hazards: BossHazard[];
-} {
-  if (!state.boss) return { ability: '', hazards: [] };
+function spawnBossHazards(state: GameEngineState): HazardBatch & { ability: string } {
+  const none = { ability: '', hazards: [], entityIds: state.entityIds };
+  if (!state.boss) return none;
   const target = getTargetPlayer(state);
-  if (!target) return { ability: '', hazards: [] };
+  if (!target) return none;
 
   const bossDefinition = getBossDefinition(state.boss.id);
   const ability = bossDefinition.attacks[state.tick % bossDefinition.attacks.length];
   const { color } = state.boss;
   const targetCell = getPlayerCell(target);
-  let hazards: BossHazard[] = [];
+  let batch: HazardBatch = { hazards: [], entityIds: state.entityIds };
 
   if (state.boss.id === 'shukaku') {
-    hazards = addHazardAt(state, hazards, 'sandTornado', targetCell.x, targetCell.y, color);
+    batch = addHazardAt(state, batch, 'sandTornado', targetCell.x, targetCell.y, color);
     if (state.boss.phase > 1) {
-      hazards = addHazardAt(state, hazards, 'sandSpikes', targetCell.x + 1, targetCell.y, color);
+      batch = addHazardAt(state, batch, 'sandSpikes', targetCell.x + 1, targetCell.y, color);
     }
   } else if (state.boss.id === 'matatabi') {
-    hazards = addLineHazards(state, 'blueFireTrail', color, state.tick % 2 === 0);
+    batch = addLineHazards(state, batch, 'blueFireTrail', color, state.tick % 2 === 0);
   } else if (state.boss.id === 'isobu') {
-    hazards = addLineHazards(state, 'waterCannon', color, Math.abs(target.x - state.boss.x) > Math.abs(target.y - state.boss.y));
+    batch = addLineHazards(state, batch, 'waterCannon', color, Math.abs(target.x - state.boss.x) > Math.abs(target.y - state.boss.y));
   } else if (state.boss.id === 'sonGoku') {
-    hazards = addHazardAt(state, hazards, 'lavaBurst', targetCell.x, targetCell.y, color);
+    batch = addHazardAt(state, batch, 'lavaBurst', targetCell.x, targetCell.y, color);
     if (state.boss.phase > 1) {
-      hazards = addHazardAt(state, hazards, 'lavaBurst', targetCell.x + 1, targetCell.y, color);
+      batch = addHazardAt(state, batch, 'lavaBurst', targetCell.x + 1, targetCell.y, color);
     }
   } else if (state.boss.id === 'kokuo') {
-    hazards = addLineHazards(state, 'steamCharge', color, state.tick % 2 === 1);
+    batch = addLineHazards(state, batch, 'steamCharge', color, state.tick % 2 === 1);
   } else if (state.boss.id === 'saiken') {
-    hazards = addHazardAt(state, hazards, 'acidBubble', targetCell.x, targetCell.y, color);
+    batch = addHazardAt(state, batch, 'acidBubble', targetCell.x, targetCell.y, color);
     if (state.boss.phase > 1) {
-      hazards = addHazardAt(state, hazards, 'acidBubble', targetCell.x + 2, targetCell.y, color);
+      batch = addHazardAt(state, batch, 'acidBubble', targetCell.x + 2, targetCell.y, color);
     }
   } else if (state.boss.id === 'chomei') {
-    hazards = addHazardAt(state, hazards, 'airStrike', targetCell.x, targetCell.y, color);
+    batch = addHazardAt(state, batch, 'airStrike', targetCell.x, targetCell.y, color);
     if (state.boss.phase > 1) {
-      hazards = addHazardAt(state, hazards, 'airStrike', targetCell.x, targetCell.y - 1, color);
+      batch = addHazardAt(state, batch, 'airStrike', targetCell.x, targetCell.y - 1, color);
     }
   } else if (state.boss.id === 'gyuki') {
-    hazards = addHazardAt(state, hazards, 'tentacleSlam', targetCell.x, targetCell.y, color);
+    batch = addHazardAt(state, batch, 'tentacleSlam', targetCell.x, targetCell.y, color);
     if (state.boss.phase > 1) {
-      hazards = addHazardAt(state, hazards, 'tentacleSlam', targetCell.x + 1, targetCell.y, color);
+      batch = addHazardAt(state, batch, 'tentacleSlam', targetCell.x + 1, targetCell.y, color);
     }
   } else {
-    hazards = addHazardAt(state, hazards, 'beastBomb', targetCell.x, targetCell.y, color);
-    hazards = addHazardAt(state, hazards, 'chakraShockwave', state.boss.x + 1, state.boss.y, color);
-    hazards = addHazardAt(state, hazards, 'chakraShockwave', state.boss.x - 1, state.boss.y, color);
-    hazards = addHazardAt(state, hazards, 'chakraShockwave', state.boss.x, state.boss.y + 1, color);
-    hazards = addHazardAt(state, hazards, 'chakraShockwave', state.boss.x, state.boss.y - 1, color);
+    batch = addHazardAt(state, batch, 'beastBomb', targetCell.x, targetCell.y, color);
+    batch = addHazardAt(state, batch, 'chakraShockwave', state.boss.x + 1, state.boss.y, color);
+    batch = addHazardAt(state, batch, 'chakraShockwave', state.boss.x - 1, state.boss.y, color);
+    batch = addHazardAt(state, batch, 'chakraShockwave', state.boss.x, state.boss.y + 1, color);
+    batch = addHazardAt(state, batch, 'chakraShockwave', state.boss.x, state.boss.y - 1, color);
   }
 
   return {
     ability,
-    hazards: hazards.map((hazard) => ({
+    hazards: batch.hazards.map((hazard) => ({
       ...hazard,
       sourceName: state.boss?.name,
       sourceAbility: ability || getHazardDeathLabel(hazard.kind),
     })),
+    entityIds: batch.entityIds,
   };
 }
 
@@ -336,10 +337,12 @@ export function tickBossEncounter(state: GameEngineState, deltaMs: number): Game
   let attackCooldown = next.boss.attackCooldown - deltaMs;
   let ability = next.boss.currentAbility;
   let spawnedHazards: BossHazard[] = [];
+  let { entityIds } = next;
   if (attackCooldown <= 0) {
     const spawned = spawnBossHazards(next);
     ability = spawned.ability;
     spawnedHazards = spawned.hazards;
+    entityIds = spawned.entityIds;
     attackCooldown = Math.round(
       (BOSS_ATTACK_MS - Math.min(700, next.boss.phase * 180))
         * getMatchDifficulty(next.config).bossAttackScale
@@ -358,5 +361,6 @@ export function tickBossEncounter(state: GameEngineState, deltaMs: number): Game
     },
     hazards: allHazards,
     players: next.players,
+    entityIds,
   };
 }

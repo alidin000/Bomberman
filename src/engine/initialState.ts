@@ -6,9 +6,8 @@ import {
 } from './types';
 import { PLAYER_COLORS, PLAYER_SPAWNS } from './constants';
 import { getMonstersForMap } from './monsterSpawns';
-import { resetBombIdCounter } from './bombs';
-import { resetBossHazardIdCounter } from './bosses';
-import { getDetectionRange, resetMonsterHazardIdCounter } from './monsters';
+import { getDetectionRange } from './monsters';
+import { NO_ENTITY_IDS } from './entityIds';
 import {
   DEFAULT_CHARACTER_ID,
   STAGE_DEFINITIONS,
@@ -236,14 +235,11 @@ function squareExploredAtStart(config: GameConfig): string[] {
 }
 
 export function createInitialState(config: GameConfig): GameEngineState {
-  resetBombIdCounter();
-  resetBossHazardIdCounter();
-  resetMonsterHazardIdCounter();
   const players = Array.from({ length: config.numPlayers }, (_, i) => createPlayer(i, config));
   const safeMap = createSpawnSafeMap(config.map, players);
   // The config keeps the board without the room's charges, so a restart
-  // lights them again.
-  const { map, bombs } = placeTrainingCharges(config, safeMap);
+  // lights them again. Every match numbers its ids from 1.
+  const { map, bombs, entityIds } = placeTrainingCharges(config, safeMap, NO_ENTITY_IDS);
   const squareExplored = squareExploredAtStart(config);
   // The village square's requests and stall come from config.village.
   const campaignRuntime = withVillageVisit(createCampaignRuntimeState(config), config);
@@ -285,22 +281,23 @@ export function createInitialState(config: GameConfig): GameEngineState {
     pressureBlocksPlaced: 0,
     config: { ...config, map: safeMap },
     roundProcessed: false,
+    entityIds,
   };
 
   return withUpdatedFogOfWar(applyLoadoutAtInit(state));
 }
 
 export function resetRoundState(state: GameEngineState): GameEngineState {
-  resetBombIdCounter();
-  resetBossHazardIdCounter();
-  resetMonsterHazardIdCounter();
   const players = Array.from(
     { length: state.config.numPlayers },
     (_, i) => createPlayer(i, state.config),
   );
-  const { map, bombs } = placeTrainingCharges(
+  // Ids keep counting through the match: like `tick`, they outlive a round,
+  // and so do view caches keyed by them (telegraph headings, scene keys).
+  const { map, bombs, entityIds } = placeTrainingCharges(
     state.config,
-    createSpawnSafeMap(state.config.map, players)
+    createSpawnSafeMap(state.config.map, players),
+    state.entityIds
   );
   const squareExplored = squareExploredAtStart(state.config);
   const campaignRuntime = withVillageVisit(createCampaignRuntimeState(state.config), state.config);
@@ -337,6 +334,7 @@ export function resetRoundState(state: GameEngineState): GameEngineState {
     roundStartTicksRemaining: ROUND_START_COUNTDOWN_MS,
     roundElapsedMs: 0,
     pressureBlocksPlaced: 0,
+    entityIds,
   };
 
   return withUpdatedFogOfWar(applyLoadoutAtInit(next));

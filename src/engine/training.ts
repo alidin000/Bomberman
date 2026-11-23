@@ -3,6 +3,7 @@ import {
   BombState, GameConfig, GameEngineState, MonsterState, Point, TrainingGoal,
 } from './types';
 import { createBomb } from './bombs';
+import { mintEntityId } from './entityIds';
 
 // Training Dojo rooms (`mode: 'training'`). The room's data travels in
 // `config.training`; this file turns it into the opening board and decides
@@ -15,14 +16,16 @@ export function isTrainingConfig(config: Pick<GameConfig, 'mode'>): boolean {
   return config.mode === 'training';
 }
 
-/** The room's charges, lit and placed on the map, plus that map. */
+/** The room's charges, lit and placed on the map, that map, and the ids after them. */
 export function placeTrainingCharges(
   config: GameConfig,
-  map: GameMap
-): { bombs: BombState[]; map: GameMap } {
+  map: GameMap,
+  entityIds: GameEngineState['entityIds']
+): { bombs: BombState[]; map: GameMap; entityIds: GameEngineState['entityIds'] } {
   const charges = isTrainingConfig(config) ? config.training?.charges ?? [] : [];
-  if (charges.length === 0) return { bombs: [], map };
+  if (charges.length === 0) return { bombs: [], map, entityIds };
   const next = map.map((row) => [...row]);
+  let ids = entityIds;
   const bombs = charges
     .filter((charge) => next[charge.y]?.[charge.x] === 'Empty')
     .map((charge) => {
@@ -31,7 +34,10 @@ export function placeTrainingCharges(
         coords: { x: charge.x, y: charge.y },
         ownerId: TRAINING_CHARGE_OWNER,
       };
+      const [id, minted] = mintEntityId(ids, 'bomb');
+      ids = minted;
       return createBomb(
+        id,
         TRAINING_CHARGE_OWNER,
         charge.x,
         charge.y,
@@ -41,7 +47,7 @@ export function placeTrainingCharges(
         charge.fuseMs
       );
     });
-  return { bombs, map: next };
+  return { bombs, map: next, entityIds: ids };
 }
 
 /** The room's sentries, standing on the first cell of their routes. */

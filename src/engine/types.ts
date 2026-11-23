@@ -509,6 +509,13 @@ export interface GameConfig {
   village?: VillageVisitConfig;
 }
 
+// The last number minted in each id family this match (entityIds.ts).
+export interface EntityIdCounters {
+  bomb: number;
+  bossHazard: number;
+  monsterHazard: number;
+}
+
 export interface GameEngineState {
   map: GameMap;
   players: PlayerState[];
@@ -539,4 +546,8 @@ export interface GameEngineState {
   pressureBlocksPlaced: number;
   config: GameConfig;
   roundProcessed: boolean;
+  // Ids live in the match, not the module, so rooms sharing a server never
+  // touch each other's. Missing means none minted yet; optional keeps older
+  // replays and online snapshots compatible.
+  entityIds?: EntityIdCounters;
 }

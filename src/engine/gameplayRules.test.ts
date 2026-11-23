@@ -6,6 +6,7 @@ import {
 import { parseMapRows } from './mapLoader';
 import { BOX_DROP_TABLE, createBomb, explodeBombs } from './bombs';
 import { createDangerMap } from './monsters';
+import { withBomb } from './entityIds.testutil';
 import {
   PRESSURE_BLOCK_INTERVAL_MS, PRESSURE_FILL_MS, VERSUS_ROUND_MS, getUpcomingPressureCells,
   tickSuddenDeath,
@@ -79,7 +80,7 @@ describe('seeded crate drops', () => {
   function blastCrateRow(seed: number) {
     const state = liveRound({ ...versusConfig, map: crateRowMap, seed });
     const bombs = Array.from({ length: 13 }, (_, index) => (
-      createBomb('player1', index + 1, 4, 1, false, 'standard')
+      createBomb(`bomb-${index + 1}`, 'player1', index + 1, 4, 1, false, 'standard')
     ));
     return explodeBombs(state, bombs).destroyedBoxes.map((box) => box.pendingPowerUp);
   }
@@ -170,7 +171,7 @@ describe('boss damage', () => {
     const state = liveRound(soloConfig, { boss });
 
     const next = explodeBombs(state, [
-      createBomb('player1', boss.x, boss.y, 3, false, 'standard'),
+      createBomb('bomb-1', 'player1', boss.x, boss.y, 3, false, 'standard'),
     ]);
 
     expect(next.boss!.health).toBe(boss.maxHealth - 80);
@@ -200,11 +201,10 @@ describe('monster hazards', () => {
 
 describe('danger-aware monster AI', () => {
   it('runs a cornered smart monster out of the blast line before the bomb goes off', () => {
-    const bomb = createBomb('player1', 6, 4, 3, false, 'standard', 1300);
-    let state = liveRound(versusConfig, {
-      bombs: [bomb],
-      monsters: [monster({ x: 8, y: 4, kind: 'smart' })],
-    });
+    let state = withBomb(
+      liveRound(versusConfig, { monsters: [monster({ x: 8, y: 4, kind: 'smart' })] }),
+      (id) => createBomb(id, 'player1', 6, 4, 3, false, 'standard', 1300)
+    );
     state.map[4][6] = { range: 3, coords: { x: 6, y: 4 }, ownerId: 'player1' };
 
     state = tickFor(state, 1400);
@@ -235,8 +235,8 @@ describe('danger-aware monster AI', () => {
   it('treats a chained bomb as going off with the bomb that triggers it', () => {
     const state = liveRound(versusConfig, {
       bombs: [
-        createBomb('player1', 2, 1, 2, false, 'standard', 300),
-        createBomb('player2', 4, 1, 2, false, 'standard', 2900),
+        createBomb('bomb-1', 'player1', 2, 1, 2, false, 'standard', 300),
+        createBomb('bomb-2', 'player2', 4, 1, 2, false, 'standard', 2900),
       ],
     });
 
@@ -250,11 +250,10 @@ describe('danger-aware monster AI', () => {
 
 describe('versus sudden death', () => {
   it('drops pressure blocks in a spiral once the clock runs out, crushing what is under them', () => {
-    const bomb = createBomb('player1', 2, 1, 2, false, 'standard', 2900);
-    let state = liveRound(versusConfig, {
-      roundElapsedMs: VERSUS_ROUND_MS - 50,
-      bombs: [bomb],
-    });
+    let state = withBomb(
+      liveRound(versusConfig, { roundElapsedMs: VERSUS_ROUND_MS - 50 }),
+      (id) => createBomb(id, 'player1', 2, 1, 2, false, 'standard', 2900)
+    );
     state = {
       ...state,
       players: state.players.map((player, index) => (

@@ -2,6 +2,7 @@ import { gameReducer } from './reducer';
 import { createInitialState } from './initialState';
 import { applyPowerUp } from './players';
 import { createBomb, getExplosionPositions } from './bombs';
+import { withBomb } from './entityIds.testutil';
 import { getShadowCloneBlocks } from './characterAbilities';
 import { parseMapRows } from './mapLoader';
 import { GameConfig, GameEngineState, PlayerState } from './types';
@@ -541,13 +542,12 @@ describe('re-ignited flames', () => {
   it('catches a ninja the old flame spared when they walk into the restarted one', () => {
     const map = openArena.map((row) => [...row]);
     map[3][6] = { range: 2, coords: { x: 6, y: 3 }, ownerId: 'player2' };
-    let state = liveRound({}, {
+    let state = withBomb(liveRound({}, {
       map,
-      bombs: [createBomb('player2', 6, 3, 2, false, 'standard', 50)],
       explosions: [{
         x: 4, y: 3, ticksRemaining: 450, kind: 'standard', ownerId: 'player2', sparedIds: ['player1'],
       }],
-    });
+    }), (id) => createBomb(id, 'player2', 6, 3, 2, false, 'standard', 50));
     state = patchPlayer(state, 'player1', { x: 2, y: 3 });
     state = patchPlayer(state, 'player2', { x: 9, y: 7, activeBombs: 1 });
 

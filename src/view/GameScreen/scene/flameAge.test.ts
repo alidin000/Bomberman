@@ -63,8 +63,8 @@ describe('drawn flame age', () => {
     const arena = { ...createInitialState(versusConfig), monsters: [] };
     // Bomb A at (2,1) and bomb B at (6,1), range 2: both blasts reach (4,1).
     const drawn: DrawnFlame = {};
-    const first = playFrames(explodeBombs(arena, [createBomb('player1', 2, 1, 2)]), 350, drawn);
-    const restarted = explodeBombs(first.state, [createBomb('player2', 6, 1, 2)]);
+    const first = playFrames(explodeBombs(arena, [createBomb('bomb-1', 'player1', 2, 1, 2)]), 350, drawn);
+    const restarted = explodeBombs(first.state, [createBomb('bomb-2', 'player2', 6, 1, 2)]);
     expect(sharedFlame(restarted)?.ticksRemaining).toBe(EXPLOSION_MS);
 
     const second = playFrames(restarted, EXPLOSION_MS + 100, drawn);

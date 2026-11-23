@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { vi } from 'vitest';
 import { parseMapRows } from '../engine/mapLoader';
 import { createBomb } from '../engine/bombs';
+import { withBomb } from '../engine/entityIds.testutil';
 import { FLAME_HURT_RADIUS, positionOverlapsCell } from '../engine/grid';
 import { GameAction } from '../engine/actions';
 import { GameConfig, GameEngineState, PlayerSlotController } from '../engine/types';
@@ -23,11 +24,14 @@ import { thinkCpuPlayer } from './cpuPlayer';
 const recorder = vi.hoisted(() => ({ on: false, actions: [] as unknown[] }));
 vi.mock('../engine/reducer', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../engine/reducer')>();
+  // This replaces the mock in setupTests.ts, so it keeps that mock's id check.
+  const { checkingEntityIds } = await import('../engine/entityIds.testutil');
+  const reduce = checkingEntityIds(actual.gameReducer);
   return {
     ...actual,
     gameReducer: (...args: Parameters<typeof actual.gameReducer>) => {
       if (recorder.on) recorder.actions.push(args[1]);
-      return actual.gameReducer(...args);
+      return reduce(...args);
     },
   };
 });
@@ -219,10 +223,12 @@ describe('CPU players', () => {
       'WWWWWWWWWWWWWWW',
     ]);
     const loop = startLoop(versus(map, ['cpu-normal', 'human']));
-    const bomb = createBomb('player2', 5, 3, 2, false, 'standard', 1200);
     const nextMap = loop.state!.map.map((row) => [...row]);
     nextMap[3][5] = { range: 2, coords: { x: 5, y: 3 }, ownerId: 'player2' };
-    loop.state = { ...loop.state!, map: nextMap, bombs: [bomb] };
+    loop.state = withBomb(
+      { ...loop.state!, map: nextMap },
+      (id) => createBomb(id, 'player2', 5, 3, 2, false, 'standard', 1200)
+    );
 
     let burned = 0;
     let lit = 0;

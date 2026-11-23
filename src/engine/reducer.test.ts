@@ -1552,7 +1552,7 @@ describe('gameReducer', () => {
     'tsukuyomi',
   ] as const)('lets %s blasts defeat regular enemies', (kind) => {
     const initial = createInitialState(baseConfig);
-    const bomb = createBomb('player1', 1, 1, 2, false, kind, 0);
+    const bomb = createBomb('bomb-1', 'player1', 1, 1, 2, false, kind, 0);
     const state = explodeBombs({
       ...initial,
       monsters: [{
@@ -1571,7 +1571,7 @@ describe('gameReducer', () => {
 
   it('damages a boss only once when one blast covers several nearby cells', () => {
     const initial = createInitialState(baseConfig);
-    const bomb = createBomb('player1', 2, 2, 2, false, 'standard', 0);
+    const bomb = createBomb('bomb-1', 'player1', 2, 2, 2, false, 'standard', 0);
     const state = explodeBombs({
       ...initial,
       monsters: [],

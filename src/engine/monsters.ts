@@ -22,6 +22,7 @@ import {
   playersOutsideSquare,
   squareBlastStop,
 } from './villageSquare';
+import { mintEntityId } from './entityIds';
 
 const DIRECTIONS: Point[] = [
   { x: 0, y: -1 },
@@ -34,11 +35,9 @@ const DIRECTIONS: Point[] = [
 const MONSTER_HAZARD_ACTIVE_MS = 800;
 const DEFAULT_DETECTION_RANGE = 5;
 const DETECTION_RETRY_MS = 350;
-let monsterHazardIdCounter = 0;
 
-export function resetMonsterHazardIdCounter(): void {
-  monsterHazardIdCounter = 0;
-}
+// The match's id counters, passed along like the hazard list they number.
+type EntityIds = GameEngineState['entityIds'];
 
 // Danger map, as used by Pommerman agents: for every threatened cell, the ms
 // until it turns lethal (0 = burning now). Built once per tick and shared.
@@ -680,6 +679,7 @@ function colorForAbility(kind: EnemyAbilityKind): string {
 }
 
 function createMonsterHazard(
+  id: string,
   kind: HazardKind,
   x: number,
   y: number,
@@ -688,9 +688,8 @@ function createMonsterHazard(
   sourceName?: string,
   sourceAbility?: string,
 ): BossHazard {
-  monsterHazardIdCounter += 1;
   return {
-    id: `monster-hazard-${monsterHazardIdCounter}`,
+    id,
     kind,
     x,
     y,
@@ -870,9 +869,10 @@ function startMonsterAbility(
   state: GameEngineState,
   monster: MonsterState,
   hazards: BossHazard[],
-): { monster: MonsterState; hazards: BossHazard[] } {
+  entityIds: EntityIds,
+): { monster: MonsterState; hazards: BossHazard[]; entityIds: EntityIds } {
   const { abilityKind } = monster;
-  if (!abilityKind || monster.clone) return { monster, hazards };
+  if (!abilityKind || monster.clone) return { monster, hazards, entityIds };
 
   const difficulty = getMatchDifficulty(state.config);
   // Below Hard, an enemy cannot strike from the fog: it must stand where the
@@ -893,6 +893,7 @@ function startMonsterAbility(
         abilityWarningTicks: 0,
       },
       hazards,
+      entityIds,
     };
   }
 
@@ -901,10 +902,14 @@ function startMonsterAbility(
     ? getAdjacentTargetCell(state, targetPlayer, hashMonster(monster, state.tick, 83))
     : targetCell;
   const hazardKind = hazardKindForAbility(abilityKind);
-  const nextHazards = hazardKind
-    ? [
+  let nextHazards = hazards;
+  let nextEntityIds = entityIds;
+  if (hazardKind) {
+    const [id, minted] = mintEntityId(entityIds, 'monsterHazard');
+    nextHazards = [
       ...hazards,
       createMonsterHazard(
+        id,
         hazardKind,
         target.x,
         target.y,
@@ -913,8 +918,9 @@ function startMonsterAbility(
         monster.name,
         monster.abilityLabel
       ),
-    ]
-    : hazards;
+    ];
+    nextEntityIds = minted;
+  }
 
   return {
     monster: {
@@ -924,6 +930,7 @@ function startMonsterAbility(
       abilityCooldown: abilityCooldownFor(abilityKind, monster.elite, difficulty),
     },
     hazards: nextHazards,
+    entityIds: nextEntityIds,
   };
 }
 
@@ -934,11 +941,13 @@ function tickMonsterAbility(
   players: PlayerState[],
   hazards: BossHazard[],
   spawned: MonsterState[],
+  entityIds: EntityIds,
 ): {
   monster: MonsterState;
   players: PlayerState[];
   hazards: BossHazard[];
   spawned: MonsterState[];
+  entityIds: EntityIds;
 } {
   if (!monster.abilityKind || monster.clone) {
     return {
@@ -946,6 +955,7 @@ function tickMonsterAbility(
       players,
       hazards,
       spawned,
+      entityIds,
     };
   }
 
@@ -958,6 +968,7 @@ function tickMonsterAbility(
         players,
         hazards,
         spawned,
+        entityIds,
       };
     }
     const resolved = resolveMonsterAbility(
@@ -971,6 +982,7 @@ function tickMonsterAbility(
       players: resolved.players,
       hazards,
       spawned: resolved.spawned,
+      entityIds,
     };
   }
 
@@ -984,19 +996,22 @@ function tickMonsterAbility(
       players,
       hazards,
       spawned,
+      entityIds,
     };
   }
 
   const started = startMonsterAbility(
     { ...state, players },
     { ...monster, abilityCooldown: 0 },
-    hazards
+    hazards,
+    entityIds
   );
   return {
     monster: started.monster,
     players,
     hazards: started.hazards,
     spawned,
+    entityIds: started.entityIds,
   };
 }
 
@@ -1011,7 +1026,7 @@ function ageSummons(monsters: MonsterState[], deltaMs: number): MonsterState[] {
 
 export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngineState {
   // The ability helpers never mutate these, so no defensive copies.
-  let { players, hazards } = state;
+  let { players, hazards, entityIds } = state;
   let spawned: MonsterState[] = [];
   const difficulty = getMatchDifficulty(state.config);
   const living = ageSummons(state.monsters, deltaMs);
@@ -1032,13 +1047,14 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
     movementContext.occupiedCells.delete(cellKey(monster.x, monster.y));
     const abilityTick = tickMonsterAbility(
       {
-        ...state, players, hazards, monsters: [...living, ...placed, ...spawned],
+        ...state, players, hazards, entityIds, monsters: [...living, ...placed, ...spawned],
       },
       monster,
       deltaMs,
       players,
       hazards,
-      spawned
+      spawned,
+      entityIds
     );
     abilityTick.spawned.slice(spawned.length).forEach((summon) => {
       movementContext.occupiedCells.add(cellKey(summon.x, summon.y));
@@ -1046,6 +1062,7 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
     players = abilityTick.players;
     hazards = abilityTick.hazards;
     spawned = abilityTick.spawned;
+    entityIds = abilityTick.entityIds;
 
     let nextMonster = abilityTick.monster;
     const cooldown = nextMonster.moveCooldown - deltaMs;
@@ -1077,6 +1094,7 @@ export function tickMonsters(state: GameEngineState, deltaMs: number): GameEngin
     players,
     hazards,
     monsters: [...monsters, ...spawned],
+    entityIds,
   };
 }
 

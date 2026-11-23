@@ -4,7 +4,7 @@ import {
   Bomb, GameMap, GenericPower, genericPowerUpOptions, isBomb, isObstacle,
 } from '../model/gameItem';
 import {
-  BombState, DestroyedBox, ExplosionCell, GameEngineState, PlayerState,
+  BombState, DestroyedBox, EntityIdCounters, ExplosionCell, GameEngineState, PlayerState,
 } from './types';
 import {
   BOMB_FUSE_MS, BOX_DESTROY_MS, EXPLOSION_MS,
@@ -24,8 +24,7 @@ import {
   getShadowCloneBlocks,
 } from './characterAbilities';
 import { isInVillageSquare, isShelteredInSquare, squareBlastStop } from './villageSquare';
-
-let bombIdCounter = 0;
+import { mintEntityId } from './entityIds';
 
 // Not every crate hides an item. When one does, every shared category has the
 // same odds for every fighter; in particular, basic and ultimate range are 50/50.
@@ -69,11 +68,8 @@ const ULTIMATE_BASE_RANGES: Record<PlayerState['characterId'], number> = {
   itachi: 5,
 };
 
-export function resetBombIdCounter(): void {
-  bombIdCounter = 0;
-}
-
 export function createBomb(
+  id: string,
   ownerId: string,
   x: number,
   y: number,
@@ -82,9 +78,8 @@ export function createBomb(
   kind: BombState['kind'] = 'standard',
   ticksRemaining = BOMB_FUSE_MS,
 ): BombState {
-  bombIdCounter += 1;
   return {
-    id: `bomb-${bombIdCounter}`,
+    id,
     ownerId,
     x,
     y,
@@ -133,10 +128,12 @@ function getBasicBombPlacements(
   player: PlayerState,
   kind: BombState['kind'],
   hasDetonator: boolean,
-): BombState[] {
+): { bombs: BombState[]; entityIds: EntityIdCounters } {
   const origin = getPlayerCell(player);
+  const [id, entityIds] = mintEntityId(state.entityIds, 'bomb');
   const bombs = [
     createBomb(
+      id,
       player.id,
       origin.x,
       origin.y,
@@ -146,13 +143,7 @@ function getBasicBombPlacements(
       getBombFuse(kind),
     ),
   ];
-
-  // Live placements derive ids from room state, so two server rooms cannot
-  // reset or advance one another's module-level helper counter.
-  return bombs.map((bomb, index) => ({
-    ...bomb,
-    id: `bomb-${state.tick}-${player.id}-${bomb.kind}-${state.bombs.length + index}`,
-  }));
+  return { bombs, entityIds };
 }
 
 /**
@@ -324,7 +315,7 @@ export function placeBomb(state: GameEngineState, playerId: string): GameEngineS
   if (isInVillageSquare(state, origin.x, origin.y)) return state;
 
   const kind = BASIC_BOMBS[player.characterId];
-  const bombs = getBasicBombPlacements(state, player, kind, hasDetonator);
+  const { bombs, entityIds } = getBasicBombPlacements(state, player, kind, hasDetonator);
   const allowedBombs = bombs.slice(0, bombLimit - player.activeBombs);
   if (allowedBombs.length === 0) return state;
 
@@ -346,6 +337,7 @@ export function placeBomb(state: GameEngineState, playerId: string): GameEngineS
     map: newMap,
     bombs: [...state.bombs, ...allowedBombs],
     players,
+    entityIds,
   };
 }
 
@@ -377,7 +369,9 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
   if (getCell(state.map, origin) !== 'Empty') return state;
   if (isInVillageSquare(state, origin.x, origin.y)) return state;
 
+  const [id, entityIds] = mintEntityId(state.entityIds, 'bomb');
   const created = createBomb(
+    id,
     playerId,
     origin.x,
     origin.y,
@@ -388,7 +382,6 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
   );
   const bomb = {
     ...created,
-    id: `bomb-${state.tick}-${player.id}-${created.kind}-${state.bombs.length}`,
     ultimateRangeBonus: player.ultimateRangeBonus ?? 0,
   };
   const newMap = state.map.map((row) => [...row]);
@@ -414,23 +407,23 @@ export function placeUltimateBomb(state: GameEngineState, playerId: string): Gam
     map: newMap,
     bombs: [...state.bombs, bomb],
     players,
+    entityIds,
   };
 }
 
 /**
  * What DROP_BOMB (or USE_ULTIMATE) would place right now, and where its owner
  * would then stand (Minato's ultimate teleports), without placing anything.
- * CPU players plan their escape with it. The id counter is restored, so this
- * look-ahead never shifts the ids a replay of the same actions produces.
+ * CPU players plan their escape with it. The placement runs on a state that
+ * is then thrown away, so it shows the ids a real drop would mint and uses
+ * none of them up.
  */
 export function previewPlayerBombs(
   state: GameEngineState,
   playerId: string,
   ultimate = false
 ): { bombs: BombState[]; owner: PlayerState } | null {
-  const savedCounter = bombIdCounter;
   const next = ultimate ? placeUltimateBomb(state, playerId) : placeBomb(state, playerId);
-  bombIdCounter = savedCounter;
   if (next === state) return null;
   const owner = next.players.find((p) => p.id === playerId);
   return owner ? { bombs: next.bombs.slice(state.bombs.length), owner } : null;

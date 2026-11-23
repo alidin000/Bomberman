@@ -1,6 +1,15 @@
 import { vi } from 'vitest';
 import '@testing-library/jest-dom';
 
+// Tests build engine states by hand, so every reducer call checks the states
+// it takes and returns for a bomb or hazard id the match would mint again
+// (entityIds.testutil.ts).
+vi.mock('./engine/reducer', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./engine/reducer')>();
+  const { checkingEntityIds } = await import('./engine/entityIds.testutil');
+  return { ...actual, gameReducer: checkingEntityIds(actual.gameReducer) };
+});
+
 const originalConsoleError = console.error;
 let restoreConsoleError: (() => void) | null = null;
 
