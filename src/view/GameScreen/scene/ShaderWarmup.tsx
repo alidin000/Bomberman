@@ -1,11 +1,11 @@
-import { useEffect } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useEffect, useRef } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import {
   FIGHTER_TOON_RAMP, createFighterWarmupMaterials, createInkWarmupMaterial,
 } from './fighterInk';
 import { createTokenWarmupMaterial } from './inkedToken';
-import { createCastWarmupMaterials } from './cast/castMaterial';
+import { castMaterial, createCastWarmupMaterials } from './cast/castMaterial';
 
 function instancedWarmup(material: THREE.Material): THREE.Material {
   const target = material;
@@ -88,6 +88,26 @@ export function createWarmupMaterials(withBoss = false, withVillage = false): TH
   ];
 }
 
+/**
+ * The shadow pass draws every caster with three's shared depth material and
+ * hands it the caster's texture map (WebGLShadowMap), so the cast figures'
+ * painted atlas needs a depth program of its own. compileAsync never runs the
+ * shadow pass: where no figure starts inside the key light's shadow camera
+ * (a city arena has no versus monsters), the first one to walk into it
+ * compiled that program mid-round. This caster wears the cast look and is
+ * never culled, so the first shadow pass compiles it; it is one degenerate
+ * triangle below the board, so it covers no pixel.
+ */
+function createShadowWarmCaster(): THREE.Mesh {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3));
+  const caster = new THREE.Mesh(geometry, castMaterial());
+  caster.castShadow = true;
+  caster.frustumCulled = false;
+  caster.position.set(0, -1, 0);
+  return caster;
+}
+
 function warmObject(material: THREE.Material, geometry: THREE.BufferGeometry): THREE.Object3D {
   if (material instanceof THREE.SpriteMaterial) return new THREE.Sprite(material);
   if (material.userData.warmInstanced) return new THREE.InstancedMesh(geometry, material, 1);
@@ -119,6 +139,25 @@ export function ShaderWarmup({
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
   const camera = useThree((state) => state.camera);
+  const shadowWarm = useRef<{ caster: THREE.Mesh; drawn: boolean } | null>(null);
+
+  // The cast figures' shadow program (createShadowWarmCaster): the caster
+  // leaves the scene once a shadow pass has drawn it, so play never pays for it.
+  useEffect(() => {
+    const warm = { caster: createShadowWarmCaster(), drawn: false };
+    warm.caster.onAfterShadow = () => { warm.drawn = true; };
+    shadowWarm.current = warm;
+    scene.add(warm.caster);
+    return () => {
+      warm.caster.removeFromParent();
+      warm.caster.geometry.dispose();
+      shadowWarm.current = null;
+    };
+  }, [scene]);
+  useFrame(() => {
+    const warm = shadowWarm.current;
+    if (warm?.drawn && warm.caster.parent) warm.caster.removeFromParent();
+  });
 
   useEffect(() => {
     const materials = createWarmupMaterials(withBoss, withVillage);

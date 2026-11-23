@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils';
 import { StageLandmarkKind } from '../../../content/stageLooks';
 import { HERO_LANDMARK_PARTS } from './village/heroLandmarks';
+import { CITY_LANDMARK_PARTS } from './city/cityLandmarks';
 import { glyphGeometries, placeAt } from './village/glyphs';
 
 /**
@@ -61,6 +62,7 @@ function pad(radius: number, height: number): Part {
 
 const LANDMARK_PARTS: Record<StageLandmarkKind, () => Part[]> = {
   ...HERO_LANDMARK_PARTS,
+  ...CITY_LANDMARK_PARTS,
   marketStall: () => [
     pad(0.98, 0.45),
     standing(box(1.4, 0.55, 0.8), 'body', 0.55, 0, 0.45, 0),

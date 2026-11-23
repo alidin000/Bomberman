@@ -2,6 +2,7 @@
 import { MonsterKind, MonsterState } from './types';
 import { MONSTER_MOVE_MS } from './constants';
 import { EnemyArchetype, getEnemyArchetypeDefinition } from '../content/enemies';
+import { arenaMonsterRule } from '../content/arenaMaps';
 
 interface SpawnDef {
   id: string;
@@ -59,13 +60,25 @@ function getArchetypeForSpawn(def: SpawnDef): EnemyArchetype {
   return getArchetypeForKind(def.kind);
 }
 
+/**
+ * The versus monsters a map starts with. A catalog arena map names its rule
+ * (content/arenaMaps.ts): a village's own set, or none (the city arenas).
+ * Ids outside the catalog keep the table below, so the legacy map ids still
+ * get their sets and anything else gets none.
+ */
 export function getMonstersForMap(
   selectedMap: string,
   numPlayers: number,
 ): MonsterState[] {
+  const rule = arenaMonsterRule(selectedMap);
+  if (rule === 'none') return [];
+  return monstersForSet(rule ?? selectedMap, numPlayers);
+}
+
+function monstersForSet(set: string, numPlayers: number): MonsterState[] {
   const twoPlayer = numPlayers === 2;
 
-  switch (selectedMap) {
+  switch (set) {
     case 'map1':
     case 'hiddenLeaf':
       return twoPlayer

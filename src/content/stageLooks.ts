@@ -1,5 +1,8 @@
 import { StageId } from './types';
 import { getStageDefinition } from './stages';
+import {
+  CITY_COLORS, CityLookId, CityMaskColors, StagePalette, isCityLookId,
+} from './cityColors';
 
 /**
  * The villages' famous places and houses as the anime shows them
@@ -28,6 +31,13 @@ export type HeroLandmarkKind =
   | 'allianceTent';
 
 /**
+ * The city arenas' skyline places (scene/city/cityLandmarks.ts): stylised
+ * massing of the Vittoriano, the Sagrada Família's towers and the Hungarian
+ * Parliament. No sculpture, signs or lighting.
+ */
+export type CityLandmarkKind = 'vittoriano' | 'sagradaFamilia' | 'parliament';
+
+/**
  * Off-grid landmark shapes. Each one is a single low-poly silhouette drawn
  * outside the playable rectangle, so the grid itself stays as quiet as it is.
  */
@@ -53,7 +63,8 @@ export type StageLandmarkKind =
   | 'warBanner'
   | 'paperShard'
   | 'stakeFence'
-  | HeroLandmarkKind;
+  | HeroLandmarkKind
+  | CityLandmarkKind;
 
 /** The far skyline behind the top rows, or the left and right margins. */
 export type StageLandmarkSector = 'far' | 'side';
@@ -74,7 +85,17 @@ export interface StageLandmarkSet {
    * fills in round it. Anchored sets never join the scatter.
    */
   anchor?: { x: number; y: number };
+  /**
+   * An anchored place stands against open sky: the scatter leaves the far
+   * band behind it empty, so its silhouette reads instead of merging with
+   * the props behind (landmarkPlacement.ts).
+   */
+  openSky?: boolean;
 }
+
+export type { CityLookId, CityMaskColors, StagePalette };
+export { isCityLookId };
+export type LookId = StageId | CityLookId;
 
 /**
  * How a stage looks around the grid: the sky behind the arena, one linear fog,
@@ -82,7 +103,10 @@ export interface StageLandmarkSet {
  * recolours its existing lights from it and never adds one.
  */
 export interface StageLook {
-  stageId: StageId;
+  /** Keys the look and seeds its skyline: a village's stage id, or a city's look id. */
+  lookId: LookId;
+  /** The village stage this look dresses; city looks have none. */
+  stageId?: StageId;
   /** The place the margin should read as, in a few words. */
   motif: string;
   /** CSS gradient behind the canvas: top of the screen, mid band, bottom. */
@@ -100,9 +124,13 @@ export interface StageLook {
   landmarks: StageLandmarkSet[];
   /** Open water round the arena slab (the Mist's marsh), drawn under the landmarks. */
   water?: string;
+  /** The board's colours. A village look shares its stage's palette object. */
+  palette: StagePalette;
+  /** City looks only: the colours of the map's render mask. */
+  mask?: CityMaskColors;
 }
 
-type StageLookData = Omit<StageLook, 'stageId' | 'accent'>;
+type StageLookData = Omit<StageLook, 'lookId' | 'stageId' | 'accent' | 'palette' | 'mask'>;
 
 const STAGE_LOOK_DATA: Record<StageId, StageLookData> = {
   hiddenLeaf: {
@@ -277,17 +305,115 @@ const STAGE_LOOK_DATA: Record<StageId, StageLookData> = {
   },
 };
 
+// A village's look id is its stage id, so its skyline seed and landmark cache
+// keys are the strings they always were.
 export const STAGE_LOOKS: Record<StageId, StageLook> = Object.fromEntries(
-  (Object.keys(STAGE_LOOK_DATA) as StageId[]).map((stageId) => [stageId, {
-    stageId,
-    accent: getStageDefinition(stageId).palette.accent,
-    ...STAGE_LOOK_DATA[stageId],
-  }])
+  (Object.keys(STAGE_LOOK_DATA) as StageId[]).map((stageId) => {
+    const { palette } = getStageDefinition(stageId);
+    return [stageId, {
+      lookId: stageId,
+      stageId,
+      accent: palette.accent,
+      palette,
+      ...STAGE_LOOK_DATA[stageId],
+    }];
+  })
 ) as Record<StageId, StageLook>;
+
+// The city arenas (content/arenaMaps.ts). Their board and mask colours are in
+// content/cityColors.ts, which the menus' city cards read without this file.
+const CITY_LOOK_DATA: Record<CityLookId, StageLookData> = {
+  rome: {
+    motif: 'Travertine piazzas and terracotta walls under the Vittoriano',
+    sky: { top: '#8fb0c8', horizon: '#f1dcb8', low: '#d5b28c' },
+    fog: { color: '#ecd9ba', range: 5.5 },
+    ambient: { color: '#fff3e2', intensity: 0.55 },
+    hemisphere: { sky: '#ffeed4', ground: '#7a5c46', intensity: 0.85 },
+    directional: { color: '#ffe4b8', intensity: 1.72 },
+    landmarks: [
+      {
+        kind: 'terraceBlock', sector: 'far', body: '#c98f62', trim: '#8e5a3d', weight: 1.6, scale: [0.9, 1.25],
+      },
+      {
+        kind: 'cedar', sector: 'far', body: '#5b4634', trim: '#41553a', weight: 0.9, scale: [0.85, 1.1],
+      },
+      {
+        kind: 'terraceBlock', sector: 'side', body: '#d6a678', trim: '#9a6444', weight: 1, scale: [0.8, 1],
+      },
+      {
+        kind: 'vittoriano', sector: 'far', body: '#efebe1', trim: '#d6cfbf', weight: 0, scale: [1, 1], anchor: { x: 6, y: -3 }, openSky: true,
+      },
+    ],
+  },
+  barcelona: {
+    motif: 'Sandstone blocks in Mediterranean light under the Sagrada Família',
+    sky: { top: '#5f9fd4', horizon: '#e9f1f4', low: '#c6dbe6' },
+    fog: { color: '#e2ecf0', range: 6.5 },
+    ambient: { color: '#fffaf0', intensity: 0.56 },
+    hemisphere: { sky: '#fff7e4', ground: '#6e5a46', intensity: 0.85 },
+    directional: { color: '#fff5de', intensity: 1.72 },
+    landmarks: [
+      {
+        kind: 'terraceBlock', sector: 'far', body: '#d9b88a', trim: '#a47b52', weight: 1.6, scale: [0.9, 1.25],
+      },
+      {
+        kind: 'quarryStep', sector: 'far', body: '#ccab7f', trim: '#946c48', weight: 1, scale: [0.9, 1.15],
+      },
+      {
+        kind: 'terraceBlock', sector: 'side', body: '#e0c296', trim: '#a98058', weight: 1, scale: [0.8, 1],
+      },
+      // Inside the basilica's real footprint in the map's crop (x 3.3-11.0,
+      // y -7.0 to -0.3: tools/city/barcelona/meta.json), at its front facing
+      // the board, as near as scenery may stand. At half size its spires
+      // stand below the top HUD bar from the spawns; at full size the bar
+      // and the screen's top edge hid everything above the tower bases.
+      {
+        kind: 'sagradaFamilia', sector: 'far', body: '#c7a27a', trim: '#9b7a58', weight: 0, scale: [0.5, 0.5], anchor: { x: 7, y: -2.15 }, openSky: true,
+      },
+    ],
+  },
+  budapest: {
+    motif: 'The Danube at dusk, blue-grey stone and Parliament\'s dome',
+    sky: { top: '#3f527a', horizon: '#e2ad86', low: '#8a86a3' },
+    fog: { color: '#b1a9bd', range: 4.5 },
+    ambient: { color: '#eef0fa', intensity: 0.6 },
+    hemisphere: { sky: '#f5ece6', ground: '#3f4a5e', intensity: 0.9 },
+    directional: { color: '#ffdcb6', intensity: 1.58 },
+    landmarks: [
+      {
+        kind: 'terraceBlock', sector: 'far', body: '#a6a2ab', trim: '#706c7a', weight: 1.6, scale: [0.9, 1.25],
+      },
+      {
+        kind: 'quarryStep', sector: 'far', body: '#9b97a2', trim: '#6a6674', weight: 1, scale: [0.9, 1.15],
+      },
+      {
+        kind: 'dockPier', sector: 'side', body: '#6c6f7d', trim: '#3f4250', weight: 1, scale: [0.85, 1.05],
+      },
+      {
+        kind: 'parliament', sector: 'far', body: '#ddd6c5', trim: '#9a4a3c', weight: 0, scale: [1, 1], anchor: { x: 13, y: -3 }, openSky: true,
+      },
+    ],
+  },
+};
+
+export const CITY_LOOKS: Record<CityLookId, StageLook> = Object.fromEntries(
+  (Object.keys(CITY_LOOK_DATA) as CityLookId[]).map((lookId) => [lookId, {
+    lookId,
+    accent: CITY_COLORS[lookId].palette.accent,
+    palette: CITY_COLORS[lookId].palette,
+    mask: CITY_COLORS[lookId].mask,
+    ...CITY_LOOK_DATA[lookId],
+  }])
+) as Record<CityLookId, StageLook>;
 
 /** The look of a stage; unknown ids fall back like getStageDefinition does. */
 export function getStageLook(id?: string): StageLook {
   return STAGE_LOOKS[getStageDefinition(id).id];
+}
+
+/** Any look by its id: a city's, or a village's (unknown ids fall back as above). */
+export function getLook(id: LookId): StageLook {
+  return isCityLookId(id) ? CITY_LOOKS[id] : getStageLook(id);
 }
 
 /** The sky behind the canvas, as a CSS background. */

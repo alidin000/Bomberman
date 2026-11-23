@@ -1,0 +1,21 @@
+OpenStreetMap data in tools/city
+
+Each city folder here (rome, barcelona, budapest) holds an extract of
+OpenStreetMap data, osm.json, and files made from it: raw.txt, the grids in
+the budapest folder and overlay.png. The city grids and masks in
+public/maps/city are made from the same extracts.
+
+Map data © OpenStreetMap contributors, available under the Open Database
+License (ODbL) 1.0:
+  https://www.openstreetmap.org/copyright
+  https://opendatacommons.org/licenses/odbl/1-0/
+
+The extracts and the corrections made to them are offered under the ODbL 1.0.
+Each meta.json records the Overpass query, its box and timestamp_osm_base;
+each method.md records the method and every hand edit; tools/city/prototype
+holds the code that turns an extract into a grid. The code itself is under
+the repository's MIT licence.
+
+The Széchenyi Chain Bridge in Budapest was designed by William Tierney Clark,
+and the Hungarian Parliament Building by Imre Steindl. The game draws its
+landmarks as stylised massing built in code.

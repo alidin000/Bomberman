@@ -13,9 +13,12 @@ import {
   STATIC_TILE_LAYER_IDS,
   StaticTileFeatures,
   StaticTileInstance,
+  StaticTileLayerId,
   StaticTileLayerStyle,
   StaticTileShape,
+  TileMask,
   WallStyle,
+  maskWaterCount,
   wallStyleForPalette,
 } from './staticTiles';
 
@@ -251,6 +254,12 @@ const TILE_SHAPES: Record<StaticTileShape, TileShape> = {
   cracked: { geometry: createCrackedGeometry(), elevation: 0, vertexColors: true },
   passage: { geometry: createPassageGeometry(), elevation: 0, vertexColors: true },
   gate: { geometry: createGateGeometry(), elevation: 0, vertexColors: true },
+  // A whole cell, so a river reads as one surface instead of tiles, a little
+  // under the ground so its banks keep their edge.
+  water: {
+    geometry: new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+    elevation: -0.012,
+  },
 };
 
 // Campaign features are a handful of cells per map (three secret doors, a few
@@ -276,11 +285,13 @@ function tileColor(hex: string): THREE.Color {
 }
 
 function StaticTileLayer({
+  layer,
   cells,
   style,
   capacity,
   shape,
 }: {
+  layer: StaticTileLayerId;
   cells: StaticTileInstance[];
   style: StaticTileLayerStyle;
   capacity: number;
@@ -326,7 +337,8 @@ function StaticTileLayer({
       args={[geometry, undefined, capacity]}
       castShadow={style.castShadow}
       receiveShadow={style.receiveShadow}
-      renderOrder={style.shape === 'ground' ? GROUND_RENDER_ORDER : 0}
+      renderOrder={style.shape === 'ground' || style.shape === 'water' ? GROUND_RENDER_ORDER : 0}
+      userData={{ tileLayer: layer }}
     >
       <meshStandardMaterial
         color="#ffffff"
@@ -354,6 +366,7 @@ export function StaticTiles({
   exploredCells,
   destroyedCells,
   features,
+  mask = null,
 }: {
   map: GameMap;
   palette: StageDefinition['palette'];
@@ -361,11 +374,16 @@ export function StaticTiles({
   exploredCells: ReadonlySet<string>;
   destroyedCells: ReadonlySet<string>;
   features: StaticTileFeatures;
+  /** A city's render mask; villages and the campaign have none. */
+  // eslint-disable-next-line react/require-default-props -- defaulted to null in the signature
+  mask?: TileMask | null;
 }) {
   const capacity = Math.max(1, getMapCellCount(map));
   const styles = useMemo(() => getStaticTileLayerStyles(palette), [palette]);
   // The village's walls: explored ones keep the shape, only their colour dims.
   const wall = wallShape(wallStyleForPalette(palette));
+  // Only a map whose mask has water gets the water layer at all.
+  const waterCapacity = useMemo(() => maskWaterCount(map, mask), [map, mask]);
   const layers = useMemo(
     () => buildStaticTileLayers(
       map,
@@ -373,19 +391,25 @@ export function StaticTiles({
       visibleCells,
       exploredCells,
       destroyedCells,
-      features
+      features,
+      mask
     ),
-    [destroyedCells, exploredCells, features, map, palette, visibleCells]
+    [destroyedCells, exploredCells, features, map, mask, palette, visibleCells]
   );
+  const layerCapacity = (id: StaticTileLayerId) => {
+    if (id === 'waterVisible') return waterCapacity;
+    return FEATURE_SHAPES.has(styles[id].shape) ? FEATURE_CAPACITY : capacity;
+  };
 
   return (
     <>
-      {STATIC_TILE_LAYER_IDS.map((id) => (
+      {STATIC_TILE_LAYER_IDS.filter((id) => layerCapacity(id) > 0).map((id) => (
         <StaticTileLayer
           key={id}
+          layer={id}
           cells={layers[id]}
           style={styles[id]}
-          capacity={FEATURE_SHAPES.has(styles[id].shape) ? FEATURE_CAPACITY : capacity}
+          capacity={layerCapacity(id)}
           shape={styles[id].shape === 'wall' ? wall : TILE_SHAPES[styles[id].shape]}
         />
       ))}

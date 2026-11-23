@@ -33,14 +33,21 @@ import SettingsScreen from './SettingsScreen/SettingsScreen';
 import ModifyControlsDialog from './SettingsScreen/ModifyControlsDialog';
 import { MatchConfirmDialog, MatchConfirmKind } from './SettingsScreen/MatchConfirmDialog';
 import { PauseMissionDetails } from './GameHUD';
-import { MatchAnnouncer, MatchHud, MatchScene } from './MatchLeaves';
+import {
+  MatchAnnouncer, MatchHud, MatchScene, RoundOverviewPlate,
+} from './MatchLeaves';
 import { selectMatchView } from './matchView';
 import { useGameEngineStore } from '../../hooks/useGameEngine';
 import { EngineStore, useEngineSelector } from '../../hooks/engineStore';
-import { GameConfig, GameEngineState, loadMapFromStorage } from '../../engine';
 import {
-  DEFAULT_CHARACTER_ID, DEFAULT_STAGE_ID, GameMode, getCharacterDefinition,
+  GameConfig, GameEngineState, loadMapFromStorage, parseMapRows,
+} from '../../engine';
+import {
+  DEFAULT_CHARACTER_ID, DEFAULT_STAGE_ID, GameMode, StageId, getCharacterDefinition,
 } from '../../content';
+import {
+  ArenaMapEntry, arenaMapForConfig, arenaMapRows, getArenaMap, isArenaMode,
+} from '../../content/arenaMaps';
 import {
   LastMissionReport,
   completeCampaignStage,
@@ -96,6 +103,8 @@ import { VillageOverlay } from './village/VillageOverlay';
 import { useStallSpendSaver } from './village/useStallSpendSaver';
 import type { VillageInteractable } from '../../content/villageSquare';
 import { normalizeVillageVisit } from '../../story/villageVisit';
+import { overviewDue } from './scene/roundOverview';
+import { CityLoadingCard } from '../CityArena/CityArena';
 
 const CONTROLS_GUIDE_SEEN_KEY = 'shinobiControlsGuideSeen';
 
@@ -115,6 +124,28 @@ function hasSeenControlsGuide(): boolean {
     return false;
   }
 }
+
+// A routed match seats at most the keyboard's seats: a hand-typed
+// /game/4/... address plays three instead of crashing on a fourth player
+// who has no keys.
+const MAX_ROUTED_PLAYERS = Object.keys(DEFAULT_KEY_BINDINGS).length;
+
+export function routedPlayerCount(numOfPlayers: string | undefined): number {
+  const parsed = Number.parseInt(numOfPlayers ?? '', 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(MAX_ROUTED_PLAYERS, Math.max(1, parsed));
+}
+
+/** A village arena dresses as its stage; a city is no stage at all. */
+function arenaStageId(arena: ArenaMapEntry): StageId | undefined {
+  return arena.family === 'village' ? arena.id as StageId : undefined;
+}
+
+// The overview's own key: a new match (a rematch, a restart) gets a fresh
+// seed, so a skip only ever ends the overview it was pressed in.
+const selectOverview = (state: GameEngineState | null): number | null => (
+  state && overviewDue(state) ? state.rngSeed : null
+);
 
 function loadStoredGameSetup(): Partial<GameConfig> {
   try {
@@ -230,7 +261,7 @@ const GameTopControls = React.memo(({
     barRef.current?.toggleAttribute('inert', locked);
   }, [locked]);
   return (
-    <TopControls ref={barRef}>
+    <TopControls ref={barRef} data-match-controls="">
       <Tooltip title={isPaused ? 'Resume' : 'Pause'}>
         <ControlButton
           aria-label={isPaused ? 'resume game' : 'pause game'}
@@ -354,15 +385,25 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
     if (matchConfig) return matchConfig;
     if (!numOfPlayers || !numOfRounds || !selectedMap) return null;
     const setup = loadStoredGameSetup();
-    const players = parseInt(numOfPlayers, 10);
-    const mode = (setup.mode as GameMode | undefined) ?? 'local';
+    const players = routedPlayerCount(numOfPlayers);
+    // A city is never a campaign mission, so its route always plays Local
+    // Arena, even when the last launch stored a mission's setup (a bookmark,
+    // a shared link, or Back after a mission).
+    const routeArena = getArenaMap(selectedMap);
+    const mode: GameMode = routeArena?.family === 'city'
+      ? 'local'
+      : (setup.mode as GameMode | undefined) ?? 'local';
+    // Arena mode plays the route's catalog map, whatever an older setup left
+    // in storage: its grid here, its look and monsters through its id. The
+    // campaign and ids outside the catalog keep the stored map.
+    const arena = isArenaMode(mode) ? routeArena : undefined;
     return {
       mode,
       numPlayers: players,
       totalRounds: parseInt(numOfRounds, 10),
       selectedMap,
-      map: loadMapFromStorage(),
-      stageId: setup.stageId ?? DEFAULT_STAGE_ID,
+      map: arena ? parseMapRows(arenaMapRows(arena.id)) : loadMapFromStorage(),
+      stageId: arena ? arenaStageId(arena) : setup.stageId ?? DEFAULT_STAGE_ID,
       selectedCharacters: setup.selectedCharacters
         ?? Array.from({ length: players }, () => DEFAULT_CHARACTER_ID),
       selectedUpgrade: setup.selectedUpgrade,
@@ -413,6 +454,14 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
   // countdown and the scene subscribe to their own slices (MatchLeaves).
   const view = useEngineSelector(store, selectMatchView);
   const { menuState } = view;
+  // A city arena's round-start overview (scene/roundOverview.ts). The scene
+  // frames the board; this screen shows its plate, and its Skip button or
+  // any input ends it early. The countdown runs as always.
+  const overviewKey = useEngineSelector(store, selectOverview);
+  const [skippedOverview, setSkippedOverview] = useState<number | null>(null);
+  const overviewSkipped = overviewKey !== null && skippedOverview === overviewKey;
+  const routedArena = useMemo(() => (config ? arenaMapForConfig(config) : undefined), [config]);
+  const cityArena = routedArena?.family === 'city' ? routedArena : undefined;
   const feedback = useEngineFeedback(store, preferences);
   // A phone is one player: the touch controls play the first human seat.
   const touchMode = useTouchMode();
@@ -489,6 +538,24 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
   }, [discoveries]);
 
   const isPaused = view.paused;
+  const overviewShowing = !!cityArena && overviewKey !== null && !overviewSkipped && !isPaused;
+  const skipOverview = useCallback(() => setSkippedOverview(overviewKey), [overviewKey]);
+  useEffect(() => {
+    if (!overviewShowing) return undefined;
+    // Pads press keys on the window (input/padHub), so this is every input,
+    // but the top controls': pausing, the settings or hiding the HUD (for a
+    // screenshot of the map) leave the overview up.
+    const skipUnlessControls = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest('[data-match-controls]')) return;
+      skipOverview();
+    };
+    window.addEventListener('keydown', skipUnlessControls);
+    window.addEventListener('pointerdown', skipUnlessControls);
+    return () => {
+      window.removeEventListener('keydown', skipUnlessControls);
+      window.removeEventListener('pointerdown', skipUnlessControls);
+    };
+  }, [overviewShowing, skipOverview]);
   // A restart, a round end or a lost match closes the square's overlay.
   const squareLive = view.loaded && view.phase === 'playing';
   useEffect(() => {
@@ -524,10 +591,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
     }
     return 'defeat';
   }, [menuState]);
-  const parsedPlayerCount = Number(numOfPlayers ?? 1);
-  const activePlayerCount = Number.isFinite(parsedPlayerCount)
-    ? Math.max(1, parsedPlayerCount)
-    : 1;
+  const activePlayerCount = routedPlayerCount(numOfPlayers);
   const { characterIds } = view;
   // The match's own roster when it is loaded; the route's count before that.
   // CPU slots take no keys, so they get no row.
@@ -779,6 +843,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
     return (
       <LoadingScreen role="status">
         <span className="caption-4">Loading game...</span>
+        {cityArena && <CityLoadingCard entry={cityArena} />}
         <LoadingStrip className="skeleton" aria-hidden="true" />
         <LoadingControls className="skeleton" aria-hidden="true" />
         <LoadingCard className="skeleton" aria-hidden="true" side="left" />
@@ -816,6 +881,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
           // still draws (the deciding blast and the KO pose play out); the
           // scene idles under a real pause or once the dialog covers it.
           idle={(isPaused && !dialogOpen) || resultVisible}
+          overviewSkipped={overviewSkipped}
         />
       </GameSceneContainer>
       <MatchAnnouncer
@@ -827,8 +893,18 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
         held={isPaused || dialogOpen || bossIntro}
         hudScale={preferences.hudScale}
         campaign={view.campaign}
+        overview={overviewShowing}
       />
       {bossIntro && !isPaused && <BossTitleCard store={store} hudScale={preferences.hudScale} />}
+      {/* Hiding the HUD hides the city's name too: a name-free view of the map. */}
+      {overviewShowing && cityArena && (
+        <RoundOverviewPlate
+          store={store}
+          entry={cityArena}
+          named={showHud}
+          onSkip={skipOverview}
+        />
+      )}
       {showControlsGuide && !dialogOpen && !isSettingsOpen && !isModifyingControls && (
         <ControlsGuide aria-label="controls guide" data-pad-layer="">
           <ControlsGuideHeader>
@@ -997,7 +1073,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
           handleCloseMenus();
         }}
         keyBindings={keyBindings}
-        numOfPlayers={String(numOfPlayers)}
+        numOfPlayers={String(activePlayerCount)}
       />
     </GameBackground>
   );

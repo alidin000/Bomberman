@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useParams } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import theme from './theme/InstructionsTheme';
 import './App.css';
@@ -10,6 +10,8 @@ import { DojoScreen } from './view/DojoScreen/DojoScreen';
 import { OnlineLobbyScreen } from './view/OnlineScreen/OnlineLobbyScreen';
 import { NotFoundScreen } from './view/NotFoundScreen/NotFoundScreen';
 import { GameSettingsProvider } from './contexts/GameSettingsContext';
+import { getArenaMap } from './content/arenaMaps';
+import { CityLoadingCard } from './view/CityArena/CityArena';
 import { MenuPad } from './input/MenuPad';
 import { TouchMode } from './input/TouchMode';
 import {
@@ -78,6 +80,19 @@ const gameLoading = (
   </div>
 );
 
+// A city match's route adds the city's name, map and OpenStreetMap credit.
+const GameRouteLoading = () => {
+  const { selectedMap } = useParams();
+  const arena = getArenaMap(selectedMap);
+  if (arena?.family !== 'city') return gameLoading;
+  return (
+    <div style={{ position: 'relative' }}>
+      {gameLoading}
+      <CityLoadingCard entry={arena} />
+    </div>
+  );
+};
+
 export function App() {
   return (
     <GameSettingsProvider>
@@ -139,7 +154,7 @@ export function App() {
             />
             <Route
               path="/game/:numOfPlayers/:numOfRounds/:selectedMap"
-              element={<Suspense fallback={gameLoading}><GameScreen /></Suspense>}
+              element={<Suspense fallback={<GameRouteLoading />}><GameScreen /></Suspense>}
             />
             <Route path="*" element={<NotFoundScreen />} />
           </Routes>

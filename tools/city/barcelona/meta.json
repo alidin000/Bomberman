@@ -1,0 +1,95 @@
+{
+ "city": "barcelona",
+ "source": "© OpenStreetMap contributors, ODbL 1.0, https://www.openstreetmap.org/copyright",
+ "bbox_swne": [
+  41.40196,
+  2.16997,
+  41.41057,
+  2.18114
+ ],
+ "query": "[out:json][timeout:120][bbox:41.40196,2.16997,41.41057,2.18114];\n(way[\"building\"];relation[\"building\"];)->.b;\nway[\"highway\"]->.h;\nway[\"railway\"=\"tram\"]->.t;\n(way[\"natural\"=\"water\"];relation[\"natural\"=\"water\"];\n way[\"waterway\"=\"riverbank\"];relation[\"waterway\"=\"riverbank\"];\n way[\"water\"=\"river\"];relation[\"water\"=\"river\"];\n way[\"waterway\"=\"river\"];)->.w;\n(way[\"leisure\"~\"^(park|garden)$\"];relation[\"leisure\"~\"^(park|garden)$\"];\n way[\"landuse\"~\"^(grass|forest|meadow|recreation_ground|village_green)$\"];\n relation[\"landuse\"~\"^(grass|forest|meadow|recreation_ground|village_green)$\"];\n way[\"natural\"~\"^(wood|scrub|grassland)$\"];relation[\"natural\"~\"^(wood|scrub|grassland)$\"];\n way[\"man_made\"=\"bridge\"];relation[\"man_made\"=\"bridge\"];\n way[\"place\"=\"square\"];relation[\"place\"=\"square\"];)->.a;\n.b out geom;\n.h out geom;\n.t out geom;\n.w out geom(41.40196,2.16997,41.41057,2.18114);\n.a out geom;\n",
+ "endpoint": "https://overpass-api.de/api/interpreter",
+ "fetched_utc": "2026-11-22T21:24:41Z",
+ "timestamp_osm_base": "2026-11-22T21:22:51Z",
+ "elements": 2248,
+ "bytes": 2303844,
+ "transform": {
+  "epsg": 32631,
+  "cell_m": 14.0,
+  "rotation_deg": 135.0,
+  "up_bearing_deg": 225.0,
+  "right_bearing_deg": 315.0,
+  "anchor": {
+   "what": "Basilica de la Sagrada Familia footprint centroid (off the board)",
+   "osm": "relation 9194723",
+   "utm": [
+    430985.5,
+    4583883.9
+   ],
+   "lonlat": [
+    2.1743378,
+    41.4035367
+   ],
+   "board_cell": [
+    7.0,
+    -3.6
+   ]
+  },
+  "crop_origin": {
+   "what": "top-left corner of cell (0,0)",
+   "lonlat": [
+    2.1755969,
+    41.4032426
+   ],
+   "utm": [
+    431090.4,
+    4583850.3
+   ]
+  },
+  "board_corners_lonlat": {
+   "top_left": [
+    2.1755969,
+    41.4032426
+   ],
+   "top_right": [
+    2.1714125,
+    41.4063335
+   ],
+   "bottom_right": [
+    2.175518,
+    41.4094839
+   ],
+   "bottom_left": [
+    2.1797024,
+    41.4063929
+   ]
+  },
+  "water_compression": null
+ },
+ "signature": {
+  "on": "skyline",
+  "what": "Basilica de la Sagrada Familia, relation 9194723",
+  "board_centroid": [
+   7.0,
+   -3.6
+  ],
+  "board_bounds": [
+   3.31,
+   -6.95,
+   11.04,
+   -0.34
+  ]
+ },
+ "changes": {
+  "counts": {
+   "blocks": 184,
+   "border": 61,
+   "spawn_plus": 3,
+   "pocket_fill": 3,
+   "crates": 237
+  },
+  "switched_wall_floor": 190,
+  "switched_excluding_crate_cells": 131,
+  "switched_vs_raster_without_width_floors": 305
+ }
+}

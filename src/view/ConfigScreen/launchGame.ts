@@ -22,6 +22,7 @@ import type { VillageVisitConfig } from '../../content/villageSquare';
 import { buildVillageVisit } from '../../story/villageVisit';
 import { PlayerSlotController, loadCampaignMapRows, loadStageMapRows } from '../../engine';
 import { getControllerLabel, normalizeControllers } from '../../ai/controllers';
+import { ArenaMapId, arenaMapRows, getArenaMap } from '../../content/arenaMaps';
 
 export const SINGLE_MATCH_ROUNDS = '1';
 /** Local matches are best of 1, 3 or 5 rounds. */
@@ -44,7 +45,10 @@ export function loadStoredKeyBindings(): KeyBindings {
 
 export interface LaunchRequest {
   mode: GameMode;
+  /** The campaign's village; Local Arena plays its arena when no arenaMapId is given. */
   stageId: StageId;
+  /** Local Arena: the catalog map to play, a village's or a city's. */
+  arenaMapId?: ArenaMapId;
   characters: CharacterId[];
   upgrade: StoryUpgradeId;
   players: string;
@@ -80,10 +84,13 @@ export async function launchGame(
     ))
     : characters;
   const stageDefinition = getStageDefinition(safeStageId);
+  // Local Arena plays a catalog map: the deck's arena choice, else the stage's.
+  const arena = mode === 'local' ? getArenaMap(request.arenaMapId ?? stageId) : undefined;
   // Missions play the village's campaign map; Local Arena keeps its arena map.
-  const mapData = mode === 'solo'
-    ? loadCampaignMapRows(stageDefinition.mapId)
-    : loadStageMapRows(stageDefinition.mapId);
+  let mapData: string[][];
+  if (arena) mapData = arenaMapRows(arena.id);
+  else if (mode === 'solo') mapData = loadCampaignMapRows(stageDefinition.mapId);
+  else mapData = loadStageMapRows(stageDefinition.mapId);
   const characterId = safeCharacters[0] ?? DEFAULT_CHARACTER_ID;
   let progress = mode === 'solo'
     ? selectStoryLoadout(characterId, stageDefinition.id, upgrade)
@@ -100,7 +107,10 @@ export async function launchGame(
   localStorage.setItem('playerKeyBindings', JSON.stringify(normalizeKeyBindings(keyBindings)));
   localStorage.setItem(GAME_SETUP_KEY, JSON.stringify({
     mode,
-    stageId: stageDefinition.id,
+    // A village arena saves its stage as before; a city is no stage, so its
+    // setup names only its arena.
+    ...(arena?.family === 'city' ? {} : { stageId: arena ? arena.id : stageDefinition.id }),
+    ...(arena ? { arenaMapId: arena.id } : {}),
     selectedCharacters: safeCharacters,
     selectedUpgrade: upgrade,
     ...(mode === 'local' ? { rounds } : {}),
@@ -110,7 +120,7 @@ export async function launchGame(
     loadout,
     village,
   }));
-  navigate(`/game/${players}/${rounds}/${stageDefinition.mapId}`);
+  navigate(`/game/${players}/${rounds}/${arena ? arena.id : stageDefinition.mapId}`);
   return progress;
 }
 
@@ -151,6 +161,8 @@ export function storeVillageEmbers(embers: number): void {
 export interface QuickPlayPlan {
   mode: 'solo' | 'local';
   stageId: StageId;
+  /** Local plans: the arena the last local battle played. */
+  arenaMapId?: ArenaMapId;
   characters: CharacterId[];
   upgrade: StoryUpgradeId;
   players: string;
@@ -164,9 +176,19 @@ function characterName(id: CharacterId): string {
   return CHARACTER_DEFINITIONS.find((character) => character.id === id)?.name ?? id;
 }
 
+function arenaName(id: ArenaMapId): string {
+  return getArenaMap(id)?.name ?? id;
+}
+
+// A local plan still names a stage (LaunchRequest needs one): a village
+// arena's own, or the first village for a city, which plays by its arena id.
+function localStageId(id: ArenaMapId): StageId {
+  return STAGE_DEFINITIONS.find((stage) => stage.id === id)?.id ?? STAGE_DEFINITIONS[0].id;
+}
+
 /** The last local battle setup, if the last match played was local. */
 export function readLastLocalSetup(): {
-  stageId: StageId;
+  arenaMapId: ArenaMapId;
   characters: CharacterId[];
   rounds: MatchRounds;
   controllers?: PlayerSlotController[];
@@ -174,14 +196,16 @@ export function readLastLocalSetup(): {
   try {
     const stored = JSON.parse(localStorage.getItem(GAME_SETUP_KEY) ?? 'null');
     if (!stored || stored.mode !== 'local') return null;
-    const stage = STAGE_DEFINITIONS.find((item) => item.id === stored.stageId);
+    // A city setup names its arena; older and village setups name the stage.
+    const savedArena = typeof stored.arenaMapId === 'string' ? stored.arenaMapId : stored.stageId;
+    const arena = getArenaMap(typeof savedArena === 'string' ? savedArena : undefined);
     const ids = CHARACTER_DEFINITIONS.map((item) => item.id);
     const characters: CharacterId[] = Array.isArray(stored.selectedCharacters)
       ? stored.selectedCharacters.filter((id: CharacterId) => ids.includes(id))
       : [];
-    if (!stage || characters.length < 2 || characters.length > 3) return null;
+    if (!arena || characters.length < 2 || characters.length > 3) return null;
     return {
-      stageId: stage.id,
+      arenaMapId: arena.id,
       characters,
       rounds: toMatchRounds(stored.rounds),
       controllers: normalizeControllers(stored.controllers, characters.length),
@@ -198,7 +222,7 @@ export function readLastLocalSetup(): {
  */
 export function getCpuBattlePlan(storyProgress: StoryProgress): QuickPlayPlan {
   const lastLocal = readLastLocalSetup();
-  const stageId = lastLocal?.stageId ?? STAGE_DEFINITIONS[0].id;
+  const arenaMapId: ArenaMapId = lastLocal?.arenaMapId ?? STAGE_DEFINITIONS[0].id;
   const player = lastLocal?.characters[0] ?? storyProgress.lastCharacter ?? DEFAULT_CHARACTER_ID;
   const rival = lastLocal?.characters[1]
     ?? CHARACTER_DEFINITIONS.find((character) => character.id !== player)?.id
@@ -206,14 +230,15 @@ export function getCpuBattlePlan(storyProgress: StoryProgress): QuickPlayPlan {
   const rounds = lastLocal?.rounds ?? SINGLE_MATCH_ROUNDS;
   return {
     mode: 'local',
-    stageId,
+    stageId: localStageId(arenaMapId),
+    arenaMapId,
     characters: [player, rival],
     upgrade: storyProgress.selectedUpgrade,
     players: '2',
     rounds,
     controllers: ['human', 'cpu-normal'],
     summary: [
-      getStageDefinition(stageId).name,
+      arenaName(arenaMapId),
       `${characterName(player)} vs ${characterName(rival)} (${getControllerLabel('cpu-normal')})`,
       ...(rounds === SINGLE_MATCH_ROUNDS ? [] : [`Best of ${rounds}`]),
     ].join(' · '),
@@ -229,7 +254,8 @@ export function getQuickPlayPlan(storyProgress: StoryProgress): QuickPlayPlan {
   if (lastLocal) {
     return {
       mode: 'local',
-      stageId: lastLocal.stageId,
+      stageId: localStageId(lastLocal.arenaMapId),
+      arenaMapId: lastLocal.arenaMapId,
       characters: lastLocal.characters,
       upgrade: storyProgress.selectedUpgrade,
       players: String(lastLocal.characters.length),
@@ -237,7 +263,7 @@ export function getQuickPlayPlan(storyProgress: StoryProgress): QuickPlayPlan {
       controllers: lastLocal.controllers,
       summary: [
         'Local rematch',
-        getStageDefinition(lastLocal.stageId).name,
+        arenaName(lastLocal.arenaMapId),
         lastLocal.characters.map((id, slot) => {
           const controller = lastLocal.controllers?.[slot] ?? 'human';
           return controller === 'human'

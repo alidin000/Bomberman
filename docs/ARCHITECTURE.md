@@ -136,6 +136,69 @@ When the boss unlocks, the reducer opens the arena gates, and the boss enters
 at the arena's centre. The renderer draws doors and gates by shape with the
 wall material, so they compile no new shader.
 
+## Arena Maps and City Arenas
+
+`content/arenaMaps.ts` is the one catalog of maps that Arena mode plays: the
+seven village arenas and the city arenas built from OpenStreetMap (OSM) data,
+Rome, Barcelona and Budapest, plus `romeControl`, the playtest's control map.
+Each entry has an `ArenaMapId`, a family (`village` or `city`), a name, a
+caption, a look id, a versus monster rule, its skyline landmark, its credit,
+and whether only the playtest lists it. City ids are never `StageId`s, so the
+campaign, the hub and the online lobby keep their own stage lists.
+
+- **The route decides.** In Arena mode the route's map id is the map's only
+  identity. The game screen loads the grid from the catalog,
+  `scene/arenaScene.ts` takes the look from it, and `engine/monsterSpawns.ts`
+  takes the monster rule from it, whatever local storage holds. Every city
+  has the rule `none`; each village keeps its own set. The campaign and
+  unknown ids keep the stored grid and the stage's look. A routed match
+  seats at most the three keyboard seats.
+- **Grid and mask.** `public/maps/city/<id>.txt` is the playable 35x35 grid,
+  with only open cells, walls and crates, bundled like the stage maps.
+  `<id>.mask.txt` gives each cell a render class. Wall cells are the border,
+  a building, water or the board's landmark. Open cells are plain, road,
+  plaza, park, bridge deck, crossing or tram track. Only the client reads the
+  mask, so it needs no protocol or replay change.
+- **Drawing it.** Floor classes recolour the ground tiles' instance colours.
+  Water replaces a wall with a flat tile in its own layer, which shares the
+  ground's material settings, so it adds no shader program. The board's
+  landmark tints its walls. High contrast retones the mask colours with the
+  palette. Each city look in `content/stageLooks.ts` has its own sky, fog,
+  lights, palette and mask colours, and one skyline landmark built in code
+  (`scene/city/cityLandmarks.ts`) on the shared landmark material, with open
+  sky behind it. The board and mask colours live apart in
+  `content/cityColors.ts`, so the menus' city cards load no look data. Looks
+  are keyed by a look id. A village's look id is its stage id, so its
+  skyline and colours are unchanged.
+- **Round-start overview.** In a city's first round, the camera frames the
+  whole board during the countdown and cuts back to the players one second
+  before GO (`scene/roundOverview.ts`). It pushes in slowly, holds still under
+  reduced motion, and any input but the top controls, or its Skip button,
+  ends it. Its plate sits under the board with the countdown in it, and the
+  camera frames the board above the plate, so nothing covers the map. With
+  the HUD hidden, the plate keeps only the countdown and the OSM credit. It
+  only moves the camera: the countdown and the engine never depend on it.
+- **Mission Deck.** Local Arena has its own arena choice, apart from the
+  campaign's village. City cards show a top-down view drawn from the grid and
+  mask. The control map is listed only with `?playtest=1`, but its route
+  always plays. Saved setups and Quick Play keep the arena id.
+- **Credit.** City cards, the loading view and the overview credit
+  "© OpenStreetMap contributors", linked to the OSM copyright page where a
+  link fits, beside a "Map data and method" link to `tools/city` in the
+  source repository (the ODbL offer). Budapest also credits William Tierney
+  Clark for the Chain Bridge and Imre Steindl for the Parliament.
+- **Gates.** `content/arenaMaps.test.ts` holds every city map and the control
+  to the structural gates. It checks the grid size and cells, a full wall
+  border, the mask's size and classes, and no water on a spawn or beside one.
+  It also checks that the engine's spawn carve removes no wall for 2 to 4
+  seats, and that all spawns are joined by crate-free lanes at round start.
+  `npm run gates` (`tools/city/gates.ts`) plays CPU matches on every city map,
+  the control and the shipped arenas for the seat-balance and on-screen
+  gates (a skyline landmark counts at half its height), and writes
+  `tools/city/GATES.md`.
+
+City arenas are local only for now; online rooms still play village arenas.
+
 ## Village Square
 
 Every campaign mission starts in its village's square: the open 10x8

@@ -29,11 +29,14 @@ export const STATIC_TILE_LAYER_IDS = [
   'passageExplored',
   'gateVisible',
   'gateExplored',
+  // A city's river: flat, with the ground's material settings (no new shader
+  // program), and drawn only where its render mask puts water on a wall.
+  'waterVisible',
 ] as const;
 
 export type StaticTileLayerId = typeof STATIC_TILE_LAYER_IDS[number];
 
-export type StaticTileShape = 'ground' | 'wall' | 'crate' | 'cracked' | 'passage' | 'gate';
+export type StaticTileShape = 'ground' | 'wall' | 'crate' | 'cracked' | 'passage' | 'gate' | 'water';
 
 /**
  * Cells the campaign draws as something other than a plain wall or crate:
@@ -77,6 +80,38 @@ export function tileFeaturesFromKey(key: string): StaticTileFeatures {
   const [cracked, passages, gates] = key.split('|')
     .map((part) => new Set(part ? part.split(';') : []));
   return { cracked, passages, gates };
+}
+
+/** A floor class's two checker tones: `a` on odd cells, `b` on even ones, like groundA/B. */
+export type CheckerTones = { a: string; b: string };
+
+/**
+ * A city's render mask, ready to draw: its rows of classes
+ * (content/arenaMaps.ts) and the colour of each class. Floor classes recolour
+ * the ground's instance colours, water replaces a wall with flat water, and
+ * a wall class with a colour (the board's landmark) recolours the wall.
+ * Classes without a colour draw as before.
+ */
+export type TileMask = {
+  rows: readonly string[];
+  floors: Readonly<Record<string, CheckerTones>>;
+  water: string;
+  walls: Readonly<Record<string, string>>;
+};
+
+/** Only a mask the size of the map is drawn; any other draws the map plain. */
+function usableMask(map: GameMap, mask: TileMask | null | undefined): TileMask | null {
+  if (!mask || mask.rows.length !== map.length) return null;
+  return map.every((row, y) => mask.rows[y].length === row.length) ? mask : null;
+}
+
+/** Cells the mask draws as water: water class on a wall, and nowhere else. */
+export function maskWaterCount(map: GameMap, mask: TileMask | null | undefined): number {
+  const usable = usableMask(map, mask);
+  if (!usable) return 0;
+  return map.reduce((total, row, y) => total + row.filter((cell, x) => (
+    cell === 'Wall' && usable.rows[y][x] === 'w'
+  )).length, 0);
 }
 
 export type StaticTileInstance = {
@@ -178,6 +213,8 @@ export function getStaticTileLayerStyles(
     passageExplored: feature('passage', FOG_EMISSIVE, 0.02),
     gateVisible: feature('gate', palette.accent, 0.12),
     gateExplored: feature('gate', FOG_EMISSIVE, 0.02),
+    // The ground's settings exactly: water shares its shader program.
+    waterVisible: { ...ground, shape: 'water' },
   };
 }
 
@@ -197,6 +234,7 @@ export function createEmptyStaticTileLayers(): StaticTileLayers {
     passageExplored: [],
     gateVisible: [],
     gateExplored: [],
+    waterVisible: [],
   };
 }
 
@@ -247,7 +285,8 @@ export function getMapCellCount(map: GameMap): number {
  * Buckets every map cell into the static (non-animated) tile layers. Hidden
  * cells only get fogged ground; walls, crates and player obstacles appear once
  * a cell has been explored. Bombs and power-ups are animated per cell, so they
- * stay out of these layers.
+ * stay out of these layers. A city's mask (visible cells only) recolours the
+ * floor, turns its water walls into flat water and tints its landmark walls.
  */
 export function buildStaticTileLayers(
   map: GameMap,
@@ -255,18 +294,30 @@ export function buildStaticTileLayers(
   visibleCells: ReadonlySet<string>,
   exploredCells: ReadonlySet<string>,
   destroyedCells: ReadonlySet<string>,
-  features: StaticTileFeatures = NO_TILE_FEATURES
+  features: StaticTileFeatures = NO_TILE_FEATURES,
+  tileMask: TileMask | null = null
 ): StaticTileLayers {
   const layers = createEmptyStaticTileLayers();
+  const mask = usableMask(map, tileMask);
   // The camera always looks toward -z (lower rows), so walking rows from the
   // bottom up emits opaque instances roughly near-to-far and lets the depth
   // test reject hidden wall and crate fragments early.
   for (let y = map.length - 1; y >= 0; y -= 1) {
     const keys = cellKeyRow(y, map[y].length);
+    const maskRow = mask?.rows[y];
     map[y].forEach((cell, x) => {
       const key = keys[x];
+      const maskClass = maskRow?.[x];
       if (visibleCells.has(key)) {
-        layers.groundVisible.push({ x, y, color: (x + y) % 2 ? palette.groundA : palette.groundB });
+        if (mask && maskClass === 'w' && cell === 'Wall') {
+          layers.waterVisible.push({ x, y, color: mask.water });
+          return;
+        }
+        const tones = maskClass && mask ? mask.floors[maskClass] : undefined;
+        const odd = (x + y) % 2 === 1;
+        let color = odd ? palette.groundA : palette.groundB;
+        if (tones) color = odd ? tones.a : tones.b;
+        layers.groundVisible.push({ x, y, color });
       } else if (exploredCells.has(key)) {
         layers.groundExplored.push({ x, y, color: EXPLORED_GROUND_COLOR });
       } else {
@@ -292,7 +343,10 @@ export function buildStaticTileLayers(
       }
       if (cell === 'Wall') {
         if (explored) layers.wallExplored.push({ x, y, color: EXPLORED_WALL_COLOR });
-        else layers.wallVisible.push({ x, y, color: palette.wall });
+        else {
+          const tint = maskClass && mask ? mask.walls[maskClass] : undefined;
+          layers.wallVisible.push({ x, y, color: tint ?? palette.wall });
+        }
         return;
       }
       if (cell !== 'Box' && !isObstacle(cell)) return;

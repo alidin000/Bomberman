@@ -61,6 +61,9 @@ export const LANDMARK_EXTENTS: Record<
   hideoutCave: { radius: 2.7, height: 3.9, halfDepth: 1.85 },
   commandTent: { radius: 1.75, height: 3.4 },
   allianceTent: { radius: 1.05, height: 1.45 },
+  vittoriano: { radius: 4.1, height: 3.4, halfDepth: 1.3 },
+  sagradaFamilia: { radius: 1.6, height: 6.8, halfDepth: 1.4 },
+  parliament: { radius: 4.3, height: 4.15, halfDepth: 0.9 },
 };
 
 export type StagePropSector = 'far' | 'left' | 'right';
@@ -111,6 +114,12 @@ const SIDE_COLUMNS = [
   { offset: 4.9, step: 4.1, density: 0.6 },
 ];
 const FAR_OVERHANG = 7;
+/**
+ * Cells kept clear either side of an open-sky landmark's footprint, behind
+ * it. Seen from the spawns, a prop further back sits up to about a cell
+ * nearer the screen's centre than one at the landmark's depth.
+ */
+export const OPEN_SKY_MARGIN = 1;
 
 function hashSeed(text: string): number {
   let hash = 7;
@@ -164,7 +173,7 @@ export function placeStageProps(
   width: number,
   height: number
 ): StagePropInstance[] {
-  const random = createRandom(hashSeed(`${look.stageId}:${width}x${height}`));
+  const random = createRandom(hashSeed(`${look.lookId}:${width}x${height}`));
   const keepOut = propKeepOut(width, height);
   const farSets = look.landmarks.filter((set) => set.sector === 'far' && !set.anchor);
   const sideSets = look.landmarks.filter((set) => set.sector === 'side' && !set.anchor);
@@ -172,6 +181,11 @@ export function placeStageProps(
 
   const fits = (x: number, y: number, radius: number) => placed.every((other) => (
     Math.hypot(other.x - x, other.y - y) >= other.radius + radius - 0.25
+  ));
+  // Famous places that stand against open sky (set after they are placed).
+  let openSky: StagePropInstance[] = [];
+  const behindOpenSky = (x: number, y: number, radius: number) => openSky.some((famous) => (
+    y < famous.y && Math.abs(x - famous.x) < famous.radius + radius + OPEN_SKY_MARGIN
   ));
 
   const tryPlace = (
@@ -194,6 +208,7 @@ export function placeStageProps(
     if (sector === 'right') x = Math.max(x, keepOut.maxX + radius);
     if (sector !== 'far' && y + radius > (height - 1) * SIDE_DEPTH_SHARE) return;
     if (!fits(x, y, radius)) return;
+    if (sector === 'far' && behindOpenSky(x, y, radius)) return;
     placed.push({
       kind: set.kind,
       sector,
@@ -215,6 +230,9 @@ export function placeStageProps(
   look.landmarks.forEach((set) => {
     if (set.anchor) tryPlace(set, 'far', 0, set.anchor.x, set.anchor.y, 1);
   });
+  const openSkyKinds = new Set(look.landmarks.filter((set) => set.anchor && set.openSky)
+    .map((set) => set.kind));
+  openSky = placed.filter((prop) => prop.famous && openSkyKinds.has(prop.kind));
 
   FAR_LAYERS.forEach((band, layer) => {
     for (let x = -FAR_OVERHANG; x <= width - 1 + FAR_OVERHANG; x += band.step) {

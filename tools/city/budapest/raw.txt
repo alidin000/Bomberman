@@ -1,0 +1,35 @@
+  W   WWWWWW          WWWWWWWWW  WW
+  W   WWWWWW             WWWWWW  WW
+      WWWWWW                     WW
+      WWWWWW          WW           
+                      WWW  WWW     
+                        W  WWW  W W
+                       WW W WW  W W
+      WWWWWW           WW WWWW  WWW
+      WWWWWW                WW  W  
+      WWWWWW                       
+       WWWWW          WWWWWW       
+       WWWWW          WWWWW W  WWWW
+       WWWWW           WWW WW  W WW
+       WWWWW           WWW W   WWWW
+       WWWWW                W  WW W
+       WWWWW                       
+       WWWWW            W          
+       WWWWW       WWW  WWW W      
+       WWWWW       WWW  WWWWW     W
+ W     WWWWW       WWW  WWWW     WW
+ W     WWWWW       WWW  WWW       W
+ W     WWWWW    W  WWWW  WWW       
+       WWWWW    W  WW W  WWW     WW
+  W    WWWWW    W  WW W  WWW     W 
+  W    WWWWW    WW  WWW  WWW     W 
+  W    WWWWW    WW  W W            
+       WWWWWW   WW  WWWW    W    WW
+       WWWWWW   WW        WWW    WW
+       WWWWWW             WWWWW    
+       WWWWWW       WWWWW  WWWW    
+       WWWWWW   W   WWWWW  WWW   WW
+       WWWWWW     W  WWWW        WW
+       WWWWWW     W  WWWWW       WW
+       WWWWWW    WW  W           WW
+       WWWWWW             W      W 

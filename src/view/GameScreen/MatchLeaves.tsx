@@ -9,6 +9,10 @@ import { CaptionLiveRegion, FeedbackCaption } from './GameScreen.styles';
 import { GamePreferences } from './gamePreferences';
 import { MatchBeatOverlay } from './MatchBeatOverlay';
 import { createRoundBeatSelector } from './matchView';
+import { useHudDevice } from '../../input/touchMode';
+import type { ArenaMapEntry } from '../../content/arenaMaps';
+import { CityOverviewPlate } from '../CityArena/CityArena';
+import { OVERVIEW_PLATE } from '../CityArena/overviewPlate';
 
 // The parts of the game screen that follow the engine tick by tick. Each one
 // subscribes to the slice it draws, so a publish that changes nothing it
@@ -38,11 +42,22 @@ type MatchSceneProps = {
   /** Online: this browser's seat, so only its player sees village prompts. */
   // eslint-disable-next-line react/require-default-props -- defaulted to null in the signature
   localSeat?: number | null;
+  /** A city's round-start overview was skipped: the camera stays on the players. */
+  // eslint-disable-next-line react/require-default-props -- defaulted to false in the signature
+  overviewSkipped?: boolean;
 };
 
 /** The 3D arena: re-renders when something on the board changes, never for clocks. */
 export function MatchScene({
-  store, motion, preferences, impact, advanceFrame, liveState, idle, localSeat = null,
+  store,
+  motion,
+  preferences,
+  impact,
+  advanceFrame,
+  liveState,
+  idle,
+  localSeat = null,
+  overviewSkipped = false,
 }: MatchSceneProps) {
   const select = useMemo(() => sceneStateSelector(motion), [motion]);
   const state = useEngineSelector(store, select);
@@ -56,6 +71,7 @@ export function MatchScene({
       liveState={liveState}
       idle={idle}
       localSeat={localSeat}
+      overviewSkipped={overviewSkipped}
     />
   );
 }
@@ -70,6 +86,12 @@ type MatchAnnouncerProps = {
   held: boolean;
   hudScale: number;
   campaign: boolean;
+  /**
+   * A city's round-start overview is up: its plate shows the countdown
+   * (RoundOverviewPlate), so the top centre stays clear over the board.
+   */
+  // eslint-disable-next-line react/require-default-props -- defaulted to false in the signature
+  overview?: boolean;
 };
 
 /**
@@ -79,7 +101,7 @@ type MatchAnnouncerProps = {
  * frozen), then captions. Re-renders per countdown number, not per tick.
  */
 export function MatchAnnouncer({
-  store, caption, eventId, roundOver, held, hudScale, campaign,
+  store, caption, eventId, roundOver, held, hudScale, campaign, overview = false,
 }: MatchAnnouncerProps) {
   const selectBeat = useMemo(createRoundBeatSelector, []);
   const beat = useEngineSelector(store, selectBeat);
@@ -105,13 +127,45 @@ export function MatchAnnouncer({
         </FeedbackCaption>
       )}
       <MatchBeatOverlay
-        countdown={countdown}
+        countdown={overview ? '' : countdown}
         go={go}
-        line={line}
+        line={overview ? '' : line}
         roundOver={roundOver}
         hudScale={hudScale}
         campaign={campaign}
       />
     </>
+  );
+}
+
+/**
+ * A city's round-start overview plate at the foot of the screen, with the
+ * countdown in it while the overview runs (the live region above still reads
+ * it). It may cover the bottom HUD band and the touch controls: the arena is
+ * frozen until GO, and any touch ends the overview. Re-renders per countdown
+ * number.
+ */
+export function RoundOverviewPlate({
+  store, entry, named, onSkip,
+}: {
+  store: EngineStore;
+  entry: ArenaMapEntry;
+  /** The HUD is shown: the plate names the city and offers Skip. */
+  named: boolean;
+  onSkip: () => void;
+}) {
+  const selectBeat = useMemo(createRoundBeatSelector, []);
+  const beat = useEngineSelector(store, selectBeat);
+  // Clear of the home indicator; the camera reads the same safe area.
+  const { safe } = useHudDevice();
+  const bottom = safe.bottom + OVERVIEW_PLATE.gapPx;
+  return (
+    <CityOverviewPlate
+      entry={entry}
+      countdown={beat.countdown}
+      named={named}
+      bottom={bottom}
+      onSkip={onSkip}
+    />
   );
 }

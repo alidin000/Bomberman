@@ -1266,9 +1266,28 @@ export const StageThumb = styled.button<{ chosen: boolean }>`
     outline-offset: 2px;
   }
 
+  /* The city arenas start a row of their own after the villages. */
+  &[data-new-row] {
+    grid-column-start: 1;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     transition: none;
   }
+`;
+
+/** A city card's OpenStreetMap credit, under its name (Caption 5). */
+export const ThumbCredit = styled.small`
+  ${textStyles.caption5}
+  color: var(--ink-3);
+  text-align: center;
+`;
+
+/** The playtest control's card says so, for whoever runs the playtest (Caption 3). */
+export const ThumbTag = styled.small`
+  ${textStyles.caption3}
+  color: var(--anime-ink);
+  text-transform: uppercase;
 `;
 
 // Square: it sits 4 px inside the thumb's 2 px corner.

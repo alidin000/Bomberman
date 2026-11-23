@@ -1,0 +1,87 @@
+{
+ "city": "rome",
+ "source": "© OpenStreetMap contributors, ODbL 1.0, https://www.openstreetmap.org/copyright",
+ "bbox_swne": [
+  41.88564,
+  12.48723,
+  41.89235,
+  12.49621
+ ],
+ "query": "[out:json][timeout:120][bbox:41.88564,12.48723,41.89235,12.49621];\n(way[\"building\"];relation[\"building\"];)->.b;\nway[\"highway\"]->.h;\nway[\"railway\"=\"tram\"]->.t;\n(way[\"natural\"=\"water\"];relation[\"natural\"=\"water\"];\n way[\"waterway\"=\"riverbank\"];relation[\"waterway\"=\"riverbank\"];\n way[\"water\"=\"river\"];relation[\"water\"=\"river\"];\n way[\"waterway\"=\"river\"];)->.w;\n(way[\"leisure\"~\"^(park|garden)$\"];relation[\"leisure\"~\"^(park|garden)$\"];\n way[\"landuse\"~\"^(grass|forest|meadow|recreation_ground|village_green)$\"];\n relation[\"landuse\"~\"^(grass|forest|meadow|recreation_ground|village_green)$\"];\n way[\"natural\"~\"^(wood|scrub|grassland)$\"];relation[\"natural\"~\"^(wood|scrub|grassland)$\"];\n way[\"man_made\"=\"bridge\"];relation[\"man_made\"=\"bridge\"];\n way[\"place\"=\"square\"];relation[\"place\"=\"square\"];)->.a;\n.b out geom;\n.h out geom;\n.t out geom;\n.w out geom(41.88564,12.48723,41.89235,12.49621);\n.a out geom;\n",
+ "endpoint": "https://overpass-api.de/api/interpreter",
+ "fetched_utc": "2026-11-22T21:23:43Z",
+ "timestamp_osm_base": "2026-11-22T21:21:48Z",
+ "elements": 1406,
+ "bytes": 1771077,
+ "transform": {
+  "epsg": 32633,
+  "cell_m": 14.0,
+  "rotation_deg": 0.0,
+  "up_bearing_deg": 0.0,
+  "right_bearing_deg": 90.0,
+  "anchor": {
+   "what": "Colosseo footprint centroid",
+   "osm": "relation 1834818",
+   "utm": [
+    291958.3,
+    4640633.7
+   ],
+   "lonlat": [
+    12.4923463,
+    41.8902669
+   ],
+   "board_cell": [
+    21.5,
+    7.5
+   ]
+  },
+  "crop_origin": {
+   "what": "top-left corner of cell (0,0)",
+   "lonlat": [
+    12.4886845,
+    41.8911325
+   ],
+   "utm": [
+    291657.3,
+    4640738.7
+   ]
+  },
+  "board_corners_lonlat": {
+   "top_left": [
+    12.4886845,
+    41.8911325
+   ],
+   "top_right": [
+    12.4945854,
+    41.8912614
+   ],
+   "bottom_right": [
+    12.4947577,
+    41.8868523
+   ],
+   "bottom_left": [
+    12.4888573,
+    41.8867234
+   ]
+  },
+  "water_compression": null
+ },
+ "signature": {
+  "on": "board",
+  "what": "the Colosseum as a ring with four arches",
+  "cells": "19,2;23,2;17,3;18,3;19,3;23,3;24,3;25,3;16,4;17,4;25,4;26,4;15,5;16,5;26,5;27,5;15,9;16,9;26,9;27,9;16,10;17,10;25,10;26,10;17,11;18,11;19,11;23,11;24,11;25,11;19,12;23,12",
+  "skyline": "the Vittoriano stands about 1 km north-west of the Colosseum, past the far edge and to the left; it is not in this extract"
+ },
+ "changes": {
+  "counts": {
+   "landmark_rule": 89,
+   "hand": 5,
+   "border": 119,
+   "spawn_plus": 2,
+   "crates": 269
+  },
+  "switched_wall_floor": 96,
+  "switched_excluding_crate_cells": 73,
+  "switched_vs_raster_without_width_floors": 116
+ }
+}

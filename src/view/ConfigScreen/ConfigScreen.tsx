@@ -50,6 +50,8 @@ import {
   StageThumb,
   StageThumbArt,
   StageCaption,
+  ThumbCredit,
+  ThumbTag,
   RoundsRow,
   CharacterPortrait,
   CharacterPortraitImage,
@@ -98,6 +100,11 @@ import {
   getStageDefinition,
 } from '../../content';
 import { DOJO_PATH } from '../../content/dojo';
+import {
+  ARENA_MAPS, ArenaMapEntry, ArenaMapId, getArenaMap,
+} from '../../content/arenaMaps';
+import { CITY_COLORS, isCityLookId } from '../../content/cityColors';
+import { ArenaCredit, CityMapPreview } from '../CityArena/CityArena';
 import { STAGE_SYMBOL } from '../../content/villageSymbols';
 import { villageMarkImage } from '../../theme/VillageMark';
 import {
@@ -194,9 +201,22 @@ function shortStageName(name: string): string {
   return name.replace(/ Village$/, '');
 }
 
+/** The arenas Local Arena offers: villages, then cities; the control only with ?playtest=1. */
+function arenaChoices(playtest: boolean): readonly ArenaMapEntry[] {
+  return ARENA_MAPS.filter((entry) => playtest || !entry.playtestOnly);
+}
+
+function arenaLabel(entry: ArenaMapEntry): string {
+  return entry.playtestOnly ? `${entry.name} (playtest control)` : entry.name;
+}
+
 export const ConfigScreen = () => {
   const location = useLocation();
-  const requestedSolo = new URLSearchParams(location.search).get('mode') === 'solo';
+  const search = new URLSearchParams(location.search);
+  const requestedSolo = search.get('mode') === 'solo';
+  // The city playtest's control map is listed only on the playtest address.
+  const playtest = search.get('playtest') === '1';
+  const arenas = useMemo(() => arenaChoices(playtest), [playtest]);
   const initialStoryProgress = useMemo(() => loadStoryProgress(), []);
   // Reopen the deck on the last local battle setup, if that was the last match.
   const lastLocalSetup = useMemo(
@@ -209,9 +229,17 @@ export const ConfigScreen = () => {
   const [numOfPlayers, setNumOfPlayers] = useState(
     lastLocalSetup ? String(lastLocalSetup.characters.length) : '1'
   );
-  const [selectedStage, setSelectedStage] = useState<StageId>(
-    lastLocalSetup?.stageId ?? initialStoryProgress.lastStage
-  );
+  // Local Arena's own choice, separate from the campaign's village below.
+  const [selectedArena, setSelectedArena] = useState<ArenaMapId>(() => (
+    lastLocalSetup && arenas.some((entry) => entry.id === lastLocalSetup.arenaMapId)
+      ? lastLocalSetup.arenaMapId
+      : initialStoryProgress.lastStage
+  ));
+  // The campaign's village; a last local battle in a village opens on it, as before.
+  const [selectedStage, setSelectedStage] = useState<StageId>(() => (
+    STAGE_DEFINITIONS.find((stage) => stage.id === lastLocalSetup?.arenaMapId)?.id
+      ?? initialStoryProgress.lastStage
+  ));
   const [selectedCharacters, setSelectedCharacters] = useState<CharacterId[]>(
     lastLocalSetup?.characters ?? [initialStoryProgress.lastCharacter ?? DEFAULT_CHARACTER_ID]
   );
@@ -248,6 +276,15 @@ export const ConfigScreen = () => {
     () => getStageDefinition(selectedStage),
     [selectedStage]
   );
+  const selectedArenaEntry = useMemo(
+    () => getArenaMap(selectedArena) ?? arenas[0],
+    [arenas, selectedArena]
+  );
+  // A village arena's accent is its stage's; a city's comes with its colours.
+  const { lookId } = selectedArenaEntry;
+  const arenaAccent = isCityLookId(lookId)
+    ? CITY_COLORS[lookId].palette.accent
+    : getStageDefinition(lookId).palette.accent;
   const selectedMission = useMemo(
     () => getCampaignMission(selectedStage),
     [selectedStage]
@@ -343,6 +380,7 @@ export const ConfigScreen = () => {
   type StartRequest = {
     nextMode: GameMode;
     stageId: StageId;
+    arenaMapId: ArenaMapId;
     characters: CharacterId[];
     upgrade: StoryUpgradeId;
     players: string;
@@ -353,11 +391,13 @@ export const ConfigScreen = () => {
   >(null);
 
   const launch = async ({
-    nextMode, stageId, characters, upgrade, players,
+    nextMode, stageId, arenaMapId, characters, upgrade, players,
   }: StartRequest) => {
     const progress = await launchGame({
       mode: nextMode,
       stageId,
+      // Local Arena plays the arena choice; a mission never takes one.
+      arenaMapId: nextMode === 'local' ? arenaMapId : undefined,
       characters,
       upgrade,
       players,
@@ -372,12 +412,13 @@ export const ConfigScreen = () => {
   const startGame = async ({
     nextMode = mode,
     stageId = selectedStage,
+    arenaMapId = selectedArenaEntry.id,
     characters = selectedCharacters,
     upgrade = selectedUpgrade,
     players = numOfPlayers,
   }: Partial<StartRequest> = {}) => {
     const request = {
-      nextMode, stageId, characters, upgrade, players,
+      nextMode, stageId, arenaMapId, characters, upgrade, players,
     };
     // A mission deploys to the village launchGame picks (the saved one when
     // this one is still locked); its before-scene plays the first time.
@@ -711,40 +752,52 @@ export const ConfigScreen = () => {
                     onAddPlayer={handleAddPlayer}
                     onRemovePlayer={handleRemovePlayer}
                   />
-                  <SectionTitle variant="subtitle2" component="h3" id="stage-label">Stage</SectionTitle>
-                  <StageStrip role="group" aria-labelledby="stage-label" data-roving-group>
-                    {STAGE_DEFINITIONS.map((item) => {
-                      const selected = selectedStage === item.id;
+                  <SectionTitle variant="subtitle2" component="h3" id="arena-label">Arena</SectionTitle>
+                  {/* One roving group: the villages, then the cities on a row of their own. */}
+                  <StageStrip role="group" aria-labelledby="arena-label" data-roving-group>
+                    {arenas.map((item, index) => {
+                      const selected = selectedArenaEntry.id === item.id;
+                      const city = item.family === 'city';
+                      const stageId = item.id as StageId;
                       return (
                         <StageThumb
                           key={item.id}
                           type="button"
                           chosen={selected}
-                          onClick={() => setSelectedStage(item.id)}
-                          aria-label={item.name}
-                          aria-describedby={selected ? 'stage-mechanic' : undefined}
+                          data-new-row={city && arenas[index - 1]?.family === 'village' ? '' : undefined}
+                          onClick={() => setSelectedArena(item.id)}
+                          aria-label={arenaLabel(item)}
+                          aria-describedby={selected ? 'arena-caption' : undefined}
                           aria-pressed={selected}
                         >
                           {selected && <SelectedMark aria-hidden="true">✓</SelectedMark>}
                           <StageThumbArt>
-                            <StagePreviewImage
-                              image={item.id === 'greatShinobiWar' ? GreatWarStage : StageAtlas}
-                              aria-hidden="true"
-                              standalone={item.id === 'greatShinobiWar'}
-                              backgroundPosition={item.id === 'greatShinobiWar'
-                                ? 'center'
-                                : STAGE_PREVIEW_POSITIONS[item.id]}
-                            />
+                            {city ? <CityMapPreview id={item.id} /> : (
+                              <StagePreviewImage
+                                image={item.id === 'greatShinobiWar' ? GreatWarStage : StageAtlas}
+                                aria-hidden="true"
+                                standalone={item.id === 'greatShinobiWar'}
+                                backgroundPosition={item.id === 'greatShinobiWar'
+                                  ? 'center'
+                                  : STAGE_PREVIEW_POSITIONS[stageId]}
+                              />
+                            )}
                           </StageThumbArt>
                           <span aria-hidden="true">{shortStageName(item.name)}</span>
+                          {item.playtestOnly && <ThumbTag aria-hidden="true">Playtest</ThumbTag>}
+                          {/* Plain text: no link inside a button. The caption links it. */}
+                          {item.attribution && <ThumbCredit>{item.attribution.text}</ThumbCredit>}
                         </StageThumb>
                       );
                     })}
                   </StageStrip>
-                  <StageCaption id="stage-mechanic">
-                    <strong>{selectedStageDefinition.name}</strong>
+                  <StageCaption id="arena-caption">
+                    <strong>{selectedArenaEntry.name}</strong>
                     {' · '}
-                    {selectedStageDefinition.mechanic}
+                    {selectedArenaEntry.caption}
+                    {selectedArenaEntry.attribution && (
+                      <ArenaCredit attribution={selectedArenaEntry.attribution} />
+                    )}
                   </StageCaption>
                   <RoundsRow>
                     <span id="rounds-label">Rounds</span>
@@ -968,10 +1021,17 @@ export const ConfigScreen = () => {
                   <span>Mode</span>
                   <strong>{battleSummary.modeTitle}</strong>
                 </SummaryItem>
-                <SummaryItem accent={selectedStageDefinition.palette.accent}>
-                  <span>Stage</span>
-                  <strong>{selectedStageDefinition.name}</strong>
-                </SummaryItem>
+                {mode === 'local' ? (
+                  <SummaryItem accent={arenaAccent}>
+                    <span>Arena</span>
+                    <strong>{selectedArenaEntry.name}</strong>
+                  </SummaryItem>
+                ) : (
+                  <SummaryItem accent={selectedStageDefinition.palette.accent}>
+                    <span>Stage</span>
+                    <strong>{selectedStageDefinition.name}</strong>
+                  </SummaryItem>
+                )}
                 {battleSummary.squad.map((member) => (
                   <SummaryItem key={member.label} accent={member.accent}>
                     <span>{member.label}</span>

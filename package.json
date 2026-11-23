@@ -23,6 +23,7 @@
     "server:build": "esbuild server/index.ts --bundle --platform=node --target=node22 --format=esm --loader:.txt=text --external:ws --outfile=server-dist/index.mjs",
     "server:start": "node server-dist/index.mjs",
     "build": "vite build",
+    "gates": "esbuild tools/city/gates.ts --bundle --platform=node --target=node22 --format=esm --loader:.txt=text --outfile=tools/city/.build/gates.mjs && node tools/city/.build/gates.mjs",
     "lint": "eslint src server --ext .ts,.tsx",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run --coverage",

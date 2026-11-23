@@ -28,8 +28,8 @@ import { BOSS_INTRO_MS, EXPLOSION_MS } from '../../engine/constants';
 import { hazardIsActive } from '../../engine/bosses';
 import { getShadowCloneFormationCells } from '../../engine/characterAbilities';
 import { cellKey } from '../../engine/fogOfWar';
-import { getStageDefinition } from '../../content';
-import { getStageLook, stageSkyBackground } from '../../content/stageLooks';
+import { stageSkyBackground } from '../../content/stageLooks';
+import { arenaMapForConfig } from '../../content/arenaMaps';
 import {
   BossId, CharacterId, StageDefinition, StageId
 } from '../../content/types';
@@ -46,9 +46,14 @@ import {
 import { StaticTiles } from './scene/StaticTiles';
 import {
   StaticTileFeatures,
+  TileMask,
   campaignTileFeatureKey,
   tileFeaturesFromKey,
 } from './scene/staticTiles';
+import { sceneLookFor, sceneTileMask } from './scene/arenaScene';
+import {
+  BoardOverview, boardOverview, hasRoundOverview, overviewInsets, overviewMs, overviewPush,
+} from './scene/roundOverview';
 import {
   framingScaleFor,
   groupShift,
@@ -2162,6 +2167,8 @@ type MapTilesProps = {
   powerTheme?: CharacterId;
   /** The village square's blast stop: Naruto's clones never form inside it. */
   blastStop?: (x: number, y: number) => boolean;
+  /** A city arena's render mask (floor colours, water, its landmark). */
+  mask?: TileMask | null;
 };
 
 // Per-cell objects re-render only when their own props change: a bomb placed
@@ -2223,6 +2230,7 @@ function MapTilesBase({
   features,
   powerTheme,
   blastStop,
+  mask = null,
 }: MapTilesProps) {
   // Keyed on positions, not the array: a crate's break timer ticks every frame,
   // and rebuilding all eight instanced tile layers for that is wasted work.
@@ -2296,6 +2304,7 @@ function MapTilesBase({
         exploredCells={exploredCellSet}
         destroyedCells={destroyedSet}
         features={features}
+        mask={mask}
       />
       {cellObjects}
     </>
@@ -2311,6 +2320,7 @@ const MapTiles = React.memo(MapTilesBase, (prev, next) => (
   && prev.features === next.features
   && prev.powerTheme === next.powerTheme
   && prev.blastStop === next.blastStop
+  && prev.mask === next.mask
 ));
 
 const HazardMeshMemo = React.memo(HazardMesh);
@@ -2335,14 +2345,36 @@ function HazardLayerBase({
 
 const HazardLayer = React.memo(HazardLayerBase);
 
+/**
+ * Milliseconds into a city's round-start overview, smoothed between engine
+ * ticks like the boss's entrance; null outside the first round's countdown
+ * overview.
+ */
+function roundOverviewMs(
+  live: GameEngineState | null,
+  countdown: ReturnType<typeof createCountdown>,
+  motion: MotionStore | null,
+): number | null {
+  if (!live || live.round !== 1 || live.phase !== 'playing') return null;
+  const remaining = live.roundStartTicksRemaining;
+  const smoothed = motion ? countdownNow(countdown, remaining, motion.simTimeMs) : remaining;
+  return overviewMs(smoothed);
+}
+
 function CameraRig({
   state,
   preferences,
   impact,
+  overview = false,
+  overviewSkipped = false,
 }: {
   state: GameEngineState;
   preferences: GamePreferences;
   impact: number;
+  /** A city arena: its first countdown frames the whole board. */
+  overview?: boolean;
+  /** The player skipped the overview: the camera stays on the players. */
+  overviewSkipped?: boolean;
 }) {
   const { camera, size } = useThree();
   const motion = React.useContext(MotionContext);
@@ -2359,6 +2391,8 @@ function CameraRig({
   const introRef = useRef({
     countdown: createCountdown(), lastMs: -Infinity, cut: false, onBoss: false,
   });
+  // The round-start overview: its smoothed clock, and whether the camera is on it.
+  const overviewRef = useRef({ countdown: createCountdown(), on: false, cut: false });
   // The HUD bands for this layout, and how far out this screen's shape
   // needs to zoom for the widest spread players can reach. The HUD is laid
   // out on the viewport; the canvas sits inside the arena frame.
@@ -2373,6 +2407,14 @@ function CameraRig({
     const aspect = size.width > 0 && size.height > 0 ? size.width / size.height : 16 / 9;
     return { insets, aspect, maxFraming: maxFramingFor(aspect, insets) };
   }, [preferences.hudScale, size.width, size.height, device]);
+  const boardWidth = state.map[0]?.length ?? 0;
+  const boardHeight = state.map.length;
+  // The board sits between the HUD bands, above the overview's plate.
+  const board = useMemo<BoardOverview | null>(() => {
+    if (!overview) return null;
+    const insets = overviewInsets(frame.insets, size.height, device.safe.bottom);
+    return boardOverview(boardWidth, boardHeight, frame.aspect, insets);
+  }, [boardHeight, boardWidth, device, frame, overview, size.height]);
 
   useFrame(({ clock }, delta) => {
     const fallbackCenter = getMapWorldCenter(
@@ -2464,6 +2506,30 @@ function CameraRig({
       intro.onBoss = false;
     } else if (nowMs - intro.lastMs < INTRO_CATCH_UP_MS) {
       followRate = INTRO_FOLLOW_RATE;
+    }
+    // A city's first countdown: frame the whole board, then come back to the
+    // players a second before GO. The board centre is far from the spawns,
+    // so like a far boss it is cut to and from (reduced motion always cuts),
+    // and the view only pushes in slowly while it holds. Camera only: the
+    // countdown runs as always, and skipping just ends this early.
+    const overviewView = overviewRef.current;
+    const boardMs = board && !overviewSkipped
+      ? roundOverviewMs(live, overviewView.countdown, motion)
+      : null;
+    if (board && boardMs !== null) {
+      const center = { x: board.centerX, y: board.centerY };
+      const cut = preferences.reducedMotion || introCuts(center, targetXCell, targetYCell);
+      const [boardX, , boardZ] = toWorld(board.centerX, board.centerY);
+      aimX = boardX;
+      aimZ = boardZ + board.shift * TILE_SIZE;
+      framingScale = board.scale * overviewPush(boardMs, preferences.reducedMotion);
+      snap = snap || (cut && !overviewView.on);
+      overviewView.on = true;
+      overviewView.cut = cut;
+      followRate = INTRO_FOLLOW_RATE;
+    } else if (overviewView.on) {
+      snap = snap || overviewView.cut;
+      overviewView.on = false;
     }
     // `impact` holds for a moment and then drops to 0; fade out from it
     // instead of cutting off mid-swing.
@@ -2709,6 +2775,8 @@ const CameraRigMemo = React.memo(CameraRig, (previous, next) => (
   && previous.state.map === next.state.map
   && previous.preferences === next.preferences
   && previous.impact === next.impact
+  && previous.overview === next.overview
+  && previous.overviewSkipped === next.overviewSkipped
 ));
 
 const MissionObjectiveMarkersMemo = React.memo(MissionObjectiveMarkers, (previous, next) => (
@@ -2747,21 +2815,31 @@ function SceneContentBase({
   state,
   preferences,
   impact,
+  overviewSkipped = false,
 }: {
   state: GameEngineState;
   preferences: GamePreferences;
   impact: number;
+  overviewSkipped?: boolean;
 }) {
-  const stage = useMemo(
-    () => getStageDefinition(state.config.stageId),
-    [state.config.stageId]
+  // The map's one identity: in Arena mode the route's catalog map sets the
+  // look (and a city's mask); otherwise the stage does, as before.
+  const { mode, selectedMap, stageId } = state.config;
+  const arena = useMemo(() => arenaMapForConfig({ mode, selectedMap }), [mode, selectedMap]);
+  const look = useMemo(
+    () => sceneLookFor({ mode, selectedMap, stageId }),
+    [mode, selectedMap, stageId]
   );
-  const look = useMemo(() => getStageLook(state.config.stageId), [state.config.stageId]);
   const { highContrast } = preferences;
   const palette = useMemo(
-    () => (highContrast ? highContrastPalette(stage.palette) : stage.palette),
-    [highContrast, stage.palette],
+    () => (highContrast ? highContrastPalette(look.palette) : look.palette),
+    [highContrast, look.palette],
   );
+  const tileMask = useMemo(
+    () => sceneTileMask(arena, look, highContrast),
+    [arena, highContrast, look]
+  );
+  const overview = useMemo(() => hasRoundOverview({ mode, selectedMap }), [mode, selectedMap]);
   useHighContrastMaterials(highContrast, HIGH_CONTRAST_MATERIALS);
   const mapDimensions = useMemo(() => getMapDimensions(state.map), [state.map]);
   const tileFeatureKey = campaignTileFeatureKey(state.campaign);
@@ -2838,7 +2916,13 @@ function SceneContentBase({
     <LightPool>
       <ShaderWarmupMemo withBoss={state.config.mode === 'solo'} withVillage={!!villageSquare} />
       <CastPrewarm stageId={state.campaign?.stageId} square={villageSquare} />
-      <CameraRigMemo state={state} preferences={preferences} impact={impact} />
+      <CameraRigMemo
+        state={state}
+        preferences={preferences}
+        impact={impact}
+        overview={overview}
+        overviewSkipped={overviewSkipped}
+      />
       <StageAtmosphere look={look} farEdgeZ={toWorld(0, -BOARD_LIP)[2]} />
       <FloorMemo
         palette={palette}
@@ -2847,7 +2931,7 @@ function SceneContentBase({
       />
       <StageLandmarks
         look={look}
-        slabColor={stage.palette.wall}
+        slabColor={look.palette.wall}
         width={mapDimensions.width}
         height={mapDimensions.height}
       />
@@ -2860,6 +2944,7 @@ function SceneContentBase({
         features={tileFeatures}
         powerTheme={state.players[0]?.characterId}
         blastStop={squareBlastStop(state.config)}
+        mask={tileMask}
       />
       {state.players.map((player) => player.teleportMark && (
         <FlyingThunderMarker
@@ -2994,6 +3079,8 @@ type GameScene3DProps = {
   idle?: boolean;
   /** Online: the seat this browser plays. Left out, every human seat is local. */
   localSeat?: number | null;
+  /** A city's round-start overview was skipped: the camera stays on the players. */
+  overviewSkipped?: boolean;
 };
 
 /**
@@ -3055,18 +3142,27 @@ function SceneFromStore({
   store,
   preferences,
   impact,
+  overviewSkipped,
 }: {
   store: SceneStore;
   preferences: GamePreferences;
   impact: number;
+  overviewSkipped: boolean;
 }) {
   const state = useSyncExternalStore(store.subscribe, store.get);
   // Request a frame whenever the scene's inputs change. In 'always' mode the
   // loop is running anyway; on demand it draws the change (a setting toggled
   // under the pause menu) exactly once.
   const invalidate = useThree((three) => three.invalidate);
-  useEffect(() => { invalidate(); }, [invalidate, state, preferences, impact]);
-  return <SceneContent state={state} preferences={preferences} impact={impact} />;
+  useEffect(() => { invalidate(); }, [invalidate, state, preferences, impact, overviewSkipped]);
+  return (
+    <SceneContent
+      state={state}
+      preferences={preferences}
+      impact={impact}
+      overviewSkipped={overviewSkipped}
+    />
+  );
 }
 
 type SceneCanvasProps = {
@@ -3080,10 +3176,11 @@ type SceneCanvasProps = {
   // The stage's sky gradient, drawn behind the transparent canvas.
   sky: string;
   localSeat: number | null;
+  overviewSkipped: boolean;
 };
 
 const SceneCanvas = React.memo(({
-  store, readState, preferences, impact, motion, idle, bombClock, sky, localSeat,
+  store, readState, preferences, impact, motion, idle, bombClock, sky, localSeat, overviewSkipped,
 }: SceneCanvasProps) => {
   const viewport = useViewportSize();
   const lowEnd = useMemo(() => isLikelyLowEndDevice(), []);
@@ -3125,7 +3222,12 @@ const SceneCanvas = React.memo(({
             <BombClockContext.Provider value={bombClock}>
               <LiveStateContext.Provider value={readState}>
                 <LocalSeatContext.Provider value={localSeat}>
-                  <SceneFromStore store={store} preferences={preferences} impact={impact} />
+                  <SceneFromStore
+                    store={store}
+                    preferences={preferences}
+                    impact={impact}
+                    overviewSkipped={overviewSkipped}
+                  />
                 </LocalSeatContext.Provider>
               </LiveStateContext.Provider>
             </BombClockContext.Provider>
@@ -3139,11 +3241,20 @@ const SceneCanvas = React.memo(({
 SceneCanvas.displayName = 'SceneCanvas';
 
 export function GameScene3D({
-  state, preferences, impact = 0, motion = null, advanceFrame, liveState, idle, localSeat = null,
+  state,
+  preferences,
+  impact = 0,
+  motion = null,
+  advanceFrame,
+  liveState,
+  idle,
+  localSeat = null,
+  overviewSkipped = false,
 }: GameScene3DProps) {
+  const { mode, selectedMap, stageId } = state.config;
   const sky = useMemo(
-    () => stageSkyBackground(getStageLook(state.config.stageId)),
-    [state.config.stageId],
+    () => stageSkyBackground(sceneLookFor({ mode, selectedMap, stageId })),
+    [mode, selectedMap, stageId],
   );
   const storeRef = useRef<SceneStore>();
   if (!storeRef.current) storeRef.current = createSceneStore(state);
@@ -3171,6 +3282,7 @@ export function GameScene3D({
       bombClock={bombClockRef}
       sky={sky}
       localSeat={localSeat}
+      overviewSkipped={overviewSkipped}
     />
   );
 }

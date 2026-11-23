@@ -88,6 +88,30 @@ export function highContrastPalette(palette: StagePalette): StagePalette {
   return next;
 }
 
+/** A colour with its lightness scaled by `factor` (hue and saturation kept). */
+export function shadeHex(hex: string, factor: number): string {
+  return retone(hex, ({ h, s, l }) => ({ h, s, l: Math.min(1, Math.max(0, l * factor)) }));
+}
+
+/** A city mask colour retoned by role, like the palette above. */
+export type MaskRole = 'floorA' | 'floorB' | 'water' | 'landmark';
+
+// Floors sit with the palette's floor (light), water well below it and the
+// board's landmark with the walls (dark), so walkable, water and solid cells
+// separate by brightness for every colour vision, and danger cues stay dark
+// against every floor.
+const MASK_TONES: Record<MaskRole, (hsl: Hsl) => Hsl> = {
+  floorA: ({ h, s }) => ({ h, s: s * 0.5, l: 0.88 }),
+  floorB: ({ h, s }) => ({ h, s: s * 0.5, l: 0.8 }),
+  water: ({ h, s }) => ({ h, s: Math.min(0.7, Math.max(0.35, s)), l: 0.34 }),
+  landmark: ({ h, s }) => ({ h, s: Math.min(1, s * 0.9), l: 0.3 }),
+};
+
+/** A mask colour for high-contrast mode in the given role. */
+export function highContrastMaskColor(hex: string, role: MaskRole): string {
+  return retone(hex, MASK_TONES[role]);
+}
+
 /** A shared material and the uniform values it takes in high-contrast mode. */
 export type HighContrastOverride = {
   material: THREE.Material & { color?: THREE.Color };

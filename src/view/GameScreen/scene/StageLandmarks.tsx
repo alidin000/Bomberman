@@ -190,7 +190,7 @@ function StageLandmarksBase({
       {layers.map((layer) => {
         if (layer.famous) {
           const geometry = famousGeometry(
-            `${look.stageId}|${width}x${height}|${slabColor}`,
+            `${look.lookId}|${width}x${height}|${slabColor}`,
             layer.instances,
             (kind) => colorsByKind.get(kind)
           );
