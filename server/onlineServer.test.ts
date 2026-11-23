@@ -309,7 +309,8 @@ describe('online room server', () => {
   });
 
   it('cancels empty-room expiry when a lobby seat reconnects', async () => {
-    const server = await startOnlineServer({ port: 0, emptyRoomTtlMs: 40 });
+    // A fast sweep, so the expiry would have run several times by the check.
+    const server = await startOnlineServer({ port: 0, emptyRoomTtlMs: 40, sweepIntervalMs: 10 });
     const first = await connect(server.port);
     let resumed: Client | null = null;
     try {
@@ -331,7 +332,7 @@ describe('online room server', () => {
         token: welcome.token,
       });
       await resumed.next('welcome');
-      await wait(60);
+      await wait(120);
 
       expect(server.roomCount()).toBe(1);
       expect(resumed.socket.readyState).toBe(WebSocket.OPEN);

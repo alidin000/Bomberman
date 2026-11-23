@@ -12,6 +12,18 @@ export type OnlineRounds = typeof ONLINE_ROUND_OPTIONS[number];
 
 export type OnlineAction = 'bomb' | 'detonate' | 'ultimate' | 'cover';
 
+/** Why a room closed, beyond the coarse reason every client understands. */
+export type RoomClosedDetail =
+  | 'host-left' | 'player-left' | 'lobby-expired' | 'empty' | 'seat-timeout'
+  | 'idle' | 'finished' | 'max-age' | 'restart';
+
+/**
+ * Why a resume failed. It rides on code 'seat-expired', which every client
+ * already treats as final, so older clients still release the seat.
+ */
+export type ResumeFailureReason =
+  | 'seat-not-found' | 'room-closed' | 'server-restarted' | 'replaced';
+
 export type OnlinePlayer = {
   seat: number;
   name: string;
@@ -57,12 +69,15 @@ export type ServerMessage =
     state?: GameEngineState; patch?: Partial<GameEngineState>;
   }
   | { type: 'peer'; seat: number; connected: boolean; graceMsLeft?: number }
-  | { type: 'room-closed'; reason: 'left' | 'timeout' | 'server' }
+  | { type: 'room-closed'; reason: 'left' | 'timeout' | 'server'; detail?: RoomClosedDetail }
   | {
     type: 'error';
     code: 'bad-message' | 'room-full' | 'room-not-found' | 'seat-expired'
       | 'upgrade-required' | 'match-started' | 'rate-limited' | 'not-host'
-      | 'not-ready' | 'not-enough-players';
+      | 'not-ready' | 'not-enough-players' | 'server-busy' | 'too-many-rooms'
+      | 'too-many-connections';
+    reason?: ResumeFailureReason;
+    detail?: RoomClosedDetail;
   };
 
 const CHARACTER_IDS: CharacterId[] = [

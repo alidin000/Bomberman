@@ -1,7 +1,9 @@
 /* eslint-disable no-param-reassign -- rooms and seats are mutable server actors. */
 /* eslint-disable no-console */
-import { randomBytes, randomInt } from 'node:crypto';
-import { createServer, Server as HttpServer } from 'node:http';
+import {
+  createHash, randomBytes, randomInt, timingSafeEqual,
+} from 'node:crypto';
+import { createServer, IncomingMessage, Server as HttpServer } from 'node:http';
 import WebSocket, { RawData, WebSocketServer } from 'ws';
 import { GameAction } from '../src/engine/actions';
 import { TICK_MS } from '../src/engine/constants';
@@ -21,27 +23,93 @@ import {
   OnlineRoomMode,
   OnlineRounds,
   PROTOCOL_VERSION,
+  ResumeFailureReason,
+  RoomClosedDetail,
   SIMULATION_VERSION,
   ServerMessage,
   parseClientMessage,
   serializeMessage,
 } from '../src/network/protocol';
+import {
+  ClientIpSource, Peer, PeerTable, addressKey, clientAddress, isLocalhostOrigin,
+  normalizeOrigin, parseClientIpSource, siteKey,
+} from './admission';
+import {
+  LogEntry, OnlineServerCounters, OnlineServerMetrics, ProtocolErrorKind,
+  createAddressTagger, createCounters,
+} from './telemetry';
+
+export type { ClientIpSource } from './admission';
+export type { LogEntry, OnlineServerMetrics } from './telemetry';
 
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ROOM_CODE_LENGTH = 6;
-const MAX_ROOMS = 100;
-const MAX_MESSAGES_PER_SECOND = 60;
-const RECONNECT_GRACE_MS = 20_000;
 const ROUND_RESULT_MS = 4_000;
-const EMPTY_ROOM_TTL_MS = 60_000;
-const LOBBY_TTL_MS = 10 * 60_000;
 const KEEPALIVE_MS = 15_000;
 const MAX_SNAPSHOT_BUFFER_BYTES = 16 * 1024;
 const MOVE_REPEAT_MS = 28;
 const FAST_MOVE_REPEAT_MS = 18;
 const MIN_ROOM_PLAYERS = 2;
+const SWEEP_INTERVAL_MS = 1000;
+const RESUME_DELAY_MS = 2000;
+// A closed room's code keeps answering resumes with why it closed.
+const TOMBSTONE_MS = 10 * 60_000;
+const MAX_TOMBSTONES = 1000;
+// Repeated abuse lines from one address collapse into one per window.
+const LOG_WINDOW_MS = 10_000;
+const CLOSE_REPLACED = 4001;
+const CLOSE_UNSEATED = 4002;
+
+/** Limits and timeouts. Each one can be set from the environment (server/config.ts). */
+export const ONLINE_SERVER_LIMITS = {
+  maxRooms: 100,
+  // Per-address caps stay generous: a household or a school behind one NAT
+  // shares an address and may host several rooms at once.
+  maxRoomsPerIp: 8,
+  maxSockets: 400,
+  maxSocketsPerIp: 32,
+  connectBurst: 20,
+  connectRefillMs: 1000,
+  // A burst as large as the room cap, so a class can open all its rooms at
+  // once; the refill only slows create-and-leave churn.
+  createBurst: 8,
+  createRefillMs: 5000,
+  // Off by default: a gap per address would queue that class up again.
+  createCooldownMs: 0,
+  joinFailBurst: 10,
+  joinFailRefillMs: 3000,
+  messagesPerSecond: 60,
+  // The browser opens its socket only when the player presses Create or
+  // Join, and sends that request as soon as it opens, so a socket still
+  // without a seat after this long never asked for one or was refused.
+  unseatedTimeoutMs: 30_000,
+  lobbyTtlMs: 10 * 60_000,
+  reconnectGraceMs: 20_000,
+  emptyRoomTtlMs: 60_000,
+  finishedRoomTtlMs: 2 * 60_000,
+  idleRoomMs: 10 * 60_000,
+  maxRoomAgeMs: 3 * 60 * 60_000,
+  shutdownGraceMs: 5000,
+};
+
+export type OnlineServerLimits = typeof ONLINE_SERVER_LIMITS;
+
+/**
+ * An IPv6 /48 gets this many times one address's socket, room and
+ * failed-join allowance. A home or a free tunnel can hold a whole /48, and
+ * each /64 in it counts as one address; set loose because phones on one
+ * carrier can share a /48 too.
+ */
+export const IPV6_SITE_FACTOR = 4;
 
 type InputMessage = Extract<ClientMessage, { type: 'input' }>;
+type RoomCloseReason = Extract<ServerMessage, { type: 'room-closed' }>['reason'];
+type RoomPhase = 'waiting' | 'active' | 'finished';
+type RateLimitScope = 'connect' | 'create' | 'create-cooldown' | 'join' | 'message';
+type RejectReason =
+  | 'origin' | 'draining' | 'max-sockets' | 'max-sockets-per-ip' | 'max-sockets-per-site'
+  | 'max-rooms' | 'max-rooms-per-ip' | 'max-rooms-per-site';
+type ResumeFailure = { reason: ResumeFailureReason; detail?: RoomClosedDetail };
 
 type Seat = {
   seat: number;
@@ -58,11 +126,22 @@ type Seat = {
   fallbackDirection: Direction | null;
   moveAccumulatorMs: number;
   needsFullSnapshot: boolean;
-  reconnectTimer: ReturnType<typeof setTimeout> | null;
+  /** When the seat's socket went away; null while it is connected. */
+  awaySince: number | null;
+  /** The ack of the last snapshot this seat was sent. */
+  sentAck: number | null;
+  /** Snapshots skipped since this reader fell behind. */
+  droppedSnapshots: number;
 };
 
 type Room = {
   id: string;
+  /** Random reference for logs; the code is a join secret while the room is open. */
+  ref: string;
+  /** The address whose open-room cap this room counts against. */
+  owner: Peer;
+  /** The owner's IPv6 /48, whose wider cap it also counts against. */
+  ownerSite: Peer | null;
   roomMode: OnlineRoomMode;
   stageId: StageId;
   totalRounds: OnlineRounds;
@@ -71,28 +150,61 @@ type Room = {
   config: GameConfig | null;
   tickTimer: ReturnType<typeof setInterval> | null;
   resultTimer: ReturnType<typeof setTimeout> | null;
-  cleanupTimer: ReturnType<typeof setTimeout> | null;
+  resumeTimer: ReturnType<typeof setTimeout> | null;
   createdAt: number;
+  startedAt: number | null;
+  finishedAt: number | null;
+  lastInputAt: number;
 };
 
-type SocketRate = { startedAt: number; count: number };
+type Tombstone = { reason: RoomCloseReason; detail: RoomClosedDetail; closedAt: number };
+
+type Connection = {
+  peer: Peer;
+  /** The IPv6 /48 the address is in; null for IPv4. */
+  site: Peer | null;
+  openedAt: number;
+  /** Whether the socket ever held a seat. */
+  seated: boolean;
+  unseatedTimer: ReturnType<typeof setTimeout> | null;
+  rate: { startedAt: number; count: number };
+};
 
 export type OnlineServer = {
   port: number;
   roomCount: () => number;
   getRoomState: (roomId: string) => GameEngineState | null;
+  /** Live gauges and counts since boot, the same object /metrics serves. */
+  metrics: () => OnlineServerMetrics;
+  /** Drains, tells every room why it ends, and resolves once every socket is gone. */
+  shutdown: (signal?: string) => Promise<void>;
   close: () => Promise<void>;
 };
 
-export type OnlineServerOptions = {
+export type OnlineServerOptions = Partial<OnlineServerLimits> & {
   port?: number;
   host?: string;
   allowedOrigins?: string[];
-  reconnectGraceMs?: number;
-  emptyRoomTtlMs?: number;
+  /** Defaults to true only when `allowedOrigins` is empty. */
+  allowLocalhostOrigins?: boolean;
+  clientIpSource?: ClientIpSource;
+  /** Logs the raw forwarding headers of every handshake, only to choose `clientIpSource`. */
+  debugClientIp?: boolean;
+  /** Bearer token for /metrics. Without one, /metrics answers 404. */
+  metricsToken?: string;
   roundResultMs?: number;
   tickIntervalMs?: number;
   maxSnapshotBufferBytes?: number;
+  /**
+   * Receives each structured log line. Unset, nothing is logged, so tests and
+   * other embedders stay quiet; server/index.ts passes writeLogLine (stdout).
+   */
+  log?: (entry: LogEntry) => void;
+  /** Clock for rate limits, cooldowns and log windows, so tests can move it. */
+  now?: () => number;
+  sweepIntervalMs?: number;
+  /** How long a match stays paused after the last seat returns. */
+  resumeDelayMs?: number;
 };
 
 type SnapshotDelivery = { needsFullSnapshot: boolean };
@@ -103,8 +215,9 @@ function roomCode(): string {
   )).join('');
 }
 
-function token(): string {
-  return randomBytes(16).toString('hex');
+/** The boot id first, so a resume can tell a restart from a lost seat; 32 hex in all. */
+function seatToken(bootId: string): string {
+  return `${bootId}${randomBytes(12).toString('hex')}`;
 }
 
 function send(socket: WebSocket | null, message: ServerMessage): void {
@@ -135,6 +248,11 @@ function lobbyMessage(room: Room): ServerMessage {
 
 function broadcast(room: Room, message: ServerMessage): void {
   room.seats.forEach((seat) => send(seat.socket, message));
+}
+
+function phaseOf(room: Room): RoomPhase {
+  if (!room.state) return 'waiting';
+  return room.state.phase === 'game_over' ? 'finished' : 'active';
 }
 
 function playerRepeatMs(player: PlayerState | undefined): number {
@@ -203,36 +321,144 @@ function createConfig(room: Room): GameConfig {
   };
 }
 
-function originAllowed(origin: string | undefined, allowedOrigins: string[]): boolean {
-  if (!origin) return true;
-  if (allowedOrigins.includes(origin)) return true;
-  return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+function bearerMatches(header: string | undefined, token: string): boolean {
+  const presented = /^Bearer\s+(.+)$/i.exec(header ?? '')?.[1] ?? '';
+  // Comparing equal-length digests keeps the check constant-time.
+  const digest = (value: string) => createHash('sha256').update(value).digest();
+  return timingSafeEqual(digest(presented), digest(token));
+}
+
+function bump(counts: Record<string, number>, key: string): void {
+  counts[key] = (counts[key] ?? 0) + 1;
 }
 
 export async function startOnlineServer(
   options: OnlineServerOptions = {}
 ): Promise<OnlineServer> {
-  const rooms = new Map<string, Room>();
-  const sessions = new Map<WebSocket, { room: Room; seat: Seat }>();
-  const rates = new Map<WebSocket, SocketRate>();
-  const liveSockets = new WeakMap<WebSocket, boolean>();
-  const allowedOrigins = options.allowedOrigins ?? [];
-  const reconnectGraceMs = options.reconnectGraceMs ?? RECONNECT_GRACE_MS;
-  const emptyRoomTtlMs = options.emptyRoomTtlMs ?? EMPTY_ROOM_TTL_MS;
+  const limits = Object.fromEntries(Object.entries(ONLINE_SERVER_LIMITS).map(([key, fallback]) => (
+    [key, options[key as keyof OnlineServerLimits] ?? fallback]
+  ))) as OnlineServerLimits;
+  const allowedOrigins = (options.allowedOrigins ?? []).map((origin) => {
+    const normalized = normalizeOrigin(origin);
+    if (!normalized) throw new Error(`Not an http(s) origin: ${origin}`);
+    return normalized;
+  });
+  const allowLocalhostOrigins = options.allowLocalhostOrigins ?? allowedOrigins.length === 0;
+  const clientIpSource = parseClientIpSource(options.clientIpSource ?? 'socket');
+  if (!clientIpSource) throw new Error(`Unknown client address source: ${options.clientIpSource}`);
   const roundResultMs = options.roundResultMs ?? ROUND_RESULT_MS;
   const tickIntervalMs = options.tickIntervalMs ?? TICK_MS;
   const maxSnapshotBufferBytes = options.maxSnapshotBufferBytes
     ?? MAX_SNAPSHOT_BUFFER_BYTES;
+  const sweepIntervalMs = options.sweepIntervalMs ?? SWEEP_INTERVAL_MS;
+  const resumeDelayMs = options.resumeDelayMs ?? RESUME_DELAY_MS;
+  const { metricsToken } = options;
+  const clock = options.now ?? Date.now;
+  const logSink = options.log ?? (() => undefined);
+
+  const rooms = new Map<string, Room>();
+  const tombstones = new Map<string, Tombstone>();
+  const sessions = new Map<WebSocket, { room: Room; seat: Seat }>();
+  const connections = new Map<WebSocket, Connection>();
+  const liveSockets = new WeakMap<WebSocket, boolean>();
+  const tagOf = createAddressTagger();
+  const peers = new PeerTable(limits, tagOf);
+  // Only their socket and room counts and failed-join bucket are used.
+  const sites = new PeerTable({
+    ...limits,
+    joinFailBurst: limits.joinFailBurst * IPV6_SITE_FACTOR,
+    joinFailRefillMs: limits.joinFailRefillMs / IPV6_SITE_FACTOR,
+  }, tagOf);
+  const counters = createCounters();
+  const bootId = randomBytes(4).toString('hex');
+  let draining = false;
+  let shutdownPromise: Promise<void> | null = null;
+
+  const log = (event: string, fields: Record<string, unknown> = {}) => {
+    logSink({ ts: new Date().toISOString(), event, ...fields });
+  };
+
+  /** One line per address and kind per window; the next one says how many were held back. */
+  const logThrottled = (
+    peer: Peer,
+    event: string,
+    kind: string,
+    fields: Record<string, unknown>
+  ) => {
+    const now = clock();
+    const slot = `${event}:${kind}`;
+    const previous = peer.logWindows.get(slot);
+    if (previous && now - previous.at < LOG_WINDOW_MS) {
+      previous.suppressed += 1;
+      return;
+    }
+    log(event, previous?.suppressed ? { ...fields, suppressed: previous.suppressed } : fields);
+    peer.logWindows.set(slot, { at: now, suppressed: 0 });
+  };
+
+  const noteRejected = (peer: Peer, reason: RejectReason, fields: Record<string, unknown> = {}) => {
+    bump(counters.rejects, reason);
+    logThrottled(peer, 'socket_rejected', reason, { reason, ip: peer.tag, ...fields });
+  };
+
+  const noteRateLimited = (peer: Peer, scope: RateLimitScope) => {
+    bump(counters.rateLimits, scope);
+    logThrottled(peer, 'rate_limited', scope, { scope, ip: peer.tag });
+  };
+
+  const protocolError = (peer: Peer, kind: ProtocolErrorKind) => {
+    counters.protocolErrors[kind] += 1;
+    logThrottled(peer, 'protocol_error', kind, { kind, ip: peer.tag });
+  };
+
+  const metrics = (): OnlineServerMetrics => {
+    const byPhase = { waiting: 0, active: 0, finished: 0 };
+    rooms.forEach((room) => { byPhase[phaseOf(room)] += 1; });
+    return {
+      rooms: byPhase,
+      sockets: { seated: sessions.size, seatless: connections.size - sessions.size },
+      ...(JSON.parse(JSON.stringify(counters)) as OnlineServerCounters),
+    };
+  };
 
   const http: HttpServer = createServer((request, response) => {
     if (request.url === '/healthz') {
       response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ ok: true, rooms: rooms.size }));
+      response.end(JSON.stringify({ ok: true, rooms: rooms.size, sockets: connections.size }));
+      return;
+    }
+    if (request.url === '/metrics' && metricsToken) {
+      if (!bearerMatches(request.headers.authorization, metricsToken)) {
+        response.writeHead(401, { 'www-authenticate': 'Bearer' });
+        response.end();
+        return;
+      }
+      response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      response.end(JSON.stringify(metrics()));
       return;
     }
     response.writeHead(404);
     response.end();
   });
+
+  /** What the client's address counts against: itself, and its /48 when it is IPv6. */
+  const peersOf = (request: IncomingMessage): { peer: Peer; site: Peer | null } => {
+    const now = clock();
+    const address = clientAddress(request, clientIpSource);
+    const site = siteKey(address);
+    return {
+      peer: peers.get(addressKey(address), now),
+      site: site === null ? null : sites.get(site, now),
+    };
+  };
+
+  const originAllowed = (origin: string | undefined): boolean => {
+    // Browsers always send Origin; a client that omits it could forge one anyway.
+    if (!origin) return true;
+    const normalized = normalizeOrigin(origin);
+    return !!normalized && (allowedOrigins.includes(normalized)
+      || (allowLocalhostOrigins && isLocalhostOrigin(normalized)));
+  };
 
   const wss = new WebSocketServer({
     server: http,
@@ -246,37 +472,69 @@ export async function startOnlineServer(
       threshold: 4 * 1024,
       zlibDeflateOptions: { level: 3 },
     },
-    verifyClient: ({ origin }, done) => {
-      if (originAllowed(origin, allowedOrigins)) done(true);
-      else done(false, 403, 'Origin not allowed');
+    verifyClient: ({ origin, req }, done) => {
+      if (options.debugClientIp) {
+        // Raw addresses, on purpose: only while choosing CLIENT_IP_SOURCE.
+        log('client_ip_debug', {
+          xForwardedFor: req.headers['x-forwarded-for'] ?? null,
+          cfConnectingIp: req.headers['cf-connecting-ip'] ?? null,
+          trueClientIp: req.headers['true-client-ip'] ?? null,
+          remoteAddress: req.socket.remoteAddress ?? null,
+        });
+      }
+      const { peer } = peersOf(req);
+      if (!originAllowed(origin)) {
+        noteRejected(peer, 'origin', { origin: String(origin).slice(0, 200) });
+        done(false, 403, 'Origin not allowed');
+        return;
+      }
+      if (draining) {
+        noteRejected(peer, 'draining');
+        done(false, 503, 'Server restarting');
+        return;
+      }
+      // The connect rate is checked once upgraded: a browser shows a refused
+      // handshake only as a failed connection, so it could not say why.
+      done(true);
     },
   });
 
   const clearRoomTimers = (room: Room) => {
     if (room.tickTimer) clearInterval(room.tickTimer);
     if (room.resultTimer) clearTimeout(room.resultTimer);
-    if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
-    room.seats.forEach((seat) => {
-      if (seat.reconnectTimer) clearTimeout(seat.reconnectTimer);
-    });
+    if (room.resumeTimer) clearTimeout(room.resumeTimer);
+    room.tickTimer = null;
+    room.resultTimer = null;
+    room.resumeTimer = null;
   };
 
-  const closeRoom = (room: Room, reason: 'left' | 'timeout' | 'server') => {
+  const closeRoom = (room: Room, reason: RoomCloseReason, detail: RoomClosedDetail) => {
     if (!rooms.delete(room.id)) return;
     clearRoomTimers(room);
+    const now = Date.now();
+    tombstones.set(room.id, { reason, detail, closedAt: now });
+    if (tombstones.size > MAX_TOMBSTONES) tombstones.delete(tombstones.keys().next().value);
+    room.owner.rooms -= 1;
+    if (room.ownerSite) room.ownerSite.rooms -= 1;
+    bump(counters.roomsClosed, detail);
+    log('room_closed', {
+      room: room.ref,
+      // Once the room is gone its code is no longer a join secret.
+      code: room.id,
+      reason,
+      detail,
+      ageMs: now - room.createdAt,
+      ...(room.startedAt === null
+        ? {}
+        : { durationMs: (room.finishedAt ?? now) - room.startedAt }),
+    });
     room.seats.forEach((seat) => {
       const { socket } = seat;
       if (!socket) return;
       sessions.delete(socket);
-      send(socket, { type: 'room-closed', reason });
-      socket.close(1000, 'Room closed');
+      send(socket, { type: 'room-closed', reason, detail });
+      socket.close(reason === 'server' ? 1001 : 1000, 'Room closed');
     });
-  };
-
-  const scheduleEmptyCleanup = (room: Room) => {
-    if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
-    if (room.seats.some((seat) => seat.connected)) return;
-    room.cleanupTimer = setTimeout(() => closeRoom(room, 'timeout'), emptyRoomTtlMs);
   };
 
   const publishState = (
@@ -286,6 +544,14 @@ export async function startOnlineServer(
   ) => {
     if (!room.state) return;
     room.seats.forEach((seat) => {
+      // Nothing changed and the ack did not move: no snapshot, and no drop
+      // that would force a full resync of a paused or finished room.
+      if (
+        !forceFull
+        && !seat.needsFullSnapshot
+        && before === room.state
+        && seat.sentAck === seat.lastAppliedSeq
+      ) return;
       const message = snapshotForDelivery(
         seat,
         before,
@@ -295,7 +561,32 @@ export async function startOnlineServer(
         maxSnapshotBufferBytes,
         forceFull
       );
-      if (message) send(seat.socket, message);
+      if (!message) {
+        seat.droppedSnapshots += 1;
+        counters.snapshotDrops += 1;
+        return;
+      }
+      // An empty patch with the same ack tells the seat nothing.
+      if (
+        message.patch
+        && Object.keys(message.patch).length === 0
+        && message.ack === seat.sentAck
+      ) return;
+      send(seat.socket, message);
+      seat.sentAck = message.ack;
+      if (message.state && seat.droppedSnapshots > 0) {
+        counters.resyncs += 1;
+        const connection = seat.socket ? connections.get(seat.socket) : undefined;
+        if (connection) {
+          logThrottled(connection.peer, 'snapshot_resync', 'resync', {
+            room: room.ref,
+            seat: seat.seat,
+            dropped: seat.droppedSnapshots,
+            ip: connection.peer.tag,
+          });
+        }
+        seat.droppedSnapshots = 0;
+      }
     });
   };
 
@@ -320,6 +611,17 @@ export async function startOnlineServer(
       reduce(room, { type: 'DISMISS_DIALOG' });
       publishState(room, result, true);
     }, roundResultMs);
+  };
+
+  const finishMatch = (room: Room) => {
+    const now = Date.now();
+    room.finishedAt = now;
+    const durationMs = now - (room.startedAt ?? now);
+    counters.matchesFinished += 1;
+    counters.matchDurationMs.count += 1;
+    counters.matchDurationMs.sum += durationMs;
+    counters.matchDurationMs.max = Math.max(counters.matchDurationMs.max, durationMs);
+    log('room_finished', { room: room.ref, durationMs });
   };
 
   const tickRoom = (room: Room): void => {
@@ -377,26 +679,53 @@ export async function startOnlineServer(
     if (!room.state) return;
     publishState(room, before);
     if (before.phase === 'playing' && room.state.phase === 'round_end') {
+      log('round_end', { room: room.ref, round: room.state.round });
       scheduleRoundAdvance(room);
+    }
+    if (room.state.phase !== 'game_over') return;
+    if (before.phase !== 'game_over') finishMatch(room);
+    // Nothing moves after the result, so stop ticking until a rematch, but
+    // only once a reader that fell behind has been sent the final state.
+    if (room.tickTimer && room.seats.every((seat) => !seat.socket || !seat.needsFullSnapshot)) {
+      clearInterval(room.tickTimer);
+      room.tickTimer = null;
     }
   };
 
   const startMatch = (room: Room) => {
     room.config = createConfig(room);
     room.state = gameReducer(null, { type: 'INIT', config: room.config });
+    const now = Date.now();
+    room.startedAt = now;
+    room.finishedAt = null;
+    room.lastInputAt = now;
     room.seats.forEach((seat) => {
       seat.queue = [];
       seat.direction = null;
       seat.fallbackDirection = null;
       seat.moveAccumulatorMs = 0;
       seat.lastAppliedSeq = -1;
+      seat.sentAck = null;
       seat.ready = false;
       send(seat.socket, {
         type: 'start', roomId: room.id, playerId: seat.playerId, config: room.config!,
       });
     });
     publishState(room, null, true);
+    // A rematch restarts the tick that finishing the last match stopped.
     if (!room.tickTimer) room.tickTimer = setInterval(() => tickRoom(room), tickIntervalMs);
+    counters.matchesStarted += 1;
+    log('room_started', {
+      room: room.ref, players: room.seats.length, roomMode: room.roomMode, stageId: room.stageId,
+    });
+  };
+
+  const markSeated = (socket: WebSocket) => {
+    const connection = connections.get(socket);
+    if (!connection) return;
+    connection.seated = true;
+    if (connection.unseatedTimer) clearTimeout(connection.unseatedTimer);
+    connection.unseatedTimer = null;
   };
 
   const addSeat = (
@@ -411,7 +740,7 @@ export async function startOnlineServer(
     const seat: Seat = {
       seat: seatIndex,
       playerId: `player${seatIndex + 1}`,
-      token: token(),
+      token: seatToken(bootId),
       name: name.trim(),
       characterId,
       ready: false,
@@ -423,10 +752,14 @@ export async function startOnlineServer(
       fallbackDirection: null,
       moveAccumulatorMs: 0,
       needsFullSnapshot: true,
-      reconnectTimer: null,
+      awaySince: null,
+      sentAck: null,
+      droppedSnapshots: 0,
     };
     room.seats.push(seat);
     sessions.set(socket, { room, seat });
+    markSeated(socket);
+    log('seat_joined', { room: room.ref, seat: seat.seat, ip: connections.get(socket)?.peer.tag });
     send(socket, {
       type: 'welcome',
       roomId: room.id,
@@ -436,24 +769,54 @@ export async function startOnlineServer(
     });
     broadcast(room, lobbyMessage(room));
     broadcast(room, {
-      type: 'peer', seat: seat.seat, connected: true, graceMsLeft: reconnectGraceMs,
+      type: 'peer', seat: seat.seat, connected: true, graceMsLeft: limits.reconnectGraceMs,
     });
     return seat;
   };
 
+  const scheduleResume = (room: Room) => {
+    if (room.resumeTimer) clearTimeout(room.resumeTimer);
+    room.resumeTimer = setTimeout(() => {
+      room.resumeTimer = null;
+      if (
+        room.state?.phase !== 'playing'
+        || !room.seats.every((item) => item.connected)
+      ) return;
+      const before = room.state;
+      reduce(room, { type: 'RESUME' });
+      publishState(room, before, true);
+    }, resumeDelayMs);
+  };
+
   const reconnect = (room: Room, seat: Seat, socket: WebSocket) => {
-    if (seat.socket && seat.socket !== socket) {
-      sessions.delete(seat.socket);
-      seat.socket.close(4001, 'Session replaced');
+    const replaced = seat.socket && seat.socket !== socket ? seat.socket : null;
+    if (replaced) {
+      sessions.delete(replaced);
+      // Say why before closing: a tab that only sees the close would resume again.
+      send(replaced, { type: 'error', code: 'seat-expired', reason: 'replaced' });
+      replaced.close(CLOSE_REPLACED, 'Session replaced');
+      bump(counters.resumeFailures, 'replaced');
     }
-    if (seat.reconnectTimer) clearTimeout(seat.reconnectTimer);
-    seat.reconnectTimer = null;
-    if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
-    room.cleanupTimer = null;
+    const awayMs = seat.awaySince === null ? 0 : Date.now() - seat.awaySince;
+    seat.awaySince = null;
     seat.socket = socket;
     seat.connected = true;
     seat.needsFullSnapshot = true;
+    seat.droppedSnapshots = 0;
+    // A new input stream: a reloaded or duplicated tab numbers its inputs
+    // from zero again, and the replaced tab's queued input and held key are
+    // not this one's.
+    seat.queue = [];
+    seat.lastAppliedSeq = -1;
+    seat.direction = null;
+    seat.fallbackDirection = null;
+    seat.moveAccumulatorMs = 0;
     sessions.set(socket, { room, seat });
+    markSeated(socket);
+    counters.reconnects += 1;
+    log('seat_reconnected', {
+      room: room.ref, seat: seat.seat, awayMs, replaced: !!replaced,
+    });
     send(socket, {
       type: 'welcome',
       roomId: room.id,
@@ -470,53 +833,43 @@ export async function startOnlineServer(
         type: 'snapshot', tick: room.state.tick, ack: seat.lastAppliedSeq, state: room.state,
       });
       seat.needsFullSnapshot = false;
+      seat.sentAck = seat.lastAppliedSeq;
       if (room.state.phase === 'round_end') scheduleRoundAdvance(room);
-      if (room.state.phase === 'playing') {
-        setTimeout(() => {
-          if (
-            room.state?.phase !== 'playing'
-            || !room.seats.every((item) => item.connected)
-          ) return;
-          const before = room.state;
-          reduce(room, { type: 'RESUME' });
-          publishState(room, before, true);
-        }, 2000);
-      }
+      if (room.state.phase === 'playing') scheduleResume(room);
     }
   };
 
   const detach = (socket: WebSocket) => {
     const session = sessions.get(socket);
     sessions.delete(socket);
-    rates.delete(socket);
     if (!session || session.seat.socket !== socket) return;
     const { room, seat } = session;
     seat.socket = null;
     seat.connected = false;
     seat.direction = null;
     seat.queue = [];
+    seat.awaySince = Date.now();
     if (room.resultTimer) clearTimeout(room.resultTimer);
     room.resultTimer = null;
+    if (room.resumeTimer) clearTimeout(room.resumeTimer);
+    room.resumeTimer = null;
+    counters.disconnects += 1;
+    log('seat_disconnected', { room: room.ref, seat: seat.seat, phase: phaseOf(room) });
     broadcast(room, lobbyMessage(room));
     broadcast(room, {
-      type: 'peer', seat: seat.seat, connected: false, graceMsLeft: reconnectGraceMs,
+      type: 'peer', seat: seat.seat, connected: false, graceMsLeft: limits.reconnectGraceMs,
     });
-    if (room.state) {
+    // The sweep ends the seat, or the room, once the grace runs out.
+    if (phaseOf(room) === 'active') {
       const before = room.state;
       reduce(room, { type: 'PAUSE' });
       publishState(room, before, true);
-      seat.reconnectTimer = setTimeout(() => closeRoom(room, 'timeout'), reconnectGraceMs);
-    } else {
-      scheduleEmptyCleanup(room);
     }
   };
 
   const removeLobbyGuest = (room: Room, seat: Seat): void => {
     const { socket } = seat;
-    if (socket) {
-      sessions.delete(socket);
-      rates.delete(socket);
-    }
+    if (socket) sessions.delete(socket);
     room.seats.splice(seat.seat, 1);
     room.seats.forEach((remaining, index) => {
       remaining.seat = index;
@@ -533,27 +886,144 @@ export async function startOnlineServer(
     socket?.close(1000, 'Left room');
   };
 
-  const rateAllowed = (socket: WebSocket): boolean => {
-    const now = Date.now();
-    const current = rates.get(socket);
-    if (!current || now - current.startedAt >= 1000) {
-      rates.set(socket, { startedAt: now, count: 1 });
-      return true;
+  /** Ends whatever a room's phase says has run out; rooms never hold their own expiry timer. */
+  const sweepRoom = (room: Room, now: number) => {
+    const ageMs = now - room.createdAt;
+    const awayPastGrace = (seat: Seat) => (
+      seat.awaySince !== null && now - seat.awaySince > limits.reconnectGraceMs
+    );
+    if (ageMs > limits.maxRoomAgeMs) {
+      closeRoom(room, 'timeout', 'max-age');
+      return;
     }
-    current.count += 1;
-    return current.count <= MAX_MESSAGES_PER_SECOND;
+    const phase = phaseOf(room);
+    if (phase !== 'waiting') {
+      // A rematch needs every seat, so a finished room waits on a dropped
+      // seat no longer than a running match does.
+      const away = room.seats.find(awayPastGrace);
+      if (away) {
+        log('seat_expired', { room: room.ref, seat: away.seat });
+        closeRoom(room, 'timeout', 'seat-timeout');
+      } else if (phase === 'finished') {
+        if (now - (room.finishedAt ?? now) > limits.finishedRoomTtlMs) {
+          closeRoom(room, 'timeout', 'finished');
+        }
+      } else if (now - room.lastInputAt > limits.idleRoomMs) {
+        closeRoom(room, 'timeout', 'idle');
+      }
+      return;
+    }
+    if (ageMs > limits.lobbyTtlMs) {
+      closeRoom(room, 'timeout', 'lobby-expired');
+      return;
+    }
+    if (room.seats.every((seat) => !seat.connected)) {
+      // Nobody is left to tell; give a reloading host the longer window.
+      const lastLeftAt = Math.max(...room.seats.map((seat) => seat.awaySince ?? now));
+      if (now - lastLeftAt > limits.emptyRoomTtlMs) closeRoom(room, 'timeout', 'empty');
+      return;
+    }
+    if (awayPastGrace(room.seats[0])) {
+      // Guests are waiting on a host who is gone: release them.
+      closeRoom(room, 'left', 'host-left');
+      return;
+    }
+    room.seats.filter((seat) => seat.seat > 0 && awayPastGrace(seat)).forEach((seat) => {
+      log('seat_expired', { room: room.ref, seat: seat.seat });
+      removeLobbyGuest(room, seat);
+    });
   };
 
-  const handleUnseated = (socket: WebSocket, message: ClientMessage) => {
+  const rateAllowed = (connection: Connection): boolean => {
+    const now = Date.now();
+    const { rate } = connection;
+    if (now - rate.startedAt >= 1000) {
+      rate.startedAt = now;
+      rate.count = 1;
+      return true;
+    }
+    rate.count += 1;
+    return rate.count <= limits.messagesPerSecond;
+  };
+
+  const rateLimited = (socket: WebSocket, peer: Peer, scope: RateLimitScope) => {
+    noteRateLimited(peer, scope);
+    send(socket, { type: 'error', code: 'rate-limited' });
+  };
+
+  const refuseCreate = (
+    socket: WebSocket,
+    peer: Peer,
+    code: 'server-busy' | 'too-many-rooms',
+    reason: RejectReason
+  ) => {
+    bump(counters.rejects, reason);
+    logThrottled(peer, 'create_rejected', reason, { reason, ip: peer.tag });
+    send(socket, { type: 'error', code });
+  };
+
+  /** Spends one guess from the address, and from its /48. */
+  const spendGuess = ({ peer, site }: Connection) => {
+    const now = clock();
+    peer.joinFail.take(now);
+    site?.joinFail.take(now);
+  };
+
+  const failJoin = (
+    socket: WebSocket,
+    connection: Connection,
+    code: 'room-not-found' | 'match-started' | 'room-full'
+  ) => {
+    // Only an unknown code is a guess. A full or started room proves the
+    // code right, and classmates behind one router may all try it.
+    if (code === 'room-not-found') spendGuess(connection);
+    send(socket, { type: 'error', code });
+  };
+
+  const resumeFailure = (roomId: string, resumeToken: string, roomIsLive: boolean) => {
+    const failure: ResumeFailure = { reason: 'room-closed' };
+    if (!resumeToken.startsWith(bootId)) failure.reason = 'server-restarted';
+    else if (roomIsLive) failure.reason = 'seat-not-found';
+    else {
+      const tombstone = tombstones.get(roomId);
+      if (tombstone) failure.detail = tombstone.detail;
+    }
+    return failure;
+  };
+
+  const handleUnseated = (socket: WebSocket, connection: Connection, message: ClientMessage) => {
+    const { peer, site } = connection;
     if (message.type === 'create') {
-      if (rooms.size >= MAX_ROOMS) {
-        send(socket, { type: 'error', code: 'rate-limited' });
+      if (draining || rooms.size >= limits.maxRooms) {
+        refuseCreate(socket, peer, 'server-busy', draining ? 'draining' : 'max-rooms');
         return;
       }
+      if (peer.rooms >= limits.maxRoomsPerIp) {
+        refuseCreate(socket, peer, 'too-many-rooms', 'max-rooms-per-ip');
+        return;
+      }
+      if (site && site.rooms >= limits.maxRoomsPerIp * IPV6_SITE_FACTOR) {
+        refuseCreate(socket, site, 'too-many-rooms', 'max-rooms-per-site');
+        return;
+      }
+      const now = clock();
+      if (peer.lastCreateAt !== null && now - peer.lastCreateAt < limits.createCooldownMs) {
+        rateLimited(socket, peer, 'create-cooldown');
+        return;
+      }
+      if (!peer.create.take(now)) {
+        rateLimited(socket, peer, 'create');
+        return;
+      }
+      peer.lastCreateAt = now;
       let id = roomCode();
-      while (rooms.has(id)) id = roomCode();
+      while (rooms.has(id) || tombstones.has(id)) id = roomCode();
+      const createdAt = Date.now();
       const room: Room = {
         id,
+        ref: randomBytes(4).toString('hex'),
+        owner: peer,
+        ownerSite: site,
         roomMode: message.roomMode,
         stageId: message.stageId,
         totalRounds: message.totalRounds,
@@ -562,48 +1032,78 @@ export async function startOnlineServer(
         config: null,
         tickTimer: null,
         resultTimer: null,
-        cleanupTimer: null,
-        createdAt: Date.now(),
+        resumeTimer: null,
+        createdAt,
+        startedAt: null,
+        finishedAt: null,
+        lastInputAt: createdAt,
       };
       rooms.set(id, room);
+      peer.rooms += 1;
+      if (site) site.rooms += 1;
+      counters.roomsCreated += 1;
+      log('room_created', {
+        room: room.ref,
+        roomMode: room.roomMode,
+        stageId: room.stageId,
+        totalRounds: room.totalRounds,
+        ip: peer.tag,
+      });
       addSeat(room, socket, message.name, message.characterId);
-      room.cleanupTimer = setTimeout(() => {
-        if (!room.state) closeRoom(room, 'timeout');
-      }, LOBBY_TTL_MS);
       return;
     }
+    // Joins with an unknown code and failed resumes spend one bucket per
+    // address, and one per IPv6 /48. Once either is empty even a right
+    // guess is refused, so codes cannot be probed faster than it refills.
+    // A resume with a real seat token is never a guess.
+    const refuseGuess = () => {
+      const now = clock();
+      if (peer.joinFail.has(now) && (!site || site.joinFail.has(now))) return false;
+      rateLimited(socket, peer, 'join');
+      socket.close(1008, 'Rate limited');
+      return true;
+    };
     if (message.type === 'join') {
+      if (refuseGuess()) return;
       const room = rooms.get(message.roomId);
       if (!room) {
-        send(socket, { type: 'error', code: 'room-not-found' });
+        failJoin(socket, connection, 'room-not-found');
         return;
       }
       if (room.state) {
-        send(socket, { type: 'error', code: 'match-started' });
+        failJoin(socket, connection, 'match-started');
         return;
       }
       if (!addSeat(room, socket, message.name, message.characterId)) {
-        send(socket, { type: 'error', code: 'room-full' });
+        failJoin(socket, connection, 'room-full');
       }
       return;
     }
     if (message.type === 'resume-session') {
       const room = rooms.get(message.roomId);
       const seat = room?.seats.find((item) => item.token === message.token);
-      if (!room || !seat) {
-        send(socket, { type: 'error', code: 'seat-expired' });
+      if (room && seat) {
+        reconnect(room, seat, socket);
         return;
       }
-      reconnect(room, seat, socket);
+      if (refuseGuess()) return;
+      const failure = resumeFailure(message.roomId, message.token, !!room);
+      spendGuess(connection);
+      bump(counters.resumeFailures, failure.reason);
+      log('resume_failed', { ...failure, ip: peer.tag });
+      // Always 'seat-expired', which every client already treats as final.
+      send(socket, { type: 'error', code: 'seat-expired', ...failure });
       return;
     }
+    protocolError(peer, 'state');
     send(socket, { type: 'error', code: 'bad-message' });
   };
 
   const handleSeated = (
     room: Room,
     seat: Seat,
-    message: ClientMessage
+    message: ClientMessage,
+    peer: Peer
   ) => {
     if (message.type === 'selection' && !room.state) {
       seat.characterId = message.characterId;
@@ -633,7 +1133,10 @@ export async function startOnlineServer(
       return;
     }
     if (message.type === 'input' && room.state) {
+      // A finished room no longer ticks, so its input would only pile up.
+      if (room.state.phase === 'game_over') return;
       if (message.seq > seat.lastAppliedSeq) seat.queue.push(message);
+      room.lastInputAt = Date.now();
       return;
     }
     if (message.type === 'rematch' && room.state?.phase === 'game_over') {
@@ -647,20 +1150,74 @@ export async function startOnlineServer(
       return;
     }
     if (message.type === 'leave') {
-      if (!room.state && seat.seat !== 0) removeLobbyGuest(room, seat);
-      else closeRoom(room, 'left');
+      if (!room.state && seat.seat !== 0) {
+        log('seat_left', { room: room.ref, seat: seat.seat });
+        removeLobbyGuest(room, seat);
+      } else {
+        closeRoom(room, 'left', room.state ? 'player-left' : 'host-left');
+      }
       return;
     }
+    protocolError(peer, 'state');
     send(seat.socket, { type: 'error', code: 'bad-message' });
   };
 
-  wss.on('connection', (socket) => {
-    rates.set(socket, { startedAt: Date.now(), count: 0 });
+  /** Answers a socket over a cap or rate with why, then closes it. */
+  const turnAway = (
+    socket: WebSocket,
+    code: 'server-busy' | 'too-many-connections' | 'rate-limited',
+    closeCode: number
+  ) => {
+    // A bad frame before the close completes must not crash the process.
+    socket.on('error', () => undefined);
+    send(socket, { type: 'error', code });
+    socket.close(closeCode, code);
+  };
+
+  wss.on('connection', (socket, request) => {
+    const { peer, site } = peersOf(request);
+    if (!peer.connect.take(clock())) {
+      noteRateLimited(peer, 'connect');
+      turnAway(socket, 'rate-limited', 1008);
+      return;
+    }
+    if (connections.size >= limits.maxSockets) {
+      noteRejected(peer, 'max-sockets');
+      turnAway(socket, 'server-busy', 1013);
+      return;
+    }
+    if (peer.sockets >= limits.maxSocketsPerIp) {
+      noteRejected(peer, 'max-sockets-per-ip');
+      turnAway(socket, 'too-many-connections', 1008);
+      return;
+    }
+    if (site && site.sockets >= limits.maxSocketsPerIp * IPV6_SITE_FACTOR) {
+      noteRejected(site, 'max-sockets-per-site');
+      turnAway(socket, 'too-many-connections', 1008);
+      return;
+    }
+    const openedAt = Date.now();
+    const connection: Connection = {
+      peer,
+      site,
+      openedAt,
+      seated: false,
+      unseatedTimer: setTimeout(() => {
+        connection.unseatedTimer = null;
+        if (!sessions.has(socket)) socket.close(CLOSE_UNSEATED, 'No seat taken');
+      }, limits.unseatedTimeoutMs),
+      rate: { startedAt: openedAt, count: 0 },
+    };
+    peer.sockets += 1;
+    if (site) site.sockets += 1;
+    connections.set(socket, connection);
     liveSockets.set(socket, true);
+    log('socket_open', { ip: peer.tag, sockets: connections.size });
     socket.on('pong', () => liveSockets.set(socket, true));
     socket.on('message', (data: RawData) => {
-      if (!rateAllowed(socket)) {
-        send(socket, { type: 'error', code: 'rate-limited' });
+      if (socket.readyState !== WebSocket.OPEN) return;
+      if (!rateAllowed(connection)) {
+        rateLimited(socket, peer, 'message');
         socket.close(1008, 'Rate limited');
         return;
       }
@@ -676,17 +1233,41 @@ export async function startOnlineServer(
         } catch {
           mismatch = false;
         }
+        protocolError(peer, mismatch ? 'version' : 'parse');
         send(socket, { type: 'error', code: mismatch ? 'upgrade-required' : 'bad-message' });
         socket.close(1008, 'Bad message');
         return;
       }
       const session = sessions.get(socket);
-      if (session) handleSeated(session.room, session.seat, message);
-      else handleUnseated(socket, message);
+      if (session) handleSeated(session.room, session.seat, message, peer);
+      else handleUnseated(socket, connection, message);
     });
-    socket.on('close', () => detach(socket));
-    socket.on('error', () => detach(socket));
+    socket.on('close', (code: number) => {
+      if (connection.unseatedTimer) clearTimeout(connection.unseatedTimer);
+      connection.unseatedTimer = null;
+      connections.delete(socket);
+      peer.sockets -= 1;
+      if (site) site.sockets -= 1;
+      detach(socket);
+      const abnormal = code === 1006;
+      if (abnormal) counters.abnormalCloses += 1;
+      log('socket_closed', {
+        ip: peer.tag, code, abnormal, seated: connection.seated, durationMs: Date.now() - openedAt,
+      });
+    });
+    // ws reports a malformed or oversized frame here, then closes the socket.
+    socket.on('error', () => {
+      protocolError(peer, 'frame');
+      detach(socket);
+    });
   });
+
+  await new Promise<void>((resolve, reject) => {
+    http.once('error', reject);
+    http.listen(options.port ?? 8787, options.host ?? '127.0.0.1', () => resolve());
+  });
+  const address = http.address();
+  const port = typeof address === 'object' && address ? address.port : options.port ?? 8787;
 
   const keepaliveTimer = setInterval(() => {
     wss.clients.forEach((socket) => {
@@ -699,26 +1280,62 @@ export async function startOnlineServer(
     });
   }, KEEPALIVE_MS);
 
-  await new Promise<void>((resolve, reject) => {
-    http.once('error', reject);
-    http.listen(options.port ?? 8787, options.host ?? '127.0.0.1', () => resolve());
+  const sweepTimer = setInterval(() => {
+    const now = Date.now();
+    Array.from(rooms.values()).forEach((room) => sweepRoom(room, now));
+    // Tombstones are kept in closing order, so the stale ones come first.
+    Array.from(tombstones).some(([roomId, tombstone]) => {
+      if (now - tombstone.closedAt < TOMBSTONE_MS) return true;
+      tombstones.delete(roomId);
+      return false;
+    });
+    peers.prune(clock());
+    sites.prune(clock());
+  }, sweepIntervalMs);
+
+  log('server_started', {
+    port,
+    clientIpSource,
+    allowedOrigins,
+    allowLocalhostOrigins,
+    metrics: !!metricsToken,
+    debugClientIp: !!options.debugClientIp,
+    limits,
   });
-  const address = http.address();
-  const port = typeof address === 'object' && address ? address.port : options.port ?? 8787;
+
+  const shutdown = (signal = 'close'): Promise<void> => {
+    if (shutdownPromise) return shutdownPromise;
+    draining = true;
+    log('server_shutdown', {
+      signal, rooms: rooms.size, sockets: connections.size, graceMs: limits.shutdownGraceMs,
+    });
+    clearInterval(keepaliveTimer);
+    clearInterval(sweepTimer);
+    const httpClosed = new Promise<void>((resolve) => {
+      http.close(() => resolve());
+    });
+    Array.from(rooms.values()).forEach((room) => closeRoom(room, 'server', 'restart'));
+    // Seatless sockets, and any socket a cap was already turning away.
+    wss.clients.forEach((socket) => socket.close(1001, 'Server restarting'));
+    const wssClosed = new Promise<void>((resolve) => {
+      wss.close(() => resolve());
+    });
+    const forceTimer = setTimeout(() => {
+      wss.clients.forEach((socket) => socket.terminate());
+      http.closeAllConnections();
+    }, limits.shutdownGraceMs);
+    shutdownPromise = Promise.all([wssClosed, httpClosed]).then(() => {
+      clearTimeout(forceTimer);
+    });
+    return shutdownPromise;
+  };
 
   return {
     port,
     roomCount: () => rooms.size,
     getRoomState: (roomId) => rooms.get(roomId)?.state ?? null,
-    close: async () => {
-      clearInterval(keepaliveTimer);
-      rooms.forEach((room) => closeRoom(room, 'server'));
-      await new Promise<void>((resolve) => {
-        wss.close(() => resolve());
-      });
-      await new Promise<void>((resolve, reject) => {
-        http.close((error) => (error ? reject(error) : resolve()));
-      });
-    },
+    metrics,
+    shutdown,
+    close: () => shutdown(),
   };
 }

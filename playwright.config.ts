@@ -56,6 +56,13 @@ export default defineConfig({
       url: 'http://127.0.0.1:8787/healthz',
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
+      // Every browser here connects from 127.0.0.1, so the per-address room
+      // limits would count all tests and their retries as one player.
+      env: {
+        CREATE_BURST: '100',
+        CREATE_COOLDOWN_MS: '0',
+        MAX_ROOMS_PER_IP: '100',
+      },
     },
   ],
 });
