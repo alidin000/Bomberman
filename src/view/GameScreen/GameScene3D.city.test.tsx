@@ -163,10 +163,12 @@ describe('GameScene3D city arenas', () => {
       preferences: { ...DEFAULT_GAME_PREFERENCES, scenery: true },
     });
     dressed.run(50);
-    // The famous place is one merged draw, among at most six.
+    // The famous place is one merged draw; the city's own outskirts stand
+    // round the board instead of filler props.
     const drawn = landmarks(dressed.root().scene);
-    expect(drawn.length).toBeGreaterThan(1);
+    expect(drawn.length).toBeGreaterThanOrEqual(1);
     expect(drawn.length).toBeLessThanOrEqual(6);
+    expect(tileLayer(dressed.root().scene, 'cityOutskirts')?.visible).toBe(true);
     dressed.unmount();
   });
 

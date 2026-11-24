@@ -6,6 +6,7 @@ import { GameMap, isObstacle } from '../../../model/gameItem';
 import { highContrastPalette } from './highContrast';
 import type { CityBuildingStyle, CrateStyle } from './city/cityBuildings';
 import type { VillageBuildingStyle } from './city/villageBuildings';
+import type { OutskirtsClearing } from './city/cityOutskirts';
 
 type StagePalette = StageDefinition['palette'];
 
@@ -89,7 +90,7 @@ export type CheckerTones = { a: string; b: string };
 
 /** Which walls draw as buildings, how, and what the crates look like. */
 export type BuildingPlan = { classes: string; seed: string; crate: CrateStyle } & (
-  | { kind: 'city'; style: CityBuildingStyle }
+  | { kind: 'city'; style: CityBuildingStyle; clearings: readonly OutskirtsClearing[] }
   | { kind: 'village'; style: VillageBuildingStyle }
 );
 

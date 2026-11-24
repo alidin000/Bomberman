@@ -90,7 +90,9 @@ describe.each(CITY_IDS)('the %s skyline', (id) => {
     expect(placed[0]).toMatchObject({
       sector: 'far', rotation: 0, famous: true, x: hero.anchor!.x,
     });
-    expect(props.length).toBeGreaterThan(8);
+    // Past the board the city's outskirts stand (cityOutskirts.ts): the
+    // skyline keeps no filler, only its famous place and Rome's trees.
+    expect(props.filter((prop) => !prop.famous).every((prop) => prop.kind === 'cedar')).toBe(true);
   });
 
   it('stands its silhouette in view at round start, clear of the HUD\'s match bar', () => {
@@ -112,8 +114,6 @@ describe.each(CITY_IDS)('the %s skyline', (id) => {
     const behind = props.filter((prop) => !prop.famous && prop.sector === 'far' && prop.y < famous.y
       && Math.abs(prop.x - famous.x) < famous.radius + prop.radius + OPEN_SKY_MARGIN);
     expect(behind).toEqual([]);
-    // The rest of the far band still fills in.
-    expect(props.filter((prop) => !prop.famous && prop.sector === 'far').length).toBeGreaterThan(6);
   });
 
   it('keeps every footprint off the board and the near rows, in at most six draws', () => {

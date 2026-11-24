@@ -298,8 +298,11 @@ blocks read as building blocks, not as the city.
   deck, so the two read as one city's bridges. Rome's Colosseum has three
   arcade tiers and an attic. The landmark stones pass the floor rule.
 - Quays (phase 5): stone rims inside the water cells along every bank.
-- City crates (phase 3): Barcelona kiosks, Rome market stalls, Budapest
-  sheds. They are no taller than today's crate and keep a gap to the next
+- Crates as goods (phase 3, after the design review): Barcelona taped boxes
+  on a pallet, Rome produce crates under a striped awning, Budapest and
+  Stone casks, Leaf log piles, Sand jars, Cloud barrels, Mist and hideout
+  lashed crates. None copies a wall's shape, and each stays under 100
+  triangles. They are no taller than today's crate and keep a gap to the next
   cell. Vertex colours are shade only, so the crate colour, the broken and
   explored tints and player obstacles still show.
 - Village arenas, after `src/assets/ninja-bomber-stage-atlas.png`:
@@ -319,6 +322,10 @@ blocks read as building blocks, not as the city.
     and is gone while hidden.
   - Each village's colours pass the cities' floor and flame rules against
     its own floor (`villageBuildings.test.ts`).
+  - The border ring is one continuous edge (`villageBorder.ts`): cliff runs
+    with a wandering top, strata, boulders and a lip (grass on Cloud, moss on
+    Mist), Leaf's overlapping crowns with conifers behind that overhang only
+    outward, and the hideout's stalagmites.
 - Windows are now dark glass, darker than every facade and as far from
   flame orange as the walls. This replaces colour rule 3's tone-on-tone.
 - Two draws on the wall program, checked in the scene test for a city and a
@@ -329,6 +336,13 @@ blocks read as building blocks, not as the city.
   about 73,000-87,000.
 - High contrast keeps today's walls everywhere, and so does a tab that
   opened the Mission Deck with `?playtest=1`.
+
+- Outskirts past the board (`cityOutskirts.ts`): two-by-two blocks of low
+  roofs on street-level ground round the floor slab, up to 1.4 behind the
+  board, lower at the sides and at most 0.5 on the camera's side. They keep
+  the famous place's footprint and the sky behind it clear. They replace the
+  filler props (terrace blocks, quarry steps, piers), so a city no longer
+  floats, and the scene's fog fades the far rows.
 
 Not yet: the buildings layer from real lots (phase 6), a high-contrast
 variant (phase 7), and boats and bollards.

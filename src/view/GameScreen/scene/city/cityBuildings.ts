@@ -32,7 +32,7 @@ export const SOUTH_ROW_CAP = 0.94;
 export type CityRoof = 'flat' | 'hipped' | 'mansard';
 
 /** A city's crates drawn as small street buildings (StaticTiles.tsx). */
-export type CrateStyle = 'kiosk' | 'stall' | 'shed' | 'hut' | 'dome';
+export type CrateStyle = 'logs' | 'jars' | 'barrels' | 'casks' | 'crateStack' | 'produce' | 'boxes';
 
 export interface CityBuildingStyle {
   roof: CityRoof;
@@ -83,7 +83,7 @@ export interface CityBuildingStyle {
   landmarkStone: string;
   /** Stone rims where the river meets the bank. */
   quay: string;
-  /** What the city's crates look like: small, low street buildings. */
+  /** What the city's crates look like: its goods, never small buildings. */
   crate: CrateStyle;
 }
 
@@ -113,7 +113,7 @@ export const CITY_BUILDING_STYLES: Readonly<Record<CityLookId, CityBuildingStyle
     turrets: 0,
     landmarkStone: '#9c7650',
     quay: '#c9bfae',
-    crate: 'kiosk',
+    crate: 'boxes',
   },
   rome: {
     roof: 'hipped',
@@ -142,7 +142,7 @@ export const CITY_BUILDING_STYLES: Readonly<Record<CityLookId, CityBuildingStyle
     landmark: 'colosseum',
     landmarkStone: '#877254',
     quay: '#cdbf9f',
-    crate: 'stall',
+    crate: 'produce',
   },
   budapest: {
     roof: 'mansard',
@@ -170,7 +170,7 @@ export const CITY_BUILDING_STYLES: Readonly<Record<CityLookId, CityBuildingStyle
     landmark: 'chainBridge',
     landmarkStone: '#837c6d',
     quay: '#a9a59b',
-    crate: 'shed',
+    crate: 'casks',
   },
 };
 
@@ -600,6 +600,8 @@ export type CityBuildingGeometry = {
    * object's cells as `y * width + x`. Absent, everything always shows.
    */
   owners?: { mass: Uint32Array; detail: Uint32Array; cells: readonly (readonly number[])[] };
+  /** A city's roofs past the board (cityOutskirts.ts): no cut-away, no fog, no shadow. */
+  outskirts?: THREE.BufferGeometry;
 };
 
 /**

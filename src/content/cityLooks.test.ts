@@ -48,9 +48,11 @@ describe('city looks', () => {
       expect(look.accent).toBe(look.palette.accent);
       expect(look.mask).toBeDefined();
       expect(look.fog.range).toBeGreaterThan(0);
-      expect(look.landmarks.some((set) => set.sector === 'far' && !set.anchor)).toBe(true);
-      expect(look.landmarks.some((set) => set.sector === 'side')).toBe(true);
+      // One famous place; the city's outskirts replace the filler props.
       expect(look.landmarks.filter((set) => set.anchor)).toHaveLength(1);
+      expect(look.landmarks.filter((set) => (
+        ['terraceBlock', 'quarryStep', 'dockPier'].includes(set.kind)
+      ))).toEqual([]);
     });
     const all = [...villages, ...cities];
     expect(new Set(all.map(signature)).size).toBe(all.length);

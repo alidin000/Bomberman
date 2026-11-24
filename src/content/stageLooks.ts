@@ -330,15 +330,11 @@ const CITY_LOOK_DATA: Record<CityLookId, StageLookData> = {
     ambient: { color: '#fff3e2', intensity: 0.55 },
     hemisphere: { sky: '#ffeed4', ground: '#7a5c46', intensity: 0.85 },
     directional: { color: '#ffe4b8', intensity: 1.72 },
+    // Past the board the city's own outskirts stand (scene/city/cityOutskirts.ts),
+    // so the skyline keeps only its famous place, and Rome its trees.
     landmarks: [
       {
-        kind: 'terraceBlock', sector: 'far', body: '#c98f62', trim: '#8e5a3d', weight: 1.6, scale: [0.9, 1.25],
-      },
-      {
         kind: 'cedar', sector: 'far', body: '#5b4634', trim: '#41553a', weight: 0.9, scale: [0.85, 1.1],
-      },
-      {
-        kind: 'terraceBlock', sector: 'side', body: '#d6a678', trim: '#9a6444', weight: 1, scale: [0.8, 1],
       },
       {
         kind: 'vittoriano', sector: 'far', body: '#efebe1', trim: '#d6cfbf', weight: 0, scale: [1, 1], anchor: { x: 6, y: -3 }, openSky: true,
@@ -353,15 +349,6 @@ const CITY_LOOK_DATA: Record<CityLookId, StageLookData> = {
     hemisphere: { sky: '#fff7e4', ground: '#6e5a46', intensity: 0.85 },
     directional: { color: '#fff5de', intensity: 1.72 },
     landmarks: [
-      {
-        kind: 'terraceBlock', sector: 'far', body: '#d9b88a', trim: '#a47b52', weight: 1.6, scale: [0.9, 1.25],
-      },
-      {
-        kind: 'quarryStep', sector: 'far', body: '#ccab7f', trim: '#946c48', weight: 1, scale: [0.9, 1.15],
-      },
-      {
-        kind: 'terraceBlock', sector: 'side', body: '#e0c296', trim: '#a98058', weight: 1, scale: [0.8, 1],
-      },
       // Inside the basilica's real footprint in the map's crop (x 3.3-11.0,
       // y -7.0 to -0.3: tools/city/barcelona/meta.json), at its front facing
       // the board, as near as scenery may stand. At half size its spires
@@ -380,15 +367,6 @@ const CITY_LOOK_DATA: Record<CityLookId, StageLookData> = {
     hemisphere: { sky: '#f5ece6', ground: '#3f4a5e', intensity: 0.9 },
     directional: { color: '#ffdcb6', intensity: 1.58 },
     landmarks: [
-      {
-        kind: 'terraceBlock', sector: 'far', body: '#a6a2ab', trim: '#706c7a', weight: 1.6, scale: [0.9, 1.25],
-      },
-      {
-        kind: 'quarryStep', sector: 'far', body: '#9b97a2', trim: '#6a6674', weight: 1, scale: [0.9, 1.15],
-      },
-      {
-        kind: 'dockPier', sector: 'side', body: '#6c6f7d', trim: '#3f4250', weight: 1, scale: [0.85, 1.05],
-      },
       {
         kind: 'parliament', sector: 'far', body: '#ddd6c5', trim: '#9a4a3c', weight: 0, scale: [1, 1], anchor: { x: 13, y: -3 }, openSky: true,
       },

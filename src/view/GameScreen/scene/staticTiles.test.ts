@@ -208,10 +208,10 @@ describe('incremental tile rewrites on a 50x50 map', () => {
   });
 });
 
-describe('crates drawn as small buildings', () => {
-  const STYLES: CrateStyle[] = ['kiosk', 'stall', 'shed', 'hut', 'dome'];
+describe('crates drawn as their place\'s goods', () => {
+  const STYLES: CrateStyle[] = ['logs', 'jars', 'barrels', 'casks', 'crateStack', 'produce', 'boxes'];
 
-  it('keeps every crate building lower than a wall and inside its cell, with room to tell apart', () => {
+  it('keeps every crate lower than a wall, inside its cell and cheap to draw hundreds of', () => {
     const plain = crateShape(undefined);
     plain.geometry.computeBoundingBox();
     STYLES.forEach((style) => {
@@ -230,6 +230,10 @@ describe('crates drawn as small buildings', () => {
       });
       // Shaded vertex colours only: the crate colour still comes from the instance.
       expect(shape.vertexColors).toBe(true);
+      // A map draws two or three hundred crates: each stays under 100 triangles.
+      const { geometry } = shape;
+      const triangles = (geometry.index?.count ?? geometry.getAttribute('position').count) / 3;
+      expect(triangles).toBeLessThanOrEqual(100);
     });
   });
 });

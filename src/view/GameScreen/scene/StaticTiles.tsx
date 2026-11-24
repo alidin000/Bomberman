@@ -224,47 +224,110 @@ const WALL_BUILDERS: Record<Exclude<WallStyle, 'masonry'>, () => ShadedPart[]> =
 
 const WALL_SHAPES = new Map<WallStyle, TileShape>();
 
-// A city's crates as small street buildings, smaller and lower than its real
-// buildings so destructible and solid stay easy to tell apart. Their colour
-// is still the crate colour (the instance colour), so breaking, high contrast
-// and player obstacles tint them as before.
+// A place's crates as its goods: log piles, jars, barrels, casks, lashed
+// crates, market produce and boxes. They are no taller than today's crate
+// and read as things, never as smaller copies of the walls' buildings. Their
+// colour is still the crate colour (the instance colour), so breaking, high
+// contrast and player obstacles tint them as before. Each stays under about a
+// hundred triangles: a map draws two or three hundred of them.
+
+/** A cylinder lying along x (a log or a cask), its centre at `at`. */
+function lying(radius: number, length: number, at: [number, number, number], segments = 6) {
+  const geometry = new THREE.CylinderGeometry(radius, radius, length, segments, 1, true);
+  geometry.rotateZ(Math.PI / 2);
+  geometry.translate(at[0], at[1], at[2]);
+  return geometry;
+}
+
+/** A flat disc facing ±x: a log's end grain or a cask's head. */
+function head(radius: number, at: [number, number, number], side: number, segments = 6) {
+  const geometry = new THREE.CircleGeometry(radius, segments);
+  geometry.rotateY((side * Math.PI) / 2);
+  geometry.translate(at[0], at[1], at[2]);
+  return geometry;
+}
+
+/** A turned jar on the ground at (x, z): a lathe of its profile. */
+function jar(x: number, z: number, scale: number) {
+  const profile = [[0, 0], [0.13, 0.02], [0.18, 0.2], [0.09, 0.42], [0, 0.45]]
+    .map(([r, y]) => new THREE.Vector2(r * scale, y * scale));
+  const geometry = new THREE.LatheGeometry(profile, 6);
+  geometry.translate(x, 0, z);
+  return geometry;
+}
+
+/** A log or cask with its two ends: an open tube and two discs. */
+function withEnds(radius: number, length: number, at: [number, number, number], shade: number) {
+  const [x, y, z] = at;
+  return [
+    { geometry: lying(radius, length, at) },
+    { geometry: head(radius, [x + length / 2, y, z], 1), shade },
+    { geometry: head(radius, [x - length / 2, y, z], -1), shade },
+  ];
+}
 
 const CRATE_BUILDERS: Record<CrateStyle, () => ShadedPart[]> = {
-  // Sand and Mist: a little drum under a dome.
-  dome: () => [
-    { geometry: new THREE.CylinderGeometry(0.27, 0.28, 0.3, 8).translate(0, 0.15, 0) },
-    {
-      geometry: new THREE.SphereGeometry(0.29, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2)
-        .translate(0, 0.3, 0),
-      tone: 0.8,
-    },
-    { geometry: box([0.12, 0.2, 0.02], [0, 0.1, 0.28]), shade: 0.42 },
+  // Leaf: a pile of logs, pale end grain toward the street.
+  logs: () => [
+    ...withEnds(0.14, 0.66, [0, 0.14, -0.15], 1.18),
+    ...withEnds(0.14, 0.66, [0, 0.14, 0.15], 1.18),
+    ...withEnds(0.14, 0.6, [0, 0.4, 0], 1.18),
   ],
-  // Leaf: a little round hut under a conical thatch.
-  hut: () => [
-    { geometry: new THREE.CylinderGeometry(0.26, 0.28, 0.36, 8).translate(0, 0.18, 0) },
-    { geometry: new THREE.ConeGeometry(0.38, 0.3, 8).translate(0, 0.36 + 0.15, 0), tone: 0.74 },
-    { geometry: box([0.12, 0.22, 0.02], [0, 0.11, 0.275]), shade: 0.42 },
+  // Sand: two clay jars, a tall one and a short one.
+  jars: () => [
+    { geometry: jar(-0.1, -0.05, 1.3) },
+    { geometry: jar(0.2, 0.14, 0.95), tone: 0.9 },
   ],
-  // Barcelona: a kiosk under a flat, overhanging roof, shutter down.
-  kiosk: () => [
-    { geometry: box([0.6, 0.44, 0.56], [0, 0.22, 0]) },
-    { geometry: box([0.72, 0.05, 0.68], [0, 0.465, 0]), tone: 0.72 },
-    { geometry: box([0.42, 0.22, 0.02], [0, 0.21, 0.29]), shade: 0.45 },
-    { geometry: box([0.6, 0.05, 0.02], [0, 0.39, 0.29]), shade: 1.15 },
+  // Cloud: a hooped barrel beside a small box.
+  barrels: () => {
+    const barrel = new THREE.CylinderGeometry(0.2, 0.2, 0.52, 8, 2);
+    // Bulge the middle ring of staves.
+    const position = barrel.getAttribute('position');
+    for (let index = 0; index < position.count; index += 1) {
+      if (Math.abs(position.getY(index)) < 1e-6) {
+        position.setX(index, position.getX(index) * 1.14);
+        position.setZ(index, position.getZ(index) * 1.14);
+      }
+    }
+    barrel.computeVertexNormals();
+    barrel.translate(-0.1, 0.26, -0.04);
+    const hoop = new THREE.CylinderGeometry(0.215, 0.215, 0.04, 8, 1, true)
+      .translate(-0.1, 0.42, -0.04);
+    return [
+      { geometry: barrel },
+      { geometry: hoop, shade: 0.45 },
+      { geometry: box([0.26, 0.24, 0.26], [0.2, 0.12, 0.17]), tone: 0.9 },
+    ];
+  },
+  // Budapest and Stone: three casks, two below and one on top, dark heads.
+  casks: () => [
+    ...withEnds(0.15, 0.62, [0, 0.15, -0.16], 0.5),
+    ...withEnds(0.15, 0.62, [0, 0.15, 0.16], 0.5),
+    ...withEnds(0.15, 0.56, [0, 0.41, 0], 0.5),
   ],
-  // Rome: a market stall under a ridged awning.
-  stall: () => [
-    { geometry: box([0.62, 0.34, 0.52], [0, 0.17, 0]) },
-    { geometry: ridge(0.74, 0.68, 0.22, 0.34), tone: 0.74 },
-    { geometry: box([0.46, 0.14, 0.02], [0, 0.2, 0.27]), shade: 0.45 },
+  // Mist and the hideout: two crates, the smaller one turned, lashed with rope.
+  crateStack: () => [
+    { geometry: box([0.62, 0.34, 0.56], [0, 0.17, 0]) },
+    { geometry: box([0.64, 0.05, 0.58], [0, 0.2, 0]), shade: 0.45 },
+    { geometry: box([0.42, 0.26, 0.4], [0.04, 0.47, -0.02], 0.35), tone: 0.92 },
+    { geometry: box([0.07, 0.27, 0.42], [0.04, 0.47, -0.02], 0.35), shade: 0.45 },
   ],
-  // Budapest: a little gabled shed with a door and a window.
-  shed: () => [
-    { geometry: box([0.6, 0.4, 0.54], [0, 0.2, 0]) },
-    { geometry: ridge(0.72, 0.66, 0.22, 0.4), tone: 0.7 },
-    { geometry: box([0.14, 0.26, 0.02], [-0.12, 0.13, 0.28]), shade: 0.42 },
-    { geometry: box([0.14, 0.1, 0.02], [0.14, 0.24, 0.28]), shade: 0.55 },
+  // Rome: two slatted produce crates under a striped awning on one pole.
+  produce: () => [
+    { geometry: box([0.3, 0.26, 0.48], [-0.16, 0.13, 0.04]) },
+    { geometry: box([0.3, 0.26, 0.48], [0.17, 0.13, 0.04]), tone: 0.92 },
+    { geometry: box([0.66, 0.04, 0.5], [0, 0.17, 0.04]), shade: 0.45 },
+    { geometry: box([0.04, 0.6, 0.04], [0, 0.3, -0.3]), shade: 0.5 },
+    { geometry: box([0.72, 0.03, 0.17], [0, 0.6, -0.22]), shade: 1.1 },
+    { geometry: box([0.72, 0.03, 0.17], [0, 0.56, -0.05]), shade: 0.72 },
+  ],
+  // Barcelona: taped boxes stacked on a pallet.
+  boxes: () => [
+    { geometry: box([0.7, 0.07, 0.62], [0, 0.035, 0]), tone: 0.7 },
+    { geometry: box([0.32, 0.26, 0.28], [-0.17, 0.2, -0.14]) },
+    { geometry: box([0.32, 0.26, 0.28], [0.17, 0.2, 0.14]), tone: 0.94 },
+    { geometry: box([0.3, 0.24, 0.3], [-0.1, 0.45, 0.02], 0.25), tone: 1.06 },
+    { geometry: box([0.31, 0.03, 0.06], [-0.1, 0.575, 0.02], 0.25), shade: 0.5 },
   ],
 };
 

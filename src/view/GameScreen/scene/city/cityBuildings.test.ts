@@ -279,7 +279,7 @@ describe('city buildings in the tile layers', () => {
     const map = parseMapRows(arenaMapRows('budapest'));
     const mask = sceneTileMask(arena, CITY_LOOKS.budapest, false)!;
     expect(mask.buildings?.classes).toBe('bem');
-    expect(mask.buildings?.crate).toBe('shed');
+    expect(mask.buildings?.crate).toBe('casks');
     const layers = buildStaticTileLayers(
       map,
       CITY_LOOKS.budapest.palette,

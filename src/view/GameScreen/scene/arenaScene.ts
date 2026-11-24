@@ -12,6 +12,7 @@ import { highContrastMaskColor, shadeHex } from './highContrast';
 import type { CheckerTones, TileMask } from './staticTiles';
 import { CITY_BUILDING_STYLES, buildingClasses } from './city/cityBuildings';
 import { VILLAGE_BUILDING_STYLES, villageMaskRows } from './city/villageBuildings';
+import { placeStageProps } from './landmarkPlacement';
 
 type MapIdentity = Pick<GameConfig, 'mode' | 'selectedMap' | 'stageId'>;
 
@@ -157,7 +158,17 @@ export function sceneTileMask(
           ...mask.floors, b: pavement, e: pavement, m: pavement, x: mask.floors.r,
         },
         buildings: {
-          kind: 'city', classes: buildingClasses(style), style, seed: arena.id, crate: style.crate,
+          kind: 'city',
+          classes: buildingClasses(style),
+          style,
+          seed: arena.id,
+          crate: style.crate,
+          // The outskirts keep clear of the skyline's props (landmarkPlacement.ts).
+          clearings: placeStageProps(look, rows[0].length, rows.length).map(({
+            x, y, radius, famous,
+          }) => ({
+            x, y, radius, famous,
+          })),
         },
       };
     }

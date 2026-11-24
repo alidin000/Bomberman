@@ -8,6 +8,7 @@ import type { TileMask } from '../staticTiles';
 import { useScenery } from '../scenery';
 import { CityBuildingGeometry, buildCityBuildings } from './cityBuildings';
 import { buildVillageBuildings } from './villageBuildings';
+import { buildCityOutskirts } from './cityOutskirts';
 import {
   CutawayWeights, FocusCell, applyCutaway, cutawayTargets, cutawayWeights, stepCutaway,
 } from './cutaway';
@@ -25,9 +26,19 @@ export function cityBuildingGeometry(mask: TileMask | null): CityBuildingGeometr
   let built = BUILT.get(mask);
   if (!built) {
     const plan = mask.buildings;
-    built = plan.kind === 'city'
-      ? buildCityBuildings(mask.rows, plan.style, plan.seed, plan.classes)
-      : buildVillageBuildings(mask.rows, plan.style, plan.seed);
+    if (plan.kind === 'city') {
+      built = buildCityBuildings(mask.rows, plan.style, plan.seed, plan.classes);
+      const width = mask.rows[0]?.length ?? 0;
+      built.outskirts = buildCityOutskirts(
+        width,
+        mask.rows.length,
+        plan.style,
+        plan.seed,
+        plan.clearings
+      );
+    } else {
+      built = buildVillageBuildings(mask.rows, plan.style, plan.seed);
+    }
     [built.mass, built.detail].forEach((geometry) => {
       BASE_COLORS.set(geometry, Float32Array.from(geometry.getAttribute('color').array));
     });
@@ -281,6 +292,14 @@ function CityBuildingsBase({
     <>
       <MergedLayer geometry={built.mass} castShadow visible name="cityBuildingMass" />
       <MergedLayer geometry={built.detail} castShadow={false} visible={scenery} name="cityBuildingDetail" />
+      {built.outskirts && (
+        <MergedLayer
+          geometry={built.outskirts}
+          castShadow={false}
+          visible={scenery}
+          name="cityOutskirts"
+        />
+      )}
     </>
   );
 }

@@ -424,3 +424,43 @@ export function cutLots(
   });
   return lots;
 }
+
+// --- Turned shapes --------------------------------------------------------------
+export type Ring = { r: number; y: number };
+
+/**
+ * A lathe: rings from bottom to top around (cu, cv), quads between them,
+ * closed with a fan when the last ring is wider than a point.
+ */
+export function lathe(
+  builder: GeometryBuilder,
+  cu: number,
+  cv: number,
+  rings: readonly Ring[],
+  hex: string,
+  turn = 0,
+  sides = 8
+) {
+  const on = (index: number, ring: Ring): V3 => {
+    const angle = turn + (index / sides) * Math.PI * 2;
+    return [wx(cu + Math.cos(angle) * ring.r), ring.y, wz(cv + Math.sin(angle) * ring.r)];
+  };
+  for (let level = 0; level + 1 < rings.length; level += 1) {
+    const low = rings[level];
+    const high = rings[level + 1];
+    for (let index = 0; index < sides; index += 1) {
+      const mid = turn + ((index + 0.5) / sides) * Math.PI * 2;
+      const rise = high.y - low.y;
+      const facing: V3 = [Math.cos(mid) * rise, low.r - high.r, Math.sin(mid) * rise];
+      const next = index + 1;
+      builder.quad(on(index, low), on(next, low), on(next, high), on(index, high), hex, facing);
+    }
+  }
+  const last = rings[rings.length - 1];
+  if (last.r > 1e-3) {
+    const centre: V3 = [wx(cu), last.y, wz(cv)];
+    for (let index = 0; index < sides; index += 1) {
+      builder.tri(centre, on(index, last), on(index + 1, last), hex, [0, 1, 0]);
+    }
+  }
+}

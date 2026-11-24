@@ -1,7 +1,10 @@
 import type { StageId } from '../../../../content/types';
 import {
-  Cell, GeometryBuilder, V3, cellId, cutLots, hashString, pick, seeded, shadeHex, wx, wz,
+  Cell, GeometryBuilder, V3, cellId, cutLots, hashString, lathe, pick, seeded, shadeHex, wx, wz,
 } from './cityGeometry';
+import {
+  borderSide, cliffCell, cliffEnd, forestCell,
+} from './villageBorder';
 import type { CityBuildingGeometry, CrateStyle } from './cityBuildings';
 
 /**
@@ -29,6 +32,8 @@ export interface VillageBuildingStyle {
   trunk: string;
   /** The border cells' ground: undergrowth or scree. */
   borderGround: string;
+  /** The top of a rock border's cliffs: a grass lip, moss or paler stone. */
+  cliffTop?: string;
   /** House walls (timber or plaster), picked per house. */
   walls: readonly string[];
   /** Posts, beams and door frames. */
@@ -63,7 +68,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     moss: '#6a8a3e',
     yard: '#c7b48f',
     path: '#d3bf98',
-    crate: 'hut',
+    crate: 'logs',
   },
   // Colours fitted to each village's floor and today's wall, like the cities'
   // (villageBuildings.test.ts): every surface stands off the floor at least
@@ -75,6 +80,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     borderTones: ['#9c7448', '#8e6a42', '#a67c4e'],
     trunk: '#6b4a2c',
     borderGround: '#c9a77a',
+    cliffTop: '#a87e52',
     walls: ['#a87e52', '#a3744a', '#ab8154'],
     frame: '#6b4a2c',
     roofs: ['#a7835c', '#a68257'],
@@ -82,7 +88,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     stone: '#9c7448',
     moss: '#8e6a42',
     yard: '#d9b98c',
-    crate: 'dome',
+    crate: 'jars',
   },
   hiddenMist: {
     border: 'rocks',
@@ -91,6 +97,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     borderTones: ['#4f6470', '#5a6f7c', '#55657a'],
     trunk: '#3e4a52',
     borderGround: '#4a6a72',
+    cliffTop: '#6a8a3e',
     walls: ['#6f7f88', '#62717a', '#76858e'],
     frame: '#3e4a52',
     roofs: ['#3f6f9c', '#4a7aa8'],
@@ -98,7 +105,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     stone: '#62717a',
     moss: '#6a8a3e',
     yard: '#8fa9ae',
-    crate: 'dome',
+    crate: 'crateStack',
   },
   hiddenCloud: {
     border: 'rocks',
@@ -107,6 +114,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     borderTones: ['#6f7f66', '#7d8f6a', '#848c7f'],
     trunk: '#4f574b',
     borderGround: '#6a8a5a',
+    cliffTop: '#5c7a38',
     walls: ['#848c7f', '#7f8a7a', '#828a7d'],
     frame: '#4f574b',
     roofs: ['#5c7a38', '#6a8a3e'],
@@ -114,7 +122,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     stone: '#7f8a7a',
     moss: '#5c7a38',
     yard: '#b9c7a8',
-    crate: 'stall',
+    crate: 'barrels',
   },
   hiddenStone: {
     border: 'rocks',
@@ -123,6 +131,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     borderTones: ['#7a6550', '#6d5a48', '#8a7560'],
     trunk: '#4f4134',
     borderGround: '#8f8068',
+    cliffTop: '#8a7560',
     walls: ['#8a7560', '#93806a', '#9b866d'],
     frame: '#4f4134',
     roofs: ['#6d5a48', '#7a6550'],
@@ -130,7 +139,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     stone: '#7a6550',
     moss: '#5f6a5a',
     yard: '#bfb69a',
-    crate: 'shed',
+    crate: 'casks',
   },
   akatsukiHideout: {
     border: 'spires',
@@ -147,7 +156,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     stone: '#5d5162',
     moss: '#4a3f4f',
     yard: '#8f7d92',
-    crate: 'shed',
+    crate: 'crateStack',
   },
 };
 
@@ -159,45 +168,6 @@ export const VILLAGE_BODY_CAP = 1.3;
 export const VILLAGE_SOUTH_CAP = 0.94;
 
 const SIDES = 8;
-
-type Ring = { r: number; y: number };
-
-/**
- * A lathe: rings from bottom to top around (cu, cv), quads between them,
- * closed with a fan when the last ring is wider than a point.
- */
-function lathe(
-  builder: GeometryBuilder,
-  cu: number,
-  cv: number,
-  rings: readonly Ring[],
-  hex: string,
-  turn = 0,
-  sides = SIDES
-) {
-  const on = (index: number, ring: Ring): V3 => {
-    const angle = turn + (index / sides) * Math.PI * 2;
-    return [wx(cu + Math.cos(angle) * ring.r), ring.y, wz(cv + Math.sin(angle) * ring.r)];
-  };
-  for (let level = 0; level + 1 < rings.length; level += 1) {
-    const low = rings[level];
-    const high = rings[level + 1];
-    for (let index = 0; index < sides; index += 1) {
-      const mid = turn + ((index + 0.5) / sides) * Math.PI * 2;
-      const rise = high.y - low.y;
-      const facing: V3 = [Math.cos(mid) * rise, low.r - high.r, Math.sin(mid) * rise];
-      const next = index + 1;
-      builder.quad(on(index, low), on(next, low), on(next, high), on(index, high), hex, facing);
-    }
-  }
-  const last = rings[rings.length - 1];
-  if (last.r > 1e-3) {
-    const centre: V3 = [wx(cu), last.y, wz(cv)];
-    for (let index = 0; index < sides; index += 1) {
-      builder.tri(centre, on(index, last), on(index + 1, last), hex, [0, 1, 0]);
-    }
-  }
-}
 
 const at = (u: number, v: number, y: number): V3 => [wx(u), y, wz(v)];
 
@@ -227,42 +197,6 @@ function panel(
   builder.quad(at(u0, v, y0), at(u1, v, y0), at(u1, v, y1), at(u0, v, y1), hex, [0, 0, 1]);
 }
 
-/** A broadleaf tree: a trunk and two rounded crowns, within its cell. */
-function tree(
-  { mass }: Builders,
-  cu: number,
-  cv: number,
-  top: number,
-  tones: readonly string[],
-  trunk: string,
-  rnd: () => number
-) {
-  const radius = 0.34 + rnd() * 0.1;
-  const trunkTop = top * 0.36;
-  mass.box(cu - 0.05, cu + 0.05, cv - 0.05, cv + 0.05, 0, trunkTop + 0.05, trunk, trunk);
-  const crown = top - trunkTop;
-  const hex = pick(rnd, tones);
-  const turn = rnd() * Math.PI;
-  lathe(mass, cu, cv, [
-    { r: radius * 0.45, y: trunkTop },
-    { r: radius, y: trunkTop + crown * 0.3 },
-    { r: radius * 0.82, y: trunkTop + crown * 0.62 },
-    { r: radius * 0.3, y: top },
-  ], hex, turn);
-  // A second, smaller crown off to one side gives the canopy its lumps.
-  const angle = rnd() * Math.PI * 2;
-  const r2 = radius * 0.62;
-  const reach = Math.min(0.5 - r2 - 0.02, radius * 0.45);
-  const su = cu + Math.cos(angle) * reach;
-  const sv = cv + Math.sin(angle) * reach;
-  const base = trunkTop + crown * 0.38;
-  lathe(mass, su, sv, [
-    { r: r2 * 0.5, y: base },
-    { r: r2, y: base + crown * 0.22 },
-    { r: r2 * 0.4, y: base + crown * 0.5 },
-  ], shadeHex(pick(rnd, tones), 1.08), turn + 0.4);
-}
-
 /** A low bush for the border row nearest the camera. */
 function bush(
   { mass }: Builders,
@@ -279,37 +213,6 @@ function bush(
     { r: radius * 0.75, y: top * 0.8 },
     { r: radius * 0.25, y: top },
   ], hex, rnd() * Math.PI);
-}
-
-/** A rock outcrop: stacked, narrowing slabs, kept inside its cell. */
-function rocks(
-  { mass }: Builders,
-  cu: number,
-  cv: number,
-  top: number,
-  tones: readonly string[],
-  rnd: () => number
-) {
-  const x = Math.floor(cu);
-  const y0 = Math.floor(cv);
-  const inside = (lo: number, hi: number, cell: number): [number, number] => [
-    Math.max(cell + 0.02, lo), Math.min(cell + 0.98, hi),
-  ];
-  const layers = 2 + Math.floor(top / 0.6);
-  let y = 0;
-  let half = 0.44;
-  for (let layer = 0; layer < layers; layer += 1) {
-    const h = (top / layers) * (0.85 + rnd() * 0.3);
-    const y1 = Math.min(top, y + h);
-    const du = (rnd() - 0.5) * 0.06;
-    const dv = (rnd() - 0.5) * 0.06;
-    const hex = pick(rnd, tones);
-    const [u0, u1] = inside(cu + du - half, cu + du + half, x);
-    const [v0, v1] = inside(cv + dv - half, cv + dv + half, y0);
-    mass.box(u0, u1, v0, v1, y, y1, hex, shadeHex(hex, 1.1));
-    y = y1;
-    half *= 0.8;
-  }
 }
 
 /** Stalagmites: a tall spire and a shorter one leaning on it. */
@@ -561,22 +464,26 @@ export function buildVillageBuildings(
     own([{ x, y }]);
     pad(builders.mass, x, x + 1, y, y + 1, style.borderGround);
     const south = y === height - 1;
-    const cu = x + 0.5 + (rnd() - 0.5) * 0.12;
-    const cv = y + 0.5 + (rnd() - 0.5) * 0.12;
+    const side = borderSide(x, y, width, height);
     let top: number;
-    if (south) {
-      top = 0.62 + rnd() * (VILLAGE_SOUTH_CAP - 0.66);
-      if (style.border === 'forest') bush(builders, cu, cv, top, pick(rnd, style.borderTones), rnd);
-      else if (style.border === 'spires') spires(builders, cu, cv, top, style.borderTones, rnd);
-      else rocks(builders, cu, cv, top, style.borderTones, rnd);
-      southRowTop = Math.max(southRowTop, top);
+    if (style.border === 'rocks') {
+      top = cliffCell(builders, x, y, side, style, seedText);
+      // A side run's last cell closes the cliff where the low south row begins.
+      if ((side === 'west' || side === 'east') && y === height - 2) {
+        cliffEnd(builders, x, y, side, style, seedText);
+      }
+    } else if (style.border === 'forest' && !south) {
+      top = forestCell(builders, x, y, side, width, height, style, rnd);
     } else {
-      top = 1.45 + rnd() * (VILLAGE_TREE_CAP - 1.45);
-      const tones = style.borderTones;
-      if (style.border === 'forest') tree(builders, cu, cv, top, tones, style.trunk, rnd);
-      else if (style.border === 'spires') spires(builders, cu, cv, top, tones, rnd);
-      else rocks(builders, cu, cv, top, tones, rnd);
+      const cu = x + 0.5 + (rnd() - 0.5) * 0.12;
+      const cv = y + 0.5 + (rnd() - 0.5) * 0.12;
+      top = south
+        ? 0.62 + rnd() * (VILLAGE_SOUTH_CAP - 0.66)
+        : 1.45 + rnd() * (VILLAGE_TREE_CAP - 1.45);
+      if (style.border === 'forest') bush(builders, cu, cv, top, pick(rnd, style.borderTones), rnd);
+      else spires(builders, cu, cv, top, style.borderTones, rnd);
     }
+    if (south) southRowTop = Math.max(southRowTop, top);
     featureTop = Math.max(featureTop, top);
   }));
 

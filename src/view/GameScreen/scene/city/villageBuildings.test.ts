@@ -21,11 +21,17 @@ const lattice = (x: number, z: number) => ({
   v: z / TILE_SIZE - MAP_OFFSET_Z + 0.5,
 });
 
-/** Raised vertices (above the floor) that stand on no wall cell. */
+/**
+ * Raised vertices (above the floor) that stand on no wall cell. Off the
+ * board counts as wall: border trees may overhang outward, never inward.
+ */
 function strayRaised(geometry: THREE.BufferGeometry, rows: readonly string[]): string[] {
   const position = geometry.getAttribute('position');
   const stray: string[] = [];
-  const wall = (x: number, y: number) => 'eb'.includes(rows[y]?.[x] ?? '.');
+  const outside = (x: number, y: number) => (
+    y < 0 || x < 0 || y >= rows.length || x >= rows[0].length
+  );
+  const wall = (x: number, y: number) => outside(x, y) || 'eb'.includes(rows[y][x]);
   for (let index = 0; index < position.count; index += 1) {
     if (position.getY(index) <= 0.02) continue; // eslint-disable-line no-continue
     const { u, v } = lattice(position.getX(index), position.getZ(index));
@@ -215,7 +221,10 @@ describe('village building colours', () => {
     const { palette } = STAGE_DEFINITIONS.find((stage) => stage.id === id)!;
     const floors = [palette.groundA, palette.groundB, ...(style.path ? [style.path] : [])];
     const floorContrast = (hex: string) => Math.min(...floors.map((floor) => contrast(hex, floor)));
-    const surfaces = [...style.walls, ...style.roofs, ...style.borderTones, style.stone];
+    const surfaces = [
+      ...style.walls, ...style.roofs, ...style.borderTones, style.stone,
+      ...(style.cliffTop ? [style.cliffTop] : []),
+    ];
 
     it(`${id}: walls, roofs, stone and border stand off the floor as well as today's wall`, () => {
       const today = floorContrast(palette.wall);
