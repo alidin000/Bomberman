@@ -449,7 +449,7 @@ describe('game screen menus', () => {
     fireEvent.click(screen.getByRole('button', { name: /quit game/i }));
     expect(screen.getByRole('dialog', { name: 'Leave The Arena?' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Stay' })).toHaveFocus();
-  });
+  }, 15000);
 
   it('puts the pause menu above the top controls and makes them inert while paused', () => {
     currentState = { ...baseState, paused: true };

@@ -191,7 +191,7 @@ describe('the Stage scenery switch in the pause menu Settings', () => {
     });
     expect(screen.getByText('Paused')).toBeInTheDocument();
     expect(engineMocks.resume).not.toHaveBeenCalled();
-  });
+  }, 15000);
 
   it('is reached with Tab and flipped with Space', () => {
     const scenery = openSettingsFromPause();

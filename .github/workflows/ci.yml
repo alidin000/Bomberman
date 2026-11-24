@@ -64,7 +64,9 @@ jobs:
 
       - name: Browser smoke tests
         run: npx playwright test
-        timeout-minutes: 10
+        # The suite took 9.3 minutes on GitHub once the city tests landed;
+        # leave room for one retry on a slow runner.
+        timeout-minutes: 20
 
       - name: Upload Playwright report
         if: failure()

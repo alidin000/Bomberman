@@ -52,8 +52,10 @@ services:
       #   1. Deploy once with DEBUG_CLIENT_IP=1. Each handshake then logs the
       #      raw x-forwarded-for, cf-connecting-ip, true-client-ip and the
       #      socket address.
-      #   2. From the repo on a laptop:
-      #      node -e "const W=require('ws');const s=new W('wss://bomberman-online-4gw2.onrender.com/',{origin:'https://bomberman-zuqb.onrender.com',headers:{'X-Forwarded-For':'198.51.100.7','CF-Connecting-IP':'198.51.100.8'}});s.on('open',()=>s.close())"
+      #   2. From a laptop, open one WebSocket to the server with the game's
+      #      origin and the headers X-Forwarded-For: 198.51.100.7 and
+      #      CF-Connecting-IP: 198.51.100.8 (the ws package's headers option
+      #      does this), then close it.
       #   3. Find your IP in the logged x-forwarded-for:
       #      198.51.100.7 is gone and your IP comes first: keep xff-left.
       #      198.51.100.7 is still there: use xff-right:<n>, where n is your
@@ -64,5 +66,6 @@ services:
       - key: CLIENT_IP_SOURCE
         value: xff-left
       # Bearer token for /metrics, set in the dashboard. Unset, /metrics answers 404.
+      # Use at least 16 characters: a shorter token stops the server at boot.
       - key: METRICS_TOKEN
         sync: false

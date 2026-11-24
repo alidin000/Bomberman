@@ -142,6 +142,9 @@ CI runs all of these on every push and pull request to `main`.
 - Characters, villages, models, effects and portraits are drawn in code by the
   game. No art, models, logos, music or voices from the show or its games are
   included.
+- City arena maps: © [OpenStreetMap](https://www.openstreetmap.org/copyright)
+  contributors, under the Open Database License 1.0. The map data, method and
+  landmark credits are in [tools/city/NOTICE.txt](tools/city/NOTICE.txt).
 
 ## License
 

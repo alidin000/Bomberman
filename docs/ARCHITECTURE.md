@@ -576,7 +576,7 @@ resource and rendering contracts; Playwright exercises real browser flows.
 CI runs on every push and pull request to `main`: lint, type check, unit and
 scene tests, the client build, the server build, and Playwright browser tests
 against the built client and server. Every rule change bumps
-`REPLAY_VERSION` (now 10), and `SIMULATION_VERSION` follows it. The online
+`REPLAY_VERSION` (now 11), and `SIMULATION_VERSION` follows it. The online
 server rejects clients on another simulation version, so old tabs cannot join
 rooms with different rules.
 

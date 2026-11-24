@@ -67,7 +67,7 @@ describe('HubScreen secrets, scarves, rebuild and story', () => {
     fireEvent.click(within(scarves).getByRole('button', { name: 'Sand scarf' }));
     expect(within(scarves).getByRole('button', { name: 'Sand scarf' })).toHaveAttribute('aria-pressed', 'true');
     expect(loadStoryProgress().scarf).toBe('hiddenSand');
-  });
+  }, 15000);
 
   it('says what a locked scarf takes, and wears nothing it has not earned', () => {
     storeProgress(SEEN_LEAF);

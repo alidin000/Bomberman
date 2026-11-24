@@ -15,6 +15,9 @@
 /dist
 /server-dist
 /tools/city/.build
+# city map rasterizer (Python) and its trial output
+__pycache__/
+/city-try/
 
 #idea
 .idea
