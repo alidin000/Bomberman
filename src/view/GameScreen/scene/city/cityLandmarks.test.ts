@@ -91,8 +91,9 @@ describe.each(CITY_IDS)('the %s skyline', (id) => {
       sector: 'far', rotation: 0, famous: true, x: hero.anchor!.x,
     });
     // Past the board the city's outskirts stand (cityOutskirts.ts): the
-    // skyline keeps no filler, only its famous place and Rome's trees.
-    expect(props.filter((prop) => !prop.famous).every((prop) => prop.kind === 'cedar')).toBe(true);
+    // skyline keeps no filler, only its famous place and Rome's pines.
+    expect(props.filter((prop) => !prop.famous).every((prop) => prop.kind === 'umbrellaPine'))
+      .toBe(true);
   });
 
   it('stands its silhouette in view at round start, clear of the HUD\'s match bar', () => {

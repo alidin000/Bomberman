@@ -1,6 +1,7 @@
 import type { StageId } from '../../../../content/types';
 import {
-  Cell, GeometryBuilder, V3, cellId, cutLots, hashString, lathe, pick, seeded, shadeHex, wx, wz,
+  Cell, GeometryBuilder, Lot, V3, cellId, cutLots, hashString, lathe, pick, seeded, shadeHex,
+  wx, wz,
 } from './cityGeometry';
 import {
   borderSide, cliffCell, cliffEnd, forestCell,
@@ -19,6 +20,9 @@ import type { CityBuildingGeometry, CrateStyle } from './cityBuildings';
 type Builders = { mass: GeometryBuilder; detail: GeometryBuilder };
 
 export type VillageBorder = 'forest' | 'rocks' | 'spires';
+
+/** A village's signature building, after the atlas (up to four stand inside the board). */
+export type VillageHero = 'tallHut' | 'domeTower' | 'podiumDome' | 'drums' | 'pagoda';
 
 export interface VillageBuildingStyle {
   /** The border ring: forest, rock outcrops, or a cave's stalagmites. */
@@ -50,6 +54,8 @@ export interface VillageBuildingStyle {
   path?: string;
   /** How the village's crates look. */
   crate: CrateStyle;
+  /** The village's signature building. */
+  hero: VillageHero;
 }
 
 export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBuildingStyle>>> = {
@@ -69,6 +75,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     yard: '#c7b48f',
     path: '#d3bf98',
     crate: 'logs',
+    hero: 'tallHut',
   },
   // Colours fitted to each village's floor and today's wall, like the cities'
   // (villageBuildings.test.ts): every surface stands off the floor at least
@@ -89,6 +96,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     moss: '#8e6a42',
     yard: '#d9b98c',
     crate: 'jars',
+    hero: 'domeTower',
   },
   hiddenMist: {
     border: 'rocks',
@@ -106,6 +114,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     moss: '#6a8a3e',
     yard: '#8fa9ae',
     crate: 'crateStack',
+    hero: 'podiumDome',
   },
   hiddenCloud: {
     border: 'rocks',
@@ -123,6 +132,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     moss: '#5c7a38',
     yard: '#b9c7a8',
     crate: 'barrels',
+    hero: 'pagoda',
   },
   hiddenStone: {
     border: 'rocks',
@@ -140,6 +150,7 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     moss: '#5f6a5a',
     yard: '#bfb69a',
     crate: 'casks',
+    hero: 'drums',
   },
   akatsukiHideout: {
     border: 'spires',
@@ -157,13 +168,16 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     moss: '#4a3f4f',
     yard: '#8f7d92',
     crate: 'crateStack',
+    hero: 'drums',
   },
 };
 
 /** Highest tree crown on the border away from the camera. */
 export const VILLAGE_TREE_CAP = 2.1;
+/** The tallest building inside the board: a village's signature towers. */
+export const VILLAGE_BODY_CAP = 1.8;
 /** Houses, huts and blocks inside the board. */
-export const VILLAGE_BODY_CAP = 1.3;
+export const VILLAGE_HOUSE_CAP = 1.3;
 /** The border row nearest the camera: as low as today's walls. */
 export const VILLAGE_SOUTH_CAP = 0.94;
 
@@ -430,6 +444,92 @@ function stoneBlock(
 }
 
 /**
+ * A village's signature building on one cell (after the atlas): Leaf's
+ * two-storey round hut, Sand's domed tower with its outside stair, Mist's
+ * blue dome on a stone podium, Cloud's two-tier pagoda, or three stacked
+ * drums. Up to VILLAGE_BODY_CAP tall; the cut-away sinks it like the rest.
+ */
+function heroTower(
+  { mass, detail }: Builders,
+  cell: Cell,
+  style: VillageBuildingStyle,
+  rnd: () => number
+): number {
+  const cu = cell.x + 0.5;
+  const cv = cell.y + 0.5;
+  const wall = pick(rnd, style.walls);
+  const roof = pick(rnd, style.roofs);
+  const turn = Math.PI / SIDES;
+  const dome = (r: number, y: number, hex: string) => {
+    const rings = [0, 0.4, 0.8, 1.15, 1.45].map((angle) => ({
+      r: r * Math.cos(angle), y: y + r * Math.sin(angle),
+    }));
+    lathe(mass, cu, cv, rings, hex, turn);
+    return y + r;
+  };
+  const finial = (y0: number, y1: number) => {
+    const f = 0.025;
+    mass.box(cu - f, cu + f, cv - f, cv + f, y0, y1, style.frame, style.frame);
+    return y1;
+  };
+  const door = (radius: number, top: number) => {
+    panel(detail, cv + radius + 0.004, cu - 0.07, cu + 0.07, 0, top, style.window);
+  };
+  switch (style.hero) {
+    case 'tallHut': {
+      lathe(mass, cu, cv, [{ r: 0.38, y: 0 }, { r: 0.38, y: 0.72 }], wall, turn);
+      lathe(mass, cu, cv, [{ r: 0.45, y: 0.72 }, { r: 0.45, y: 0.78 }], style.frame, turn);
+      lathe(mass, cu, cv, [{ r: 0.3, y: 0.78 }, { r: 0.3, y: 1.1 }], wall, turn);
+      lathe(mass, cu, cv, [
+        { r: 0.46, y: 1.06 }, { r: 0.22, y: 1.42 }, { r: 0, y: 1.68 },
+      ], roof, turn);
+      lathe(mass, cu, cv, [{ r: 0.355, y: 1.2 }, { r: 0.32, y: 1.25 }], shadeHex(roof, 0.8), turn);
+      door(0.38, 0.46);
+      return finial(1.6, 1.78);
+    }
+    case 'domeTower': {
+      mass.box(cell.x + 0.08, cell.x + 0.92, cell.y + 0.08, cell.y + 0.92, 0, 0.45, wall, wall);
+      // The outside stair up the front of the base.
+      const front = cell.y + 0.92 + 0.004;
+      const c = (u: number, y: number): V3 => [wx(u), y, wz(front)];
+      const { x } = cell;
+      const stair = [c(x + 0.14, 0), c(x + 0.34, 0), c(x + 0.86, 0.45), c(x + 0.66, 0.45)] as const;
+      detail.quad(stair[0], stair[1], stair[2], stair[3], style.frame, [0, 0, 1]);
+      lathe(mass, cu, cv, [{ r: 0.33, y: 0.45 }, { r: 0.33, y: 1.02 }], shadeHex(wall, 1.05), turn);
+      panel(detail, cv + 0.334, cu - 0.05, cu + 0.05, 0.6, 0.82, style.window);
+      return finial(dome(0.33, 1.02, roof) - 0.02, 1.52);
+    }
+    case 'podiumDome': {
+      const { stone } = style;
+      mass.box(cell.x + 0.05, cell.x + 0.95, cell.y + 0.05, cell.y + 0.95, 0, 0.3, stone, stone);
+      lathe(mass, cu, cv, [{ r: 0.34, y: 0.3 }, { r: 0.34, y: 1.04 }], wall, turn);
+      lathe(mass, cu, cv, [{ r: 0.4, y: 1.04 }, { r: 0.4, y: 1.1 }], style.frame, turn);
+      panel(detail, cv + 0.344, cu - 0.12, cu - 0.04, 0.55, 0.85, style.window);
+      panel(detail, cv + 0.344, cu + 0.04, cu + 0.12, 0.55, 0.85, style.window);
+      return finial(dome(0.37, 1.1, roof) - 0.02, 1.75);
+    }
+    case 'pagoda': {
+      mass.box(cell.x + 0.12, cell.x + 0.88, cell.y + 0.12, cell.y + 0.88, 0, 0.5, wall, wall);
+      lathe(mass, cu, cv, [{ r: 0.64, y: 0.5 }, { r: 0.34, y: 0.74 }], roof, Math.PI / 4, 4);
+      mass.box(cu - 0.22, cu + 0.22, cv - 0.22, cv + 0.22, 0.74, 1.06, wall, wall);
+      lathe(mass, cu, cv, [{ r: 0.52, y: 1.06 }, { r: 0, y: 1.5 }], roof, Math.PI / 4, 4);
+      door(0.38, 0.36);
+      return finial(1.45, 1.68);
+    }
+    default: {
+      // Three stacked drums, narrowing.
+      [[0.42, 0, 0.55], [0.34, 0.55, 1.05], [0.25, 1.05, 1.48]].forEach(([r, y0, y1], tier) => {
+        const tone = tier % 2 ? shadeHex(wall, 1.08) : wall;
+        lathe(mass, cu, cv, [{ r, y: y0 }, { r, y: y1 }], tone, turn);
+        lathe(mass, cu, cv, [{ r: r + 0.03, y: y1 - 0.04 }, { r: r + 0.03, y: y1 }], roof, turn);
+        panel(detail, cv + r + 0.004, cu - 0.05, cu + 0.05, y0 + 0.15, y0 + 0.32, style.window);
+      });
+      return 1.48;
+    }
+  }
+}
+
+/**
  * Merged village scenery for a village arena's synthetic mask: `e` cells
  * (the border ring) as forest or rock, `b` cells (walls inside) cut into
  * lots of houses, round huts and stone blocks.
@@ -487,8 +587,9 @@ export function buildVillageBuildings(
     featureTop = Math.max(featureTop, top);
   }));
 
-  // Walls inside: each 4-connected group cut into lots.
+  // Walls inside: each 4-connected group cut into lots, drawn once all are cut.
   const seen = new Set<number>();
+  const pending: { lot: Lot; rnd: () => number }[] = [];
   rows.forEach((row, y0) => Array.from(row).forEach((cls, x0) => {
     if (cls !== 'b' || seen.has(cellId(x0, y0))) return;
     const group: Cell[] = [];
@@ -509,25 +610,47 @@ export function buildVillageBuildings(
     blocks += 1;
     cells += group.length;
     const rnd = seeded(hashString(`${seedText}|${x0},${y0}`));
-    cutLots(group, 2, 2, rnd).forEach((lot) => {
-      own(lot.cells);
-      const yard = 0.03;
-      const [u1, v1] = [lot.x + lot.w - yard, lot.y + lot.h - yard];
-      pad(builders.mass, lot.x + yard, u1, lot.y + yard, v1, style.yard);
-      let top = 0;
-      if (lot.cells.length === 2) {
-        top = house(builders, lot, style, rnd);
-      } else if (lot.cells.length === 1) {
-        const [cell] = lot.cells;
-        const draw = rnd() < 0.5 ? hut : stoneBlock;
-        top = draw(builders, cell, style, rnd);
-      } else {
-        // A bigger lot: a hut on each cell, as a little compound.
-        lot.cells.forEach((cell) => { top = Math.max(top, hut(builders, cell, style, rnd)); });
-      }
-      bodyTop = Math.max(bodyTop, top);
-    });
+    cutLots(group, 2, 2, rnd).forEach((lot) => pending.push({ lot, rnd }));
   }));
+  // The village's signature buildings: the lots nearest each quarter of the board.
+  const heroes = new Set<number>();
+  [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]].forEach(([fx, fy]) => {
+    const ax = width * fx;
+    const ay = height * fy;
+    let best = -1;
+    let bestDistance = Math.min(width, height) * 0.2;
+    pending.forEach(({ lot }, index) => {
+      if (heroes.has(index) || lot.cells.length > 2) return;
+      const distance = Math.hypot(lot.x + lot.w / 2 - ax, lot.y + lot.h / 2 - ay);
+      if (distance < bestDistance) {
+        best = index;
+        bestDistance = distance;
+      }
+    });
+    if (best >= 0) heroes.add(best);
+  });
+  pending.forEach(({ lot, rnd }, index) => {
+    own(lot.cells);
+    const yard = 0.03;
+    const [u1, v1] = [lot.x + lot.w - yard, lot.y + lot.h - yard];
+    pad(builders.mass, lot.x + yard, u1, lot.y + yard, v1, style.yard);
+    let top = 0;
+    if (heroes.has(index)) {
+      const [tower, ...rest] = lot.cells;
+      top = heroTower(builders, tower, style, rnd);
+      rest.forEach((cell) => { top = Math.max(top, stoneBlock(builders, cell, style, rnd)); });
+    } else if (lot.cells.length === 2) {
+      top = house(builders, lot, style, rnd);
+    } else if (lot.cells.length === 1) {
+      const [cell] = lot.cells;
+      const draw = rnd() < 0.5 ? hut : stoneBlock;
+      top = draw(builders, cell, style, rnd);
+    } else {
+      // A bigger lot: a hut on each cell, as a little compound.
+      lot.cells.forEach((cell) => { top = Math.max(top, hut(builders, cell, style, rnd)); });
+    }
+    bodyTop = Math.max(bodyTop, top);
+  });
   featureTop = Math.max(featureTop, bodyTop);
   return {
     mass: builders.mass.build('village mass'),

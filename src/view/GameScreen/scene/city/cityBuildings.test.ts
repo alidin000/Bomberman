@@ -9,6 +9,10 @@ import { parseMapRows } from '../../../../engine/mapLoader';
 import { maskTones, sceneTileMask } from '../arenaScene';
 import { MAP_OFFSET_X, MAP_OFFSET_Z, TILE_SIZE } from '../sceneSpace';
 import { buildStaticTileLayers } from '../staticTiles';
+import { contrastRatio } from '../highContrast';
+import {
+  TELEGRAPH_EDGE_COLOR, TELEGRAPH_EDGE_OPACITY, TELEGRAPH_FILL_COLOR, TELEGRAPH_FILL_OPACITY,
+} from '../hazardTelegraph';
 import {
   BODY_CAP, CITY_BUILDING_STYLES, FEATURE_CAP, SOUTH_ROW_CAP, buildCityBuildings, buildingClasses,
 } from './cityBuildings';
@@ -315,6 +319,70 @@ describe('city buildings in the tile layers', () => {
     );
     const wallCells = map.flat().filter((cell) => cell === 'Wall').length;
     expect(layers.wallVisible.length + layers.waterVisible.length).toBe(wallCells);
+  });
+});
+
+// A colour seen through a translucent mark on the floor (sRGB mix).
+function over(floor: string, mark: string, opacity: number): string {
+  const channel = (hex: string, index: number) => (
+    parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16)
+  );
+  return `#${[0, 1, 2].map((index) => Math.round(
+    channel(floor, index) * (1 - opacity) + channel(mark, index) * opacity
+  ).toString(16).padStart(2, '0')).join('')}`;
+}
+
+describe('Rome\'s Colosseum', () => {
+  const rows = arenaMapMask('rome')!;
+  const built = buildCityBuildings(rows, CITY_BUILDING_STYLES.rome, 'rome');
+  const ringRows = rows.flatMap((row, y) => (row.includes('m') ? [y] : []));
+  const north = ringRows[0];
+  const south = ringRows[ringRows.length - 1];
+
+  it('stands three tiers tall on the north arc, two on the south, and falls inward to the arena', () => {
+    const position = built.mass.getAttribute('position');
+    let northTop = 0;
+    let southTop = 0;
+    const heights = new Set<number>();
+    for (let index = 0; index < position.count; index += 1) {
+      const { u, v } = lattice(position.getX(index), position.getZ(index));
+      const x = Math.floor(u);
+      const y = Math.floor(v);
+      if (rows[y]?.[x] === 'm' && u - x > 0.01 && v - y > 0.01) {
+        const h = position.getY(index);
+        if (y === north) northTop = Math.max(northTop, h);
+        if (y === south) southTop = Math.max(southTop, h);
+        heights.add(Math.round(h * 100));
+      }
+    }
+    expect(northTop).toBeGreaterThan(1.7);
+    expect(southTop).toBeLessThan(1.25);
+    // The arena wall the seating falls to.
+    expect(heights.has(62)).toBe(true);
+  });
+
+  it('lays the arena inside the ring on sand that keeps every danger cue readable', () => {
+    const mask = sceneTileMask(getArenaMap('rome')!, CITY_LOOKS.rome, false)!;
+    const map = parseMapRows(arenaMapRows('rome'));
+    const sand = mask.rows.flatMap((row, y) => Array.from(row)
+      .flatMap((cls, x) => (cls === 'a' ? [{ x, y }] : [])));
+    expect(sand.length).toBeGreaterThan(40);
+    // Floor only, and only inside the ring's rows.
+    sand.forEach(({ x, y }) => {
+      expect(map[y][x]).not.toBe('Wall');
+      expect(y).toBeGreaterThan(north);
+      expect(y).toBeLessThan(south);
+    });
+    const tones = mask.floors.a;
+    expect(tones.a).not.toBe(tones.b);
+    [tones.a, tones.b].forEach((floor) => {
+      expect(contrastRatio(floor, over(floor, TELEGRAPH_EDGE_COLOR, TELEGRAPH_EDGE_OPACITY)))
+        .toBeGreaterThanOrEqual(3);
+      expect(contrastRatio(floor, over(floor, TELEGRAPH_FILL_COLOR, TELEGRAPH_FILL_OPACITY)))
+        .toBeGreaterThanOrEqual(3);
+    });
+    // High contrast keeps the plain floor.
+    expect(sceneTileMask(getArenaMap('rome')!, CITY_LOOKS.rome, true)!.floors.a).toBeUndefined();
   });
 });
 

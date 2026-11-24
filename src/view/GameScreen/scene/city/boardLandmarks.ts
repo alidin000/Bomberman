@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import type { CityBuildingStyle } from './cityBuildings';
 import {
   Cell, GeometryBuilder, V2, V3, blockOutlines, cellId, chainLoops, shadeHex, unitEdges, world,
@@ -283,10 +284,16 @@ function chainBridge(
   return top;
 }
 
+/** The Colosseum's inner wall round the arena, and the outer ring's height on its south arc. */
+const ARENA_WALL = 0.62;
+const SOUTH_RING_TOP = 1.06;
+
 /**
- * The Colosseum: its `m` cells as arcaded walls, three tiers of arches and an
- * attic of small windows, in the landmark stone. Open arches (the grid's gaps)
- * stay walkable as before.
+ * The Colosseum: its `m` cells as one oval stadium in the landmark stone.
+ * The outer wall carries three tiers of arches and an attic on the north
+ * arc and drops to two tiers on the south, as the ruin stands (which also
+ * hides less of the board). Its top falls inward as a bank of seating to a
+ * low wall round the arena. Open arches (the grid's gaps) stay walkable.
  */
 function colosseum(
   { mass, detail }: Builders,
@@ -297,79 +304,142 @@ function colosseum(
   if (!ring.length) return 0;
   const stone = style.landmarkStone;
   const trim = shadeHex(stone, 1.18);
+  const seats = shadeHex(stone, 1.06);
   const dark = shadeHex(stone, 0.5);
   const members = new Set(ring.map(({ x, y }) => cellId(x, y)));
   const inRing = (x: number, y: number) => members.has(cellId(x, y));
   const classAt = (x: number, y: number) => rows[y]?.[x] ?? 'e';
   const tiers = [[0.04, 0.5], [0.56, 1.0], [1.06, 1.46]];
   const attic = [1.52, 1.74];
+  // The ring's centre and half extents, to tell its outer face from its inner.
+  const us = ring.map(({ x }) => x + 0.5);
+  const vs = ring.map(({ y }) => y + 0.5);
+  const cu = (Math.min(...us) + Math.max(...us)) / 2;
+  const cv = (Math.min(...vs) + Math.max(...vs)) / 2;
+  const ru = (Math.max(...us) - Math.min(...us)) / 2 + 0.5;
+  const rv = (Math.max(...vs) - Math.min(...vs)) / 2 + 0.5;
+  /** The outer wall's top: full on the north arc, two tiers on the south. */
+  const outerTop = (point: V2) => {
+    const north = Math.min(1, Math.max(0, 0.5 - (point.v - cv) / (rv * 1.2)));
+    const t = north * north * (3 - 2 * north);
+    return SOUTH_RING_TOP + (attic[1] - SOUTH_RING_TOP) * t;
+  };
   const loops = chainLoops(unitEdges(ring, inRing));
   const outlines = blockOutlines(loops, inRing, classAt, () => 0, 0.05, 0);
-  outlines.forEach((outline) => outline.points.forEach((p0, index) => {
-    const p1 = outline.points[(index + 1) % outline.points.length];
-    const { normal } = outline.edges[index];
-    const facing: V3 = [normal.u, 0, normal.v];
-    const length = Math.hypot(p1.u - p0.u, p1.v - p0.v);
-    const at = (t: number): V2 => ({
-      u: p0.u + ((p1.u - p0.u) * t) / length,
-      v: p0.v + ((p1.v - p0.v) * t) / length,
+  outlines.forEach((outline) => {
+    const count = outline.points.length;
+    const looksIn = outline.edges.map(({ normal }, index) => {
+      const p0 = outline.points[index];
+      const p1 = outline.points[(index + 1) % count];
+      const mu = (p0.u + p1.u) / 2 - cu;
+      const mv = (p0.v + p1.v) / 2 - cv;
+      return normal.u * (mu / ru) + normal.v * (mv / rv) < 0;
     });
-    const band = (
-      builder: GeometryBuilder,
-      y0: number,
-      y1: number,
-      hex: string,
-      off = 0,
-      t0 = 0,
-      t1 = length
-    ) => {
-      builder.quad(
-        world(at(t0), y0, normal, off),
-        world(at(t1), y0, normal, off),
-        world(at(t1), y1, normal, off),
-        world(at(t0), y1, normal, off),
-        hex,
-        facing
-      );
-    };
-    band(mass, 0, attic[1], stone);
-    if (normal.v < -0.35 || length < 0.2) return;
-    tiers.forEach(([y0, y1]) => {
-      band(detail, y1, y1 + 0.03, trim, 0.004);
-      const bays = Math.max(1, Math.round(length / 0.28));
-      const bay = length / bays;
-      for (let bayIndex = 0; bayIndex < bays; bayIndex += 1) {
-        const centre = (bayIndex + 0.5) * bay;
-        const half = bay * 0.3;
-        // An arch: a dark opening with a pointed-round head.
-        band(detail, y0 + 0.04, y1 - 0.11, dark, 0.006, centre - half, centre + half);
+    // A corner on the outer face stands at the outer wall's height; one
+    // between two inner faces at the arena wall's.
+    const topAt = outline.points.map((point, index) => (
+      looksIn[index] && looksIn[(index + count - 1) % count] ? ARENA_WALL : outerTop(point)
+    ));
+    outline.points.forEach((p0, index) => {
+      const next = (index + 1) % count;
+      const p1 = outline.points[next];
+      const { normal } = outline.edges[index];
+      const facing: V3 = [normal.u, 0, normal.v];
+      const top0 = topAt[index];
+      const top1 = topAt[next];
+      const on = (point: V2, y: number) => world(point, y, normal, 0);
+      mass.quad(on(p0, 0), on(p1, 0), on(p1, top1), on(p0, top0), stone, facing);
+      const length = Math.hypot(p1.u - p0.u, p1.v - p0.v);
+      if (normal.v < -0.35 || length < 0.2) return;
+      const at = (t: number): V2 => ({
+        u: p0.u + ((p1.u - p0.u) * t) / length,
+        v: p0.v + ((p1.v - p0.v) * t) / length,
+      });
+      const band = (y0: number, y1: number, hex: string, off: number, t0 = 0, t1 = length) => {
         detail.quad(
-          world(at(centre - half), y1 - 0.11, normal, 0.006),
-          world(at(centre + half), y1 - 0.11, normal, 0.006),
-          world(at(centre + half * 0.45), y1 - 0.05, normal, 0.006),
-          world(at(centre - half * 0.45), y1 - 0.05, normal, 0.006),
-          dark,
+          world(at(t0), y0, normal, off),
+          world(at(t1), y0, normal, off),
+          world(at(t1), y1, normal, off),
+          world(at(t0), y1, normal, off),
+          hex,
           facing
         );
-        // Half-columns between the arches.
-        band(detail, y0, y1, trim, 0.004, centre + bay / 2 - 0.016, centre + bay / 2 + 0.016);
+      };
+      if (looksIn[index]) {
+        // The arena wall's coping.
+        band(ARENA_WALL - 0.05, ARENA_WALL - 0.02, trim, 0.004);
+        return;
+      }
+      const wallTop = Math.min(top0, top1);
+      tiers.forEach(([y0, y1]) => {
+        if (y1 + 0.03 > wallTop + 1e-6) return;
+        band(y1, y1 + 0.03, trim, 0.004);
+        const bays = Math.max(1, Math.round(length / 0.28));
+        const bay = length / bays;
+        for (let bayIndex = 0; bayIndex < bays; bayIndex += 1) {
+          const centre = (bayIndex + 0.5) * bay;
+          const half = bay * 0.3;
+          // An arch: a dark opening with a pointed-round head.
+          band(y0 + 0.04, y1 - 0.11, dark, 0.006, centre - half, centre + half);
+          detail.quad(
+            world(at(centre - half), y1 - 0.11, normal, 0.006),
+            world(at(centre + half), y1 - 0.11, normal, 0.006),
+            world(at(centre + half * 0.45), y1 - 0.05, normal, 0.006),
+            world(at(centre - half * 0.45), y1 - 0.05, normal, 0.006),
+            dark,
+            facing
+          );
+          // Half-columns between the arches.
+          band(y0, y1, trim, 0.004, centre + bay / 2 - 0.016, centre + bay / 2 + 0.016);
+        }
+      });
+      if (wallTop >= attic[1] - 0.02) {
+        const windows = Math.max(1, Math.round(length / 0.56));
+        for (let w = 0; w < windows; w += 1) {
+          const centre = ((w + 0.5) * length) / windows;
+          band(attic[0] + 0.06, attic[0] + 0.14, dark, 0.006, centre - 0.05, centre + 0.05);
+        }
       }
     });
-    const windows = Math.max(1, Math.round(length / 0.56));
-    for (let w = 0; w < windows; w += 1) {
-      const centre = ((w + 0.5) * length) / windows;
-      band(detail, attic[0] + 0.06, attic[0] + 0.14, dark, 0.006, centre - 0.05, centre + 0.05);
-    }
-  }));
-  const outer = outlines.findIndex((outline) => outline.area > 0);
-  outlines.forEach((outline, index) => {
-    if (index !== outer && outline.area > 0) mass.cap(outline.points, [], attic[1], trim);
+    // The seating: the top, falling from the outer rim to the arena wall.
+    const contour = outline.points.map(({ u, v }) => new THREE.Vector2(u, v));
+    THREE.ShapeUtils.triangulateShape(contour, []).forEach(([a, b, c]) => {
+      const corner = (index: number): V3 => {
+        const { u, v } = outline.points[index];
+        return [wx(u), topAt[index], wz(v)];
+      };
+      mass.tri(corner(a), corner(b), corner(c), seats, [0, 1, 0]);
+    });
   });
-  if (outer >= 0) {
-    const holes = outlines.filter((o, i) => i !== outer && o.area < 0).map((o) => o.points);
-    mass.cap(outlines[outer].points, holes, attic[1], trim);
-  }
   return attic[1];
+}
+
+/**
+ * The open cells a ring of `m` cells encloses (the Colosseum's arena): floor
+ * nearer the ring's centre, on the ellipse through its bounds, than its
+ * innermost cell. Its gates (the ring's gaps) stay outside.
+ */
+export function ringInterior(rows: readonly string[]): Set<string> {
+  const ring = cellsOf(rows, 'm');
+  const inside = new Set<string>();
+  if (!ring.length) return inside;
+  const x0 = Math.min(...ring.map(({ x }) => x));
+  const x1 = Math.max(...ring.map(({ x }) => x));
+  const y0 = Math.min(...ring.map(({ y }) => y));
+  const y1 = Math.max(...ring.map(({ y }) => y));
+  const cu = (x0 + x1) / 2;
+  const cv = (y0 + y1) / 2;
+  const ru = (x1 - x0) / 2 + 0.5;
+  const rv = (y1 - y0) / 2 + 0.5;
+  const radius = (x: number, y: number) => Math.hypot((x - cu) / ru, (y - cv) / rv);
+  const innermost = Math.min(...ring.map(({ x, y }) => radius(x, y)));
+  for (let y = y0; y <= y1; y += 1) {
+    for (let x = x0; x <= x1; x += 1) {
+      const cls = rows[y][x];
+      if (!'mbew'.includes(cls) && radius(x, y) < innermost) inside.add(`${x},${y}`);
+    }
+  }
+  return inside;
 }
 
 /** Stone rims inside each water cell where it meets the bank: the river's quays. */

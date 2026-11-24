@@ -27,6 +27,7 @@ export const LANDMARK_EXTENTS: Record<
   marketStall: { radius: 1.05, height: 1.95 },
   rootArch: { radius: 1.75, height: 2.2 },
   cedar: { radius: 1.25, height: 5.4 },
+  umbrellaPine: { radius: 1.45, height: 3.9 },
   terraceBlock: { radius: 1.6, height: 1.9 },
   kilnDome: { radius: 1.1, height: 1.75 },
   clothTower: { radius: 0.8, height: 4.4 },

@@ -9,7 +9,7 @@ import { sceneTileMask } from '../arenaScene';
 import { MAP_OFFSET_X, MAP_OFFSET_Z, TILE_SIZE } from '../sceneSpace';
 import { buildStaticTileLayers } from '../staticTiles';
 import {
-  VILLAGE_BODY_CAP, VILLAGE_BUILDING_STYLES, VILLAGE_SOUTH_CAP, VILLAGE_TREE_CAP,
+  VILLAGE_BODY_CAP, VILLAGE_BUILDING_STYLES, VILLAGE_HOUSE_CAP, VILLAGE_SOUTH_CAP, VILLAGE_TREE_CAP,
   buildVillageBuildings, villageMaskRows,
 } from './villageBuildings';
 
@@ -108,6 +108,8 @@ describe('village buildings', () => {
 
     it(`${id}: keeps houses low, the border's crowns under the cap and its camera row low`, () => {
       expect(built.bodyTop).toBeGreaterThan(0.66);
+      // The signature towers top the village; houses stay lower.
+      expect(built.bodyTop).toBeGreaterThan(VILLAGE_HOUSE_CAP);
       expect(built.bodyTop).toBeLessThanOrEqual(VILLAGE_BODY_CAP);
       expect(built.southRowTop).toBeLessThanOrEqual(VILLAGE_SOUTH_CAP);
       expect(built.featureTop).toBeLessThanOrEqual(VILLAGE_TREE_CAP);
@@ -129,6 +131,24 @@ describe('village buildings', () => {
     it(`${id}: dresses an online room on this village exactly as Local Arena`, () => {
       const online = arenaMapForConfig({ mode: 'onlinePreview', selectedMap: id });
       expect(sceneTileMask(online, getStageLook(id), false)).toBe(mask);
+    });
+
+    it(`${id}: stands its signature buildings near the board's quarters`, () => {
+      const position = built.mass.getAttribute('position');
+      const towers = new Set<string>();
+      for (let index = 0; index < position.count; index += 1) {
+        const { u, v } = lattice(position.getX(index), position.getZ(index));
+        const inside = u > 1 && v > 1 && u < mask.rows[0].length - 1 && v < mask.rows.length - 1;
+        if (inside && position.getY(index) > VILLAGE_HOUSE_CAP + 0.05) {
+          towers.add(`${Math.floor(u)},${Math.floor(v)}`);
+        }
+      }
+      expect(towers.size).toBeGreaterThanOrEqual(2);
+      expect(towers.size).toBeLessThanOrEqual(4);
+      towers.forEach((cell) => {
+        const [x, y] = cell.split(',').map(Number);
+        expect(mask.rows[y][x]).toBe('b');
+      });
     });
 
     it(`${id}: builds the same village every time`, () => {

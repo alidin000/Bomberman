@@ -106,7 +106,12 @@ describe('city mask tiles', () => {
     ARENA_MAPS.filter((entry) => entry.family === 'city').forEach((entry) => {
       const look = getLook(entry.lookId);
       const tileMask = sceneTileMask(entry, look, false);
-      expect(tileMask?.rows).toBe(arenaMapMask(entry.id));
+      // The committed rows, but for a stadium's sand arena (class `a`).
+      const committed = arenaMapMask(entry.id)!;
+      expect(tileMask!.rows).toHaveLength(committed.length);
+      tileMask!.rows.forEach((row, y) => Array.from(row).forEach((cls, x) => {
+        if (cls !== committed[y][x]) expect(cls).toBe('a');
+      }));
       const grid = arenaMapRows(entry.id);
       const parsed = parseMapRows(grid);
       const all = everyCell(parsed);

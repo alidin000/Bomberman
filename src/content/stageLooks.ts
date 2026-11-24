@@ -45,6 +45,7 @@ export type StageLandmarkKind =
   | 'marketStall'
   | 'rootArch'
   | 'cedar'
+  | 'umbrellaPine'
   | 'terraceBlock'
   | 'kilnDome'
   | 'clothTower'
@@ -331,10 +332,10 @@ const CITY_LOOK_DATA: Record<CityLookId, StageLookData> = {
     hemisphere: { sky: '#ffeed4', ground: '#7a5c46', intensity: 0.85 },
     directional: { color: '#ffe4b8', intensity: 1.72 },
     // Past the board the city's own outskirts stand (scene/city/cityOutskirts.ts),
-    // so the skyline keeps only its famous place, and Rome its trees.
+    // so the skyline keeps only its famous place, and Rome its umbrella pines.
     landmarks: [
       {
-        kind: 'cedar', sector: 'far', body: '#5b4634', trim: '#41553a', weight: 0.9, scale: [0.85, 1.1],
+        kind: 'umbrellaPine', sector: 'far', body: '#6b5040', trim: '#4d6a3c', weight: 0.9, scale: [0.85, 1.1],
       },
       {
         kind: 'vittoriano', sector: 'far', body: '#efebe1', trim: '#d6cfbf', weight: 0, scale: [1, 1], anchor: { x: 6, y: -3 }, openSky: true,

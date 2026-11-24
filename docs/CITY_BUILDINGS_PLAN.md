@@ -295,8 +295,11 @@ blocks read as building blocks, not as the city.
   lower arched crossing. It has double chains swinging from the banks over
   both towers, hangers, iron railings and girders. The second bridge
   downstream gets the same towers, on the river cells either side of its
-  deck, so the two read as one city's bridges. Rome's Colosseum has three
-  arcade tiers and an attic. The landmark stones pass the floor rule.
+  deck, so the two read as one city's bridges. Rome's Colosseum reads as one
+  oval stadium: three arcade tiers and an attic on its north arc, two tiers
+  on the south as the ruin stands, its top falling inward as seating to a
+  low arena wall, round a sand arena floor (class `a`, which keeps the danger
+  cues readable). The landmark stones pass the floor rule.
 - Quays (phase 5): stone rims inside the water cells along every bank.
 - Crates as goods (phase 3, after the design review): Barcelona taped boxes
   on a pallet, Rome produce crates under a striped awning, Budapest and
@@ -337,6 +340,14 @@ blocks read as building blocks, not as the city.
 - High contrast keeps today's walls everywhere, and so does a tab that
   opened the Mission Deck with `?playtest=1`.
 
+- Roof life: chimneys on Rome's and Budapest's roofs, water tanks on
+  Barcelona's terraces, small value steps between neighbouring lots (never
+  lighter than the palette), and the border ring stepping by whole storeys.
+  Rome's skyline trees are umbrella pines.
+- Village signature buildings: up to four near the board's quarters, after
+  the atlas: Leaf's two-storey round hut, Sand's domed tower with its
+  outside stair, Mist's blue dome on a podium, Cloud's pagoda, and stacked
+  drums in Stone and the hideout. Up to 1.8 tall; houses stay under 1.3.
 - Outskirts past the board (`cityOutskirts.ts`): two-by-two blocks of low
   roofs on street-level ground round the floor slab, up to 1.4 behind the
   board, lower at the sides and at most 0.5 on the camera's side. They keep

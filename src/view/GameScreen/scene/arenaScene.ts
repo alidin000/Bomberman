@@ -11,6 +11,7 @@ import { isCityLookId } from '../../../content/cityColors';
 import { highContrastMaskColor, shadeHex } from './highContrast';
 import type { CheckerTones, TileMask } from './staticTiles';
 import { CITY_BUILDING_STYLES, buildingClasses } from './city/cityBuildings';
+import { ringInterior } from './city/boardLandmarks';
 import { VILLAGE_BUILDING_STYLES, villageMaskRows } from './city/villageBuildings';
 import { placeStageProps } from './landmarkPlacement';
 
@@ -152,11 +153,21 @@ export function sceneTileMask(
       const pavement: CheckerTones = {
         a: style.pavement, b: shadeHex(style.pavement, CHECKER_SHADE),
       };
+      // A stadium's arena (Rome's Colosseum) on its own sand floor, class `a`.
+      const sand = style.arenaFloor ? ringInterior(rows) : new Set<string>();
+      const floors: Record<string, CheckerTones> = {
+        ...mask.floors, b: pavement, e: pavement, m: pavement, x: mask.floors.r,
+      };
+      if (style.arenaFloor && sand.size) {
+        floors.a = { a: style.arenaFloor, b: shadeHex(style.arenaFloor, CHECKER_SHADE) };
+      }
       mask = {
         ...mask,
-        floors: {
-          ...mask.floors, b: pavement, e: pavement, m: pavement, x: mask.floors.r,
-        },
+        rows: sand.size
+          ? rows.map((row, y) => Array.from(row)
+            .map((cls, x) => (sand.has(`${x},${y}`) ? 'a' : cls)).join(''))
+          : rows,
+        floors,
         buildings: {
           kind: 'city',
           classes: buildingClasses(style),

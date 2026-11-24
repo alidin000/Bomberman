@@ -174,7 +174,9 @@ campaign, the hub and the online lobby keep their own stage lists.
   its landmark cells, draw as merged buildings (`scene/city/cityBuildings.ts`,
   `scene/city/boardLandmarks.ts`): several storeys with cornices, framed
   windows, shutters, balconies, pilasters, mansards, dormers and corner
-  turrets by city, Rome's Colosseum arcades, and stone quays along the water.
+  turrets by city, chimneys and water tanks, and stone quays along the water.
+  Rome's Colosseum is one oval stadium: three tiers on its north arc, two on
+  its south, seating falling inward to a low wall round a sand arena.
   Every deck over the river is a chain bridge, with towers on its `m` cells
   or on the river cells either side of the deck. Past the board a city's own
   outskirts stand (`scene/city/cityOutskirts.ts`): low roofs on street-level
@@ -186,7 +188,9 @@ campaign, the hub and the online lobby keep their own stage lists.
   border ring is one continuous edge (`scene/city/villageBorder.ts`): cliffs
   with strata and boulders, a forest of overlapping crowns with conifers
   behind, or stalagmites. Inside stand houses, round huts and stone blocks on
-  a dirt path, with grass beside the walls. A campaign's boss gates and its
+  a dirt path, with grass beside the walls, and up to four of the village's
+  signature buildings (a two-storey hut, a domed tower, a blue dome on a
+  podium, a pagoda or stacked drums) near the board's quarters. A campaign's boss gates and its
   village square, with the square's wall ring, keep their own tiles and
   dressing. Under the campaign's fog, a house or tree shows once any of its
   cells is explored, darkened until it is in sight, and collapses to nothing

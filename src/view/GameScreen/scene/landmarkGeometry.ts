@@ -92,6 +92,15 @@ const LANDMARK_PARTS: Record<StageLandmarkKind, () => Part[]> = {
     standing(cone(0.9, 1.35, 7), 'trim', 1.35, 0, 2.9, 0, [0, 0.3, 0]),
     standing(cone(0.62, 1.4, 7), 'trim', 1.4, 0, 3.9, 0, [0, 0.6, 0]),
   ],
+  // Rome's stone pine: a tall bare trunk, leaning and forking under a wide,
+  // flat crown.
+  umbrellaPine: () => [
+    pad(0.6, 0.3),
+    standing(cylinder(0.12, 0.2, 2.6, 6), 'body', 2.6, 0, 0.3, 0, [0, 0, 0.08]),
+    standing(cylinder(0.07, 0.11, 0.7, 5), 'body', 0.7, 0.32, 2.65, 0, [0, 0, -0.5]),
+    standing(cylinder(1.22, 0.9, 0.5, 9), 'trim', 0.5, 0.12, 2.95, 0),
+    standing(cylinder(0.72, 1.22, 0.32, 9), 'trim', 0.32, 0.12, 3.45, 0, [0, 0.35, 0]),
+  ],
   terraceBlock: () => [
     standing(box(2.2, 0.62, 1.8), 'body', 0.62, 0, 0, 0),
     standing(box(1.6, 0.62, 1.3), 'body', 0.62, -0.15, 0.62, -0.1),

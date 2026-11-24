@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { CityLookId } from '../../../../content/cityColors';
 import {
   Cell, GeometryBuilder, Lot, Outline, STREET_CLASSES, V2, V3, blockOutlines, cellId, chainLoops,
+  lathe,
   cutLots, hashString, insetOutline, pick, seeded, shadeHex, unitEdges, world, wx, wz,
 } from './cityGeometry';
 import { buildBoardLandmarks, type BoardLandmark } from './boardLandmarks';
@@ -83,6 +84,8 @@ export interface CityBuildingStyle {
   landmarkStone: string;
   /** Stone rims where the river meets the bank. */
   quay: string;
+  /** The arena floor inside a stadium landmark (Rome's Colosseum): sand. */
+  arenaFloor?: string;
   /** What the city's crates look like: its goods, never small buildings. */
   crate: CrateStyle;
 }
@@ -141,6 +144,7 @@ export const CITY_BUILDING_STYLES: Readonly<Record<CityLookId, CityBuildingStyle
     turrets: 0,
     landmark: 'colosseum',
     landmarkStone: '#877254',
+    arenaFloor: '#d6bf8e',
     quay: '#cdbf9f',
     crate: 'produce',
   },
@@ -687,7 +691,9 @@ export function buildCityBuildings(
     }));
     const lotOf = (x: number, y: number) => lotIndex.get(cellId(x, y)) ?? -1;
     const lotWalls = lots.map(() => {
-      const wall = pick(rnd, style.facades);
+      // Neighbouring lots step a little in value, never lighter than the
+      // palette (so never nearer the floor than the colour rules allow).
+      const wall = shadeHex(pick(rnd, style.facades), 0.92 + rnd() * 0.08);
       return { wall, plinth: shadeHex(wall, 0.82), joint: shadeHex(wall, 0.66) };
     });
     const wallFor = (lot: number) => (lotWalls[lot] ?? lotWalls[0]).wall;
@@ -697,7 +703,8 @@ export function buildCityBuildings(
     const south = cells.some(({ y }) => y === height - 1);
     const ring = classAt(x0, y0) === 'e';
     let eave = style.eaves[0] + rnd() * (style.eaves[1] - style.eaves[0]);
-    if (ring && !south) eave += style.ringBoost;
+    // The ring steps by whole storeys from run to run, so it reads as houses.
+    if (ring && !south) eave += style.ringBoost - style.floor * Math.floor(rnd() * 3);
     if (south) eave = SOUTH_EAVE;
     const roof: CityRoof = south ? 'flat' : style.roof;
     const loops = chainLoops(unitEdges(cells, inBlock));
@@ -756,6 +763,17 @@ export function buildCityBuildings(
           mass.box(u, u + size, v, v + size, eave, eave + lift, wall, style.trim);
           featureTop = Math.max(featureTop, eave + lift);
         });
+        // Water tanks on Barcelona's terraces.
+        lots.forEach((lot) => {
+          if (rnd() > 0.35) return;
+          const cell = pick(rnd, lot.cells);
+          const u = cell.x + 0.3 + rnd() * 0.4;
+          const v = cell.y + 0.3 + rnd() * 0.4;
+          lathe(mass, u, v, [
+            { r: 0.075, y: eave }, { r: 0.075, y: eave + 0.15 }, { r: 0, y: eave + 0.2 },
+          ], style.trim, rnd() * Math.PI, 6);
+          featureTop = Math.max(featureTop, eave + 0.2);
+        });
       }
     } else {
       const outer = outlines.findIndex((outline) => outline.area > 0);
@@ -776,14 +794,25 @@ export function buildCityBuildings(
         };
         const rise = style.rise[0] + rnd() * (style.rise[1] - style.rise[0]);
         const hex = pick(rnd, style.roofs);
+        let ridge: number;
         if (roof === 'mansard') {
           mansardRoof(builders, lot, external, eave, rise, hex, style);
-          blockTop = Math.max(blockTop, eave + MANSARD_HEIGHT + rise);
+          ridge = eave + MANSARD_HEIGHT + rise;
         } else {
           const rect = roofRect(lot, external);
           fascia(mass, rect, eave, shadeHex(hex, 0.7));
           hipCap(mass, rect, eave, rise, hex);
-          blockTop = Math.max(blockTop, eave + rise);
+          ridge = eave + rise;
+        }
+        blockTop = Math.max(blockTop, ridge);
+        // A chimney through the roof, every other lot.
+        if (rnd() < 0.5) {
+          const u = lot.x + lot.w * (0.35 + rnd() * 0.3);
+          const v = lot.y + lot.h * (0.35 + rnd() * 0.3);
+          const top = ridge + 0.12;
+          const brick = shadeHex(wallFor(0), 0.85);
+          mass.box(u - 0.04, u + 0.04, v - 0.04, v + 0.04, eave, top, brick, style.trim);
+          featureTop = Math.max(featureTop, top);
         }
       });
     }
