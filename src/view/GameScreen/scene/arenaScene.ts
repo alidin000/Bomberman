@@ -1,12 +1,17 @@
 import type { GameConfig } from '../../../engine/types';
 import {
-  ArenaMapEntry, FloorMaskClass, arenaMapForConfig, arenaMapMask,
+  ArenaMapEntry, FloorMaskClass, arenaMapForConfig, arenaMapMask, arenaMapRows,
 } from '../../../content/arenaMaps';
+import type { StageId } from '../../../content/types';
+import type { GameMap } from '../../../model/gameItem';
 import {
   CityMaskColors, StageLook, getLook, getStageLook,
 } from '../../../content/stageLooks';
+import { isCityLookId } from '../../../content/cityColors';
 import { highContrastMaskColor, shadeHex } from './highContrast';
 import type { CheckerTones, TileMask } from './staticTiles';
+import { CITY_BUILDING_STYLES, buildingClasses } from './city/cityBuildings';
+import { VILLAGE_BUILDING_STYLES, villageMaskRows } from './city/villageBuildings';
 
 type MapIdentity = Pick<GameConfig, 'mode' | 'selectedMap' | 'stageId'>;
 
@@ -56,23 +61,106 @@ export function maskTones(
 
 const TILE_MASKS = new Map<string, TileMask>();
 
+const VILLAGE_MASKS = new WeakMap<object, Map<string, TileMask>>();
+const ARENA_ROWS = new Map<string, string[][]>();
+const NO_SKIP: ReadonlySet<string> = new Set();
+
+/** An arena's authored rows, read once: its village mask is then one object per map. */
+function arenaRows(id: ArenaMapEntry['id']): string[][] {
+  let rows = ARENA_ROWS.get(id);
+  if (!rows) {
+    rows = arenaMapRows(id);
+    ARENA_ROWS.set(id, rows);
+  }
+  return rows;
+}
+
 /**
- * A match's render mask in its look's colours: a city map's, or null (the
- * villages and the campaign draw as before). One object per map, look and
- * contrast setting, so the tiles rebuild only when one of them changes.
+ * A village map's mask, in any mode (arena, online room, campaign,
+ * training): no wall colours of its own and the palette floor but for its
+ * path, only its walls drawn as the village, when the village has a
+ * building style. Null otherwise. One object per grid, village and skipped
+ * cells (a campaign's boss gates).
+ */
+function villageTileMask(
+  look: StageLook,
+  grid: readonly (readonly unknown[])[],
+  skip: ReadonlySet<string>
+): TileMask | null {
+  const style = VILLAGE_BUILDING_STYLES[look.lookId as StageId];
+  if (!style) return null;
+  const key = `${look.lookId}|${[...skip].sort().join(';')}`;
+  let masks = VILLAGE_MASKS.get(grid);
+  if (!masks) {
+    masks = new Map();
+    VILLAGE_MASKS.set(grid, masks);
+  }
+  let mask = masks.get(key);
+  if (!mask) {
+    mask = {
+      rows: villageMaskRows(grid, skip),
+      floors: style.path ? { p: { a: style.path, b: shadeHex(style.path, CHECKER_SHADE) } } : {},
+      water: style.borderGround,
+      walls: {},
+      buildings: {
+        kind: 'village', classes: 'be', style, seed: look.lookId, crate: style.crate,
+      },
+    };
+    masks.set(key, mask);
+  }
+  return mask;
+}
+
+/**
+ * A match's render mask in its look's colours: a city map's, a village's
+ * (its walls as the village, in every mode), or null. One object per map,
+ * look, contrast setting and buildings choice, so the tiles rebuild only when
+ * one of them changes. A village outside the arena catalog (the campaign,
+ * training) builds from the match's own `map`; `skip` keeps cells that change
+ * (a campaign's boss gates) out of its buildings.
+ *
+ * With `buildings`, a city's building and border walls, and its landmark,
+ * draw as merged buildings (scene/city/CityBuildings.tsx) on a pavement floor, and crossing
+ * cells take the road's tone under their stripes. High contrast keeps
+ * today's walls, whose contrast rules are tested.
  */
 export function sceneTileMask(
   arena: ArenaMapEntry | undefined,
   look: StageLook,
-  highContrast: boolean
+  highContrast: boolean,
+  buildings = true,
+  map: GameMap | null = null,
+  skip: ReadonlySet<string> = NO_SKIP
 ): TileMask | null {
-  if (!arena || !look.mask) return null;
+  if (!look.mask) {
+    if (!buildings || highContrast) return null;
+    const grid = arena?.family === 'village' ? arenaRows(arena.id) : map;
+    return grid ? villageTileMask(look, grid, skip) : null;
+  }
+  if (!arena) return null;
   const rows = arenaMapMask(arena.id);
   if (!rows) return null;
-  const key = `${arena.id}|${look.lookId}|${highContrast ? 'high' : 'normal'}`;
+  const style = buildings && !highContrast && isCityLookId(look.lookId)
+    ? CITY_BUILDING_STYLES[look.lookId]
+    : undefined;
+  const key = `${arena.id}|${look.lookId}|${highContrast ? 'high' : 'normal'}|${style ? 'buildings' : 'walls'}`;
   let mask = TILE_MASKS.get(key);
   if (!mask) {
     mask = { rows, ...maskTones(look.mask, highContrast) };
+    if (style) {
+      const pavement: CheckerTones = {
+        a: style.pavement, b: shadeHex(style.pavement, CHECKER_SHADE),
+      };
+      mask = {
+        ...mask,
+        floors: {
+          ...mask.floors, b: pavement, e: pavement, m: pavement, x: mask.floors.r,
+        },
+        buildings: {
+          kind: 'city', classes: buildingClasses(style), style, seed: arena.id, crate: style.crate,
+        },
+      };
+    }
     TILE_MASKS.set(key, mask);
   }
   return mask;

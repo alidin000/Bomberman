@@ -266,6 +266,73 @@ rebuilt identical, and the files came to 2.9–12.2 KB.
   ODbL data, so `public/maps/city/NOTICE.txt` must list it. It ships no names:
   75% of Budapest's building cells are named, some as hotel brands.
 
+## Build Status (2026-11-24)
+
+![Barcelona's play view with buildings](images/city-buildings-barcelona.png)
+
+![Budapest's Chain Bridge](images/city-buildings-budapest.png)
+
+![Hidden Leaf's arena drawn as its village](images/village-buildings-leaf.png)
+
+Built: phases 1-4 and the quays from phase 5 for all three cities and the
+control, plus the village arenas, after playtest feedback that the first
+blocks read as building blocks, not as the city.
+
+- Taller buildings. Bodies reach 2.1 and features 2.5 (`BODY_CAP`,
+  `FEATURE_CAP`). Barcelona has flat terraces, xamfrans and balconies on
+  every floor. Rome has hipped tile roofs, green shutters and first-floor
+  balconies. Budapest has slate mansards with dormers, pilasters and corner
+  turrets. Every city has framed dark windows, cornices and string courses.
+- A cut-away replaces the 0.94 cap. The cells from the row of each
+  fighter, bomb, cell a bomb's blast will cross, blast, pickup, monster, boss
+  and hazard in sight, to two rows toward the camera and a column either
+  side, sink to 0.36 of their height (at most 0.9). They ease over a sixth of a second,
+  or snap under reduced motion. The border row nearest the camera stays at
+  0.94. Tested: every vertex in front of a focus is under 0.94 once sunk, and
+  exact again at full height.
+- On-board landmarks (phase 4). Budapest's Chain Bridge has two stone
+  towers, each a pair of pylons with the blind arch facing the camera and a
+  lower arched crossing. It has double chains swinging from the banks over
+  both towers, hangers, iron railings and girders. The second bridge
+  downstream gets the same towers, on the river cells either side of its
+  deck, so the two read as one city's bridges. Rome's Colosseum has three
+  arcade tiers and an attic. The landmark stones pass the floor rule.
+- Quays (phase 5): stone rims inside the water cells along every bank.
+- City crates (phase 3): Barcelona kiosks, Rome market stalls, Budapest
+  sheds. They are no taller than today's crate and keep a gap to the next
+  cell. Vertex colours are shade only, so the crate colour, the broken and
+  explored tints and player obstacles still show.
+- Village arenas, after `src/assets/ninja-bomber-stage-atlas.png`:
+  - Leaf: a forest ring, thatched timber houses, round huts, mossy stones,
+    dirt paths, and huts for crates.
+  - Sand: rock outcrops, flat adobe with beam ends, and domes.
+  - Mist: grey-blue rock, stone houses and blue domes.
+  - Cloud: moss-roofed stone shrines.
+  - Stone: rock mesas and stone houses.
+  - Akatsuki hideout: stalagmite spires and dark stone with lantern-red
+    openings.
+  - The war front keeps its palisade.
+  - The same villages dress online rooms, training and the campaign, built
+    from each match's map. The campaign keeps its boss gates and its village
+    square (with the square's own dressing) as before. Under its fog a house
+    or tree shows once any of its cells is explored, darkened until in sight,
+    and is gone while hidden.
+  - Each village's colours pass the cities' floor and flame rules against
+    its own floor (`villageBuildings.test.ts`).
+- Windows are now dark glass, darker than every facade and as far from
+  flame orange as the walls. This replaces colour rule 3's tone-on-tone.
+- Two draws on the wall program, checked in the scene test for a city and a
+  village. In the browser, every city and village keeps 17 programs and links
+  none after GO.
+- The budget test still measures cities against Hidden Leaf, which now draws
+  its village too (about 80,000 triangles, up from 69,000). Cities run at
+  about 73,000-87,000.
+- High contrast keeps today's walls everywhere, and so does a tab that
+  opened the Mission Deck with `?playtest=1`.
+
+Not yet: the buildings layer from real lots (phase 6), a high-contrast
+variant (phase 7), and boats and bollards.
+
 ## Phases
 
 Each phase ends in something playable, with screenshots both owners review

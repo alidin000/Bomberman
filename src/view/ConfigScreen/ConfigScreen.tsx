@@ -105,6 +105,7 @@ import {
 } from '../../content/arenaMaps';
 import { CITY_COLORS, isCityLookId } from '../../content/cityColors';
 import { ArenaCredit, CityMapPreview } from '../CityArena/CityArena';
+import { rememberCityPlaytest } from '../CityArena/playtestSession';
 import { STAGE_SYMBOL } from '../../content/villageSymbols';
 import { villageMarkImage } from '../../theme/VillageMark';
 import {
@@ -217,6 +218,9 @@ export const ConfigScreen = () => {
   // The city playtest's control map is listed only on the playtest address.
   const playtest = search.get('playtest') === '1';
   const arenas = useMemo(() => arenaChoices(playtest), [playtest]);
+  useEffect(() => {
+    if (playtest) rememberCityPlaytest();
+  }, [playtest]);
   const initialStoryProgress = useMemo(() => loadStoryProgress(), []);
   // Reopen the deck on the last local battle setup, if that was the last match.
   const lastLocalSetup = useMemo(

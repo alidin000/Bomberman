@@ -3,6 +3,8 @@ import { cellKey, withUpdatedFogOfWar } from '../../../engine/fogOfWar';
 import { parseMapRows } from '../../../engine/mapLoader';
 import { createInitialState } from '../../../engine/initialState';
 import type { CampaignRuntimeState } from '../../../engine/types';
+import { crateShape } from './StaticTiles';
+import type { CrateStyle } from './city/cityBuildings';
 import {
   buildStaticTileLayers,
   campaignTileFeatureKey,
@@ -203,5 +205,31 @@ describe('incremental tile rewrites on a 50x50 map', () => {
     // Rebuilding without a fog change rewrites nothing at all.
     const again = build(after);
     STATIC_TILE_LAYER_IDS.forEach((id) => expect(firstChangedTile(b[id], again[id])).toBe(-1));
+  });
+});
+
+describe('crates drawn as small buildings', () => {
+  const STYLES: CrateStyle[] = ['kiosk', 'stall', 'shed', 'hut', 'dome'];
+
+  it('keeps every crate building lower than a wall and inside its cell, with room to tell apart', () => {
+    const plain = crateShape(undefined);
+    plain.geometry.computeBoundingBox();
+    STYLES.forEach((style) => {
+      const shape = crateShape(style);
+      expect(shape).not.toBe(plain);
+      // Built once and shared, like the walls.
+      expect(crateShape(style)).toBe(shape);
+      shape.geometry.computeBoundingBox();
+      const box = shape.geometry.boundingBox!;
+      // No taller than today's crate, so far under a 0.94 wall and the buildings.
+      expect(box.max.y).toBeLessThanOrEqual(plain.geometry.boundingBox!.max.y + 1e-6);
+      expect(box.min.y).toBeGreaterThanOrEqual(-1e-6);
+      // A gap to the next cell on every side.
+      [box.min.x, box.max.x, box.min.z, box.max.z].forEach((edge) => {
+        expect(Math.abs(edge)).toBeLessThanOrEqual(0.4);
+      });
+      // Shaded vertex colours only: the crate colour still comes from the instance.
+      expect(shape.vertexColors).toBe(true);
+    });
   });
 });

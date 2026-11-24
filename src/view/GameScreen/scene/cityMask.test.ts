@@ -125,9 +125,16 @@ describe('city mask tiles', () => {
     });
   });
 
-  it('gives villages and the campaign no mask, and a city route its own look whatever the stage says', () => {
+  it('gives villages only their buildings, the campaign no mask, and a city route its own look', () => {
     STAGE_DEFINITIONS.forEach((stage) => {
-      expect(sceneTileMask(getArenaMap(stage.id), getStageLook(stage.id), false)).toBeNull();
+      const village = sceneTileMask(getArenaMap(stage.id), getStageLook(stage.id), false);
+      // A village's mask recolours nothing but its own path, and draws its walls as the village.
+      if (village) {
+        expect(village.buildings?.kind).toBe('village');
+        expect(Object.keys(village.floors).filter((cls) => cls !== 'p')).toEqual([]);
+        expect(village.walls).toEqual({});
+      }
+      expect(sceneTileMask(undefined, getStageLook(stage.id), false)).toBeNull();
       expect(sceneLookFor({ mode: 'local', selectedMap: stage.id, stageId: stage.id }))
         .toBe(getStageLook(stage.id));
     });

@@ -4,6 +4,8 @@ import { cellKey } from '../../../engine/fogOfWar';
 import type { CampaignRuntimeState } from '../../../engine/types';
 import { GameMap, isObstacle } from '../../../model/gameItem';
 import { highContrastPalette } from './highContrast';
+import type { CityBuildingStyle, CrateStyle } from './city/cityBuildings';
+import type { VillageBuildingStyle } from './city/villageBuildings';
 
 type StagePalette = StageDefinition['palette'];
 
@@ -85,6 +87,12 @@ export function tileFeaturesFromKey(key: string): StaticTileFeatures {
 /** A floor class's two checker tones: `a` on odd cells, `b` on even ones, like groundA/B. */
 export type CheckerTones = { a: string; b: string };
 
+/** Which walls draw as buildings, how, and what the crates look like. */
+export type BuildingPlan = { classes: string; seed: string; crate: CrateStyle } & (
+  | { kind: 'city'; style: CityBuildingStyle }
+  | { kind: 'village'; style: VillageBuildingStyle }
+);
+
 /**
  * A city's render mask, ready to draw: its rows of classes
  * (content/arenaMaps.ts) and the colour of each class. Floor classes recolour
@@ -97,6 +105,12 @@ export type TileMask = {
   floors: Readonly<Record<string, CheckerTones>>;
   water: string;
   walls: Readonly<Record<string, string>>;
+  /**
+   * Wall classes drawn as merged buildings (scene/city/CityBuildings.tsx)
+   * instead of wall cubes: a city's in its building style, a village's in
+   * its village style. Absent, every wall is a cube.
+   */
+  buildings?: BuildingPlan;
 };
 
 /** Only a mask the size of the map is drawn; any other draws the map plain. */
@@ -342,8 +356,14 @@ export function buildStaticTileLayers(
         return;
       }
       if (cell === 'Wall') {
-        if (explored) layers.wallExplored.push({ x, y, color: EXPLORED_WALL_COLOR });
-        else {
+        if (maskClass && mask?.buildings?.classes.includes(maskClass)) {
+          // CityBuildings draws this wall as part of its block, seen or
+          // explored (darkened under fog). Building walls never change
+          // mid-match; sudden death's new walls land on floor classes and a
+          // campaign's gates stay out of the mask, so those stay cubes here.
+        } else if (explored) {
+          layers.wallExplored.push({ x, y, color: EXPLORED_WALL_COLOR });
+        } else {
           const tint = maskClass && mask ? mask.walls[maskClass] : undefined;
           layers.wallVisible.push({ x, y, color: tint ?? palette.wall });
         }

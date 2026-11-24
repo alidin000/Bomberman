@@ -21,6 +21,7 @@ import {
   maskWaterCount,
   wallStyleForPalette,
 } from './staticTiles';
+import type { CrateStyle } from './city/cityBuildings';
 
 export type TileShape = {
   geometry: THREE.BufferGeometry;
@@ -37,10 +38,11 @@ function normalShade(x: number, y: number, z: number): number {
   return 0.72;
 }
 
-type ShadedPart = { geometry: THREE.BufferGeometry; shade?: number };
+type ShadedPart = { geometry: THREE.BufferGeometry; shade?: number; tone?: number };
 
 // Merges parts into one vertex-coloured shape. A part with `shade` is a
-// flat-toned detail (a dark crack or seam); the rest shade by face normal.
+// flat-toned detail (a dark crack or seam); the rest shade by face normal,
+// scaled by `tone` (a darker roof over lighter walls).
 function mergeShaded(input: ShadedPart[], name: string): THREE.BufferGeometry {
   // Polyhedra come without an index: then merge everything unindexed.
   const plain = input.some((part) => !part.geometry.index);
@@ -52,12 +54,12 @@ function mergeShaded(input: ShadedPart[], name: string): THREE.BufferGeometry {
       return { ...part, geometry };
     })
     : input;
-  parts.forEach(({ geometry, shade }) => {
+  parts.forEach(({ geometry, shade, tone: scale = 1 }) => {
     const normals = geometry.getAttribute('normal');
     const colors = new Float32Array(normals.count * 3);
     for (let index = 0; index < normals.count; index += 1) {
       const tone = shade
-        ?? normalShade(normals.getX(index), normals.getY(index), normals.getZ(index));
+        ?? scale * normalShade(normals.getX(index), normals.getY(index), normals.getZ(index));
       colors[index * 3] = tone;
       colors[index * 3 + 1] = tone;
       colors[index * 3 + 2] = tone;
@@ -222,6 +224,68 @@ const WALL_BUILDERS: Record<Exclude<WallStyle, 'masonry'>, () => ShadedPart[]> =
 
 const WALL_SHAPES = new Map<WallStyle, TileShape>();
 
+// A city's crates as small street buildings, smaller and lower than its real
+// buildings so destructible and solid stay easy to tell apart. Their colour
+// is still the crate colour (the instance colour), so breaking, high contrast
+// and player obstacles tint them as before.
+
+const CRATE_BUILDERS: Record<CrateStyle, () => ShadedPart[]> = {
+  // Sand and Mist: a little drum under a dome.
+  dome: () => [
+    { geometry: new THREE.CylinderGeometry(0.27, 0.28, 0.3, 8).translate(0, 0.15, 0) },
+    {
+      geometry: new THREE.SphereGeometry(0.29, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2)
+        .translate(0, 0.3, 0),
+      tone: 0.8,
+    },
+    { geometry: box([0.12, 0.2, 0.02], [0, 0.1, 0.28]), shade: 0.42 },
+  ],
+  // Leaf: a little round hut under a conical thatch.
+  hut: () => [
+    { geometry: new THREE.CylinderGeometry(0.26, 0.28, 0.36, 8).translate(0, 0.18, 0) },
+    { geometry: new THREE.ConeGeometry(0.38, 0.3, 8).translate(0, 0.36 + 0.15, 0), tone: 0.74 },
+    { geometry: box([0.12, 0.22, 0.02], [0, 0.11, 0.275]), shade: 0.42 },
+  ],
+  // Barcelona: a kiosk under a flat, overhanging roof, shutter down.
+  kiosk: () => [
+    { geometry: box([0.6, 0.44, 0.56], [0, 0.22, 0]) },
+    { geometry: box([0.72, 0.05, 0.68], [0, 0.465, 0]), tone: 0.72 },
+    { geometry: box([0.42, 0.22, 0.02], [0, 0.21, 0.29]), shade: 0.45 },
+    { geometry: box([0.6, 0.05, 0.02], [0, 0.39, 0.29]), shade: 1.15 },
+  ],
+  // Rome: a market stall under a ridged awning.
+  stall: () => [
+    { geometry: box([0.62, 0.34, 0.52], [0, 0.17, 0]) },
+    { geometry: ridge(0.74, 0.68, 0.22, 0.34), tone: 0.74 },
+    { geometry: box([0.46, 0.14, 0.02], [0, 0.2, 0.27]), shade: 0.45 },
+  ],
+  // Budapest: a little gabled shed with a door and a window.
+  shed: () => [
+    { geometry: box([0.6, 0.4, 0.54], [0, 0.2, 0]) },
+    { geometry: ridge(0.72, 0.66, 0.22, 0.4), tone: 0.7 },
+    { geometry: box([0.14, 0.26, 0.02], [-0.12, 0.13, 0.28]), shade: 0.42 },
+    { geometry: box([0.14, 0.1, 0.02], [0.14, 0.24, 0.28]), shade: 0.55 },
+  ],
+};
+
+const CRATE_SHAPES = new Map<CrateStyle, TileShape>();
+
+/** The crate shape for a city's crate style, or the plain crate. */
+export function crateShape(style: CrateStyle | undefined): TileShape {
+  // eslint-disable-next-line no-use-before-define -- only called after module load
+  if (!style) return TILE_SHAPES.crate;
+  let shape = CRATE_SHAPES.get(style);
+  if (!shape) {
+    shape = {
+      geometry: mergeShaded(CRATE_BUILDERS[style](), `${style} crate`),
+      elevation: 0,
+      vertexColors: true,
+    };
+    CRATE_SHAPES.set(style, shape);
+  }
+  return shape;
+}
+
 /** The wall shape for a village style: built once per style and kept. */
 export function wallShape(style: WallStyle): TileShape {
   let shape = WALL_SHAPES.get(style);
@@ -354,6 +418,12 @@ function StaticTileLayer({
   );
 }
 
+function tileShapeFor(shape: StaticTileShape, wall: TileShape, crate: TileShape): TileShape {
+  if (shape === 'wall') return wall;
+  if (shape === 'crate') return crate;
+  return TILE_SHAPES[shape];
+}
+
 /**
  * Ground tiles, walls, crates and player obstacles for the whole map, drawn as
  * a handful of instanced meshes. Instances are rewritten only when the map,
@@ -382,6 +452,8 @@ export function StaticTiles({
   const styles = useMemo(() => getStaticTileLayerStyles(palette), [palette]);
   // The village's walls: explored ones keep the shape, only their colour dims.
   const wall = wallShape(wallStyleForPalette(palette));
+  // A city or village with buildings shows its crates as small buildings.
+  const crate = crateShape(mask?.buildings?.crate);
   // Only a map whose mask has water gets the water layer at all.
   const waterCapacity = useMemo(() => maskWaterCount(map, mask), [map, mask]);
   const layers = useMemo(
@@ -410,7 +482,7 @@ export function StaticTiles({
           cells={layers[id]}
           style={styles[id]}
           capacity={layerCapacity(id)}
-          shape={styles[id].shape === 'wall' ? wall : TILE_SHAPES[styles[id].shape]}
+          shape={tileShapeFor(styles[id].shape, wall, crate)}
         />
       ))}
     </>

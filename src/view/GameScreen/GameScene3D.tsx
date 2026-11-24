@@ -102,6 +102,8 @@ import {
 } from './scene/motionFeel';
 import { StageAtmosphere } from './scene/StageAtmosphere';
 import { StageLandmarks } from './scene/StageLandmarks';
+import { CityBuildings } from './scene/city/CityBuildings';
+import { isCityPlaytestSession } from '../CityArena/playtestSession';
 import { SceneryContext } from './scene/scenery';
 import { BOARD_LIP } from './scene/landmarkPlacement';
 import { MonsterFigure, monsterIsTranslucent } from './scene/MonsterFigure';
@@ -2835,18 +2837,44 @@ function SceneContentBase({
     () => (highContrast ? highContrastPalette(look.palette) : look.palette),
     [highContrast, look.palette],
   );
+  // City buildings stay off in a playtest tab (CityArena/playtestSession.ts).
+  const cityBuildings = useMemo(() => !isCityPlaytestSession(), []);
+  const tileFeatureKey = campaignTileFeatureKey(state.campaign);
+  const tileFeatures = useMemo(() => tileFeaturesFromKey(tileFeatureKey), [tileFeatureKey]);
+  // A campaign's gates open, so they stay out of its village's buildings, and
+  // so does its village square with its wall ring, which keeps its own
+  // dressing (scene/village/squareDressing.ts).
+  const gateKey = tileFeatureKey.split('|')[2] ?? '';
+  const squareBounds = activeSquareLayout(state.config)?.bounds;
+  const squareKey = squareBounds
+    ? `${squareBounds.x0},${squareBounds.y0},${squareBounds.x1},${squareBounds.y1}`
+    : '';
+  const gateCells = useMemo(() => {
+    const cells = new Set(gateKey ? gateKey.split(';') : []);
+    if (squareKey) {
+      const [x0, y0, x1, y1] = squareKey.split(',').map(Number);
+      for (let y = y0 - 1; y <= y1 + 1; y += 1) {
+        for (let x = x0 - 1; x <= x1 + 1; x += 1) cells.add(`${x},${y}`);
+      }
+    }
+    return cells;
+  }, [gateKey, squareKey]);
   const tileMask = useMemo(
-    () => sceneTileMask(arena, look, highContrast),
-    [arena, highContrast, look]
+    () => sceneTileMask(arena, look, highContrast, cityBuildings, state.config.map ?? null, gateCells),
+    [arena, cityBuildings, gateCells, highContrast, look, state.config.map]
   );
   const overview = useMemo(() => hasRoundOverview({ mode, selectedMap }), [mode, selectedMap]);
   useHighContrastMaterials(highContrast, HIGH_CONTRAST_MATERIALS);
   const mapDimensions = useMemo(() => getMapDimensions(state.map), [state.map]);
-  const tileFeatureKey = campaignTileFeatureKey(state.campaign);
-  const tileFeatures = useMemo(() => tileFeaturesFromKey(tileFeatureKey), [tileFeatureKey]);
   const visibleCellSet = useMemo(
     () => new Set(state.fogOfWar.visible ?? []),
     [state.fogOfWar.visible],
+  );
+  // Only the solo campaign has fog (engine/fogOfWar.ts); elsewhere every cell is seen.
+  const fogged = mode === 'solo';
+  const exploredCellSet = useMemo(
+    () => (fogged ? new Set(state.fogOfWar.explored ?? []) : null),
+    [fogged, state.fogOfWar.explored],
   );
   const sensedEnemyCells = useMemo(
     () => new Set(state.fogOfWar.sensedEnemies ?? []),
@@ -2945,6 +2973,13 @@ function SceneContentBase({
         powerTheme={state.players[0]?.characterId}
         blastStop={squareBlastStop(state.config)}
         mask={tileMask}
+      />
+      <CityBuildings
+        mask={tileMask}
+        readState={readLiveState}
+        reducedMotion={preferences.reducedMotion}
+        visibleCells={fogged ? visibleCellSet : null}
+        exploredCells={exploredCellSet}
       />
       {state.players.map((player) => player.teleportMark && (
         <FlyingThunderMarker

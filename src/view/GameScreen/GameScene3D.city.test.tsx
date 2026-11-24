@@ -177,6 +177,61 @@ describe('GameScene3D city arenas', () => {
     view.unmount();
   });
 
+  it('draws the city\'s buildings on the walls\' own program, their detail only with scenery on', async () => {
+    const state = cityState('budapest', { roundStartTicksRemaining: 0 });
+    const dressed = await mount(state, {
+      preferences: { ...DEFAULT_GAME_PREFERENCES, scenery: true },
+    });
+    dressed.run(50);
+    const { scene, gl } = dressed.root();
+    const mass = tileLayer(scene, 'cityBuildingMass');
+    const detail = tileLayer(scene, 'cityBuildingDetail');
+    const crates = tileLayer(scene, 'crateVisible');
+    expect(mass?.visible).toBe(true);
+    expect(detail?.visible).toBe(true);
+    // Every building and border wall is part of a block: no cube is left
+    // for them (the mocked mask has no other walls than water).
+    expect(tileLayer(scene, 'wallVisible')?.count ?? 0).toBe(0);
+    // Walls and crates share one program; the buildings must reuse it.
+    const program = (mesh: THREE.Mesh) => gl.properties.get(mesh.material).currentProgram;
+    expect(program(mass!)).toBeDefined();
+    expect(program(mass!)).toBe(program(crates!));
+    expect(program(detail!)).toBe(program(crates!));
+    dressed.unmount();
+
+    const plain = await mount(state, {
+      preferences: { ...DEFAULT_GAME_PREFERENCES, scenery: false },
+    });
+    plain.run(50);
+    expect(tileLayer(plain.root().scene, 'cityBuildingMass')?.visible).toBe(true);
+    expect(tileLayer(plain.root().scene, 'cityBuildingDetail')?.visible).toBe(false);
+    plain.unmount();
+  });
+
+  it('keeps today\'s walls for a playtest tab, and builds a village arena as its village', async () => {
+    sessionStorage.setItem('shinobiCityPlaytest', '1');
+    try {
+      const playtest = await mount(cityState('budapest', { roundStartTicksRemaining: 0 }));
+      playtest.run(50);
+      expect(tileLayer(playtest.root().scene, 'cityBuildingMass')).toBeNull();
+      expect(tileLayer(playtest.root().scene, 'wallVisible')?.count).toBeGreaterThan(0);
+      playtest.unmount();
+    } finally {
+      sessionStorage.removeItem('shinobiCityPlaytest');
+    }
+    const village = await mount(cityState('hiddenLeaf', { roundStartTicksRemaining: 0 }));
+    village.run(50);
+    const { scene, gl } = village.root();
+    const program = (mesh: THREE.Mesh) => gl.properties.get(mesh.material).currentProgram;
+    const mass = tileLayer(scene, 'cityBuildingMass');
+    expect(mass).not.toBeNull();
+    // Every Leaf wall is forest, a house, a hut or a stone: no cube is left.
+    expect(tileLayer(scene, 'wallVisible')?.count ?? 0).toBe(0);
+    // Its houses and crates share one program, as a city's do.
+    expect(program(mass!)).toBe(program(tileLayer(scene, 'crateVisible')!));
+    village.unmount();
+  });
+
   it('compiles the figures\' shadow program in the countdown, though none starts in the key light\'s shadow', async () => {
     // A city has no versus monsters, so no figure starts under the key
     // light's shadow camera; the first to walk in used to link a program

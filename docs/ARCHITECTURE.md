@@ -170,6 +170,33 @@ campaign, the hub and the online lobby keep their own stage lists.
   `content/cityColors.ts`, so the menus' city cards load no look data. Looks
   are keyed by a look id. A village's look id is its stage id, so its
   skyline and colours are unchanged.
+- **City and village buildings.** A city's building and border walls, and
+  its landmark cells, draw as merged buildings (`scene/city/cityBuildings.ts`,
+  `scene/city/boardLandmarks.ts`): several storeys with cornices, framed
+  windows, shutters, balconies, pilasters, mansards, dormers and corner
+  turrets by city, Budapest's Chain Bridge and Rome's Colosseum arcades, and
+  stone quays along the water. Every deck over the river is a chain bridge:
+  towers on its `m` cells, or on the river cells either side of the deck. A
+  village's walls draw as its village after the stage atlas
+  (`scene/city/villageBuildings.ts`), in every mode: Local Arena, online
+  rooms, training and the campaign, built from the match's own map. Forest,
+  rock or stalagmites stand on the border ring; houses, round huts and stone
+  blocks inside; a dirt path with grass beside the walls. A campaign's boss
+  gates and its village square, with the square's wall ring, keep their own
+  tiles and dressing. Under the campaign's fog, a house or tree shows once
+  any of its cells is explored, darkened until it is in sight, and collapses
+  to nothing while hidden. Crates draw as small buildings of
+  the same place (kiosks, stalls, sheds, huts, domes) at most as tall as
+  today's crate, still in the crate colour. Each map builds two meshes once:
+  the mass, which casts shadows, and the detail, which follows the scenery
+  setting. Both use the wall layer's material settings, so they render with
+  the walls' program. The grid is untouched: they are still `W` cells.
+  Buildings rise above today's 0.94, so a cut-away (`scene/city/cutaway.ts`)
+  sinks the cells in front of every fighter, bomb, blast line, blast, pickup,
+  monster, boss and hazard in sight to 0.36 of their height on the CPU each
+  frame, and the border row nearest the camera stays at 0.94. High contrast, and a tab that opened the Mission Deck with
+  `?playtest=1`, keep today's wall cubes. The plan and its rules are in
+  `docs/CITY_BUILDINGS_PLAN.md`.
 - **Round-start overview.** In a city's first round, the camera frames the
   whole board during the countdown and cuts back to the players one second
   before GO (`scene/roundOverview.ts`). It pushes in slowly, holds still under
