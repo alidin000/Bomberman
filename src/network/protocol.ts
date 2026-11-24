@@ -2,7 +2,8 @@ import { CharacterId, StageId } from '../content/types';
 import { Direction, GameConfig, GameEngineState } from '../engine/types';
 import { REPLAY_VERSION } from './replay';
 
-export const PROTOCOL_VERSION = 3;
+// 4: arena rooms name their map (`arenaMapId`), so a room can play a city.
+export const PROTOCOL_VERSION = 4;
 export const SIMULATION_VERSION = REPLAY_VERSION;
 export const MAX_CLIENT_MESSAGE_BYTES = 1024;
 export const ONLINE_ROOM_CAPACITY = 4;
@@ -11,6 +12,11 @@ export type OnlineRoomMode = 'coop' | 'arena';
 export type OnlineRounds = typeof ONLINE_ROUND_OPTIONS[number];
 
 export type OnlineAction = 'bomb' | 'detonate' | 'ultimate' | 'cover';
+
+/** The cities an online arena room can play (the playtest's control is not one). */
+export const ONLINE_CITY_MAPS = ['rome', 'barcelona', 'budapest'] as const;
+/** An arena room's map: a village stage or a city (content/arenaMaps.ts). */
+export type OnlineArenaMapId = StageId | typeof ONLINE_CITY_MAPS[number];
 
 /** Why a room closed, beyond the coarse reason every client understands. */
 export type RoomClosedDetail =
@@ -37,6 +43,8 @@ export type ClientMessage =
     type: 'create'; protocol: typeof PROTOCOL_VERSION; simulation: typeof SIMULATION_VERSION;
     name: string; characterId: CharacterId; roomMode: OnlineRoomMode;
     stageId: StageId; totalRounds: OnlineRounds;
+    /** An arena room's map; absent, the stage's own village map. Co-op rooms send none. */
+    arenaMapId?: OnlineArenaMapId;
   }
   | {
     type: 'join'; protocol: typeof PROTOCOL_VERSION; simulation: typeof SIMULATION_VERSION;
@@ -60,6 +68,8 @@ export type ServerMessage =
   | { type: 'welcome'; roomId: string; seat: number; playerId: string; token: string }
   | {
     type: 'lobby'; roomId: string; stageId: StageId;
+    /** The map the room plays: the stage's village, or an arena room's city. */
+    arenaMapId: OnlineArenaMapId;
     roomMode: OnlineRoomMode; capacity: typeof ONLINE_ROOM_CAPACITY;
     totalRounds: OnlineRounds; players: OnlinePlayer[];
   }
@@ -121,6 +131,10 @@ function isStageId(value: unknown): value is StageId {
   ].includes(value);
 }
 
+export function isOnlineArenaMapId(value: unknown): value is OnlineArenaMapId {
+  return isStageId(value) || (ONLINE_CITY_MAPS as readonly unknown[]).includes(value);
+}
+
 function isOnlineRoomMode(value: unknown): value is OnlineRoomMode {
   return value === 'coop' || value === 'arena';
 }
@@ -154,11 +168,14 @@ export function parseClientMessage(raw: string): ClientMessage | null {
         value,
         [
           'type', 'protocol', 'simulation', 'name', 'characterId',
-          'roomMode', 'stageId', 'totalRounds',
+          'roomMode', 'stageId', 'totalRounds', 'arenaMapId',
         ]
       ) && hasVersions(value) && isName(value.name) && isCharacterId(value.characterId)
         && isOnlineRoomMode(value.roomMode) && isStageId(value.stageId)
         && isOnlineRounds(value.totalRounds)
+        // Only an arena room names a map; co-op plays its village's mission.
+        && (value.arenaMapId === undefined
+          || (value.roomMode === 'arena' && isOnlineArenaMapId(value.arenaMapId)))
         ? value as ClientMessage : null;
     case 'join':
       return hasOnlyKeys(
@@ -219,6 +236,7 @@ export function parseServerMessage(raw: string): ServerMessage | null {
     case 'lobby':
       return isRoomId(value.roomId) && isOnlineRoomMode(value.roomMode)
         && value.capacity === ONLINE_ROOM_CAPACITY && isStageId(value.stageId)
+        && isOnlineArenaMapId(value.arenaMapId)
         && isOnlineRounds(value.totalRounds) && Array.isArray(value.players)
         ? value as ServerMessage : null;
     case 'start':

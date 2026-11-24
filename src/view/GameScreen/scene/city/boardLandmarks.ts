@@ -22,6 +22,8 @@ const CHAIN_ANCHOR = 0.22;
 const CHAIN_GAP = 0.13;
 const RAIL_HEIGHT = 0.15;
 const IRON = '#363c40';
+/** The parapet where the river crosses the board's edge. */
+const PARAPET = 0.16;
 
 function cellsOf(rows: readonly string[], cls: string): Cell[] {
   const cells: Cell[] = [];
@@ -111,23 +113,94 @@ function deckGroups(rows: readonly string[]): Deck[] {
   return decks;
 }
 
-/**
- * A deck's towers: its `m` cells where the map has them (the Chain Bridge),
- * otherwise one tower in the river at each bank, on the water cells either
- * side of the deck (they are walls, so a tower stands on nothing walkable).
- */
-function towersFor(rows: readonly string[], deck: Deck): Tower[] {
+/** A deck's towers on its marked `m` cells (the Chain Bridge), or none. */
+function markedTowers(rows: readonly string[], deck: Deck): Tower[] {
   const top = deck.rows[0] - 1;
   const bottom = deck.rows[deck.rows.length - 1] + 1;
   const columns = [...new Set(deck.cells.map(({ x }) => x))].sort((p, q) => p - q);
-  const pair = (cls: string) => columns.filter((x) => (
-    rows[top]?.[x] === cls && rows[bottom]?.[x] === cls
-  ));
-  const marked = pair('m');
-  if (marked.length >= 2) return marked.map((x) => ({ x, top, bottom }));
-  const water = pair('w');
-  if (water.length < 2 || water[water.length - 1] - water[0] < 2) return [];
-  return [water[0], water[water.length - 1]].map((x) => ({ x, top, bottom }));
+  const marked = columns.filter((x) => rows[top]?.[x] === 'm' && rows[bottom]?.[x] === 'm');
+  return marked.length >= 2 ? marked.map((x) => ({ x, top, bottom })) : [];
+}
+
+/** The columns where a deck has river on both sides: it crosses the water there. */
+function waterColumns(rows: readonly string[], deck: Deck): number[] {
+  const top = deck.rows[0] - 1;
+  const bottom = deck.rows[deck.rows.length - 1] + 1;
+  const columns = [...new Set(deck.cells.map(({ x }) => x))].sort((p, q) => p - q);
+  return columns.filter((x) => rows[top]?.[x] === 'w' && rows[bottom]?.[x] === 'w');
+}
+
+/** Iron railings where a deck meets the river or a pylon, and girders in the water under them. */
+function deckRailings(
+  { mass, detail }: Builders,
+  rows: readonly string[],
+  deckCells: readonly Cell[]
+) {
+  const c = (u: number, v: number, y: number): V3 => [wx(u), y, wz(v)];
+  deckCells.forEach(({ x, y }) => {
+    [[y - 1, y + 0.03], [y + 1, y + 0.97]].forEach(([ny, v]) => {
+      const beyond = rows[ny]?.[x];
+      if (beyond !== 'w' && beyond !== 'm') return;
+      bar(detail, c(x, v, RAIL_HEIGHT), c(x + 1, v, RAIL_HEIGHT), 0.035, IRON);
+      for (let post = 0.125; post < 1; post += 0.25) {
+        detail.quad(
+          c(x + post - 0.008, v, 0),
+          c(x + post + 0.008, v, 0),
+          c(x + post + 0.008, v, RAIL_HEIGHT),
+          c(x + post - 0.008, v, RAIL_HEIGHT),
+          IRON,
+          [0, 0, 1]
+        );
+      }
+      if (beyond !== 'w') return;
+      // The iron girder under the deck's edge, standing in the river.
+      const out = ny < y ? -0.07 : 0.07;
+      const [g0, g1] = out < 0 ? [y + out, y] : [y + 1, y + 1 + out];
+      mass.box(x, x + 1, g0, g1, -0.02, 0.07, IRON, shadeHex(IRON, 1.3));
+    });
+  });
+}
+
+/** Painted steel, as on Budapest's other Danube bridges. */
+const STEEL = '#4f6f5f';
+const TRUSS_RISE = 0.36;
+
+/**
+ * Any other deck over the river: a steel arch truss either side of the
+ * deck, standing in the water beside it, with the deck's railings. Not a
+ * copy of the Chain Bridge, which keeps the towers and chains. Returns its top.
+ */
+function steelBridge(builders: Builders, rows: readonly string[], deck: Deck): number {
+  const columns = waterColumns(rows, deck);
+  if (columns.length < 2) return 0;
+  const { mass } = builders;
+  const c = (u: number, v: number, y: number): V3 => [wx(u), y, wz(v)];
+  const u0 = columns[0];
+  const u1 = columns[columns.length - 1] + 1;
+  const chord = 0.06;
+  const arch = (u: number) => (
+    chord + 0.06 + TRUSS_RISE * Math.sin((Math.PI * (u - u0)) / (u1 - u0))
+  );
+  const top = deck.rows[0] - 1;
+  const bottom = deck.rows[deck.rows.length - 1] + 1;
+  [top + 0.92, bottom + 0.08].forEach((v) => {
+    const step = 0.25;
+    for (let u = u0; u < u1 - 1e-6; u += step) {
+      const n = Math.min(u1, u + step);
+      bar(mass, c(u, v, arch(u)), c(n, v, arch(n)), 0.05, STEEL);
+      bar(mass, c(u, v, chord), c(n, v, chord), 0.04, STEEL);
+      // A post and a diagonal in each panel.
+      // Kept inside the river: the first post stands just in from the bank.
+      const post = Math.max(u, u0 + 0.012);
+      const end = Math.min(n, u1 - 0.012);
+      const low = (du: number) => c(post + du, v, chord);
+      const high = (at: number, du: number) => c(at + du, v, arch(at));
+      mass.quad(low(-0.012), low(0.012), high(post, 0.012), high(post, -0.012), STEEL, [0, 0, 1]);
+      mass.quad(low(-0.01), low(0.01), high(end, 0.01), high(end, -0.01), STEEL, [0, 0, 1]);
+    }
+  });
+  deckRailings(builders, rows, deck.cells);
+  return chord + 0.06 + TRUSS_RISE + 0.03;
 }
 
 function suspensionBridge(
@@ -239,36 +312,16 @@ function suspensionBridge(
     }
   });
   // Railings where the deck meets the river (walkable on one side only).
-  deckCells.forEach(({ x, y }) => {
-    [[y - 1, y + 0.03], [y + 1, y + 0.97]].forEach(([ny, v]) => {
-      const beyond = rows[ny]?.[x];
-      if (beyond !== 'w' && beyond !== 'm') return;
-      bar(detail, c(x, v, RAIL_HEIGHT), c(x + 1, v, RAIL_HEIGHT), 0.035, IRON);
-      if (beyond !== 'w') return;
-      // The iron girder under the deck's edge, standing in the river.
-      const out = ny < y ? -0.07 : 0.07;
-      const [g0, g1] = out < 0 ? [y + out, y] : [y + 1, y + 1 + out];
-      mass.box(x, x + 1, g0, g1, -0.02, 0.07, IRON, shadeHex(IRON, 1.3));
-      for (let post = 0.125; post < 1; post += 0.25) {
-        detail.quad(
-          c(x + post - 0.008, v, 0),
-          c(x + post + 0.008, v, 0),
-          c(x + post + 0.008, v, RAIL_HEIGHT),
-          c(x + post - 0.008, v, RAIL_HEIGHT),
-          IRON,
-          [0, 0, 1]
-        );
-      }
-    });
-  });
+  deckRailings({ mass, detail }, rows, deckCells);
   return TOWER_TOP + TOWER_CAP;
 }
 
 /**
- * Budapest's bridges, after the Chain Bridge: each deck over the river has two
- * stone towers, each a pair of pylons joined over the road by an arched
- * lintel; chains swing from the banks over both towers and sag across the
- * river, with hangers down to iron railings along the deck's water edges.
+ * Budapest's bridges: the Chain Bridge on its marked pylons (two stone
+ * towers, each a pair of pylons joined over the road by an arched lintel,
+ * chains swinging from the banks over both and sagging across the river,
+ * hangers down to iron railings), and a steel arch truss for any other deck
+ * over the river.
  */
 function chainBridge(
   builders: Builders,
@@ -277,9 +330,11 @@ function chainBridge(
 ): number {
   let top = 0;
   deckGroups(rows).forEach((deck) => {
-    const towers = towersFor(rows, deck);
-    if (towers.length < 2) return;
-    top = Math.max(top, suspensionBridge(builders, rows, style, towers, deck));
+    const towers = markedTowers(rows, deck);
+    const span = towers.length >= 2
+      ? suspensionBridge(builders, rows, style, towers, deck)
+      : steelBridge(builders, rows, deck);
+    top = Math.max(top, span);
   });
   return top;
 }
@@ -287,6 +342,76 @@ function chainBridge(
 /** The Colosseum's inner wall round the arena, and the outer ring's height on its south arc. */
 const ARENA_WALL = 0.62;
 const SOUTH_RING_TOP = 1.06;
+
+/** The seating tiers' floor heights, from the arena wall up. */
+const SEAT_LEVELS = [ARENA_WALL, ARENA_WALL + 0.373, ARENA_WALL + 0.746];
+
+/** The tier a height falls in: its floor. */
+function tierOf(f: number): number {
+  let level = SEAT_LEVELS[0];
+  SEAT_LEVELS.forEach((floor) => { if (f >= floor - 1e-6) level = floor; });
+  return level;
+}
+
+type FieldPoint = { u: number; v: number; f: number };
+
+/** Clips a polygon to one side of the level line `f = level` of its linear field. */
+function clipToLevel(poly: readonly FieldPoint[], level: number, above: boolean): FieldPoint[] {
+  const inside = (p: FieldPoint) => (above ? p.f >= level : p.f <= level);
+  const out: FieldPoint[] = [];
+  poly.forEach((p, index) => {
+    const q = poly[(index + 1) % poly.length];
+    if (inside(p)) out.push(p);
+    if (inside(p) !== inside(q)) {
+      const t = (level - p.f) / (q.f - p.f);
+      out.push({ u: p.u + (q.u - p.u) * t, v: p.v + (q.v - p.v) * t, f: level });
+    }
+  });
+  return out;
+}
+
+/**
+ * Terraces over one triangle of a sloping top: each band of the height field
+ * between two levels drawn flat at its lower level, and a riser along each
+ * level line from the tier below up to it, facing down the slope.
+ */
+function seatingTiers(
+  builder: GeometryBuilder,
+  triangle: readonly FieldPoint[],
+  levels: readonly number[],
+  seat: string,
+  riser: string
+) {
+  const c = (p: FieldPoint, y: number): V3 => [wx(p.u), y, wz(p.v)];
+  levels.forEach((level, index) => {
+    let band = clipToLevel(triangle, level, true);
+    const next = levels[index + 1];
+    if (next !== undefined) band = clipToLevel(band, next, false);
+    if (index === 0) band = clipToLevel(triangle, next ?? Infinity, false);
+    for (let k = 1; k + 1 < band.length; k += 1) {
+      builder.tri(c(band[0], level), c(band[k], level), c(band[k + 1], level), seat, [0, 1, 0]);
+    }
+    if (index === 0) return;
+    // The level line across the triangle, and the slope's downhill direction.
+    const cut: FieldPoint[] = [];
+    triangle.forEach((p, i) => {
+      const q = triangle[(i + 1) % triangle.length];
+      if ((p.f - level) * (q.f - level) < 0) {
+        const t = (level - p.f) / (q.f - p.f);
+        cut.push({ u: p.u + (q.u - p.u) * t, v: p.v + (q.v - p.v) * t, f: level });
+      }
+    });
+    if (cut.length !== 2) return;
+    const [a, b, d] = triangle;
+    const det = (b.u - a.u) * (d.v - a.v) - (d.u - a.u) * (b.v - a.v);
+    if (Math.abs(det) < 1e-9) return;
+    const gu = ((b.f - a.f) * (d.v - a.v) - (d.f - a.f) * (b.v - a.v)) / det;
+    const gv = ((d.f - a.f) * (b.u - a.u) - (b.f - a.f) * (d.u - a.u)) / det;
+    const below = levels[index - 1];
+    const [p0, p1] = cut;
+    builder.quad(c(p0, below), c(p1, below), c(p1, level), c(p0, level), riser, [-gu, 0, -gv]);
+  });
+}
 
 /**
  * The Colosseum: its `m` cells as one oval stadium in the landmark stone.
@@ -305,6 +430,7 @@ function colosseum(
   const stone = style.landmarkStone;
   const trim = shadeHex(stone, 1.18);
   const seats = shadeHex(stone, 1.06);
+  const riser = shadeHex(stone, 0.6);
   const dark = shadeHex(stone, 0.5);
   const members = new Set(ring.map(({ x, y }) => cellId(x, y)));
   const inRing = (x: number, y: number) => members.has(cellId(x, y));
@@ -401,23 +527,38 @@ function colosseum(
         }
       }
     });
-    // The seating: the top, falling from the outer rim to the arena wall.
+    // The seating: three tiers stepping down from the outer rim to the arena
+    // wall, with dark risers between them.
     const contour = outline.points.map(({ u, v }) => new THREE.Vector2(u, v));
-    THREE.ShapeUtils.triangulateShape(contour, []).forEach(([a, b, c]) => {
-      const corner = (index: number): V3 => {
-        const { u, v } = outline.points[index];
-        return [wx(u), topAt[index], wz(v)];
-      };
-      mass.tri(corner(a), corner(b), corner(c), seats, [0, 1, 0]);
+    THREE.ShapeUtils.triangulateShape(contour, []).forEach((corners) => {
+      const triangle = corners.map((index) => ({ ...outline.points[index], f: topAt[index] }));
+      seatingTiers(mass, triangle, SEAT_LEVELS, seats, riser);
+    });
+    // Where the outer wall stands above the top tier, its inner face.
+    outline.points.forEach((p0, index) => {
+      if (looksIn[index]) return;
+      const next = (index + 1) % count;
+      const p1 = outline.points[next];
+      const { normal } = outline.edges[index];
+      const seat = Math.min(tierOf(topAt[index]), tierOf(topAt[next]));
+      const on = (point: V2, y: number) => world(point, y, normal, -0.002);
+      const inward: V3 = [-normal.u, 0, -normal.v];
+      const [t0, t1] = [topAt[index], topAt[next]];
+      mass.quad(on(p0, seat), on(p1, seat), on(p1, t1), on(p0, t0), stone, inward);
     });
   });
   return attic[1];
 }
 
 /**
- * The open cells a ring of `m` cells encloses (the Colosseum's arena): floor
- * nearer the ring's centre, on the ellipse through its bounds, than its
- * innermost cell. Its gates (the ring's gaps) stay outside.
+ * The Colosseum's real arena is 83 by 48 m inside an outer ring of 189 by
+ * 156 m: the sand covers that share of the ring, not all its inside.
+ */
+const ARENA_SHARE = { u: 83 / 189, v: 48 / 156 };
+
+/**
+ * The cells of a stadium's arena (the Colosseum's): open floor inside the
+ * ellipse its ring's bounds give, scaled to the real arena's size.
  */
 export function ringInterior(rows: readonly string[]): Set<string> {
   const ring = cellsOf(rows, 'm');
@@ -429,14 +570,14 @@ export function ringInterior(rows: readonly string[]): Set<string> {
   const y1 = Math.max(...ring.map(({ y }) => y));
   const cu = (x0 + x1) / 2;
   const cv = (y0 + y1) / 2;
-  const ru = (x1 - x0) / 2 + 0.5;
-  const rv = (y1 - y0) / 2 + 0.5;
-  const radius = (x: number, y: number) => Math.hypot((x - cu) / ru, (y - cv) / rv);
-  const innermost = Math.min(...ring.map(({ x, y }) => radius(x, y)));
+  const au = ((x1 - x0) / 2 + 0.5) * ARENA_SHARE.u;
+  const av = ((y1 - y0) / 2 + 0.5) * ARENA_SHARE.v;
   for (let y = y0; y <= y1; y += 1) {
     for (let x = x0; x <= x1; x += 1) {
       const cls = rows[y][x];
-      if (!'mbew'.includes(cls) && radius(x, y) < innermost) inside.add(`${x},${y}`);
+      if (!'mbew'.includes(cls) && Math.hypot((x - cu) / au, (y - cv) / av) <= 1) {
+        inside.add(`${x},${y}`);
+      }
     }
   }
   return inside;
@@ -448,6 +589,11 @@ function quays(mass: GeometryBuilder, rows: readonly string[], style: CityBuildi
   const top = 0.05;
   rows.forEach((row, y) => Array.from(row).forEach((cls, x) => {
     if (cls !== 'w') return;
+    // Where the river leaves the board, a low granite parapet marks the edge.
+    const coping = shadeHex(style.quay, 1.1);
+    if (y === 0) mass.box(x, x + 1, y, y + 0.1, -0.01, PARAPET, style.quay, coping);
+    const south = y === rows.length - 1;
+    if (south) mass.box(x, x + 1, y + 0.9, y + 1, -0.01, PARAPET, style.quay, coping);
     const bank = (nx: number, ny: number) => {
       const beyond = rows[ny]?.[nx];
       return beyond !== undefined && beyond !== 'w' && beyond !== 'e';

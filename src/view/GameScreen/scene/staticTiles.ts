@@ -3,7 +3,7 @@ import { STAGE_DEFINITIONS } from '../../../content/stages';
 import { cellKey } from '../../../engine/fogOfWar';
 import type { CampaignRuntimeState } from '../../../engine/types';
 import { GameMap, isObstacle } from '../../../model/gameItem';
-import { highContrastPalette } from './highContrast';
+import { highContrastPalette, shadeHex } from './highContrast';
 import type { CityBuildingStyle, CrateStyle } from './city/cityBuildings';
 import type { VillageBuildingStyle } from './city/villageBuildings';
 import type { OutskirtsClearing } from './city/cityOutskirts';
@@ -88,8 +88,20 @@ export function tileFeaturesFromKey(key: string): StaticTileFeatures {
 /** A floor class's two checker tones: `a` on odd cells, `b` on even ones, like groundA/B. */
 export type CheckerTones = { a: string; b: string };
 
+/**
+ * High contrast: every building colour retoned into the walls' hue, no
+ * lighter than `maxLuminance`, so buildings keep 3:1 on every floor and 2:1
+ * against the crates (scene/city/CityBuildings.tsx).
+ */
+export type BuildingContrast = { tone: string; maxLuminance: number };
+
 /** Which walls draw as buildings, how, and what the crates look like. */
-export type BuildingPlan = { classes: string; seed: string; crate: CrateStyle } & (
+export type BuildingPlan = {
+  classes: string;
+  seed: string;
+  crate: CrateStyle;
+  contrast?: BuildingContrast;
+} & (
   | { kind: 'city'; style: CityBuildingStyle; clearings: readonly OutskirtsClearing[] }
   | { kind: 'village'; style: VillageBuildingStyle }
 );
@@ -297,6 +309,55 @@ export function getMapCellCount(map: GameMap): number {
 }
 
 /**
+ * How much floor next to walls and crates darkens at most: a soft contact
+ * shadow, kept light enough that every danger cue still reads on it.
+ */
+export const CONTACT_SHADE_MAX = 0.06;
+const CONTACT_SIDE = 0.03;
+const CONTACT_CORNER = 0.015;
+const NEIGHBOURS: readonly [number, number, number][] = [
+  [1, 0, CONTACT_SIDE], [-1, 0, CONTACT_SIDE],
+  [0, 1, CONTACT_SIDE], [0, -1, CONTACT_SIDE],
+  [1, 1, CONTACT_CORNER], [1, -1, CONTACT_CORNER],
+  [-1, 1, CONTACT_CORNER], [-1, -1, CONTACT_CORNER],
+];
+
+/**
+ * A floor cell's light, darkened a little by each wall or crate beside it
+ * (more for one at a side than at a corner), like ambient occlusion baked
+ * into the tile colour. Walls the mask draws as water stay flat and shade
+ * nothing.
+ */
+export function contactShadeAt(
+  map: GameMap,
+  mask: TileMask | null,
+  x: number,
+  y: number
+): number {
+  let dark = 0;
+  NEIGHBOURS.forEach(([dx, dy, weight]) => {
+    const cell = map[y + dy]?.[x + dx];
+    if (cell !== 'Wall' && cell !== 'Box') return;
+    if (cell === 'Wall' && mask?.rows[y + dy]?.[x + dx] === 'w') return;
+    dark += weight;
+  });
+  return 1 - Math.min(CONTACT_SHADE_MAX, dark);
+}
+
+const SHADED = new Map<string, string>();
+
+function shadedFloor(color: string, factor: number): string {
+  if (factor >= 1) return color;
+  const key = `${color}|${factor.toFixed(3)}`;
+  let shaded = SHADED.get(key);
+  if (!shaded) {
+    shaded = shadeHex(color, factor);
+    SHADED.set(key, shaded);
+  }
+  return shaded;
+}
+
+/**
  * Buckets every map cell into the static (non-animated) tile layers. Hidden
  * cells only get fogged ground; walls, crates and player obstacles appear once
  * a cell has been explored. Bombs and power-ups are animated per cell, so they
@@ -310,10 +371,12 @@ export function buildStaticTileLayers(
   exploredCells: ReadonlySet<string>,
   destroyedCells: ReadonlySet<string>,
   features: StaticTileFeatures = NO_TILE_FEATURES,
-  tileMask: TileMask | null = null
+  tileMask: TileMask | null = null,
+  contactShade = false
 ): StaticTileLayers {
   const layers = createEmptyStaticTileLayers();
   const mask = usableMask(map, tileMask);
+  const shadeAt = contactShade ? contactShadeAt : () => 1;
   // The camera always looks toward -z (lower rows), so walking rows from the
   // bottom up emits opaque instances roughly near-to-far and lets the depth
   // test reject hidden wall and crate fragments early.
@@ -332,6 +395,7 @@ export function buildStaticTileLayers(
         const odd = (x + y) % 2 === 1;
         let color = odd ? palette.groundA : palette.groundB;
         if (tones) color = odd ? tones.a : tones.b;
+        if (cell !== 'Wall') color = shadedFloor(color, shadeAt(map, mask, x, y));
         layers.groundVisible.push({ x, y, color });
       } else if (exploredCells.has(key)) {
         layers.groundExplored.push({ x, y, color: EXPLORED_GROUND_COLOR });

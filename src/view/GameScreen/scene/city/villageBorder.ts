@@ -229,3 +229,39 @@ export function forestCell(
   }
   return peak;
 }
+
+/**
+ * A slice of the war camp's palisade: sharpened stakes in a row along the
+ * ring, tied by two beams, low on the camera's row. Returns the slice's top.
+ */
+export function palisadeCell(
+  { mass }: Builders,
+  x: number,
+  y: number,
+  side: BorderSide,
+  style: VillageBuildingStyle,
+  rnd: () => number
+): number {
+  const { uv } = borderSpace(side, x, y);
+  const south = side === 'south';
+  const height = south ? 0.6 + rnd() * 0.25 : 1.25 + rnd() * 0.3;
+  const depth = 0.55;
+  [0.125, 0.375, 0.625, 0.875].forEach((s) => {
+    const { u, v } = uv(s, depth);
+    const top = height * (0.9 + rnd() * 0.12);
+    lathe(mass, u, v, [
+      { r: 0.075, y: 0 },
+      { r: 0.075, y: top - 0.16 },
+      { r: 0, y: top },
+    ], pick(rnd, style.borderTones), rnd() * Math.PI, 5);
+  });
+  // Two beams along the run, inside the cell.
+  const { u: bu, v: bv } = uv(0, depth);
+  const along = side === 'north' || south;
+  const beam = (y0: number) => (along
+    ? mass.box(x, x + 1, bv - 0.03, bv + 0.03, y0, y0 + 0.05, style.trunk, style.trunk)
+    : mass.box(bu - 0.03, bu + 0.03, y, y + 1, y0, y0 + 0.05, style.trunk, style.trunk));
+  beam(height * 0.3);
+  beam(height * 0.65);
+  return height * 1.02;
+}

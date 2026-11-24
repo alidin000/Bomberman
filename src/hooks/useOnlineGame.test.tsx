@@ -45,6 +45,7 @@ function fakeSession(initialState: GameEngineState) {
     players: [],
     roomMode: 'arena',
     stageId: 'hiddenLeaf',
+    arenaMapId: 'hiddenLeaf',
     capacity: 4,
     totalRounds: 3,
     gameState: initialState,

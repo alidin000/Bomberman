@@ -7,7 +7,8 @@ import { createServer, IncomingMessage, Server as HttpServer } from 'node:http';
 import WebSocket, { RawData, WebSocketServer } from 'ws';
 import { GameAction } from '../src/engine/actions';
 import { TICK_MS } from '../src/engine/constants';
-import { loadCampaignMapRows, loadStageMapRows, parseMapRows } from '../src/engine/mapLoader';
+import { loadCampaignMapRows, parseMapRows } from '../src/engine/mapLoader';
+import { arenaMapRows, getArenaMap } from '../src/content/arenaMaps';
 import { gameReducer } from '../src/engine/reducer';
 import {
   Direction, GameConfig, GameEngineState, PlayerState,
@@ -20,6 +21,7 @@ import {
   OnlineAction,
   OnlinePlayer,
   ONLINE_ROOM_CAPACITY,
+  OnlineArenaMapId,
   OnlineRoomMode,
   OnlineRounds,
   PROTOCOL_VERSION,
@@ -144,6 +146,8 @@ type Room = {
   ownerSite: Peer | null;
   roomMode: OnlineRoomMode;
   stageId: StageId;
+  /** The map an arena room plays (a village or a city); a co-op room's is its stage. */
+  arenaMapId: OnlineArenaMapId;
   totalRounds: OnlineRounds;
   seats: Seat[];
   state: GameEngineState | null;
@@ -240,6 +244,7 @@ function lobbyMessage(room: Room): ServerMessage {
     roomId: room.id,
     roomMode: room.roomMode,
     stageId: room.stageId,
+    arenaMapId: room.arenaMapId,
     capacity: ONLINE_ROOM_CAPACITY,
     totalRounds: room.totalRounds,
     players: roomPlayers(room),
@@ -304,20 +309,35 @@ export function snapshotForDelivery(
 }
 
 function createConfig(room: Room): GameConfig {
-  const stage = getStageDefinition(room.stageId);
-  return {
-    mode: room.roomMode === 'coop' ? 'solo' : 'onlinePreview',
+  const seats = {
     numPlayers: room.seats.length,
-    totalRounds: room.roomMode === 'coop' ? 1 : room.totalRounds,
-    selectedMap: stage.mapId,
-    stageId: stage.id,
-    // Co-op missions play the campaign map; arena rooms the arena map.
-    map: parseMapRows(room.roomMode === 'coop'
-      ? loadCampaignMapRows(stage.mapId)
-      : loadStageMapRows(stage.mapId)),
     selectedCharacters: room.seats.map((seat) => seat.characterId),
     playerNames: room.seats.map((seat) => seat.name),
     seed: randomInt(1, 2_147_483_646),
+  };
+  if (room.roomMode === 'coop') {
+    // Co-op missions play the village's campaign map.
+    const stage = getStageDefinition(room.stageId);
+    return {
+      ...seats,
+      mode: 'solo',
+      totalRounds: 1,
+      selectedMap: stage.mapId,
+      stageId: stage.id,
+      map: parseMapRows(loadCampaignMapRows(stage.mapId)),
+    };
+  }
+  // Arena rooms play their catalog map, as Local Arena does: a village is its
+  // stage, a city is no stage and names only its map.
+  const arena = getArenaMap(room.arenaMapId);
+  if (!arena) throw new Error(`Unknown arena map '${room.arenaMapId}'`);
+  return {
+    ...seats,
+    mode: 'onlinePreview',
+    totalRounds: room.totalRounds,
+    selectedMap: arena.id,
+    ...(arena.family === 'city' ? {} : { stageId: arena.id as StageId }),
+    map: parseMapRows(arenaMapRows(arena.id)),
   };
 }
 
@@ -1026,6 +1046,9 @@ export async function startOnlineServer(
         ownerSite: site,
         roomMode: message.roomMode,
         stageId: message.stageId,
+        arenaMapId: message.roomMode === 'arena'
+          ? message.arenaMapId ?? message.stageId
+          : message.stageId,
         totalRounds: message.totalRounds,
         seats: [],
         state: null,
@@ -1046,6 +1069,7 @@ export async function startOnlineServer(
         room: room.ref,
         roomMode: room.roomMode,
         stageId: room.stageId,
+        arenaMapId: room.arenaMapId,
         totalRounds: room.totalRounds,
         ip: peer.tag,
       });

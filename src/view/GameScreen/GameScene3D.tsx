@@ -2171,6 +2171,8 @@ type MapTilesProps = {
   blastStop?: (x: number, y: number) => boolean;
   /** A city arena's render mask (floor colours, water, its landmark). */
   mask?: TileMask | null;
+  /** Darken floor beside walls and crates: off in high contrast. */
+  contactShade?: boolean;
 };
 
 // Per-cell objects re-render only when their own props change: a bomb placed
@@ -2233,6 +2235,7 @@ function MapTilesBase({
   powerTheme,
   blastStop,
   mask = null,
+  contactShade = false,
 }: MapTilesProps) {
   // Keyed on positions, not the array: a crate's break timer ticks every frame,
   // and rebuilding all eight instanced tile layers for that is wasted work.
@@ -2307,6 +2310,7 @@ function MapTilesBase({
         destroyedCells={destroyedSet}
         features={features}
         mask={mask}
+        contactShade={contactShade}
       />
       {cellObjects}
     </>
@@ -2323,6 +2327,7 @@ const MapTiles = React.memo(MapTilesBase, (prev, next) => (
   && prev.powerTheme === next.powerTheme
   && prev.blastStop === next.blastStop
   && prev.mask === next.mask
+  && prev.contactShade === next.contactShade
 ));
 
 const HazardMeshMemo = React.memo(HazardMesh);
@@ -2973,6 +2978,9 @@ function SceneContentBase({
         powerTheme={state.players[0]?.characterId}
         blastStop={squareBlastStop(state.config)}
         mask={tileMask}
+        // Cities only: their pavements keep every danger cue readable under
+        // the shade; the villages' floors have no contrast to spare.
+        contactShade={!highContrast && tileMask?.buildings?.kind === 'city'}
       />
       <CityBuildings
         mask={tileMask}

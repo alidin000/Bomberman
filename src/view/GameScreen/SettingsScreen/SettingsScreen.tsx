@@ -90,6 +90,19 @@ const SettingsScreen: React.FC<Props> = (
             <FormControlLabel
               control={(
                 <Switch
+                  checked={preferences.musicEnabled}
+                  disabled={!preferences.soundEnabled}
+                  onChange={(event) => onPreferencesChange({
+                    ...preferences,
+                    musicEnabled: event.target.checked,
+                  })}
+                />
+              )}
+              label="Music"
+            />
+            <FormControlLabel
+              control={(
+                <Switch
                   checked={preferences.captions}
                   onChange={(event) => onPreferencesChange({
                     ...preferences,
@@ -148,6 +161,22 @@ const SettingsScreen: React.FC<Props> = (
               onChange={(_, value) => onPreferencesChange({
                 ...preferences,
                 effectsVolume: value as number,
+              })}
+            />
+          </PreferenceSlider>
+          <PreferenceSlider>
+            <span>
+              Music volume
+              <strong>{preferences.musicEnabled ? `${preferences.musicVolume}%` : 'Off'}</strong>
+            </span>
+            <Slider
+              aria-label="music volume"
+              value={preferences.musicVolume}
+              disabled={!preferences.musicEnabled || !preferences.soundEnabled}
+              valueLabelDisplay="auto"
+              onChange={(_, value) => onPreferencesChange({
+                ...preferences,
+                musicVolume: value as number,
               })}
             />
           </PreferenceSlider>

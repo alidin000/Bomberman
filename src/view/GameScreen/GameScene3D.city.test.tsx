@@ -46,9 +46,15 @@ river.rows = budapestGrid.map((row, y) => row.map((cell, x) => {
   if (cell === 'W') return x >= 7 && x <= 11 ? 'w' : 'b';
   return (x + y) % 3 === 0 ? 'r' : '.';
 }).join(''));
+// The river's own cells, and the border cells it runs out under
+// (cityMaskRows draws those as water too).
+const lastRow = budapestGrid.length - 1;
+const runsOut = (x: number, y: number) => (
+  (y === 0 && river.rows![1][x] === 'w') || (y === lastRow && river.rows![lastRow - 1][x] === 'w')
+);
 const waterCells = budapestGrid.flatMap((row, y) => row
   .map((cell, x) => ({ cell, x, y }))
-  .filter(({ cell, x, y: cy }) => cell === 'W' && river.rows![cy][x] === 'w'));
+  .filter(({ cell, x, y: cy }) => cell === 'W' && (river.rows![cy][x] === 'w' || runsOut(x, cy))));
 
 function cityState(selectedMap: 'rome' | 'budapest' | 'hiddenLeaf', extra: Partial<GameEngineState> = {}) {
   return {

@@ -1,6 +1,10 @@
 export type GamePreferences = {
+  /** All sound: off silences the effects and the music. */
   soundEnabled: boolean;
   effectsVolume: number;
+  /** The match music (src/audio/music), under the master sound switch. */
+  musicEnabled: boolean;
+  musicVolume: number;
   reducedMotion: boolean;
   highContrast: boolean;
   screenShake: number;
@@ -19,6 +23,8 @@ export const GAME_PREFERENCES_KEY = 'shinobiGamePreferences';
 export const DEFAULT_GAME_PREFERENCES: GamePreferences = {
   soundEnabled: true,
   effectsVolume: 65,
+  musicEnabled: true,
+  musicVolume: 40,
   reducedMotion: false,
   highContrast: false,
   screenShake: 55,
@@ -70,6 +76,10 @@ export function normalizeGamePreferences(
       ? value.soundEnabled
       : DEFAULT_GAME_PREFERENCES.soundEnabled,
     effectsVolume: clamp(value?.effectsVolume, DEFAULT_GAME_PREFERENCES.effectsVolume, 0, 100),
+    musicEnabled: typeof value?.musicEnabled === 'boolean'
+      ? value.musicEnabled
+      : DEFAULT_GAME_PREFERENCES.musicEnabled,
+    musicVolume: clamp(value?.musicVolume, DEFAULT_GAME_PREFERENCES.musicVolume, 0, 100),
     reducedMotion: typeof value?.reducedMotion === 'boolean'
       ? value.reducedMotion
       : DEFAULT_GAME_PREFERENCES.reducedMotion,

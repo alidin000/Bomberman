@@ -9,7 +9,8 @@ import { parseMapRows } from '../../../../engine/mapLoader';
 import { maskTones, sceneTileMask } from '../arenaScene';
 import { MAP_OFFSET_X, MAP_OFFSET_Z, TILE_SIZE } from '../sceneSpace';
 import { buildStaticTileLayers } from '../staticTiles';
-import { contrastRatio } from '../highContrast';
+import { contrastRatio, highContrastPalette } from '../highContrast';
+import { cityBuildingGeometry } from './CityBuildings';
 import {
   TELEGRAPH_EDGE_COLOR, TELEGRAPH_EDGE_OPACITY, TELEGRAPH_FILL_COLOR, TELEGRAPH_FILL_OPACITY,
 } from '../hazardTelegraph';
@@ -37,6 +38,22 @@ const lattice = (x: number, z: number) => ({
   u: x / TILE_SIZE - MAP_OFFSET_X + 0.5,
   v: z / TILE_SIZE - MAP_OFFSET_Z + 0.5,
 });
+
+/** The brightest colour a geometry draws, as sRGB hex: its worst case against a light floor. */
+function brightestColour(geometry: THREE.BufferGeometry): string {
+  const color = geometry.getAttribute('color');
+  let best = -1;
+  let hex = '#000000';
+  for (let index = 0; index < color.count; index += 1) {
+    const [r, g, b] = [color.getX(index), color.getY(index), color.getZ(index)];
+    const light = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    if (light > best) {
+      best = light;
+      hex = `#${new THREE.Color(r, g, b).getHexString()}`;
+    }
+  }
+  return hex;
+}
 
 function cellsOf(rows: readonly string[], classes: string) {
   const cells = new Set<string>();
@@ -293,8 +310,12 @@ describe('city buildings in the tile layers', () => {
       undefined,
       mask
     );
-    const rows = arenaMapMask('budapest')!;
+    const { rows } = mask;
     // Every wall is a building, the bridge or the river: no cube is left.
+    // The river runs out under both border rows as water too.
+    const last = rows.length - 1;
+    const outlets = [0, last].flatMap((y) => Array.from(rows[y]).filter((cls) => cls === 'w'));
+    expect(outlets.length).toBeGreaterThan(8);
     expect(layers.wallVisible).toEqual([]);
     const riverWalls = map.flatMap((row, y) => row.filter((cell, x) => (
       cell === 'Wall' && rows[y][x] === 'w'
@@ -302,9 +323,26 @@ describe('city buildings in the tile layers', () => {
     expect(layers.waterVisible.length).toBe(riverWalls);
   });
 
-  it('draws today\'s walls in high contrast and when buildings are off', () => {
+  (['rome', 'barcelona', 'budapest'] as const).forEach((city) => {
+    it(`${city}: keeps its buildings in high contrast, in the walls' dark band`, () => {
+      const look = CITY_LOOKS[city];
+      const mask = sceneTileMask(getArenaMap(city)!, look, true)!;
+      expect(mask.buildings?.contrast).toBeDefined();
+      const board = highContrastPalette(look.palette);
+      const floors = [
+        board.groundA, board.groundB, ...Object.values(mask.floors).flatMap(({ a, b }) => [a, b]),
+      ];
+      const built = cityBuildingGeometry(mask)!;
+      [built.mass, built.detail, built.outskirts!].forEach((geometry) => {
+        const hex = brightestColour(geometry);
+        floors.forEach((floor) => expect(contrastRatio(hex, floor)).toBeGreaterThanOrEqual(3));
+        expect(contrastRatio(hex, board.crate)).toBeGreaterThanOrEqual(2);
+      });
+    });
+  });
+
+  it('draws today\'s walls when buildings are off', () => {
     const arena = getArenaMap('barcelona')!;
-    expect(sceneTileMask(arena, CITY_LOOKS.barcelona, true)?.buildings).toBeUndefined();
     expect(sceneTileMask(arena, CITY_LOOKS.barcelona, false, false)?.buildings).toBeUndefined();
     const map = parseMapRows(arenaMapRows('barcelona'));
     const mask = sceneTileMask(arena, CITY_LOOKS.barcelona, false, false)!;
@@ -357,8 +395,8 @@ describe('Rome\'s Colosseum', () => {
     }
     expect(northTop).toBeGreaterThan(1.7);
     expect(southTop).toBeLessThan(1.25);
-    // The arena wall the seating falls to.
-    expect(heights.has(62)).toBe(true);
+    // The arena wall and the two tiers above it: the seating steps.
+    [62, 99, 137].forEach((tier) => expect(heights.has(tier)).toBe(true));
   });
 
   it('lays the arena inside the ring on sand that keeps every danger cue readable', () => {
@@ -366,7 +404,9 @@ describe('Rome\'s Colosseum', () => {
     const map = parseMapRows(arenaMapRows('rome'));
     const sand = mask.rows.flatMap((row, y) => Array.from(row)
       .flatMap((cls, x) => (cls === 'a' ? [{ x, y }] : [])));
-    expect(sand.length).toBeGreaterThan(40);
+    // The real arena's share of the ring (83 by 48 m in 189 by 156 m).
+    expect(sand.length).toBeGreaterThan(8);
+    expect(sand.length).toBeLessThan(30);
     // Floor only, and only inside the ring's rows.
     sand.forEach(({ x, y }) => {
       expect(map[y][x]).not.toBe('Wall');
@@ -387,7 +427,7 @@ describe('Rome\'s Colosseum', () => {
 });
 
 describe('Budapest bridges', () => {
-  it('stands two towers, one at each bank, on every deck over the river', () => {
+  it('stands the Chain Bridge on its stone towers, and the other crossing on steel', () => {
     const rows = arenaMapMask('budapest')!;
     const built = buildCityBuildings(rows, CITY_BUILDING_STYLES.budapest, 'budapest');
     const position = built.mass.getAttribute('position');
@@ -399,15 +439,20 @@ describe('Budapest bridges', () => {
         towerCells.add(`${Math.floor(u)},${Math.floor(v)}`);
       }
     }
-    // The Chain Bridge on its marked pylons; the second bridge on the river
-    // cells either side of its deck, in the same two columns.
-    expect([...towerCells].sort()).toEqual([
-      '11,13', '11,17', '11,3', '11,7', '7,13', '7,17', '7,3', '7,7',
-    ]);
-    expect(['7,13', '7,17', '11,13', '11,17'].every((cell) => {
-      const [x, y] = cell.split(',').map(Number);
-      return rows[y][x] === 'w';
-    })).toBe(true);
+    // Only the Chain Bridge (the one OSM tags as a suspension bridge) has
+    // towers, on its marked pylons.
+    expect([...towerCells].sort()).toEqual(['11,3', '11,7', '7,3', '7,7']);
+    // The other crossing: arched steel trusses standing in the river beside
+    // its deck, low enough to read as a girder bridge.
+    const trussRows = new Set<number>();
+    for (let index = 0; index < position.count; index += 1) {
+      const { u, v } = lattice(position.getX(index), position.getZ(index));
+      const x = Math.floor(u);
+      const y = Math.floor(v);
+      const h = position.getY(index);
+      if (y > 8 && rows[y]?.[x] === 'w' && h > 0.35 && h < 0.6) trussRows.add(y);
+    }
+    expect([...trussRows].sort((p, q) => p - q)).toEqual([13, 17]);
   });
 });
 

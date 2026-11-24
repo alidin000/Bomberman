@@ -30,6 +30,8 @@ describe.each(Object.keys(CITY_LOOKS) as CityLookId[])('the %s outskirts', (id) 
 
   it('stands round the board, never on it or its slab', () => {
     expect(vertices.length).toBeGreaterThan(0);
+    // Every vertex is a real point (a bad bank lookup once gave Infinity).
+    expect(vertices.filter(({ u, v, y }) => ![u, v, y].every(Number.isFinite))).toEqual([]);
     const onSlab = vertices.filter(({ u, v, y }) => y > 0 && u > -SLAB + EPS
       && u < width + SLAB - EPS && v > -SLAB + EPS && v < height + SLAB - EPS);
     expect(onSlab).toEqual([]);
@@ -50,8 +52,40 @@ describe.each(Object.keys(CITY_LOOKS) as CityLookId[])('the %s outskirts', (id) 
     // Map cells to the lattice: a cell's centre sits half a cell in.
     const cx = x + 0.5;
     const cy = y + 0.5;
-    const inColumn = vertices.filter(({ u, v, y: h }) => h > 0.01
+    // Low embankments may run past it; no roof does.
+    const inColumn = vertices.filter(({ u, v, y: h }) => h > 0.15
       && Math.abs(u - cx) < radius + 0.6 && v < cy + radius + 0.4);
     expect(inColumn).toEqual([]);
+  });
+});
+
+describe('the Danube past the board', () => {
+  const mask = sceneTileMask(getArenaMap('budapest'), CITY_LOOKS.budapest, false)!;
+  const outskirts = cityBuildingGeometry(mask)!.outskirts!;
+  const position = outskirts.getAttribute('position');
+  const width = mask.rows[0].length;
+  const height = mask.rows.length;
+
+  it('runs on north and south as water, with no roof on it', () => {
+    const water = { north: 0, south: 0 };
+    const roofsOnRiver: string[] = [];
+    for (let index = 0; index < position.count; index += 1) {
+      const { u, v } = lattice(position.getX(index), position.getZ(index));
+      const y = position.getY(index);
+      if (y < -0.01 && y > -0.03) {
+        if (v < -2) water.north += 1;
+        if (v > height + 2) water.south += 1;
+      }
+      // Next to the board the river keeps the columns it leaves by.
+      const nearNorth = v < -SLAB && v > -0.7;
+      const river = Array.from(mask.rows[0]).flatMap((cls, x) => (cls === 'w' ? [x] : []));
+      if (nearNorth && y > 0.2 && u > Math.min(...river) && u < Math.max(...river) + 1) {
+        roofsOnRiver.push(`${u.toFixed(2)},${v.toFixed(2)}`);
+      }
+    }
+    expect(water.north).toBeGreaterThan(0);
+    expect(water.south).toBeGreaterThan(0);
+    expect(roofsOnRiver).toEqual([]);
+    expect(width).toBeGreaterThan(0);
   });
 });

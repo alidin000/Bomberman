@@ -35,6 +35,9 @@ const NEAR_TOP = 0.4;
 /** The floor slab reaches this far past the board (GameScene3D's Floor: width + 1.1). */
 const SLAB_LIP = 0.55;
 const GROUND_Y = -0.06;
+/** The river past the board: just over the floor slab's top, under the board's own water. */
+const RIVER_Y = -0.02;
+const EMBANKMENT = 0.12;
 
 function clear(cx: number, cy: number, clearings: readonly OutskirtsClearing[]): boolean {
   return clearings.every(({
@@ -49,13 +52,22 @@ function clear(cx: number, cy: number, clearings: readonly OutskirtsClearing[]):
   });
 }
 
+/** The columns a river leaves the board by, on a border row of the mask. */
+function riverColumns(row: string | undefined): [number, number] | null {
+  if (!row) return null;
+  const xs = Array.from(row).flatMap((cls, x) => (cls === 'w' ? [x] : []));
+  return xs.length ? [Math.min(...xs), Math.max(...xs) + 1] : null;
+}
+
 export function buildCityOutskirts(
-  width: number,
-  height: number,
+  rows: readonly string[],
   style: CityBuildingStyle,
   seedText: string,
-  clearings: readonly OutskirtsClearing[]
+  clearings: readonly OutskirtsClearing[],
+  water: string
 ): THREE.BufferGeometry {
+  const height = rows.length;
+  const width = rows[0]?.length ?? 0;
   const mass = new GeometryBuilder();
   const c = (u: number, v: number, y: number): V3 => [wx(u), y, wz(v)];
   // The ground: four strips round the slab, in the kerb's tone.
@@ -70,6 +82,87 @@ export function buildCityOutskirts(
   flat(-outer, -SLAB_LIP, -SLAB_LIP, height + SLAB_LIP);
   flat(width + SLAB_LIP, width + outer, -SLAB_LIP, height + SLAB_LIP);
 
+  // A river that leaves the board runs on through the outskirts, between
+  // granite embankments. North of the board it bends aside from a famous
+  // place in its way, so the place stands on its bank (the Parliament).
+  type Knot = { v: number; west: number; east: number };
+  const paths: Knot[][] = [];
+  const north = riverColumns(rows[0]);
+  if (north) {
+    const [w, e] = north;
+    const blocker = clearings.find(({ x, radius, famous }) => (
+      famous && x + 0.5 - radius < e && x + 0.5 + radius > w
+    ));
+    // Bend west to end clear of its west end, or east past its east end.
+    const westShift = blocker ? blocker.x + 0.5 - blocker.radius - 0.2 - e : 0;
+    const eastShift = blocker ? blocker.x + 0.5 + blocker.radius + 0.2 - w : 0;
+    const shift = Math.abs(westShift) <= Math.abs(eastShift) ? westShift : eastShift;
+    paths.push([
+      { v: 0, west: w, east: e },
+      { v: -0.7, west: w, east: e },
+      { v: -1.5, west: w + shift, east: e + shift },
+      { v: -outer, west: w + shift, east: e + shift },
+    ]);
+  }
+  const south = riverColumns(rows[height - 1]);
+  if (south) {
+    const [w, e] = south;
+    paths.push([
+      { v: height, west: w, east: e },
+      { v: height + outer, west: w, east: e },
+    ]);
+  }
+  const bank = (path: Knot[], v: number): [number, number] => {
+    for (let index = 0; index + 1 < path.length; index += 1) {
+      const a = path[index];
+      const b = path[index + 1];
+      const lo = Math.min(a.v, b.v);
+      const hi = Math.max(a.v, b.v);
+      if (v >= lo && v <= hi) {
+        const t = hi === lo ? 0 : (v - a.v) / (b.v - a.v);
+        return [a.west + (b.west - a.west) * t, a.east + (b.east - a.east) * t];
+      }
+    }
+    return [Infinity, -Infinity];
+  };
+  paths.forEach((path) => {
+    for (let index = 0; index + 1 < path.length; index += 1) {
+      const a = path[index];
+      const b = path[index + 1];
+      const y = RIVER_Y;
+      const w = (u: number, v: number) => c(u, v, y);
+      const sky: V3 = [0, 1, 0];
+      mass.quad(w(a.west, a.v), w(a.east, a.v), w(b.east, b.v), w(b.west, b.v), water, sky, 1);
+      // Embankments, off the floor slab (the board's parapet marks its edge).
+      // North of the board v <= 0; south of it v >= height.
+      const clip = (v: number) => (
+        v <= 0 ? Math.min(v, -SLAB_LIP) : Math.max(v, height + SLAB_LIP)
+      );
+      const [v0, v1] = [clip(a.v), clip(b.v)];
+      if (Math.abs(v1 - v0) < 1e-6) continue; // eslint-disable-line no-continue
+      const at = (v: number) => bank(path, v);
+      [[0, -0.1], [1, 0.1]].forEach(([side, out]) => {
+        const p0 = at(v0)[side];
+        const p1 = at(v1)[side];
+        const outer0 = p0 + out;
+        const outer1 = p1 + out;
+        const top = EMBANKMENT;
+        const granite = shadeHex(style.quay, 1.1);
+        const up = (u: number, v: number) => c(u, v, top);
+        const down = (u: number, v: number) => c(u, v, GROUND_Y);
+        mass.quad(up(p0, v0), up(outer0, v0), up(outer1, v1), up(p1, v1), granite, [0, 1, 0]);
+        const facing: V3 = [side ? -1 : 1, 0, 0];
+        mass.quad(down(p0, v0), down(p1, v1), up(p1, v1), up(p0, v0), style.quay, facing);
+      });
+    }
+  });
+  const inRiver = (cx: number, cy: number) => paths.some((path) => (
+    [cy, cy + 0.5, cy + 1].some((v) => {
+      const [west, east] = bank(path, v);
+      return cx + 1 > west - 0.15 && cx < east + 0.15;
+    })
+  ));
+
   const inset = 0.06;
   for (let cy = -OUTSKIRTS_DEPTH - 1; cy < height + OUTSKIRTS_DEPTH + 1; cy += 1) {
     for (let cx = -OUTSKIRTS_DEPTH - 1; cx < width + OUTSKIRTS_DEPTH + 1; cx += 1) {
@@ -77,7 +170,7 @@ export function buildCityOutskirts(
       const onSlab = cx >= -1 && cx <= width && cy >= -1 && cy <= height;
       // Streets every third row and column, in step with the board.
       const street = ((cx % 3) + 3) % 3 === 2 || ((cy % 3) + 3) % 3 === 2;
-      if (!onSlab && !street && clear(cx, cy, clearings)) {
+      if (!onSlab && !street && !inRiver(cx, cy) && clear(cx, cy, clearings)) {
         const rnd = seeded(hashString(`${seedText}|outskirts|${cx},${cy}`));
         let top: number;
         if (cy < 0) top = 0.7 + rnd() * (OUTSKIRTS_TOP - 0.7 - 0.2);

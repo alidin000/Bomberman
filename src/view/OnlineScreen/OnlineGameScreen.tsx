@@ -13,8 +13,13 @@ import { useOnlineEngine, useOnlineInput, useOnlineStatusSnapshot } from '../../
 import { useTouchMode } from '../../input/touchMode';
 import { getOnlineSession } from '../../network/onlineSession';
 import { useEngineFeedback } from '../GameScreen/useGameFeedback';
+import { useMatchMusic } from '../GameScreen/useMatchMusic';
 import { applyDocumentPreferences, loadGamePreferences } from '../GameScreen/gamePreferences';
-import { MatchAnnouncer, MatchHud, MatchScene } from '../GameScreen/MatchLeaves';
+import {
+  MatchAnnouncer, MatchHud, MatchScene, RoundOverviewPlate,
+} from '../GameScreen/MatchLeaves';
+import { overviewDue } from '../GameScreen/scene/roundOverview';
+import { arenaMapForConfig } from '../../content/arenaMaps';
 import { GameBackground, GameSceneContainer } from '../GameScreen/GameScreen.styles';
 import { TouchControls } from '../GameScreen/TouchControls';
 import { VillageOverlay } from '../GameScreen/village/VillageOverlay';
@@ -30,6 +35,15 @@ import { JOINING_MATCH_MESSAGE, describeOnlineError, findOnlineProblem } from '.
 type OnlineMatchStatus = (
   Pick<GameEngineState, 'phase' | 'paused' | 'resultMessage'> & { campaign: boolean }
 ) | null;
+
+// A city room's map (its overview plate carries the city's OSM credit).
+const selectArenaKey = (state: GameEngineState | null): string | null => (
+  state ? `${state.config.mode}|${state.config.selectedMap}` : null
+);
+// The overview's own key, as GameScreen's: a rematch's new seed starts a new one.
+const selectOverview = (state: GameEngineState | null): number | null => (
+  state && overviewDue(state) ? state.rngSeed : null
+);
 
 const selectOnlineMatchStatus: EngineSelector<OnlineMatchStatus> = (state, previous) => {
   if (!state) return null;
@@ -59,6 +73,22 @@ export function OnlineGameScreen() {
   const [preferences] = useState(loadGamePreferences);
   const state = useEngineSelector(engine.store, selectOnlineMatchStatus);
   const feedback = useEngineFeedback(engine.store, preferences);
+  useMatchMusic(engine.store, preferences);
+  // A city room opens on the board's overview, as Local Arena does: the
+  // plate names the city, credits OpenStreetMap, and Skip ends it here only.
+  const arenaKey = useEngineSelector(engine.store, selectArenaKey);
+  const cityArena = useMemo(() => {
+    if (!arenaKey) return undefined;
+    const [mode, selectedMap] = arenaKey.split('|');
+    const arena = arenaMapForConfig({ mode: mode as GameEngineState['config']['mode'], selectedMap });
+    return arena?.family === 'city' ? arena : undefined;
+  }, [arenaKey]);
+  const overviewKey = useEngineSelector(engine.store, selectOverview);
+  const [skippedOverview, setSkippedOverview] = useState<number | null>(null);
+  const overviewSkipped = overviewKey !== null && skippedOverview === overviewKey;
+  const skipOverview = useCallback(() => setSkippedOverview(overviewKey), [overviewKey]);
+  const overviewShowing = !!cityArena && overviewKey !== null && !overviewSkipped
+    && !(state?.paused ?? false);
   const touchMode = useTouchMode();
   const canPlay = online.connected && !!state && state.phase === 'playing' && !state.paused;
   // A co-op square's villagers, shrine and gate: the room plays on (no
@@ -180,9 +210,13 @@ export function OnlineGameScreen() {
           liveState={engine.getState}
           idle={!online.connected || state.paused}
           localSeat={online.seat}
+          overviewSkipped={overviewSkipped}
         />
       </GameSceneContainer>
-      <MatchAnnouncer store={engine.store} caption={feedback.caption} eventId={feedback.eventId} roundOver={roundOver} held={state.paused || state.phase !== 'playing'} hudScale={preferences.hudScale} campaign={state.campaign} />
+      {overviewShowing && cityArena && (
+        <RoundOverviewPlate store={engine.store} entry={cityArena} named onSkip={skipOverview} />
+      )}
+      <MatchAnnouncer store={engine.store} caption={feedback.caption} eventId={feedback.eventId} roundOver={roundOver} held={state.paused || state.phase !== 'playing'} hudScale={preferences.hudScale} campaign={state.campaign} overview={overviewShowing} />
       {touchMode && online.seat !== null && (
         // Online has one local control set; the server seat only selects the
         // fighter whose kit and ultimate charge the overlay displays.

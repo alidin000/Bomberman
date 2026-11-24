@@ -4,7 +4,7 @@ import {
   wx, wz,
 } from './cityGeometry';
 import {
-  borderSide, cliffCell, cliffEnd, forestCell,
+  borderSide, cliffCell, cliffEnd, forestCell, palisadeCell,
 } from './villageBorder';
 import type { CityBuildingGeometry, CrateStyle } from './cityBuildings';
 
@@ -19,7 +19,7 @@ import type { CityBuildingGeometry, CrateStyle } from './cityBuildings';
 
 type Builders = { mass: GeometryBuilder; detail: GeometryBuilder };
 
-export type VillageBorder = 'forest' | 'rocks' | 'spires';
+export type VillageBorder = 'forest' | 'rocks' | 'spires' | 'palisade';
 
 /** A village's signature building, after the atlas (up to four stand inside the board). */
 export type VillageHero = 'tallHut' | 'domeTower' | 'podiumDome' | 'drums' | 'pagoda';
@@ -169,6 +169,24 @@ export const VILLAGE_BUILDING_STYLES: Readonly<Partial<Record<StageId, VillageBu
     yard: '#8f7d92',
     crate: 'crateStack',
     hero: 'drums',
+  },
+  // The war front's camp: a stake palisade, canvas tents and supply crates.
+  greatShinobiWar: {
+    border: 'palisade',
+    houseRoof: 'thatch',
+    hutRoof: 'cone',
+    borderTones: ['#5d4a3a', '#6b5644', '#54463a'],
+    trunk: '#3f342b',
+    borderGround: '#6f6a66',
+    walls: ['#5f5a4e', '#6a6456', '#57534a'],
+    frame: '#3a332b',
+    roofs: ['#77705d', '#79705d', '#6f6a58'],
+    window: '#2a2622',
+    stone: '#5e6266',
+    moss: '#4c5a3a',
+    yard: '#9b978f',
+    crate: 'crateStack',
+    hero: 'tallHut',
   },
 };
 
@@ -574,6 +592,8 @@ export function buildVillageBuildings(
       }
     } else if (style.border === 'forest' && !south) {
       top = forestCell(builders, x, y, side, width, height, style, rnd);
+    } else if (style.border === 'palisade') {
+      top = palisadeCell(builders, x, y, side, style, rnd);
     } else {
       const cu = x + 0.5 + (rnd() - 0.5) * 0.12;
       const cv = y + 0.5 + (rnd() - 0.5) * 0.12;

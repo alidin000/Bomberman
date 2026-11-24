@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
     players: [],
     roomMode: 'arena',
     stageId: 'hiddenLeaf',
+    arenaMapId: 'hiddenLeaf',
     capacity: 4,
     totalRounds: 3,
     gameState: null,
@@ -85,6 +86,7 @@ describe('OnlineLobbyScreen', () => {
       players: [],
       roomMode: 'arena',
       stageId: 'hiddenLeaf',
+      arenaMapId: 'hiddenLeaf',
       capacity: 4,
       totalRounds: 3,
       gameState: null,
@@ -105,11 +107,34 @@ describe('OnlineLobbyScreen', () => {
     renderLobby();
     fireEvent.change(screen.getByLabelText('display name'), { target: { value: 'Hinata' } });
     fireEvent.click(screen.getByRole('button', { name: /Online Arena/i }));
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'village' }));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'arena' }));
     fireEvent.click(screen.getByRole('option', { name: 'Hidden Sand Village' }));
     fireEvent.click(screen.getByRole('button', { name: '5 rounds' }));
     fireEvent.click(screen.getByRole('button', { name: /create room/i }));
-    expect(mocks.create).toHaveBeenCalledWith('Hinata', 'naruto', 'arena', 'hiddenSand', 5);
+    expect(mocks.create).toHaveBeenCalledWith('Hinata', 'naruto', 'arena', 'hiddenSand', 5, 'hiddenSand');
+  });
+
+  it('creates an arena on a city, and lists every city but the playtest\'s control', () => {
+    renderLobby();
+    fireEvent.change(screen.getByLabelText('display name'), { target: { value: 'Hinata' } });
+    fireEvent.click(screen.getByRole('button', { name: /Online Arena/i }));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'arena' }));
+    const options = screen.getAllByRole('option').map((option) => option.textContent);
+    expect(options).toEqual(expect.arrayContaining(['Rome', 'Barcelona', 'Budapest', 'Hidden Leaf Village']));
+    expect(options.some((label) => /control/i.test(label ?? ''))).toBe(false);
+    fireEvent.click(screen.getByRole('option', { name: 'Budapest' }));
+    fireEvent.click(screen.getByRole('button', { name: /create room/i }));
+    // A city names a village for the room's stage; the map is the city.
+    expect(mocks.create).toHaveBeenCalledWith('Hinata', 'naruto', 'arena', 'hiddenLeaf', 3, 'budapest');
+  });
+
+  it('keeps co-op rooms on a village', () => {
+    renderLobby();
+    fireEvent.change(screen.getByLabelText('display name'), { target: { value: 'Hinata' } });
+    fireEvent.click(screen.getByRole('button', { name: /Co-op/i }));
+    expect(screen.queryByRole('combobox', { name: 'arena' })).toBeNull();
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'village' }));
+    expect(screen.queryByRole('option', { name: 'Rome' })).toBeNull();
   });
 
   it('prefills an invite code and joins it', () => {
@@ -138,6 +163,7 @@ describe('OnlineLobbyScreen', () => {
       ],
       roomMode: 'coop',
       stageId: 'hiddenSand',
+      arenaMapId: 'hiddenSand',
       capacity: 4,
       totalRounds: 1,
     };
@@ -188,6 +214,7 @@ describe('OnlineLobbyScreen connection states', () => {
       players: [],
       roomMode: 'coop',
       stageId: 'hiddenLeaf',
+      arenaMapId: 'hiddenLeaf',
       capacity: 4,
       totalRounds: 3,
       gameState: null,

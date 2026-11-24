@@ -293,13 +293,18 @@ blocks read as building blocks, not as the city.
 - On-board landmarks (phase 4). Budapest's Chain Bridge has two stone
   towers, each a pair of pylons with the blind arch facing the camera and a
   lower arched crossing. It has double chains swinging from the banks over
-  both towers, hangers, iron railings and girders. The second bridge
-  downstream gets the same towers, on the river cells either side of its
-  deck, so the two read as one city's bridges. Rome's Colosseum reads as one
-  oval stadium: three arcade tiers and an attic on its north arc, two tiers
-  on the south as the ruin stands, its top falling inward as seating to a
-  low arena wall, round a sand arena floor (class `a`, which keeps the danger
-  cues readable). The landmark stones pass the floor rule.
+  both towers, hangers, iron railings and girders. Only the Chain Bridge,
+  which OSM tags as a suspension bridge, keeps the towers and chains; the
+  other crossing is a steel arch truss standing in the river beside its
+  deck. The Danube runs out under both border rows as
+  water behind a low granite parapet and on through the outskirts between
+  embankments, bending west of the Parliament so it stands on its bank.
+  Rome's Colosseum reads as one oval stadium: three arcade tiers and an attic
+  on its north arc, two tiers on the south as the ruin stands, and three
+  stepped seating tiers with dark risers down to a low arena wall. The sand
+  (class `a`, which keeps the danger cues readable) covers the real arena's
+  share of the ring, 83 by 48 m of 189 by 156 m. The landmark stones pass the
+  floor rule.
 - Quays (phase 5): stone rims inside the water cells along every bank.
 - Crates as goods (phase 3, after the design review): Barcelona taped boxes
   on a pallet, Rome produce crates under a striped awning, Budapest and
@@ -317,7 +322,8 @@ blocks read as building blocks, not as the city.
   - Stone: rock mesas and stone houses.
   - Akatsuki hideout: stalagmite spires and dark stone with lantern-red
     openings.
-  - The war front keeps its palisade.
+  - The war front's camp: a palisade of sharpened stakes round the board,
+    canvas tents, a command tent and supply crates.
   - The same villages dress online rooms, training and the campaign, built
     from each match's map. The campaign keeps its boss gates and its village
     square (with the square's own dressing) as before. Under its fog a house
@@ -337,8 +343,11 @@ blocks read as building blocks, not as the city.
 - The budget test still measures cities against Hidden Leaf, which now draws
   its village too (about 80,000 triangles, up from 69,000). Cities run at
   about 73,000-87,000.
-- High contrast keeps today's walls everywhere, and so does a tab that
-  opened the Mission Deck with `?playtest=1`.
+- High contrast (phase 7) keeps the buildings, crates and outskirts on every
+  map, retoned into the walls' dark hue: the brightest colour of each stays
+  3:1 against every floor and 2:1 against the crates (tested per city and
+  village). A tab that opened the Mission Deck with `?playtest=1` keeps
+  today's walls, as the Rome playtest's control.
 
 - Roof life: chimneys on Rome's and Budapest's roofs, water tanks on
   Barcelona's terraces, small value steps between neighbouring lots (never
@@ -355,8 +364,8 @@ blocks read as building blocks, not as the city.
   filler props (terrace blocks, quarry steps, piers), so a city no longer
   floats, and the scene's fog fades the far rows.
 
-Not yet: the buildings layer from real lots (phase 6), a high-contrast
-variant (phase 7), and boats and bollards.
+Not yet: the buildings layer from real lots (phase 6), and boats and
+bollards.
 
 ## Phases
 

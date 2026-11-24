@@ -144,7 +144,8 @@ Rome, Barcelona and Budapest, plus `romeControl`, the playtest's control map.
 Each entry has an `ArenaMapId`, a family (`village` or `city`), a name, a
 caption, a look id, a versus monster rule, its skyline landmark, its credit,
 and whether only the playtest lists it. City ids are never `StageId`s, so the
-campaign, the hub and the online lobby keep their own stage lists.
+campaign and the hub keep their own stage lists. Online arena rooms play the
+catalog too: the villages and the three cities, never the playtest's control.
 
 - **The route decides.** In Arena mode the route's map id is the map's only
   identity. The game screen loads the grid from the catalog,
@@ -206,8 +207,13 @@ campaign, the hub and the online lobby keep their own stage lists.
   a cut-away (`scene/city/cutaway.ts`) sinks the cells in front of every
   fighter, bomb, blast line, blast, pickup, monster, boss and hazard in sight
   to 0.36 of their height on the CPU each frame. The border row nearest the
-  camera stays at 0.94. High contrast, and a tab that opened the Mission Deck
-  with `?playtest=1`, keep today's wall cubes. The plan and its rules are in
+  camera stays at 0.94. High contrast keeps the buildings, crates and
+  outskirts, retoned into the walls' dark hue (`contrastBand` in
+  `scene/arenaScene.ts`, `retoneForContrast` in `scene/city/CityBuildings.tsx`)
+  so every colour keeps 3:1 on every floor and 2:1 against the crates; it
+  keeps its own floors (no sand, no path, no contact shade). Only a tab that
+  opened the Mission Deck with `?playtest=1`, the Rome playtest's control,
+  keeps today's wall cubes. The plan and its rules are in
   `docs/CITY_BUILDINGS_PLAN.md`.
 - **Round-start overview.** In a city's first round, the camera frames the
   whole board during the countdown and cuts back to the players one second
@@ -303,6 +309,13 @@ sequenceDiagram
     S-->>B: Snapshot/delta + acknowledgement
   end
 ```
+
+An arena room names its map (`arenaMapId`, protocol 4): a village or one of
+`ONLINE_CITY_MAPS`. The server checks it, loads the grid from the catalog
+(`arenaMapRows`) and sends it in `start`, so a city room plays as Local Arena
+plays it: no stage, no versus monsters. The lobby reports the map, and a city
+match opens on its overview plate with the city's OSM credit, as locally. A
+co-op room keeps its village's campaign mission and names no map.
 
 The browser never sends a player ID, reducer action, or replacement state.
 `src/network/protocol.ts` validates message shape and limits. The server assigns
@@ -589,6 +602,43 @@ theme tokens in `src/index.css`:
 
 The HUD keeps fixed band sizes, so camera framing is unchanged.
 
+### Light
+
+The key light follows the point the camera looks at, keeping its direction,
+and its shadow box grows with the camera's distance (`scene/StageAtmosphere.tsx`):
+the play view and the whole board in the overview cast shadows, not only the
+corner near the world origin (three's default box). The map is 2048 texels a
+side, 1024 on low-end devices, snapped to its texels so shadows do not shimmer.
+City floors darken a little beside walls and crates, at most 6%
+(`contactShadeAt` in `scene/staticTiles.ts`), off in high contrast; the
+villages' floors have no contrast to spare for the danger cues.
+
+## Audio
+
+Sound effects are synthesised in `view/GameScreen/useGameFeedback.ts`. The
+match music is original and generated in the browser (`src/audio/music/`), with
+no recordings or samples:
+
+- `themes.ts`: a theme per map. Villages use Japanese scales (yo for Leaf and
+  Stone, in for Mist and the hideout, hirajoshi for Sand) with taiko, a flute,
+  koto or shamisen. Rome plays a tarantella in 6/8 on a mandolin, Barcelona
+  Spanish cadences, Budapest a csárdás on a violin.
+- `composer.ts`: pure, deterministic bars of notes. Melodies are walked from
+  a seed per theme in an eight-bar form, so each map has its own tune.
+  Sudden death and an enraged boss lift the melody an octave and fill the
+  drums.
+- `synth.ts`: the instruments, from oscillators, noise and Karplus-Strong
+  plucks rendered once per note.
+- `musicPlayer.ts`: one AudioContext, bars scheduled a quarter second ahead of
+  the audio clock. `view/GameScreen/useMatchMusic.ts` starts it on the first
+  input (browsers hold audio until then), speeds it up by 12% when intense,
+  dips it under blasts, and pauses it with the game and while the tab is
+  hidden. Settings has a Music switch and volume, under the master Sound switch.
+- `tracks.ts`: recorded tracks the owner adds in `public/music/tracks.json`
+  play instead, map by map, through the same volume, dips and pauses; a map
+  without one, or a track that fails, keeps its generated theme
+  (`docs/MUSIC.md`).
+
 ## Performance Constraints
 
 - Simulation: fixed 50 ms steps outside React.
@@ -641,6 +691,7 @@ rooms with different rules.
 | `src/view/GameScreen/village/` | The square's talk, board, stall, shrine and gate panels |
 | `src/view/HubScreen/`, `src/view/portraits/` | Hub tabs, story scenes and SVG portraits |
 | `src/theme/`, `src/index.css` | Theme tokens, fonts and village marks for menus and HUD |
+| `src/audio/music/` | Generated match music: themes, composer, instruments and player |
 
 ## Deployment
 

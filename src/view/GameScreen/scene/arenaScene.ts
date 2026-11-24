@@ -8,10 +8,11 @@ import {
   CityMaskColors, StageLook, getLook, getStageLook,
 } from '../../../content/stageLooks';
 import { isCityLookId } from '../../../content/cityColors';
-import { highContrastMaskColor, shadeHex } from './highContrast';
-import type { CheckerTones, TileMask } from './staticTiles';
-import { CITY_BUILDING_STYLES, buildingClasses } from './city/cityBuildings';
-import { ringInterior } from './city/boardLandmarks';
+import {
+  highContrastMaskColor, highContrastPalette, relativeLuminance, shadeHex,
+} from './highContrast';
+import type { BuildingContrast, CheckerTones, TileMask } from './staticTiles';
+import { CITY_BUILDING_STYLES, buildingClasses, cityMaskRows } from './city/cityBuildings';
 import { VILLAGE_BUILDING_STYLES, villageMaskRows } from './city/villageBuildings';
 import { placeStageProps } from './landmarkPlacement';
 
@@ -63,6 +64,21 @@ export function maskTones(
 
 const TILE_MASKS = new Map<string, TileMask>();
 
+/**
+ * High contrast's band for buildings: the walls' tone, dark enough for 3:1
+ * on every floor and 2:1 against a lighter crate, with a little to spare.
+ */
+export function contrastBand(
+  floors: readonly string[],
+  crate: string,
+  wall: string
+): BuildingContrast {
+  const limits = floors.map((floor) => (relativeLuminance(floor) + 0.05) / 3 - 0.05);
+  const crateLight = relativeLuminance(crate);
+  if (crateLight > relativeLuminance(wall)) limits.push((crateLight + 0.05) / 2 - 0.05);
+  return { tone: wall, maxLuminance: Math.max(0.004, Math.min(...limits) * 0.9) };
+}
+
 const VILLAGE_MASKS = new WeakMap<object, Map<string, TileMask>>();
 const ARENA_ROWS = new Map<string, string[][]>();
 const NO_SKIP: ReadonlySet<string> = new Set();
@@ -87,11 +103,12 @@ function arenaRows(id: ArenaMapEntry['id']): string[][] {
 function villageTileMask(
   look: StageLook,
   grid: readonly (readonly unknown[])[],
-  skip: ReadonlySet<string>
+  skip: ReadonlySet<string>,
+  highContrast: boolean
 ): TileMask | null {
   const style = VILLAGE_BUILDING_STYLES[look.lookId as StageId];
   if (!style) return null;
-  const key = `${look.lookId}|${[...skip].sort().join(';')}`;
+  const key = `${look.lookId}|${highContrast ? 'high' : 'normal'}|${[...skip].sort().join(';')}`;
   let masks = VILLAGE_MASKS.get(grid);
   if (!masks) {
     masks = new Map();
@@ -99,13 +116,23 @@ function villageTileMask(
   }
   let mask = masks.get(key);
   if (!mask) {
+    // High contrast keeps the palette's own floor (no path) and retones the village.
+    const board = highContrastPalette(look.palette);
+    const path = style.path && !highContrast;
     mask = {
       rows: villageMaskRows(grid, skip),
-      floors: style.path ? { p: { a: style.path, b: shadeHex(style.path, CHECKER_SHADE) } } : {},
+      floors: path ? { p: { a: style.path!, b: shadeHex(style.path!, CHECKER_SHADE) } } : {},
       water: style.borderGround,
       walls: {},
       buildings: {
-        kind: 'village', classes: 'be', style, seed: look.lookId, crate: style.crate,
+        kind: 'village',
+        classes: 'be',
+        style,
+        seed: look.lookId,
+        crate: style.crate,
+        ...(highContrast
+          ? { contrast: contrastBand([board.groundA, board.groundB], board.crate, board.wall) }
+          : {}),
       },
     };
     masks.set(key, mask);
@@ -122,9 +149,10 @@ function villageTileMask(
  * (a campaign's boss gates) out of its buildings.
  *
  * With `buildings`, a city's building and border walls, and its landmark,
- * draw as merged buildings (scene/city/CityBuildings.tsx) on a pavement floor, and crossing
- * cells take the road's tone under their stripes. High contrast keeps
- * today's walls, whose contrast rules are tested.
+ * draw as merged buildings (scene/city/CityBuildings.tsx) on a pavement
+ * floor, and crossing cells take the road's tone under their stripes. High
+ * contrast keeps its own floors and retones the buildings into the walls'
+ * dark band (contrastBand), so they keep the contrast the walls had.
  */
 export function sceneTileMask(
   arena: ArenaMapEntry | undefined,
@@ -135,14 +163,14 @@ export function sceneTileMask(
   skip: ReadonlySet<string> = NO_SKIP
 ): TileMask | null {
   if (!look.mask) {
-    if (!buildings || highContrast) return null;
+    if (!buildings) return null;
     const grid = arena?.family === 'village' ? arenaRows(arena.id) : map;
-    return grid ? villageTileMask(look, grid, skip) : null;
+    return grid ? villageTileMask(look, grid, skip, highContrast) : null;
   }
   if (!arena) return null;
   const rows = arenaMapMask(arena.id);
   if (!rows) return null;
-  const style = buildings && !highContrast && isCityLookId(look.lookId)
+  const style = buildings && isCityLookId(look.lookId)
     ? CITY_BUILDING_STYLES[look.lookId]
     : undefined;
   const key = `${arena.id}|${look.lookId}|${highContrast ? 'high' : 'normal'}|${style ? 'buildings' : 'walls'}`;
@@ -153,20 +181,26 @@ export function sceneTileMask(
       const pavement: CheckerTones = {
         a: style.pavement, b: shadeHex(style.pavement, CHECKER_SHADE),
       };
-      // A stadium's arena (Rome's Colosseum) on its own sand floor, class `a`.
-      const sand = style.arenaFloor ? ringInterior(rows) : new Set<string>();
-      const floors: Record<string, CheckerTones> = {
+      // A stadium's arena (Rome's Colosseum) on its own sand floor, class
+      // `a`, and the river running out under the border (cityMaskRows).
+      // High contrast keeps its own floor tones (no pavement, no sand).
+      const floors: Record<string, CheckerTones> = highContrast ? { ...mask.floors } : {
         ...mask.floors, b: pavement, e: pavement, m: pavement, x: mask.floors.r,
       };
-      if (style.arenaFloor && sand.size) {
+      if (style.arenaFloor && !highContrast) {
         floors.a = { a: style.arenaFloor, b: shadeHex(style.arenaFloor, CHECKER_SHADE) };
       }
+      const board = highContrastPalette(look.palette);
+      const contrast = highContrast
+        ? contrastBand(
+          [board.groundA, board.groundB, ...Object.values(floors).flatMap(({ a, b }) => [a, b])],
+          board.crate,
+          board.wall
+        )
+        : undefined;
       mask = {
         ...mask,
-        rows: sand.size
-          ? rows.map((row, y) => Array.from(row)
-            .map((cls, x) => (sand.has(`${x},${y}`) ? 'a' : cls)).join(''))
-          : rows,
+        rows: cityMaskRows(rows, style),
         floors,
         buildings: {
           kind: 'city',
@@ -174,6 +208,7 @@ export function sceneTileMask(
           style,
           seed: arena.id,
           crate: style.crate,
+          ...(contrast ? { contrast } : {}),
           // The outskirts keep clear of the skyline's props (landmarkPlacement.ts).
           clearings: placeStageProps(look, rows[0].length, rows.length).map(({
             x, y, radius, famous,

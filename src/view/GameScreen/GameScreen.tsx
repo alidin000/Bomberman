@@ -82,6 +82,7 @@ import {
   saveGamePreferences,
 } from './gamePreferences';
 import { useEngineFeedback } from './useGameFeedback';
+import { useMatchMusic } from './useMatchMusic';
 import { playerSlotColor, playerSlotLabel, playerSlotTextColor } from './playerSlots';
 import { loadCampaignDifficulty } from '../ConfigScreen/campaignDifficulty';
 import { isCpuSlot, normalizeControllers } from '../../ai/controllers';
@@ -463,6 +464,7 @@ export const GameScreen = ({ match }: GameScreenProps = {}) => {
   const routedArena = useMemo(() => (config ? arenaMapForConfig(config) : undefined), [config]);
   const cityArena = routedArena?.family === 'city' ? routedArena : undefined;
   const feedback = useEngineFeedback(store, preferences);
+  useMatchMusic(store, preferences);
   // A phone is one player: the touch controls play the first human seat.
   const touchMode = useTouchMode();
   const { leftHanded } = useTouchPreferences();

@@ -8,6 +8,8 @@ import { loadCampaignMapRows, parseMapRows } from '../../../../engine/mapLoader'
 import { sceneTileMask } from '../arenaScene';
 import { MAP_OFFSET_X, MAP_OFFSET_Z, TILE_SIZE } from '../sceneSpace';
 import { buildStaticTileLayers } from '../staticTiles';
+import { contrastRatio, highContrastPalette } from '../highContrast';
+import { cityBuildingGeometry } from './CityBuildings';
 import {
   VILLAGE_BODY_CAP, VILLAGE_BUILDING_STYLES, VILLAGE_HOUSE_CAP, VILLAGE_SOUTH_CAP, VILLAGE_TREE_CAP,
   buildVillageBuildings, villageMaskRows,
@@ -44,20 +46,53 @@ function strayRaised(geometry: THREE.BufferGeometry, rows: readonly string[]): s
   return stray;
 }
 
+/** The brightest colour a geometry draws, as sRGB hex: its worst case against a light floor. */
+function brightestColour(geometry: THREE.BufferGeometry): string {
+  const color = geometry.getAttribute('color');
+  let best = -1;
+  let hex = '#000000';
+  for (let index = 0; index < color.count; index += 1) {
+    const [r, g, b] = [color.getX(index), color.getY(index), color.getZ(index)];
+    const light = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    if (light > best) {
+      best = light;
+      hex = `#${new THREE.Color(r, g, b).getHexString()}`;
+    }
+  }
+  return hex;
+}
+
 describe('village buildings', () => {
-  it('gives the six atlas villages buildings, and leaves the war front as it was', () => {
+  it('gives every village its buildings: the six atlas villages and the war front\'s camp', () => {
     expect(VILLAGES.sort()).toEqual([
-      'akatsukiHideout', 'hiddenCloud', 'hiddenLeaf', 'hiddenMist', 'hiddenSand', 'hiddenStone',
+      'akatsukiHideout', 'greatShinobiWar', 'hiddenCloud', 'hiddenLeaf', 'hiddenMist', 'hiddenSand',
+      'hiddenStone',
     ]);
-    const war = getArenaMap('greatShinobiWar')!;
-    expect(sceneTileMask(war, getStageLook('greatShinobiWar'), false)).toBeNull();
+    expect(VILLAGES).toEqual(expect.arrayContaining(STAGE_DEFINITIONS.map((stage) => stage.id)));
+    expect(VILLAGE_BUILDING_STYLES.greatShinobiWar?.border).toBe('palisade');
   });
 
-  it('keeps today\'s walls in high contrast and with buildings off', () => {
+  it('keeps today\'s walls with buildings off', () => {
     const arena = getArenaMap('hiddenLeaf')!;
-    const look = getStageLook('hiddenLeaf');
-    expect(sceneTileMask(arena, look, true)).toBeNull();
-    expect(sceneTileMask(arena, look, false, false)).toBeNull();
+    expect(sceneTileMask(arena, getStageLook('hiddenLeaf'), false, false)).toBeNull();
+  });
+
+  VILLAGES.forEach((id) => {
+    it(`${id}: keeps its village in high contrast, in the walls' dark band, on the palette floor`, () => {
+      const look = getStageLook(id);
+      const mask = sceneTileMask(getArenaMap(id)!, look, true)!;
+      expect(mask.buildings?.contrast).toBeDefined();
+      expect(mask.floors).toEqual({});
+      const board = highContrastPalette(look.palette);
+      const built = cityBuildingGeometry(mask)!;
+      [built.mass, built.detail].forEach((geometry) => {
+        const hex = brightestColour(geometry);
+        [board.groundA, board.groundB].forEach((floor) => {
+          expect(contrastRatio(hex, floor)).toBeGreaterThanOrEqual(3);
+        });
+        expect(contrastRatio(hex, board.crate)).toBeGreaterThanOrEqual(2);
+      });
+    });
   });
 
   it('marks the border ring, the walls inside, and grass beside walls', () => {
@@ -196,9 +231,12 @@ describe('campaign villages', () => {
         .toBe(owners.cells.length - 1);
     });
 
-    it(`${id}: keeps one mask per match map, and none in high contrast`, () => {
+    it(`${id}: keeps one mask per match map and contrast setting`, () => {
       expect(sceneTileMask(undefined, look, false, true, map, new Set(skip))).toBe(mask);
-      expect(sceneTileMask(undefined, look, true, true, map, skip)).toBeNull();
+      const high = sceneTileMask(undefined, look, true, true, map, skip)!;
+      expect(high).not.toBe(mask);
+      expect(high.buildings?.contrast).toBeDefined();
+      expect(sceneTileMask(undefined, look, true, true, map, new Set(skip))).toBe(high);
     });
   });
 });

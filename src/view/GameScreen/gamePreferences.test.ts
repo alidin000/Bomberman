@@ -7,6 +7,18 @@ import {
 } from './gamePreferences';
 
 describe('game preferences', () => {
+  it('keeps the music on at a moderate volume by default, and clamps stored values', () => {
+    expect(DEFAULT_GAME_PREFERENCES.musicEnabled).toBe(true);
+    const { musicVolume, effectsVolume } = DEFAULT_GAME_PREFERENCES;
+    expect(musicVolume).toBeLessThan(effectsVolume);
+    const stored = normalizeGamePreferences({ musicVolume: 500, musicEnabled: 'yes' as unknown as boolean });
+    expect(stored.musicVolume).toBe(100);
+    expect(stored.musicEnabled).toBe(true);
+    expect(normalizeGamePreferences({ musicEnabled: false, musicVolume: -3 })).toMatchObject({
+      musicEnabled: false, musicVolume: 0,
+    });
+  });
+
   it('clamps unsafe stored values and keeps valid accessibility choices', () => {
     expect(normalizeGamePreferences({
       effectsVolume: 500,

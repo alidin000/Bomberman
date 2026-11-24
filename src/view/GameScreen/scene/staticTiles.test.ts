@@ -4,10 +4,14 @@ import { parseMapRows } from '../../../engine/mapLoader';
 import { createInitialState } from '../../../engine/initialState';
 import type { CampaignRuntimeState } from '../../../engine/types';
 import { crateShape } from './StaticTiles';
+import { STAGE_DEFINITIONS } from '../../../content/stages';
 import type { CrateStyle } from './city/cityBuildings';
 import {
+  CONTACT_SHADE_MAX,
+  TileMask,
   buildStaticTileLayers,
   campaignTileFeatureKey,
+  contactShadeAt,
   firstChangedTile,
   tileFeaturesFromKey,
   DESTROYED_CRATE_COLOR,
@@ -235,5 +239,59 @@ describe('crates drawn as their place\'s goods', () => {
       const triangles = (geometry.index?.count ?? geometry.getAttribute('position').count) / 3;
       expect(triangles).toBeLessThanOrEqual(100);
     });
+  });
+});
+
+describe('contact shading on the floor', () => {
+  const leaf = STAGE_DEFINITIONS[0].palette;
+  const room = parseMapRows([
+    'WWWWWWW'.split(''),
+    'W     W'.split(''),
+    'W  B  W'.split(''),
+    'W     W'.split(''),
+    'W     W'.split(''),
+    'WWWWWWW'.split(''),
+  ]);
+  const all = new Set(room.flatMap((row, y) => row.map((_cell, x) => cellKey(x, y))));
+  const ground = (shade: boolean) => {
+    const layers = buildStaticTileLayers(
+      room,
+      leaf,
+      all,
+      new Set(),
+      new Set(),
+      undefined,
+      null,
+      shade
+    );
+    return new Map(layers.groundVisible.map(({ x, y, color }) => [`${x},${y}`, color]));
+  };
+  const luminance = (hex: string) => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16)
+    + parseInt(hex.slice(5, 7), 16);
+
+  it('darkens floor beside walls and crates, never past its cap, and only when asked', () => {
+    const plain = ground(false);
+    const shaded = ground(true);
+    // Off: every floor cell keeps the palette's checker.
+    plain.forEach((color, key) => {
+      const [x, y] = key.split(',').map(Number);
+      const checker = (x + y) % 2 === 1 ? leaf.groundA : leaf.groundB;
+      if (room[y][x] !== 'Wall') expect(color).toBe(checker);
+    });
+    // In a corner, beside a crate, and in the open (one cell from anything is still near).
+    expect(luminance(shaded.get('1,1')!)).toBeLessThan(luminance(plain.get('1,1')!));
+    expect(luminance(shaded.get('3,1')!)).toBeLessThan(luminance(plain.get('3,1')!));
+    expect(contactShadeAt(room, null, 1, 1)).toBeCloseTo(1 - CONTACT_SHADE_MAX);
+    // Only a crate at its corner: a lighter shade.
+    expect(contactShadeAt(room, null, 2, 3)).toBeGreaterThan(1 - CONTACT_SHADE_MAX);
+    expect(contactShadeAt(room, null, 2, 3)).toBeLessThan(1);
+    // A wall the mask draws as water shades nothing.
+    const water: TileMask = {
+      rows: room.map((row) => row.map((cell) => (cell === 'Wall' ? 'w' : '.')).join('')),
+      floors: {},
+      water: '#123456',
+      walls: {},
+    };
+    expect(contactShadeAt(room, water, 1, 3)).toBe(1);
   });
 });

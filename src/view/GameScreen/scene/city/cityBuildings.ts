@@ -5,7 +5,7 @@ import {
   lathe,
   cutLots, hashString, insetOutline, pick, seeded, shadeHex, unitEdges, world, wx, wz,
 } from './cityGeometry';
-import { buildBoardLandmarks, type BoardLandmark } from './boardLandmarks';
+import { buildBoardLandmarks, ringInterior, type BoardLandmark } from './boardLandmarks';
 
 /**
  * A city's building cells drawn as merged buildings instead of one wall cube
@@ -177,6 +177,26 @@ export const CITY_BUILDING_STYLES: Readonly<Record<CityLookId, CityBuildingStyle
     crate: 'casks',
   },
 };
+
+/**
+ * A city map's mask rows as its buildings draw them: a stadium's arena on
+ * sand (`a`), and the border cells the river runs under as water (`w`), so
+ * the river leaves the board instead of ending at a row of houses.
+ */
+export function cityMaskRows(rows: readonly string[], style: CityBuildingStyle): readonly string[] {
+  const sand = style.arenaFloor ? ringInterior(rows) : new Set<string>();
+  const last = rows.length - 1;
+  const river = (x: number, y: number) => (
+    (y === 0 && rows[1]?.[x] === 'w') || (y === last && rows[last - 1]?.[x] === 'w')
+  );
+  let changed = false;
+  const out = rows.map((row, y) => Array.from(row).map((cls, x) => {
+    if (sand.has(`${x},${y}`)) { changed = true; return 'a'; }
+    if (cls === 'e' && x > 0 && x < row.length - 1 && river(x, y)) { changed = true; return 'w'; }
+    return cls;
+  }).join(''));
+  return changed ? out : rows;
+}
 
 /** The wall classes a style's buildings draw: building and border walls, and its landmark. */
 export function buildingClasses(style: CityBuildingStyle): string {

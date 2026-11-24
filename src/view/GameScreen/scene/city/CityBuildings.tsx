@@ -4,7 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { GameEngineState } from '../../../../engine/types';
 import { isPower } from '../../../../model/gameItem';
-import type { TileMask } from '../staticTiles';
+import type { BuildingContrast, TileMask } from '../staticTiles';
 import { useScenery } from '../scenery';
 import { CityBuildingGeometry, buildCityBuildings } from './cityBuildings';
 import { buildVillageBuildings } from './villageBuildings';
@@ -20,6 +20,36 @@ const BUILT = new WeakMap<TileMask, CityBuildingGeometry>();
 // Each geometry's colours as built: fog darkens a copy of these, never itself.
 const BASE_COLORS = new WeakMap<THREE.BufferGeometry, Float32Array>();
 
+const LUMA = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+/**
+ * High contrast: every colour of a geometry moved into the walls' hue, its
+ * light kept in order (a window still darker than its facade) but squeezed
+ * into the dark band, no lighter than `maxLuminance` (linear light, the same
+ * measure as the contrast rules).
+ */
+export function retoneForContrast(geometry: THREE.BufferGeometry, contrast: BuildingContrast) {
+  const color = geometry.getAttribute('color') as THREE.BufferAttribute;
+  const array = color.array as Float32Array;
+  const tone = new THREE.Color(contrast.tone);
+  const toneLight = Math.max(1e-4, LUMA(tone.r, tone.g, tone.b));
+  let brightest = 0;
+  for (let index = 0; index < array.length; index += 3) {
+    brightest = Math.max(brightest, LUMA(array[index], array[index + 1], array[index + 2]));
+  }
+  const darkest = contrast.maxLuminance * 0.15;
+  for (let index = 0; index < array.length; index += 3) {
+    const light = LUMA(array[index], array[index + 1], array[index + 2]);
+    const share = brightest > 0 ? (light / brightest) ** 0.8 : 0;
+    const target = darkest + (contrast.maxLuminance - darkest) * share;
+    const scale = target / toneLight;
+    array[index] = Math.min(1, tone.r * scale);
+    array[index + 1] = Math.min(1, tone.g * scale);
+    array[index + 2] = Math.min(1, tone.b * scale);
+  }
+  color.needsUpdate = true;
+}
+
 /** A mask's buildings, built on first use; null when it draws none. */
 export function cityBuildingGeometry(mask: TileMask | null): CityBuildingGeometry | null {
   if (!mask?.buildings) return null;
@@ -28,16 +58,21 @@ export function cityBuildingGeometry(mask: TileMask | null): CityBuildingGeometr
     const plan = mask.buildings;
     if (plan.kind === 'city') {
       built = buildCityBuildings(mask.rows, plan.style, plan.seed, plan.classes);
-      const width = mask.rows[0]?.length ?? 0;
       built.outskirts = buildCityOutskirts(
-        width,
-        mask.rows.length,
+        mask.rows,
         plan.style,
         plan.seed,
-        plan.clearings
+        plan.clearings,
+        mask.water
       );
     } else {
       built = buildVillageBuildings(mask.rows, plan.style, plan.seed);
+    }
+    const { contrast } = plan;
+    if (contrast) {
+      [built.mass, built.detail, built.outskirts].forEach((geometry) => {
+        if (geometry) retoneForContrast(geometry, contrast);
+      });
     }
     [built.mass, built.detail].forEach((geometry) => {
       BASE_COLORS.set(geometry, Float32Array.from(geometry.getAttribute('color').array));

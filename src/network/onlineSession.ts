@@ -3,6 +3,7 @@ import { GameEngineState } from '../engine/types';
 import {
   ClientMessage,
   OnlineAction,
+  OnlineArenaMapId,
   OnlinePlayer,
   ONLINE_ROOM_CAPACITY,
   OnlineRoomMode,
@@ -79,6 +80,8 @@ export type OnlineSessionSnapshot = {
   players: OnlinePlayer[];
   roomMode: OnlineRoomMode;
   stageId: StageId;
+  /** The map the room plays: its village, or an arena room's city. */
+  arenaMapId: OnlineArenaMapId;
   capacity: number;
   totalRounds: OnlineRounds;
   gameState: GameEngineState | null;
@@ -112,6 +115,7 @@ function emptySnapshot(): OnlineSessionSnapshot {
     players: [],
     roomMode: 'arena',
     stageId: 'hiddenLeaf',
+    arenaMapId: 'hiddenLeaf',
     capacity: ONLINE_ROOM_CAPACITY,
     totalRounds: 3,
     gameState: null,
@@ -425,6 +429,7 @@ export class OnlineSession {
           players: message.players,
           roomMode: message.roomMode,
           stageId: message.stageId,
+          arenaMapId: message.arenaMapId,
           capacity: message.capacity,
           totalRounds: message.totalRounds,
           status: this.snapshot.gameState ? 'playing' : 'lobby',
@@ -492,7 +497,8 @@ export class OnlineSession {
     characterId: CharacterId,
     roomMode: OnlineRoomMode,
     stageId: StageId,
-    totalRounds: OnlineRounds
+    totalRounds: OnlineRounds,
+    arenaMapId?: OnlineArenaMapId
   ): void {
     this.stopTimers();
     this.graceEnds.clear();
@@ -506,6 +512,8 @@ export class OnlineSession {
       roomMode,
       stageId,
       totalRounds,
+      // Only an arena room names its map.
+      ...(roomMode === 'arena' && arenaMapId ? { arenaMapId } : {}),
     });
   }
 

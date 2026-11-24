@@ -500,6 +500,7 @@ export function StaticTiles({
   destroyedCells,
   features,
   mask = null,
+  contactShade = false,
 }: {
   map: GameMap;
   palette: StageDefinition['palette'];
@@ -510,6 +511,9 @@ export function StaticTiles({
   /** A city's render mask; villages and the campaign have none. */
   // eslint-disable-next-line react/require-default-props -- defaulted to null in the signature
   mask?: TileMask | null;
+  /** Darken floor beside walls and crates (off in high contrast). */
+  // eslint-disable-next-line react/require-default-props -- defaulted to false in the signature
+  contactShade?: boolean;
 }) {
   const capacity = Math.max(1, getMapCellCount(map));
   const styles = useMemo(() => getStaticTileLayerStyles(palette), [palette]);
@@ -527,9 +531,10 @@ export function StaticTiles({
       exploredCells,
       destroyedCells,
       features,
-      mask
+      mask,
+      contactShade
     ),
-    [destroyedCells, exploredCells, features, map, mask, palette, visibleCells]
+    [contactShade, destroyedCells, exploredCells, features, map, mask, palette, visibleCells]
   );
   const layerCapacity = (id: StaticTileLayerId) => {
     if (id === 'waterVisible') return waterCapacity;

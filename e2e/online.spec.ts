@@ -129,3 +129,43 @@ test(
     }
   }
 );
+
+test('an arena room plays a city: the guest sees it, and both open on its overview', async ({ browser, page }) => {
+  const guestContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  try {
+    await page.goto('/online');
+    await page.getByLabel('display name').fill('Host');
+    await page.getByRole('button', { name: /Online Arena/i }).click();
+    await page.getByRole('combobox', { name: 'arena' }).click();
+    await page.getByRole('option', { name: 'Rome' }).click();
+    await page.getByRole('button', { name: 'Create room' }).click();
+    const codeElement = page.locator('strong').filter({ hasText: /^[A-HJ-NP-Z2-9]{6}$/ });
+    await expect(codeElement).toBeVisible();
+    const roomCode = (await codeElement.textContent()) ?? '';
+
+    await guest.goto(new URL(`/online/${roomCode}`, page.url()).toString());
+    await guest.getByLabel('display name').fill('Guest');
+    await guest.getByRole('button', { name: 'Join room' }).click();
+    // Both lobbies name the city the room plays.
+    await expect(page.getByText(/Online Arena · Rome/)).toBeVisible();
+    await expect(guest.getByText(/Online Arena · Rome/)).toBeVisible();
+
+    await page.getByRole('button', { name: 'Ready' }).click();
+    await guest.getByRole('button', { name: 'Ready' }).click();
+    await page.getByRole('button', { name: 'Start battle' }).click();
+    await expect(page).toHaveURL(new RegExp(`/online/${roomCode}/play$`));
+    await expect(guest).toHaveURL(new RegExp(`/online/${roomCode}/play$`));
+    // The city's overview, with its OpenStreetMap credit, opens the round.
+    // Read at once: the overview hands back to the players a second before GO.
+    const plate = guest.getByRole('group', { name: 'map overview' });
+    await expect(plate).toBeVisible({ timeout: 45_000 });
+    const credit = await plate.innerText();
+    expect(credit).toContain('Rome');
+    expect(credit).toContain('OpenStreetMap');
+    await expect(page.getByLabel('round countdown')).toBeHidden({ timeout: 30_000 });
+    await expect(plate).toBeHidden();
+  } finally {
+    await guestContext.close();
+  }
+});

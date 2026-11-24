@@ -142,6 +142,10 @@ CI runs all of these on every push and pull request to `main`.
 - Characters, villages, models, effects and portraits are drawn in code by the
   game. No art, models, logos, music or voices from the show or its games are
   included.
+- Music: original, composed and played in the browser by the game
+  ([src/audio/music](src/audio/music)) from Japanese and city scales and
+  seeded melodies. No recordings or samples. Recorded tracks can replace it,
+  map by map: see [docs/MUSIC.md](docs/MUSIC.md).
 - City arena maps: © [OpenStreetMap](https://www.openstreetmap.org/copyright)
   contributors, under the Open Database License 1.0. The map data, method and
   landmark credits are in [tools/city/NOTICE.txt](tools/city/NOTICE.txt).

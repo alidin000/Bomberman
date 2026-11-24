@@ -9,6 +9,7 @@ import {
 } from '../../../content/stageLooks';
 import { STAGE_DEFINITIONS } from '../../../content/stages';
 import {
+  CONTACT_SHADE_MAX,
   STATIC_TILE_LAYER_IDS,
   StaticTileLayers,
   TileMask,
@@ -17,7 +18,7 @@ import {
   maskWaterCount,
 } from './staticTiles';
 import { maskTones, sceneLookFor, sceneTileMask } from './arenaScene';
-import { contrastRatio, highContrastPalette } from './highContrast';
+import { contrastRatio, highContrastPalette, shadeHex } from './highContrast';
 import {
   TELEGRAPH_EDGE_COLOR, TELEGRAPH_EDGE_OPACITY, TELEGRAPH_FILL_COLOR, TELEGRAPH_FILL_OPACITY,
 } from './hazardTelegraph';
@@ -106,11 +107,14 @@ describe('city mask tiles', () => {
     ARENA_MAPS.filter((entry) => entry.family === 'city').forEach((entry) => {
       const look = getLook(entry.lookId);
       const tileMask = sceneTileMask(entry, look, false);
-      // The committed rows, but for a stadium's sand arena (class `a`).
+      // The committed rows, but for a stadium's sand arena (class `a`) and
+      // the border cells a river runs out under (water).
       const committed = arenaMapMask(entry.id)!;
       expect(tileMask!.rows).toHaveLength(committed.length);
       tileMask!.rows.forEach((row, y) => Array.from(row).forEach((cls, x) => {
-        if (cls !== committed[y][x]) expect(cls).toBe('a');
+        if (cls === committed[y][x]) return;
+        if (cls === 'w') expect(committed[y][x]).toBe('e');
+        else expect(cls).toBe('a');
       }));
       const grid = arenaMapRows(entry.id);
       const parsed = parseMapRows(grid);
@@ -182,6 +186,16 @@ describe.each(Object.keys(CITY_LOOKS) as CityLookId[])('the %s mask colours', (i
       expect(contrastRatio(floor, over(floor, TELEGRAPH_FILL_COLOR, TELEGRAPH_FILL_OPACITY)))
         .toBeGreaterThanOrEqual(3);
     }));
+  });
+
+  it('keeps every danger cue readable on its floors at their darkest contact shade', () => {
+    floorsOf(modes[0]).forEach((tone) => {
+      const floor = shadeHex(tone, 1 - CONTACT_SHADE_MAX);
+      expect(contrastRatio(floor, over(floor, TELEGRAPH_EDGE_COLOR, TELEGRAPH_EDGE_OPACITY)))
+        .toBeGreaterThanOrEqual(3);
+      expect(contrastRatio(floor, over(floor, TELEGRAPH_FILL_COLOR, TELEGRAPH_FILL_OPACITY)))
+        .toBeGreaterThanOrEqual(3);
+    });
   });
 
   it('separates floor, water and walls by brightness, not only by hue', () => {

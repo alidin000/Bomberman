@@ -368,6 +368,8 @@ const CITY_LOOK_DATA: Record<CityLookId, StageLookData> = {
     hemisphere: { sky: '#f5ece6', ground: '#3f4a5e', intensity: 0.9 },
     directional: { color: '#ffdcb6', intensity: 1.58 },
     landmarks: [
+      // On the Pest bank: past the board the Danube bends west of it, so its
+      // west wing stands at the embankment (scene/city/cityOutskirts.ts).
       {
         kind: 'parliament', sector: 'far', body: '#ddd6c5', trim: '#9a4a3c', weight: 0, scale: [1, 1], anchor: { x: 13, y: -3 }, openSky: true,
       },

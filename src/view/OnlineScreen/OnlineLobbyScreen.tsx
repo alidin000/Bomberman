@@ -8,7 +8,7 @@ import PublicIcon from '@mui/icons-material/Public';
 import ReplayIcon from '@mui/icons-material/Replay';
 import SportsKabaddiIcon from '@mui/icons-material/SportsKabaddi';
 import {
-  Button, MenuItem, Select, ToggleButton, ToggleButtonGroup,
+  Button, ListSubheader, MenuItem, Select, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -16,8 +16,9 @@ import {
 } from '../../content';
 import { getOnlineSession } from '../../network/onlineSession';
 import {
-  ONLINE_ROUND_OPTIONS, OnlineRoomMode, OnlineRounds,
+  ONLINE_CITY_MAPS, ONLINE_ROUND_OPTIONS, OnlineArenaMapId, OnlineRoomMode, OnlineRounds,
 } from '../../network/protocol';
+import { getArenaMap } from '../../content/arenaMaps';
 import { useOnlineSessionSnapshot } from '../../hooks/useOnlineGame';
 import { MAIN_MENU_LABEL } from '../ConfigScreen/menuCopy';
 import {
@@ -73,6 +74,8 @@ export function OnlineLobbyScreen() {
   const [characterId, setCharacterId] = useState<CharacterId>('naruto');
   const [roomMode, setRoomMode] = useState<OnlineRoomMode>('coop');
   const [stageId, setStageId] = useState<StageId>('hiddenLeaf');
+  // An arena room's map: any village, or a city.
+  const [arenaMapId, setArenaMapId] = useState<OnlineArenaMapId>('hiddenLeaf');
   const [totalRounds, setTotalRounds] = useState<OnlineRounds>(3);
   const [copyState, setCopyState] = useState<CopyState>('idle');
   // The last create or join, so an error can offer the same try again.
@@ -100,7 +103,13 @@ export function OnlineLobbyScreen() {
     if (!name.trim()) return;
     rememberName();
     setAttempt('create');
-    session.create(name, characterId, roomMode, stageId, totalRounds);
+    if (roomMode === 'arena') {
+      // A city is no stage: the room still names a village for its stage.
+      const village = STAGE_DEFINITIONS.find((stage) => stage.id === arenaMapId)?.id ?? stageId;
+      session.create(name, characterId, roomMode, village, totalRounds, arenaMapId);
+    } else {
+      session.create(name, characterId, roomMode, stageId, totalRounds);
+    }
   };
 
   const joinRoom = () => {
@@ -121,6 +130,9 @@ export function OnlineLobbyScreen() {
     && online.players.every((player) => player.connected && player.ready);
   const openSeats = Math.max(0, online.capacity - online.players.length);
   const roomStage = getStageDefinition(online.stageId);
+  const roomMapName = online.roomMode === 'arena'
+    ? getArenaMap(online.arenaMapId)?.name ?? roomStage.name
+    : roomStage.name;
   const roomLabel = online.roomMode === 'coop' ? 'Co-op Campaign' : 'Online Arena';
   const inviteUrl = online.roomId ? `${window.location.origin}/online/${online.roomId}` : '';
   const copyInvite = async () => {
@@ -207,19 +219,40 @@ export function OnlineLobbyScreen() {
         <SetupGrid>
           <OnlinePanel>
             <h2>{`Create ${roomMode === 'coop' ? 'a co-op mission' : 'an arena'}`}</h2>
-            <Field>
-              Village
-              <Select
-                inputProps={{ 'aria-label': 'village' }}
-                size="small"
-                value={stageId}
-                onChange={(event) => setStageId(event.target.value as StageId)}
-              >
-                {STAGE_DEFINITIONS.map((stage) => (
-                  <MenuItem key={stage.id} value={stage.id}>{stage.name}</MenuItem>
-                ))}
-              </Select>
-            </Field>
+            {roomMode === 'coop' ? (
+              <Field>
+                Village
+                <Select
+                  inputProps={{ 'aria-label': 'village' }}
+                  size="small"
+                  value={stageId}
+                  onChange={(event) => setStageId(event.target.value as StageId)}
+                >
+                  {STAGE_DEFINITIONS.map((stage) => (
+                    <MenuItem key={stage.id} value={stage.id}>{stage.name}</MenuItem>
+                  ))}
+                </Select>
+              </Field>
+            ) : (
+              <Field>
+                Arena
+                <Select
+                  inputProps={{ 'aria-label': 'arena' }}
+                  size="small"
+                  value={arenaMapId}
+                  onChange={(event) => setArenaMapId(event.target.value as OnlineArenaMapId)}
+                >
+                  <ListSubheader>Villages</ListSubheader>
+                  {STAGE_DEFINITIONS.map((stage) => (
+                    <MenuItem key={stage.id} value={stage.id}>{stage.name}</MenuItem>
+                  ))}
+                  <ListSubheader>Cities</ListSubheader>
+                  {ONLINE_CITY_MAPS.map((id) => (
+                    <MenuItem key={id} value={id}>{getArenaMap(id)?.name ?? id}</MenuItem>
+                  ))}
+                </Select>
+              </Field>
+            )}
             {roomMode === 'arena' && (
               <RoundToggles>
                 <ToggleButtonGroup
@@ -271,7 +304,7 @@ export function OnlineLobbyScreen() {
             </>
           )}
           <p>
-            {`${roomLabel} · ${roomStage.name}`}
+            {`${roomLabel} · ${roomMapName}`}
             {online.roomMode === 'arena' ? ` · Best of ${online.totalRounds}` : ''}
           </p>
         </OnlinePanel>

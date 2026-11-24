@@ -594,6 +594,13 @@ mechanics, not fun, so the human playtest is the final gate.
 
 Phase 1b. City rooms reuse the arena room flow.
 
+**Built (2026-11-24):** protocol 4. Arena `create` carries an optional
+`arenaMapId` (a village or `rome`, `barcelona`, `budapest`; never the
+playtest's control), the `lobby` reports it, the server loads the grid from
+the catalog, and the lobby's map select lists the villages and the cities.
+Online city matches show the overview plate with the OSM credit. The client
+error fix this section asks for shipped first (`onlineSession.ts`).
+
 | File | Change |
 | --- | --- |
 | `onlineSession.ts` | First, fix terminal errors, and ship the fix in a release that still speaks protocol 3. On `upgrade-required` the client clears its seat (`:257-264`); the close handler (`:168-177`) then reconnects when a seat is stored, otherwise it overwrites the error, so "This game is out of date" never shows. Render deploys client and server separately, so every version bump takes this path. |
